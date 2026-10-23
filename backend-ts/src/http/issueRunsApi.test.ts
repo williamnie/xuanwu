@@ -1,89 +1,68 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter } from "./server.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
-const tempRoots: string[] = [];
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-issue-runs-api-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("Bun issue runs API", () => {
   test("returns an empty run history when no attempts exist", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const issueId = insertIssue(database, "demo");
-      const router = createDefaultRouter({ database });
+    insertProject(database, "demo");
+    const issueId = insertIssue(database, "demo");
+    const router = createDefaultRouter({ database });
 
-      const response = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}/runs`));
+    const response = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}/runs`));
 
-      expect(response.status).toBe(200);
-      expect(await response.json()).toEqual([]);
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual([]);
   });
 
   test("lists issue_runs canonical attempt history by attempt", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const issueId = insertIssue(database, "demo");
-      insertRun(database, issueId, {
-        attempt: 2,
-        status: "done",
-        providerSessionId: "session-2",
-        providerTurnId: "turn-2",
-        endedAt: "2026-01-03T00:00:00Z"
-      });
-      insertRun(database, issueId, {
-        attempt: 1,
-        status: "failed",
-        providerSessionId: "session-1",
-        providerTurnId: "turn-1",
-        endedAt: "2026-01-02T00:00:00Z"
-      });
+    insertProject(database, "demo");
+    const issueId = insertIssue(database, "demo");
+    insertRun(database, issueId, {
+      attempt: 2,
+      status: "done",
+      providerSessionId: "session-2",
+      providerTurnId: "turn-2",
+      endedAt: "2026-01-03T00:00:00Z"
+    });
+    insertRun(database, issueId, {
+      attempt: 1,
+      status: "failed",
+      providerSessionId: "session-1",
+      providerTurnId: "turn-1",
+      endedAt: "2026-01-02T00:00:00Z"
+    });
 
-      const router = createDefaultRouter({ database });
-      const response = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}/runs`));
-      const runs = await response.json() as Array<Record<string, unknown>>;
+    const router = createDefaultRouter({ database });
+    const response = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}/runs`));
+    const runs = await response.json() as Array<Record<string, unknown>>;
 
-      expect(response.status).toBe(200);
-      expect(runs.map((run) => run.attempt)).toEqual([1, 2]);
-      expect(runs[0]).toMatchObject({
-        id: `issue-${issueId}-attempt-1`,
-        issue_id: issueId,
-        status: "failed",
-        provider: "codex",
-        provider_session_id: "session-1",
-        provider_turn_id: "turn-1",
-        exit_reason: "failed"
-      });
-      expect(runs[1]).toMatchObject({
-        id: `issue-${issueId}-attempt-2`,
-        issue_id: issueId,
-        status: "done",
-        provider_session_id: "session-2",
-        provider_turn_id: "turn-2",
-        exit_reason: "explicit_status_update"
-      });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(runs.map((run) => run.attempt)).toEqual([1, 2]);
+    expect(runs[0]).toMatchObject({
+      id: `issue-${issueId}-attempt-1`,
+      issue_id: issueId,
+      status: "failed",
+      provider: "codex",
+      provider_session_id: "session-1",
+      provider_turn_id: "turn-1",
+      exit_reason: "failed"
+    });
+    expect(runs[1]).toMatchObject({
+      id: `issue-${issueId}-attempt-2`,
+      issue_id: issueId,
+      status: "done",
+      provider_session_id: "session-2",
+      provider_turn_id: "turn-2",
+      exit_reason: "explicit_status_update"
+    });
   });
 });
 

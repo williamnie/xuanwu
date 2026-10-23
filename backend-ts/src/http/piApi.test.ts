@@ -1,6 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
@@ -8,169 +7,145 @@ import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { createPiConversation, PI_MANAGER_CYCLE_TITLE } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { createDefaultRouter } from "./server.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
-const tempRoots: string[] = [];
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-api-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("Bun PI settings API", () => {
   test("updates Persona with Supervisor settings atomically and returns a safe prompt summary", async () => {
     const database = await openFixtureDatabase();
-    try {
-      const router = createDefaultRouter({ database });
-      const initial = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor`));
-      expect(await initial.json()).toMatchObject({
-        persona: { enabled: 0, language_mode: "system", revision: 0, verbosity: "adaptive" }
-      });
+    const router = createDefaultRouter({ database });
+    const initial = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor`));
+    expect(await initial.json()).toMatchObject({
+      persona: { enabled: 0, language_mode: "system", revision: 0, verbosity: "adaptive" }
+    });
 
-      const updated = await request(router, "/api/pi/supervisor", "PATCH", {
-        name: "Xuanwu Persona Canary",
-        persona: {
-          expected_revision: 0,
-          enabled: true,
-          personality: "自然可靠",
-          communication_style: "先说结论",
-          verbosity: "concise",
-          language_mode: "follow_user"
-        }
-      });
-      expect(updated.status).toBe(200);
-      expect(await updated.json()).toMatchObject({
-        name: "Xuanwu Persona Canary",
-        persona: { enabled: 1, revision: 1, verbosity: "concise", language_mode: "follow_user" }
-      });
+    const updated = await request(router, "/api/pi/supervisor", "PATCH", {
+      name: "Xuanwu Persona Canary",
+      persona: {
+        expected_revision: 0,
+        enabled: true,
+        personality: "自然可靠",
+        communication_style: "先说结论",
+        verbosity: "concise",
+        language_mode: "follow_user"
+      }
+    });
+    expect(updated.status).toBe(200);
+    expect(await updated.json()).toMatchObject({
+      name: "Xuanwu Persona Canary",
+      persona: { enabled: 1, revision: 1, verbosity: "concise", language_mode: "follow_user" }
+    });
 
-      const summary = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor/runtime-prompt`));
-      const summaryText = await summary.text();
-      expect(summaryText).not.toContain("自然可靠");
-      expect(summaryText).not.toContain("先说结论");
-      expect(JSON.parse(summaryText)).toMatchObject({
-        runtime_prompt_summary: {
-          profiles: ["chat", "acceptance", "memory_reflection", "recovery", "manager_cycle", "notification"],
-          persona_configured: true,
-          persona_enabled: true,
-          persona_revision: 1,
-          persona_chars: 8,
-          persona_profiles: ["chat", "notification.message"],
-          language_mode: "follow_user"
-        }
-      });
+    const summary = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor/runtime-prompt`));
+    const summaryText = await summary.text();
+    expect(summaryText).not.toContain("自然可靠");
+    expect(summaryText).not.toContain("先说结论");
+    expect(JSON.parse(summaryText)).toMatchObject({
+      runtime_prompt_summary: {
+        profiles: ["chat", "acceptance", "memory_reflection", "recovery", "manager_cycle", "notification"],
+        persona_configured: true,
+        persona_enabled: true,
+        persona_revision: 1,
+        persona_chars: 8,
+        persona_profiles: ["chat", "notification.message"],
+        language_mode: "follow_user"
+      }
+    });
 
-      const conflict = await request(router, "/api/pi/supervisor", "PATCH", {
-        name: "must-roll-back",
-        persona: { expected_revision: 0, enabled: false }
-      });
-      expect(conflict.status).toBe(409);
-      expect(await conflict.json()).toMatchObject({ message: expect.stringContaining("persona revision conflict") });
-      const afterConflict = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor`));
-      expect(await afterConflict.json()).toMatchObject({
-        name: "Xuanwu Persona Canary",
-        persona: { enabled: 1, revision: 1 }
-      });
-    } finally {
-      database.close();
-    }
+    const conflict = await request(router, "/api/pi/supervisor", "PATCH", {
+      name: "must-roll-back",
+      persona: { expected_revision: 0, enabled: false }
+    });
+    expect(conflict.status).toBe(409);
+    expect(await conflict.json()).toMatchObject({ message: expect.stringContaining("persona revision conflict") });
+    const afterConflict = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor`));
+    expect(await afterConflict.json()).toMatchObject({
+      name: "Xuanwu Persona Canary",
+      persona: { enabled: 1, revision: 1 }
+    });
   });
 
   test("exposes one Supervisor settings resource without agent CRUD", async () => {
     const database = await openFixtureDatabase();
-    try {
-      const router = createDefaultRouter({ database });
-      const retiredAgents = await router.handle(new Request(`${BASE_URL}/api/pi/agents`));
-      expect(retiredAgents.status).toBe(404);
+    const router = createDefaultRouter({ database });
+    const retiredAgents = await router.handle(new Request(`${BASE_URL}/api/pi/agents`));
+    expect(retiredAgents.status).toBe(404);
 
-      const read = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor`));
-      expect(read.status).toBe(200);
-      expect(await read.json()).toMatchObject({
-        id: "runner-default",
-        name: "Xuanwu Supervisor",
-        provider: "pi-sdk",
-        thinking_level: "medium",
-        cwd_policy: "project",
-        instructions: expect.stringContaining("说人话"),
-        enabled: 1
-      });
+    const read = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor`));
+    expect(read.status).toBe(200);
+    expect(await read.json()).toMatchObject({
+      id: "runner-default",
+      name: "Xuanwu Supervisor",
+      provider: "pi-sdk",
+      thinking_level: "medium",
+      cwd_policy: "project",
+      instructions: expect.stringContaining("说人话"),
+      enabled: 1
+    });
 
-      const patched = await request(router, "/api/pi/supervisor", "PATCH", {
-        model_provider: "openai",
-        model_id: "gpt-5.4",
-        instructions: "CODEX_API_KEY=fixture-secret\n每轮先总结 Runner 风险。",
-        enabled: false
-      });
-      expect(patched.status).toBe(200);
-      expect(await patched.json()).toMatchObject({
-        id: "runner-default",
-        model_provider: "openai",
-        model_id: "gpt-5.4",
-        enabled: 0
-      });
+    const patched = await request(router, "/api/pi/supervisor", "PATCH", {
+      model_provider: "openai",
+      model_id: "gpt-5.4",
+      instructions: "CODEX_API_KEY=fixture-secret\n每轮先总结 Runner 风险。",
+      enabled: false
+    });
+    expect(patched.status).toBe(200);
+    expect(await patched.json()).toMatchObject({
+      id: "runner-default",
+      model_provider: "openai",
+      model_id: "gpt-5.4",
+      enabled: 0
+    });
 
-      const promptSummary = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor/runtime-prompt`));
-      const promptSummaryBody = await promptSummary.json() as Record<string, unknown>;
-      expect(promptSummary.status).toBe(200);
-      expect(JSON.stringify(promptSummaryBody)).not.toContain("fixture-secret");
-      expect(promptSummaryBody).toMatchObject({
-        supervisor_name: "Xuanwu Supervisor",
-        runtime_prompt_summary: {
-          custom_instructions_configured: true,
-          injected_after: "core Supervisor role/safety/tool/MCP constraints"
-        }
-      });
+    const promptSummary = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor/runtime-prompt`));
+    const promptSummaryBody = await promptSummary.json() as Record<string, unknown>;
+    expect(promptSummary.status).toBe(200);
+    expect(JSON.stringify(promptSummaryBody)).not.toContain("fixture-secret");
+    expect(promptSummaryBody).toMatchObject({
+      supervisor_name: "Xuanwu Supervisor",
+      runtime_prompt_summary: {
+        custom_instructions_configured: true,
+        injected_after: "core Supervisor role/safety/tool/MCP constraints"
+      }
+    });
 
-      const deleted = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor`, { method: "DELETE" }));
-      const stillThere = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor`));
-      expect(deleted.status).toBe(405);
-      expect(stillThere.status).toBe(200);
-    } finally {
-      database.close();
-    }
+    const deleted = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor`, { method: "DELETE" }));
+    const stillThere = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor`));
+    expect(deleted.status).toBe(405);
+    expect(stillThere.status).toBe(200);
   });
 
   test("binds and unbinds a project with automatic PI takeover", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const router = createDefaultRouter({ database });
+    insertProject(database, "demo");
+    const router = createDefaultRouter({ database });
 
-      const initial = await router.handle(new Request(`${BASE_URL}/api/projects/demo/pi-settings`));
-      expect(initial.status).toBe(200);
-      expect(await initial.json()).toBeNull();
+    const initial = await router.handle(new Request(`${BASE_URL}/api/projects/demo/pi-settings`));
+    expect(initial.status).toBe(200);
+    expect(await initial.json()).toBeNull();
 
-      const patched = await request(router, "/api/projects/demo/pi-settings", "PATCH", {});
-      expect(patched.status).toBe(200);
-      expect(await patched.json()).toMatchObject({ project_id: "demo" });
-      expect(getProject(database, "demo")?.auto_run).toBe(1);
-      expect(getProject(database, "demo")?.pi_managed).toBe(1);
+    const patched = await request(router, "/api/projects/demo/pi-settings", "PATCH", {});
+    expect(patched.status).toBe(200);
+    expect(await patched.json()).toMatchObject({ project_id: "demo" });
+    expect(getProject(database, "demo")?.auto_run).toBe(1);
+    expect(getProject(database, "demo")?.pi_managed).toBe(1);
 
-      const removedField = await request(router, "/api/projects/demo/pi-settings", "PATCH", { auto_manage: 0 });
-      expect(removedField.status).toBe(400);
-      expect(await removedField.json()).toEqual({ message: "auto_manage 已移除；绑定项目后 Supervisor 会自动完全接管" });
+    const removedField = await request(router, "/api/projects/demo/pi-settings", "PATCH", { auto_manage: 0 });
+    expect(removedField.status).toBe(400);
+    expect(await removedField.json()).toEqual({ message: "auto_manage 已移除；绑定项目后 Supervisor 会自动完全接管" });
 
-      const deleted = await router.handle(new Request(`${BASE_URL}/api/projects/demo/pi-settings`, { method: "DELETE" }));
-      expect(deleted.status).toBe(200);
-      expect(await deleted.json()).toEqual({ managed: false, project_id: "demo" });
-      expect(getProject(database, "demo")?.auto_run).toBe(0);
-      expect(getProject(database, "demo")?.pi_managed).toBe(0);
+    const deleted = await router.handle(new Request(`${BASE_URL}/api/projects/demo/pi-settings`, { method: "DELETE" }));
+    expect(deleted.status).toBe(200);
+    expect(await deleted.json()).toEqual({ managed: false, project_id: "demo" });
+    expect(getProject(database, "demo")?.auto_run).toBe(0);
+    expect(getProject(database, "demo")?.pi_managed).toBe(0);
 
-      database.sqlite.run("update projects set auto_run=1 where id='demo'");
-      const stoppedLegacyLoop = await router.handle(new Request(`${BASE_URL}/api/projects/demo/pi-settings`, { method: "DELETE" }));
-      expect(stoppedLegacyLoop.status).toBe(200);
-      expect(getProject(database, "demo")?.auto_run).toBe(0);
-    } finally {
-      database.close();
-    }
+    database.sqlite.run("update projects set auto_run=1 where id='demo'");
+    const stoppedLegacyLoop = await router.handle(new Request(`${BASE_URL}/api/projects/demo/pi-settings`, { method: "DELETE" }));
+    expect(stoppedLegacyLoop.status).toBe(200);
+    expect(getProject(database, "demo")?.auto_run).toBe(0);
   });
 
 
@@ -245,96 +220,80 @@ describe("Bun PI settings API", () => {
 
   test("creates global Runner conversations without binding a project", async () => {
     const database = await openFixtureDatabase();
-    try {
-      const router = createDefaultRouter({ database });
+    const router = createDefaultRouter({ database });
 
-      const created = await request(router, "/api/pi/conversations", "POST", {
-        id: "runner-global",
-        title: "Runner"
-      });
+    const created = await request(router, "/api/pi/conversations", "POST", {
+      id: "runner-global",
+      title: "Runner"
+    });
 
-      expect(created.status).toBe(201);
-      const body = await created.json() as Record<string, unknown>;
-      expect(body).toMatchObject({
-        id: "runner-global",
-        project_id: "",
-        pi_agent_id: "runner-default",
-        pi_session_id: "runner-global",
-        status: "active",
-        title: "Runner"
-      });
-      expect(String(body.session_file)).toContain(".runner/sessions/runner/");
-      expect(String(body.session_file)).toContain("_runner-global.jsonl");
-      expect(existsSync(String(body.session_file))).toBe(true);
-      expect(getAgentSession(database, "pi-sdk:runner-global")).toMatchObject({
-        provider: "pi-sdk",
-        provider_session_id: "runner-global",
-        agent_role: "pi_manager",
-        project_id: "",
-        status: "active",
-        title: "Runner"
-      });
-    } finally {
-      database.close();
-    }
+    expect(created.status).toBe(201);
+    const body = await created.json() as Record<string, unknown>;
+    expect(body).toMatchObject({
+      id: "runner-global",
+      project_id: "",
+      pi_agent_id: "runner-default",
+      pi_session_id: "runner-global",
+      status: "active",
+      title: "Runner"
+    });
+    expect(String(body.session_file)).toContain(".runner/sessions/runner/");
+    expect(String(body.session_file)).toContain("_runner-global.jsonl");
+    expect(existsSync(String(body.session_file))).toBe(true);
+    expect(getAgentSession(database, "pi-sdk:runner-global")).toMatchObject({
+      provider: "pi-sdk",
+      provider_session_id: "runner-global",
+      agent_role: "pi_manager",
+      project_id: "",
+      status: "active",
+      title: "Runner"
+    });
   });
 
   test("does not retain the retired PI agent collection API", async () => {
     const database = await openFixtureDatabase();
-    try {
-      const router = createDefaultRouter({ database });
-      const read = await router.handle(new Request(`${BASE_URL}/api/pi/agents`));
-      const write = await request(router, "/api/pi/agents", "POST", { name: "Missing ID" });
-      expect(read.status).toBe(404);
-      expect(write.status).toBe(404);
-    } finally {
-      database.close();
-    }
+    const router = createDefaultRouter({ database });
+    const read = await router.handle(new Request(`${BASE_URL}/api/pi/agents`));
+    const write = await request(router, "/api/pi/agents", "POST", { name: "Missing ID" });
+    expect(read.status).toBe(404);
+    expect(write.status).toBe(404);
   });
 
   test("recovers the default assistant for settings and chat when PI agents are empty", async () => {
     const database = await openFixtureDatabase();
-    try {
-      const router = createDefaultRouter({ database });
-      database.sqlite.run("delete from pi_agents");
+    const router = createDefaultRouter({ database });
+    database.sqlite.run("delete from pi_agents");
 
-      const settingsSupervisor = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor`));
-      expect(settingsSupervisor.status).toBe(200);
-      expect(await settingsSupervisor.json()).toMatchObject({ id: "runner-default" });
+    const settingsSupervisor = await router.handle(new Request(`${BASE_URL}/api/pi/supervisor`));
+    expect(settingsSupervisor.status).toBe(200);
+    expect(await settingsSupervisor.json()).toMatchObject({ id: "runner-default" });
 
-      database.sqlite.run("delete from pi_agents");
-      const conversation = await request(router, "/api/pi/conversations", "POST", {
-        id: "empty-agents-chat",
-        title: "New conversation"
-      });
+    database.sqlite.run("delete from pi_agents");
+    const conversation = await request(router, "/api/pi/conversations", "POST", {
+      id: "empty-agents-chat",
+      title: "New conversation"
+    });
 
-      expect(conversation.status).toBe(201);
-      expect(await conversation.json()).toMatchObject({
-        id: "empty-agents-chat",
-        pi_agent_id: "runner-default",
-        status: "active"
-      });
-    } finally {
-      database.close();
-    }
+    expect(conversation.status).toBe(201);
+    expect(await conversation.json()).toMatchObject({
+      id: "empty-agents-chat",
+      pi_agent_id: "runner-default",
+      status: "active"
+    });
   });
 
   test("keeps project automation bound to the singleton Supervisor", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const router = createDefaultRouter({ database });
+    insertProject(database, "demo");
+    const router = createDefaultRouter({ database });
 
-      const autoManaged = await request(router, "/api/projects/demo/pi-settings", "PATCH", {});
-      const disabledAfterEnable = await request(router, "/api/pi/supervisor", "PATCH", { enabled: 0 });
+    const autoManaged = await request(router, "/api/projects/demo/pi-settings", "PATCH", {});
+    const disabledAfterEnable = await request(router, "/api/pi/supervisor", "PATCH", { enabled: 0 });
 
-      expect(autoManaged.status).toBe(200);
-      expect(await autoManaged.json()).toMatchObject({ project_id: "demo" });
-      expect(disabledAfterEnable.status).toBe(400);
-      expect(await disabledAfterEnable.json()).toEqual({ message: "enabled=false would disable projects managed by Supervisor" });
-    } finally {
-      database.close();
-    }
+    expect(autoManaged.status).toBe(200);
+    expect(await autoManaged.json()).toMatchObject({ project_id: "demo" });
+    expect(disabledAfterEnable.status).toBe(400);
+    expect(await disabledAfterEnable.json()).toEqual({ message: "enabled=false would disable projects managed by Supervisor" });
   });
 });
 

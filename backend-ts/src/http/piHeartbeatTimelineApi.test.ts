@@ -1,69 +1,52 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter } from "./server.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("PI heartbeat timeline API", () => {
   test("loads timeline rows and filters issue-linked heartbeat/audit events", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const issueID = insertIssue(database, "demo");
-      insertHeartbeatEvent(database, {
-        eventType: "collect_signals", heartbeatID: "hb-demo", projectID: "demo",
-        payload: { issue_secret: "payload-secret", cwd: "/Users/secret/project" }
-      });
-      insertHeartbeatEvent(database, {
-        eventType: "audit", heartbeatID: "hb-other", projectID: "demo", seconds: 1
-      });
-      insertActionEvent(database, {
-        eventType: "gate_decision", heartbeatID: "hb-demo", issueID, projectID: "demo",
-        reason: "Authorization: Bearer bearer-secret at /tmp/secret.log"
-      });
-      insertSupervisorEvent(database, {
-        eventType: "decision", issueID, projectID: "demo",
-        payload: { recovery_message: "resume after checking state" }
-      });
+    insertProject(database, "demo");
+    const issueID = insertIssue(database, "demo");
+    insertHeartbeatEvent(database, {
+      eventType: "collect_signals", heartbeatID: "hb-demo", projectID: "demo",
+      payload: { issue_secret: "payload-secret", cwd: "/Users/secret/project" }
+    });
+    insertHeartbeatEvent(database, {
+      eventType: "audit", heartbeatID: "hb-other", projectID: "demo", seconds: 1
+    });
+    insertActionEvent(database, {
+      eventType: "gate_decision", heartbeatID: "hb-demo", issueID, projectID: "demo",
+      reason: "Authorization: Bearer bearer-secret at /tmp/secret.log"
+    });
+    insertSupervisorEvent(database, {
+      eventType: "decision", issueID, projectID: "demo",
+      payload: { recovery_message: "resume after checking state" }
+    });
 
-      const response = await createDefaultRouter({ database }).handle(
-        new Request(`${BASE_URL}/api/pi/heartbeat-timeline?project_id=demo&issue_id=${issueID}`)
-      );
-      const body = await response.json() as Array<Record<string, unknown>>;
-      const text = JSON.stringify(body);
+    const response = await createDefaultRouter({ database }).handle(
+      new Request(`${BASE_URL}/api/pi/heartbeat-timeline?project_id=demo&issue_id=${issueID}`)
+    );
+    const body = await response.json() as Array<Record<string, unknown>>;
+    const text = JSON.stringify(body);
 
-      expect(response.status).toBe(200);
-      expect(body.map((item) => item.source)).toEqual(["supervisor", "action", "heartbeat"]);
-      expect(body.map((item) => item.stage)).toEqual(["supervisor_decision", "decision", "signal"]);
-      expect(body.map((item) => item.heartbeat_id)).toEqual(["", "hb-demo", "hb-demo"]);
-      expect(text).toContain("[redacted]");
-      expect(text).toContain("[redacted-path]");
-      expect(text).not.toContain("payload-secret");
-      expect(text).not.toContain("bearer-secret");
-      expect(text).not.toContain("/Users/secret");
-      expect(text).not.toContain("/tmp/secret");
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(body.map((item) => item.source)).toEqual(["supervisor", "action", "heartbeat"]);
+    expect(body.map((item) => item.stage)).toEqual(["supervisor_decision", "decision", "signal"]);
+    expect(body.map((item) => item.heartbeat_id)).toEqual(["", "hb-demo", "hb-demo"]);
+    expect(text).toContain("[redacted]");
+    expect(text).toContain("[redacted-path]");
+    expect(text).not.toContain("payload-secret");
+    expect(text).not.toContain("bearer-secret");
+    expect(text).not.toContain("/Users/secret");
+    expect(text).not.toContain("/tmp/secret");
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-heartbeat-timeline-api-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function insertProject(db: RunnerDatabase, id: string): void {
   db.sqlite.run(

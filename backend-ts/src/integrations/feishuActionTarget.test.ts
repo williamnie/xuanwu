@@ -1,107 +1,81 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { approveImReplyDraft, createImReplyDraft } from "../db/repositories/imReplyOutbox.ts";
 import { createPiNotificationIntent } from "../db/repositories/pi.ts";
 import { createHumanReviewRequest } from "../domain/review/humanReview.ts";
 import { normalizeFeishuMessageEvent } from "./feishu.ts";
 import { resolveFeishuActionTarget } from "./feishuActionTarget.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const roots: string[] = [];
-
-afterEach(async () => {
-  while (roots.length > 0) await rm(roots.pop()!, { recursive: true, force: true });
-});
+const fixture = useTestDatabase();
 
 describe("Feishu actionable notification target", () => {
   test("binds a short reply to the only currently open actionable notification, not an older Issue", async () => {
     const db = await fixture();
-    try {
-      insertProject(db);
-      insertIssue(db, 828, "done");
-      insertIssue(db, 841, "needs_user");
-      createHumanReviewRequest(db, 841, { kind: "acceptance", question: "接受离线验收吗？" });
-      insertIntent(db, 828, "2026-08-01T18:40:35Z");
-      insertIntent(db, 841, "2026-08-02T05:08:19Z");
+    insertProject(db);
+    insertIssue(db, 828, "done");
+    insertIssue(db, 841, "needs_user");
+    createHumanReviewRequest(db, 841, { kind: "acceptance", question: "接受离线验收吗？" });
+    insertIntent(db, 828, "2026-08-01T18:40:35Z");
+    insertIntent(db, 841, "2026-08-02T05:08:19Z");
 
-      expect(resolveFeishuActionTarget(db, event("接受，这种不用管"))).toMatchObject({
-        issueID: 841,
-        projectID: "demo",
-        source: "single_open_actionable_notification"
-      });
-    } finally {
-      db.close();
-    }
+    expect(resolveFeishuActionTarget(db, event("接受，这种不用管"))).toMatchObject({
+      issueID: 841,
+      projectID: "demo",
+      source: "single_open_actionable_notification"
+    });
   });
 
   test("fails closed when the same chat has multiple open actionable Issues", async () => {
     const db = await fixture();
-    try {
-      insertProject(db);
-      for (const id of [841, 842]) {
-        insertIssue(db, id, "needs_user");
-        createHumanReviewRequest(db, id, { kind: "acceptance", question: `接受 #${id} 吗？` });
-        insertIntent(db, id, `2026-08-02T05:0${id - 840}:19Z`);
-      }
-
-      expect(resolveFeishuActionTarget(db, event("接受"))).toEqual({
-        issueID: 0,
-        projectID: "",
-        source: "none",
-        sourceRef: ""
-      });
-    } finally {
-      db.close();
+    insertProject(db);
+    for (const id of [841, 842]) {
+      insertIssue(db, id, "needs_user");
+      createHumanReviewRequest(db, id, { kind: "acceptance", question: `接受 #${id} 吗？` });
+      insertIntent(db, id, `2026-08-02T05:0${id - 840}:19Z`);
     }
+
+    expect(resolveFeishuActionTarget(db, event("接受"))).toEqual({
+      issueID: 0,
+      projectID: "",
+      source: "none",
+      sourceRef: ""
+    });
   });
 
   test("does not bind an unrelated new topic merely because one actionable Issue is open", async () => {
     const db = await fixture();
-    try {
-      insertProject(db);
-      insertIssue(db, 841, "needs_user");
-      createHumanReviewRequest(db, 841, { kind: "acceptance", question: "接受离线验收吗？" });
-      insertIntent(db, 841, "2026-08-02T05:08:19Z");
+    insertProject(db);
+    insertIssue(db, 841, "needs_user");
+    createHumanReviewRequest(db, 841, { kind: "acceptance", question: "接受离线验收吗？" });
+    insertIntent(db, 841, "2026-08-02T05:08:19Z");
 
-      expect(resolveFeishuActionTarget(db, event("帮我新建一个图片压缩任务"))).toEqual({
-        issueID: 0,
-        projectID: "",
-        source: "none",
-        sourceRef: ""
-      });
-    } finally {
-      db.close();
-    }
+    expect(resolveFeishuActionTarget(db, event("帮我新建一个图片压缩任务"))).toEqual({
+      issueID: 0,
+      projectID: "",
+      source: "none",
+      sourceRef: ""
+    });
   });
 
   test("binds an explicit reply to the notification message even without approval keywords", async () => {
     const db = await fixture();
-    try {
-      insertProject(db);
-      insertIssue(db, 841, "needs_user");
-      createHumanReviewRequest(db, 841, { kind: "acceptance", question: "接受离线验收吗？" });
-      insertSentOutbox(db, 841, "om-notification-841");
+    insertProject(db);
+    insertIssue(db, 841, "needs_user");
+    createHumanReviewRequest(db, 841, { kind: "acceptance", question: "接受离线验收吗？" });
+    insertSentOutbox(db, 841, "om-notification-841");
 
-      expect(resolveFeishuActionTarget(db, event("这种情况按之前说的办", {
-        threadID: "om-notification-841"
-      }))).toMatchObject({
-        issueID: 841,
-        projectID: "demo",
-        source: "replied_notification"
-      });
-    } finally {
-      db.close();
-    }
+    expect(resolveFeishuActionTarget(db, event("这种情况按之前说的办", {
+      threadID: "om-notification-841"
+    }))).toMatchObject({
+      issueID: 841,
+      projectID: "demo",
+      source: "replied_notification"
+    });
   });
 });
-
-async function fixture(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-action-target-"));
-  roots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function insertProject(db: RunnerDatabase): void {
   db.sqlite.run(`insert into projects (id, name, cwd, created_at, updated_at)

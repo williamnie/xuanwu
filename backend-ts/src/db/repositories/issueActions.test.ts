@@ -1,26 +1,13 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../database.ts";
+import { type RunnerDatabase } from "../database.ts";
 import { deleteIssues, enqueueIssue, retryIssue } from "./issueActions.ts";
 import { claimNextIssue } from "./issueQueue.ts";
 import { getIssue, listIssueRuns } from "./issues.ts";
+import { useTestDatabase } from "../../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-issue-actions-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("issue action repository", () => {
   test("enqueue is idempotent for an already running issue with an open run", async () => {
@@ -58,19 +45,15 @@ describe("issue action repository", () => {
 
   test("batch delete is atomic when any issue still has an open Run", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const deletableID = insertIssue(db, "demo", "triage");
-      const runningID = insertRunningIssue(db, "demo");
-      insertOpenRun(db, runningID);
+    insertProject(db, "demo");
+    const deletableID = insertIssue(db, "demo", "triage");
+    const runningID = insertRunningIssue(db, "demo");
+    insertOpenRun(db, runningID);
 
-      expect(() => deleteIssues(db, [deletableID, runningID]))
-        .toThrow("运行中的 issue 不能删除，请先取消执行");
-      expect(getIssue(db, deletableID)).toMatchObject({ id: deletableID, status: "triage" });
-      expect(getIssue(db, runningID)).toMatchObject({ id: runningID, status: "in_progress" });
-    } finally {
-      db.close();
-    }
+    expect(() => deleteIssues(db, [deletableID, runningID]))
+      .toThrow("运行中的 issue 不能删除，请先取消执行");
+    expect(getIssue(db, deletableID)).toMatchObject({ id: deletableID, status: "triage" });
+    expect(getIssue(db, runningID)).toMatchObject({ id: runningID, status: "in_progress" });
   });
 });
 
@@ -78,26 +61,22 @@ async function expectRunningActionToBeIdempotent(
   action: typeof enqueueIssue
 ): Promise<void> {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueID = insertRunningIssue(db, "demo");
-      insertOpenRun(db, issueID);
+    insertProject(db, "demo");
+    const issueID = insertRunningIssue(db, "demo");
+    insertOpenRun(db, issueID);
 
-      const issue = action(db, issueID);
+    const issue = action(db, issueID);
 
-      expect(issue).toMatchObject({ id: issueID, status: "in_progress", attempt_count: 1 });
-      expect(getIssue(db, issueID)).toMatchObject({ status: "in_progress", attempt_count: 1 });
-      expect(listIssueRuns(db, issueID)).toMatchObject([{
-        id: `issue-${issueID}-attempt-1`,
-        status: "in_progress",
-        provider_session_id: "thread-1",
-        provider_turn_id: "turn-1",
-        ended_at: ""
-      }]);
-      expect(statusEvents(db, issueID)).toEqual([]);
-    } finally {
-      db.close();
-    }
+    expect(issue).toMatchObject({ id: issueID, status: "in_progress", attempt_count: 1 });
+    expect(getIssue(db, issueID)).toMatchObject({ status: "in_progress", attempt_count: 1 });
+    expect(listIssueRuns(db, issueID)).toMatchObject([{
+      id: `issue-${issueID}-attempt-1`,
+      status: "in_progress",
+      provider_session_id: "thread-1",
+      provider_turn_id: "turn-1",
+      ended_at: ""
+    }]);
+    expect(statusEvents(db, issueID)).toEqual([]);
 }
 
 function insertProject(db: RunnerDatabase, id: string): void {

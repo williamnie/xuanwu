@@ -1,113 +1,88 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import { createDefaultRouter } from "./server.ts";
 import type { ExecutorProvider, InterruptInput, ProviderRunInput } from "../providers/types.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
-const tempRoots: string[] = [];
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-session-interrupt-api-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("Bun session interrupt API", () => {
   test("interrupts a persisted Codex session turn without mutating issues", async () => {
     const database = await openFixtureDatabase();
     const provider = new InterruptCaptureProvider();
-    try {
-      upsertAgentSession(database, {
-        provider: "codex",
-        provider_session_id: "thread-manual",
-        raw_ref: { provider_turn_id: "turn-manual" },
-        status: "running"
-      });
+    upsertAgentSession(database, {
+      provider: "codex",
+      provider_session_id: "thread-manual",
+      raw_ref: { provider_turn_id: "turn-manual" },
+      status: "running"
+    });
 
-      const response = await createDefaultRouter({
-        database,
-        providers: { codex: provider }
-      }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-manual/interrupt`, { method: "POST" }));
+    const response = await createDefaultRouter({
+      database,
+      providers: { codex: provider }
+    }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-manual/interrupt`, { method: "POST" }));
 
-      expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ interrupted: true });
-      expect(provider.interrupts).toEqual([{
-        session: { provider: "codex", sessionId: "thread-manual", turnId: "turn-manual" },
-        reason: "session_interrupt"
-      }]);
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ interrupted: true });
+    expect(provider.interrupts).toEqual([{
+      session: { provider: "codex", sessionId: "thread-manual", turnId: "turn-manual" },
+      reason: "session_interrupt"
+    }]);
   });
 
   test("interrupts an issue-linked session turn without cancelling the issue", async () => {
     const database = await openFixtureDatabase();
     const provider = new InterruptCaptureProvider();
-    try {
-      insertProject(database, "demo");
-      const issueID = insertIssue(database, "demo", "in_progress", "thread-linked", "turn-linked");
-      insertOpenRun(database, issueID);
+    insertProject(database, "demo");
+    const issueID = insertIssue(database, "demo", "in_progress", "thread-linked", "turn-linked");
+    insertOpenRun(database, issueID);
 
-      const response = await createDefaultRouter({
-        database,
-        providers: { codex: provider }
-      }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-linked/interrupt`, { method: "POST" }));
+    const response = await createDefaultRouter({
+      database,
+      providers: { codex: provider }
+    }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-linked/interrupt`, { method: "POST" }));
 
-      expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ interrupted: true });
-      expect(provider.interrupts).toEqual([{
-        session: { provider: "codex", sessionId: "thread-linked", turnId: "turn-linked" },
-        reason: "session_interrupt"
-      }]);
-      expect(issueStatus(database, issueID)).toBe("in_progress");
-      expect(latestRun(database, issueID)).toMatchObject({
-        ended_at: "",
-        exit_reason: "",
-        status: "in_progress"
-      });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ interrupted: true });
+    expect(provider.interrupts).toEqual([{
+      session: { provider: "codex", sessionId: "thread-linked", turnId: "turn-linked" },
+      reason: "session_interrupt"
+    }]);
+    expect(issueStatus(database, issueID)).toBe("in_progress");
+    expect(latestRun(database, issueID)).toMatchObject({
+      ended_at: "",
+      exit_reason: "",
+      status: "in_progress"
+    });
   });
 
   test("retry endpoint interrupts an issue-linked turn before requeueing it", async () => {
     const database = await openFixtureDatabase();
     const provider = new InterruptCaptureProvider();
-    try {
-      insertProject(database, "demo");
-      const issueID = insertIssue(database, "demo", "in_progress", "thread-linked", "turn-linked");
-      insertOpenRun(database, issueID);
+    insertProject(database, "demo");
+    const issueID = insertIssue(database, "demo", "in_progress", "thread-linked", "turn-linked");
+    insertOpenRun(database, issueID);
 
-      const response = await createDefaultRouter({
-        database,
-        providers: { codex: provider }
-      }).handle(new Request(`${BASE_URL}/api/issues/${issueID}/retry`, { method: "POST" }));
+    const response = await createDefaultRouter({
+      database,
+      providers: { codex: provider }
+    }).handle(new Request(`${BASE_URL}/api/issues/${issueID}/retry`, { method: "POST" }));
 
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({ id: issueID, status: "todo" });
-      expect(provider.interrupts).toEqual([{
-        session: { provider: "codex", sessionId: "thread-linked", turnId: "turn-linked" },
-        reason: "issue_retry"
-      }]);
-      expect(issueStatus(database, issueID)).toBe("todo");
-      expect(latestRun(database, issueID)).toMatchObject({
-        status: "cancelled",
-        exit_reason: `superseded_by:xw:run:issue_runs:issue-${issueID}-attempt-2`
-      });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ id: issueID, status: "todo" });
+    expect(provider.interrupts).toEqual([{
+      session: { provider: "codex", sessionId: "thread-linked", turnId: "turn-linked" },
+      reason: "issue_retry"
+    }]);
+    expect(issueStatus(database, issueID)).toBe("todo");
+    expect(latestRun(database, issueID)).toMatchObject({
+      status: "cancelled",
+      exit_reason: `superseded_by:xw:run:issue_runs:issue-${issueID}-attempt-2`
+    });
   });
 });
 

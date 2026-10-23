@@ -1,234 +1,185 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { createAgentProfile } from "../db/repositories/agentProfiles.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { createDefaultRouter } from "./server.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
-const tempRoots: string[] = [];
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-issue-patch-api-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("Bun issue patch API", () => {
   test("patches issue fields and records status change history", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      createAgentProfile(database, { id: "codex-pro", name: "Codex Pro", provider: "codex" });
-      const issueId = insertIssue(database, "demo");
-      const response = await patchIssue(database, issueId, fullPatchPayload());
-      const body = await response.json() as Record<string, unknown>;
+    insertProject(database, "demo");
+    createAgentProfile(database, { id: "codex-pro", name: "Codex Pro", provider: "codex" });
+    const issueId = insertIssue(database, "demo");
+    const response = await patchIssue(database, issueId, fullPatchPayload());
+    const body = await response.json() as Record<string, unknown>;
 
-      expect(response.status).toBe(200);
-      expect(body).toMatchObject(expectedPatchedIssue(issueId));
-      expect(listEvents(database)).toEqual([
-        { type: "issue.status_changed", payload: "{\"status\":\"todo\"}" },
-        {
-          type: "issue.planning_metadata_updated.v1",
-          payload: JSON.stringify({
-            contract: "unstarted-issue-planning-update-v1",
-            fields: ["title", "description"]
-          })
-        },
-        {
-          type: "issue.lifecycle_control.v1",
-          payload: JSON.stringify({
-            actor: { kind: "operator", source: "http", thread_id: "" },
-            after_status: "todo",
-            before_status: "triage",
-            issue_run_id: "",
-            operation: "status_update"
-          })
-        }
-      ]);
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject(expectedPatchedIssue(issueId));
+    expect(listEvents(database)).toEqual([
+      { type: "issue.status_changed", payload: "{\"status\":\"todo\"}" },
+      {
+        type: "issue.planning_metadata_updated.v1",
+        payload: JSON.stringify({
+          contract: "unstarted-issue-planning-update-v1",
+          fields: ["title", "description"]
+        })
+      },
+      {
+        type: "issue.lifecycle_control.v1",
+        payload: JSON.stringify({
+          actor: { kind: "operator", source: "http", thread_id: "" },
+          after_status: "todo",
+          before_status: "triage",
+          issue_run_id: "",
+          operation: "status_update"
+        })
+      }
+    ]);
   });
 
   test("rejects an unknown agent profile instead of silently falling back", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const issueId = insertIssue(database, "demo");
+    insertProject(database, "demo");
+    const issueId = insertIssue(database, "demo");
 
-      const response = await patchIssue(database, issueId, { agent_profile_id: "missing-profile" });
+    const response = await patchIssue(database, issueId, { agent_profile_id: "missing-profile" });
 
-      expect(response.status).toBe(400);
-      expect(await response.json()).toEqual({ message: "Agent Profile \"missing-profile\" was not found" });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ message: "Agent Profile \"missing-profile\" was not found" });
   });
 
   test("defers a done claim until the active Provider Run reaches terminal state", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const issueId = insertIssue(database, "demo", "in_progress");
-      insertOpenRun(database, issueId);
+    insertProject(database, "demo");
+    const issueId = insertIssue(database, "demo", "in_progress");
+    insertOpenRun(database, issueId);
 
-      const response = await patchIssue(database, issueId, { status: "done", error: "" });
-      const run = latestRun(database, issueId);
+    const response = await patchIssue(database, issueId, { status: "done", error: "" });
+    const run = latestRun(database, issueId);
 
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({
-        id: issueId,
-        status: "in_progress",
-        error: ""
-      });
-      expect(run).toMatchObject({
-        status: "in_progress"
-      });
-      expect(run?.ended_at).toBe("");
-      expect(listEvents(database).map((event) => event.type)).toEqual([
-        "issue.pi_acceptance_deferred.v1"
-      ]);
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      id: issueId,
+      status: "in_progress",
+      error: ""
+    });
+    expect(run).toMatchObject({
+      status: "in_progress"
+    });
+    expect(run?.ended_at).toBe("");
+    expect(listEvents(database).map((event) => event.type)).toEqual([
+      "issue.pi_acceptance_deferred.v1"
+    ]);
   });
 
   test("routes an ended Run to PI acceptance without classifying command text", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const issueId = insertIssue(database, "demo", "in_progress");
-      insertOpenRun(database, issueId);
-      database.sqlite.run(
-        "update issue_runs set status='failed', ended_at='2026-01-01T00:01:00Z' where issue_id=?",
-        [issueId]
-      );
-      insertCommandEvidenceEvent(database, issueId, "/bin/zsh -lc 'custom-check --scope all; rc=$?; exit \"$rc\"'", 0);
+    insertProject(database, "demo");
+    const issueId = insertIssue(database, "demo", "in_progress");
+    insertOpenRun(database, issueId);
+    database.sqlite.run(
+      "update issue_runs set status='failed', ended_at='2026-01-01T00:01:00Z' where issue_id=?",
+      [issueId]
+    );
+    insertCommandEvidenceEvent(database, issueId, "/bin/zsh -lc 'custom-check --scope all; rc=$?; exit \"$rc\"'", 0);
 
-      const response = await patchIssue(database, issueId, { status: "done", error: "" });
-      const events = listEvents(database);
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({
-        id: issueId,
-        status: "in_progress",
-        error: ""
-      });
-      expect(events.map((event) => event.type)).toContain("issue.pi_acceptance_requested.v1");
-      expect(events.some((event) => event.type.startsWith("issue.verification_gate_"))).toBe(false);
-    } finally {
-      database.close();
-    }
+    const response = await patchIssue(database, issueId, { status: "done", error: "" });
+    const events = listEvents(database);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      id: issueId,
+      status: "in_progress",
+      error: ""
+    });
+    expect(events.map((event) => event.type)).toContain("issue.pi_acceptance_requested.v1");
+    expect(events.some((event) => event.type.startsWith("issue.verification_gate_"))).toBe(false);
   });
 
   test("rejects raw in progress to todo patches so callers cannot orphan a running session", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const issueId = insertIssue(database, "demo", "in_progress");
-      insertOpenRun(database, issueId);
+    insertProject(database, "demo");
+    const issueId = insertIssue(database, "demo", "in_progress");
+    insertOpenRun(database, issueId);
 
-      const response = await patchIssue(database, issueId, { status: "todo" });
+    const response = await patchIssue(database, issueId, { status: "todo" });
 
-      expect(response.status).toBe(400);
-      expect(await response.json()).toEqual({ message: "运行中的 Issue 请使用 retry 操作，避免重复创建 Session" });
-      expect(latestRun(database, issueId)).toMatchObject({ status: "in_progress", ended_at: "" });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ message: "运行中的 Issue 请使用 retry 操作，避免重复创建 Session" });
+    expect(latestRun(database, issueId)).toMatchObject({ status: "in_progress", ended_at: "" });
   });
 
   test("rejects a generic failed status patch because only PI may decide failure", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const issueId = insertIssue(database, "demo", "in_progress");
+    insertProject(database, "demo");
+    const issueId = insertIssue(database, "demo", "in_progress");
 
-      const response = await patchIssue(database, issueId, { status: "failed", error: "agent fallback" });
+    const response = await patchIssue(database, issueId, { status: "failed", error: "agent fallback" });
 
-      expect(response.status).toBe(400);
-      expect(await response.json()).toEqual({
-        message: "failed 只能由 PI 语义决策写入"
-      });
-      expect(database.sqlite.query<{ status: string }, [number]>("select status from issues where id=?").get(issueId))
-        .toEqual({ status: "in_progress" });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      message: "failed 只能由 PI 语义决策写入"
+    });
+    expect(database.sqlite.query<{ status: string }, [number]>("select status from issues where id=?").get(issueId))
+      .toEqual({ status: "in_progress" });
   });
 
   test("moves a triage issue to an existing project", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      insertProject(database, "target");
-      const issueId = insertIssue(database, "demo");
+    insertProject(database, "demo");
+    insertProject(database, "target");
+    const issueId = insertIssue(database, "demo");
 
-      const response = await patchIssue(database, issueId, { project_id: "target" });
+    const response = await patchIssue(database, issueId, { project_id: "target" });
 
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({ id: issueId, project_id: "target" });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ id: issueId, project_id: "target" });
   });
 
   test("rejects moving an issue after it leaves triage or to a missing project", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const triageIssueId = insertIssue(database, "demo");
-      const queuedIssueId = insertIssue(database, "demo", "todo");
+    insertProject(database, "demo");
+    const triageIssueId = insertIssue(database, "demo");
+    const queuedIssueId = insertIssue(database, "demo", "todo");
 
-      const missingProject = await patchIssue(database, triageIssueId, { project_id: "missing" });
-      const queuedIssue = await patchIssue(database, queuedIssueId, { project_id: "demo" });
+    const missingProject = await patchIssue(database, triageIssueId, { project_id: "missing" });
+    const queuedIssue = await patchIssue(database, queuedIssueId, { project_id: "demo" });
 
-      expect(missingProject.status).toBe(404);
-      expect(await missingProject.json()).toEqual({ message: "资源不存在" });
-      expect(queuedIssue.status).toBe(400);
-      expect(await queuedIssue.json()).toEqual({ message: "只有 Triage 状态的 Issue 可以更换所属项目" });
-    } finally {
-      database.close();
-    }
+    expect(missingProject.status).toBe(404);
+    expect(await missingProject.json()).toEqual({ message: "资源不存在" });
+    expect(queuedIssue.status).toBe(400);
+    expect(await queuedIssue.json()).toEqual({ message: "只有 Triage 状态的 Issue 可以更换所属项目" });
   });
 
   test("rejects moving an issue while a structural dependency relation exists", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      insertProject(database, "target");
-      const upstream = createIssue(database, {
-        project_id: "demo",
-        status: "todo",
-        title: "upstream"
-      });
-      const downstream = createIssue(database, {
-        depends_on_issue_ids: [upstream.id],
-        project_id: "demo",
-        status: "triage",
-        title: "downstream"
-      });
+    insertProject(database, "demo");
+    insertProject(database, "target");
+    const upstream = createIssue(database, {
+      project_id: "demo",
+      status: "todo",
+      title: "upstream"
+    });
+    const downstream = createIssue(database, {
+      depends_on_issue_ids: [upstream.id],
+      project_id: "demo",
+      status: "triage",
+      title: "downstream"
+    });
 
-      const response = await patchIssue(database, downstream.id, { project_id: "target" });
+    const response = await patchIssue(database, downstream.id, { project_id: "target" });
 
-      expect(response.status).toBe(400);
-      expect(await response.json()).toEqual({
-        message: "存在结构化依赖关系的 Issue 不能更换所属项目"
-      });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      message: "存在结构化依赖关系的 Issue 不能更换所属项目"
+    });
   });
 
   test("preserves title on a body-only patch and atomically replaces then clears dependencies", async () => {
@@ -275,57 +226,49 @@ describe("Bun issue patch API", () => {
 
   test("fails closed for Run history, cycles and inconsistent body declarations without partial writes", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const first = createIssue(database, { project_id: "demo", status: "triage", title: "first" });
-      const second = createIssue(database, {
-        depends_on_issue_ids: [first.id], project_id: "demo", status: "triage", title: "second"
-      });
-      const ran = createIssue(database, { project_id: "demo", status: "todo", title: "ran" });
-      insertOpenRun(database, ran.id);
+    insertProject(database, "demo");
+    const first = createIssue(database, { project_id: "demo", status: "triage", title: "first" });
+    const second = createIssue(database, {
+      depends_on_issue_ids: [first.id], project_id: "demo", status: "triage", title: "second"
+    });
+    const ran = createIssue(database, { project_id: "demo", status: "todo", title: "ran" });
+    insertOpenRun(database, ran.id);
 
-      const cycle = await patchIssue(database, first.id, {
-        depends_on_issue_ids: [second.id], title: "must not persist"
-      });
-      const mismatch = await patchIssue(database, second.id, { description: "## Dependencies\n\nNone" });
-      const runHistory = await patchIssue(database, ran.id, { title: "must not persist" });
+    const cycle = await patchIssue(database, first.id, {
+      depends_on_issue_ids: [second.id], title: "must not persist"
+    });
+    const mismatch = await patchIssue(database, second.id, { description: "## Dependencies\n\nNone" });
+    const runHistory = await patchIssue(database, ran.id, { title: "must not persist" });
 
-      expect(cycle.status).toBe(400);
-      expect(await cycle.json()).toEqual({
-        message: `depends_on_issue_ids 会形成依赖环：Issue #${first.id} -> Issue #${second.id}`
-      });
-      expect(mismatch.status).toBe(400);
-      expect(await mismatch.json()).toEqual({
-        message: "正文依赖章节必须与 depends_on_issue_ids 完全一致；请同时更新正文和结构化依赖"
-      });
-      expect(runHistory.status).toBe(400);
-      expect(await runHistory.json()).toEqual({
-        message: "Issue 已存在 Run 历史，禁止更新 title、description 或 depends_on_issue_ids"
-      });
-      expect(database.sqlite.query<{ title: string }, [number]>("select title from issues where id=?").get(first.id))
-        .toEqual({ title: "first" });
-      expect(database.sqlite.query<{ title: string }, [number]>("select title from issues where id=?").get(ran.id))
-        .toEqual({ title: "ran" });
-    } finally {
-      database.close();
-    }
+    expect(cycle.status).toBe(400);
+    expect(await cycle.json()).toEqual({
+      message: `depends_on_issue_ids 会形成依赖环：Issue #${first.id} -> Issue #${second.id}`
+    });
+    expect(mismatch.status).toBe(400);
+    expect(await mismatch.json()).toEqual({
+      message: "正文依赖章节必须与 depends_on_issue_ids 完全一致；请同时更新正文和结构化依赖"
+    });
+    expect(runHistory.status).toBe(400);
+    expect(await runHistory.json()).toEqual({
+      message: "Issue 已存在 Run 历史，禁止更新 title、description 或 depends_on_issue_ids"
+    });
+    expect(database.sqlite.query<{ title: string }, [number]>("select title from issues where id=?").get(first.id))
+      .toEqual({ title: "first" });
+    expect(database.sqlite.query<{ title: string }, [number]>("select title from issues where id=?").get(ran.id))
+      .toEqual({ title: "ran" });
   });
 
   test("returns stable errors for invalid and missing issue patches", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const issueId = insertIssue(database, "demo");
-      const invalidStatus = await patchIssue(database, issueId, { status: "bogus" });
-      const missing = await patchIssue(database, 404, { title: "Missing" });
+    insertProject(database, "demo");
+    const issueId = insertIssue(database, "demo");
+    const invalidStatus = await patchIssue(database, issueId, { status: "bogus" });
+    const missing = await patchIssue(database, 404, { title: "Missing" });
 
-      expect(invalidStatus.status).toBe(400);
-      expect(await invalidStatus.json()).toEqual({ message: "status 不合法" });
-      expect(missing.status).toBe(404);
-      expect(await missing.json()).toEqual({ message: "资源不存在" });
-    } finally {
-      database.close();
-    }
+    expect(invalidStatus.status).toBe(400);
+    expect(await invalidStatus.json()).toEqual({ message: "status 不合法" });
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ message: "资源不存在" });
   });
 });
 

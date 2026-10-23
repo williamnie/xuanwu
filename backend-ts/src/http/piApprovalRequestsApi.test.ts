@@ -1,19 +1,15 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { getPiApprovalRequest, upsertPiApprovalRequest } from "../db/repositories/pi.ts";
 import { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { createDefaultRouter } from "./server.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) await rm(tempRoots.pop() ?? "", { recursive: true, force: true });
-});
+const fixtureDatabase = useTestDatabase();
 
 describe("PI approval requests API", () => {
   test("lists approval detail and handles approve/deny exactly once from Command Center", async () => {
@@ -67,90 +63,75 @@ describe("PI approval requests API", () => {
       expect(events).toContain("approval.resolved");
     } finally {
       stop();
-      db.close();
     }
   });
 
   test("filters approval request list by provider session and run", async () => {
     const db = await fixtureDatabase();
-    try {
-      createApprovalRequest(db, "approval-panel-2", {
-        runID: "issue-393-attempt-1",
-        sessionID: "thread-393"
-      });
-      createApprovalRequest(db, "approval-panel-3", {
-        runID: "issue-394-attempt-1",
-        sessionID: "thread-394"
-      });
-      const router = createDefaultRouter({ database: db });
+    createApprovalRequest(db, "approval-panel-2", {
+      runID: "issue-393-attempt-1",
+      sessionID: "thread-393"
+    });
+    createApprovalRequest(db, "approval-panel-3", {
+      runID: "issue-394-attempt-1",
+      sessionID: "thread-394"
+    });
+    const router = createDefaultRouter({ database: db });
 
-      const response = await router.handle(new Request(
-        `${BASE_URL}/api/pi/approval-requests?provider=codex&session_id=thread-393&run_id=issue-393-attempt-1`
-      ));
+    const response = await router.handle(new Request(
+      `${BASE_URL}/api/pi/approval-requests?provider=codex&session_id=thread-393&run_id=issue-393-attempt-1`
+    ));
 
-      expect(response.status).toBe(200);
-      expect(await response.json()).toEqual([expect.objectContaining({
-        approval_id: "approval-panel-2",
-        run_id: "issue-393-attempt-1",
-        session_id: "thread-393"
-      })]);
-    } finally {
-      db.close();
-    }
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual([expect.objectContaining({
+      approval_id: "approval-panel-2",
+      run_id: "issue-393-attempt-1",
+      session_id: "thread-393"
+    })]);
   });
 
   test("keeps failed resolver decisions visible and retryable from the panel", async () => {
     const db = await fixtureDatabase();
     let failNext = true;
     const resolutions: Array<{ decision: string; id: string; scope: string }> = [];
-    try {
-      createApprovalRequest(db, "approval-panel-fail");
-      const router = createDefaultRouter({
-        database: db,
-        providers: {
-          codex: approvalProvider(resolutions, async () => {
-            if (!failNext) return;
-            failNext = false;
-            throw new Error("approval request is not pending: approval-panel-fail");
-          })
-        }
-      });
+    createApprovalRequest(db, "approval-panel-fail");
+    const router = createDefaultRouter({
+      database: db,
+      providers: {
+        codex: approvalProvider(resolutions, async () => {
+          if (!failNext) return;
+          failNext = false;
+          throw new Error("approval request is not pending: approval-panel-fail");
+        })
+      }
+    });
 
-      const failed = await router.handle(new Request(`${BASE_URL}/api/pi/approval-requests/approval-panel-fail/resolve`, {
-        body: JSON.stringify({ decision: "approve", scope: "turn" }),
-        headers: { "content-type": "application/json" },
-        method: "POST"
-      }));
-      const listed = await router.handle(new Request(`${BASE_URL}/api/pi/approval-requests?status=open`));
-      const retried = await router.handle(new Request(`${BASE_URL}/api/pi/approval-requests/approval-panel-fail/resolve`, {
-        body: JSON.stringify({ decision: "approve", scope: "turn" }),
-        headers: { "content-type": "application/json" },
-        method: "POST"
-      }));
+    const failed = await router.handle(new Request(`${BASE_URL}/api/pi/approval-requests/approval-panel-fail/resolve`, {
+      body: JSON.stringify({ decision: "approve", scope: "turn" }),
+      headers: { "content-type": "application/json" },
+      method: "POST"
+    }));
+    const listed = await router.handle(new Request(`${BASE_URL}/api/pi/approval-requests?status=open`));
+    const retried = await router.handle(new Request(`${BASE_URL}/api/pi/approval-requests/approval-panel-fail/resolve`, {
+      body: JSON.stringify({ decision: "approve", scope: "turn" }),
+      headers: { "content-type": "application/json" },
+      method: "POST"
+    }));
 
-      expect(failed.status).toBe(409);
-      expect(await failed.json()).toEqual({ message: "approval request is not pending: approval-panel-fail" });
-      expect(await listed.json()).toEqual([expect.objectContaining({
-        approval_id: "approval-panel-fail",
-        resolver_error: expect.stringContaining("approval request is not pending"),
-        resolver_retryable: 1,
-        resolver_status: "failed",
-        status: "resolve_failed"
-      })]);
-      expect(retried.status).toBe(200);
-      expect(await retried.json()).toMatchObject({ ok: true, status: "approved" });
-      expect(resolutions).toHaveLength(2);
-    } finally {
-      db.close();
-    }
+    expect(failed.status).toBe(409);
+    expect(await failed.json()).toEqual({ message: "approval request is not pending: approval-panel-fail" });
+    expect(await listed.json()).toEqual([expect.objectContaining({
+      approval_id: "approval-panel-fail",
+      resolver_error: expect.stringContaining("approval request is not pending"),
+      resolver_retryable: 1,
+      resolver_status: "failed",
+      status: "resolve_failed"
+    })]);
+    expect(retried.status).toBe(200);
+    expect(await retried.json()).toMatchObject({ ok: true, status: "approved" });
+    expect(resolutions).toHaveLength(2);
   });
 });
-
-async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-approval-api-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function createApprovalRequest(
   db: RunnerDatabase,

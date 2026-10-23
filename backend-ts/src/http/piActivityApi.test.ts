@@ -1,104 +1,82 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { createContextBundle } from "../db/repositories/contextBundles.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { createPiAction, createPiActionEvent } from "../db/repositories/pi.ts";
 import { createAttentionInboxItem, createIntakeRun } from "../db/repositories/intakeRuns.ts";
 import { createDefaultRouter } from "./server.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const root = tempRoots.pop();
-    if (root) await rm(root, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("PI Activity timeline API", () => {
   test("links fake CLI raw/context/intake/inbox/proposal to issue and reply with redacted summaries", async () => {
     const db = await openFixtureDatabase();
-    try {
-      seedProject(db, "demo");
-      const seed = seedFakeCliFlow(db);
-      createIssue(db, {
-        description: "Unrelated external ref should not leak into source-scoped activity.",
-        project_id: "demo",
-        source_excerpt: "external_event:999",
-        status: "triage",
-        title: "Unrelated external ref"
-      });
-      const router = createDefaultRouter({ database: db });
-      const domainRun = await jsonRequest(router, `/api/pi/attention-inbox/items/${seed.itemID}/domain-skill`, { method: "POST" });
-      const proposal = await createCustomProposal(router, seed, domainRun.action.id);
+    seedProject(db, "demo");
+    const seed = seedFakeCliFlow(db);
+    createIssue(db, {
+      description: "Unrelated external ref should not leak into source-scoped activity.",
+      project_id: "demo",
+      source_excerpt: "external_event:999",
+      status: "triage",
+      title: "Unrelated external ref"
+    });
+    const router = createDefaultRouter({ database: db });
+    const domainRun = await jsonRequest(router, `/api/pi/attention-inbox/items/${seed.itemID}/domain-skill`, { method: "POST" });
+    const proposal = await createCustomProposal(router, seed, domainRun.action.id);
 
-      await jsonRequest(router, `/api/pi/action-proposals/${proposal.id}/approve`, {
-        body: JSON.stringify({ actor: "tester" }),
-        method: "POST"
-      });
+    await jsonRequest(router, `/api/pi/action-proposals/${proposal.id}/approve`, {
+      body: JSON.stringify({ actor: "tester" }),
+      method: "POST"
+    });
 
-      const sourceTimeline = await jsonRequest(router, "/api/pi/activity?source=fixture-cli&limit=200");
-      const proposalTimeline = await jsonRequest(router, `/api/pi/activity?proposal_id=${proposal.id}&limit=200`);
-      const text = JSON.stringify(sourceTimeline);
-      const stages = sourceTimeline.items.map((item: { stage: string }) => item.stage);
+    const sourceTimeline = await jsonRequest(router, "/api/pi/activity?source=fixture-cli&limit=200");
+    const proposalTimeline = await jsonRequest(router, `/api/pi/activity?proposal_id=${proposal.id}&limit=200`);
+    const text = JSON.stringify(sourceTimeline);
+    const stages = sourceTimeline.items.map((item: { stage: string }) => item.stage);
 
-      expect(stages).toEqual(expect.arrayContaining(["Raw", "Context", "Intake", "Inbox", "Domain Skill", "Proposal", "Policy", "Action", "Issue", "Reply"]));
-      expect(indexOf(stages, "Raw")).toBeLessThan(indexOf(stages, "Context"));
-      expect(indexOf(stages, "Context")).toBeLessThan(indexOf(stages, "Intake"));
-      expect(indexOf(stages, "Intake")).toBeLessThan(indexOf(stages, "Inbox"));
-      expect(sourceTimeline.items.find((item: { kind: string }) => item.kind === "raw_event").links.detail)
-        .toBe(`/api/pi/attention-inbox/raw-events/${seed.eventID}`);
-      expect(sourceTimeline.items.some((item: { title: string }) => item.title.includes("Unrelated external ref"))).toBe(false);
-      expect(text).not.toContain("raw-secret");
-      expect(text).not.toContain("schema-secret");
-      expect(text).not.toContain("/Users/secret");
-      expect(proposalTimeline.items.map((item: { stage: string }) => item.stage))
-        .toEqual(expect.arrayContaining(["Raw", "Context", "Intake", "Inbox", "Proposal", "Issue", "Reply"]));
-    } finally {
-      db.close();
-    }
+    expect(stages).toEqual(expect.arrayContaining(["Raw", "Context", "Intake", "Inbox", "Domain Skill", "Proposal", "Policy", "Action", "Issue", "Reply"]));
+    expect(indexOf(stages, "Raw")).toBeLessThan(indexOf(stages, "Context"));
+    expect(indexOf(stages, "Context")).toBeLessThan(indexOf(stages, "Intake"));
+    expect(indexOf(stages, "Intake")).toBeLessThan(indexOf(stages, "Inbox"));
+    expect(sourceTimeline.items.find((item: { kind: string }) => item.kind === "raw_event").links.detail)
+      .toBe(`/api/pi/attention-inbox/raw-events/${seed.eventID}`);
+    expect(sourceTimeline.items.some((item: { title: string }) => item.title.includes("Unrelated external ref"))).toBe(false);
+    expect(text).not.toContain("raw-secret");
+    expect(text).not.toContain("schema-secret");
+    expect(text).not.toContain("/Users/secret");
+    expect(proposalTimeline.items.map((item: { stage: string }) => item.stage))
+      .toEqual(expect.arrayContaining(["Raw", "Context", "Intake", "Inbox", "Proposal", "Issue", "Reply"]));
   });
 
   test("filters activity timeline by PI conversation id", async () => {
     const db = await openFixtureDatabase();
-    try {
-      seedProject(db, "demo");
-      seedConversationActivity(db, "conv-a", "action-a");
-      seedConversationActivity(db, "conv-b", "action-b");
-      createPiActionEvent(db, {
-        action_id: "tool-registry:conv-a",
-        conversation_id: "conv-a",
-        event_type: "runtime_tool_registry_snapshot",
-        reason: "loaded PI runtime tools from registry"
-      });
-      const router = createDefaultRouter({ database: db });
+    seedProject(db, "demo");
+    seedConversationActivity(db, "conv-a", "action-a");
+    seedConversationActivity(db, "conv-b", "action-b");
+    createPiActionEvent(db, {
+      action_id: "tool-registry:conv-a",
+      conversation_id: "conv-a",
+      event_type: "runtime_tool_registry_snapshot",
+      reason: "loaded PI runtime tools from registry"
+    });
+    const router = createDefaultRouter({ database: db });
 
-      const timeline = await jsonRequest(router, "/api/pi/activity?conversation_id=conv-a&limit=200");
-      const ids = timeline.items.map((item: { id: string }) => item.id);
-      const text = JSON.stringify(timeline);
+    const timeline = await jsonRequest(router, "/api/pi/activity?conversation_id=conv-a&limit=200");
+    const ids = timeline.items.map((item: { id: string }) => item.id);
+    const text = JSON.stringify(timeline);
 
-      expect(timeline.filters.conversation_id).toBe("conv-a");
-      expect(ids).toContain("pi_action:action-a");
-      expect(text).toContain("tool-registry:conv-a");
-      expect(ids).not.toContain("pi_action:action-b");
-      expect(text).not.toContain("conv-b");
-    } finally {
-      db.close();
-    }
+    expect(timeline.filters.conversation_id).toBe("conv-a");
+    expect(ids).toContain("pi_action:action-a");
+    expect(text).toContain("tool-registry:conv-a");
+    expect(ids).not.toContain("pi_action:action-b");
+    expect(text).not.toContain("conv-b");
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-activity-api-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
 
 function seedConversationActivity(db: RunnerDatabase, conversationID: string, actionID: string): void {
   createPiAction(db, {

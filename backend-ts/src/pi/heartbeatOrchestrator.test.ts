@@ -1,8 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { createAutomation } from "../db/repositories/automations.ts";
 import {
   diagnosePiHeartbeat,
@@ -13,188 +12,156 @@ import {
   resumePiHeartbeat
 } from "../db/repositories/pi.ts";
 import { runPiHeartbeatOnce } from "./heartbeatOrchestrator.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
+const openFixtureDatabase = useTestDatabase();
 const NOW = new Date("2026-06-02T10:00:00Z");
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
 
 describe("PI heartbeat orchestrator", () => {
   test("runs one project heartbeat and persists audit timeline", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "project-a");
-      insertIssue(db, "project-a", "failed", "network error: unexpected eof");
+    insertProject(db, "project-a");
+    insertIssue(db, "project-a", "failed", "network error: unexpected eof");
 
-      const result = await runPiHeartbeatOnce({ database: db, now: NOW, projectID: "project-a" });
+    const result = await runPiHeartbeatOnce({ database: db, now: NOW, projectID: "project-a" });
 
-      expect(result).toMatchObject({ project_id: "project-a", status: "completed" });
-      expect(result.signals.issues.status_counts.failed).toBe(1);
-      expect(result.action_candidates).toEqual([]);
-      expect(result.actions_proposed).toBe(0);
-      expect(result.next_tick_at).toBe("2026-06-02T10:01:00Z");
+    expect(result).toMatchObject({ project_id: "project-a", status: "completed" });
+    expect(result.signals.issues.status_counts.failed).toBe(1);
+    expect(result.action_candidates).toEqual([]);
+    expect(result.actions_proposed).toBe(0);
+    expect(result.next_tick_at).toBe("2026-06-02T10:01:00Z");
 
-      const stored = db.sqlite.query<{ status: string; result_json: string }, []>(
-        "select status, result_json from pi_heartbeat_runs"
-      ).get();
-      expect(stored?.status).toBe("completed");
-      expect(JSON.parse(stored?.result_json ?? "{}").heartbeat_id).toBe(result.heartbeat_id);
+    const stored = db.sqlite.query<{ status: string; result_json: string }, []>(
+      "select status, result_json from pi_heartbeat_runs"
+    ).get();
+    expect(stored?.status).toBe("completed");
+    expect(JSON.parse(stored?.result_json ?? "{}").heartbeat_id).toBe(result.heartbeat_id);
 
-      expect(listPiHeartbeatEvents(db, { heartbeatId: result.heartbeat_id }).map((event) => event.event_type)).toEqual([
-        "collect_signals",
-        "evaluate_policies",
-        "delegate_decision",
-        "authorization_gate",
-        "audit",
-        "schedule_next_tick"
-      ]);
-    } finally {
-      db.close();
-    }
+    expect(listPiHeartbeatEvents(db, { heartbeatId: result.heartbeat_id }).map((event) => event.event_type)).toEqual([
+      "collect_signals",
+      "evaluate_policies",
+      "delegate_decision",
+      "authorization_gate",
+      "audit",
+      "schedule_next_tick"
+    ]);
   });
 
   test("collects heartbeat signal families from runner state", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "project-a");
-      const issueID = insertIssue(db, "project-a", "failed", "unexpected eof");
-      insertClosedRun(db, issueID);
-      insertIssueEvent(db, issueID);
-      insertAgentSession(db, "project-a", issueID);
-      insertProjectHold(db, "project-a");
-      insertTargetAutomations(db, "project-a");
-      insertDelegation(db, "delegation-a", "project-a");
-      insertPiConversation(db, "project-a");
-      insertMemoryItem(db, "project-a");
+    insertProject(db, "project-a");
+    const issueID = insertIssue(db, "project-a", "failed", "unexpected eof");
+    insertClosedRun(db, issueID);
+    insertIssueEvent(db, issueID);
+    insertAgentSession(db, "project-a", issueID);
+    insertProjectHold(db, "project-a");
+    insertTargetAutomations(db, "project-a");
+    insertDelegation(db, "delegation-a", "project-a");
+    insertPiConversation(db, "project-a");
+    insertMemoryItem(db, "project-a");
 
-      const result = await runPiHeartbeatOnce({ database: db, now: NOW, projectID: "project-a" });
+    const result = await runPiHeartbeatOnce({ database: db, now: NOW, projectID: "project-a" });
 
-      expect(result.signals.project?.recent_runs).toHaveLength(1);
-      expect(result.signals.project?.recent_sessions).toHaveLength(1);
-      expect(result.signals.project?.active_holds).toHaveLength(1);
-      expect(result.signals.cron).toEqual({ active: 1, due: 1, total: 1 });
-      expect(result.signals.delegations).toEqual({ active: 1, due: 1 });
-      expect(result.signals.memory).toEqual({ active: 1, pinned: 1 });
-      expect(result.signals.pi_conversations).toEqual({ active: 1, total: 1 });
-      expect(result.signals.provider_health).toEqual({ provider: "codex", status: "configured" });
-      expect(result.signals.usage_cost).toEqual({ status: "not_configured", total_tokens: 0 });
-    } finally {
-      db.close();
-    }
+    expect(result.signals.project?.recent_runs).toHaveLength(1);
+    expect(result.signals.project?.recent_sessions).toHaveLength(1);
+    expect(result.signals.project?.active_holds).toHaveLength(1);
+    expect(result.signals.cron).toEqual({ active: 1, due: 1, total: 1 });
+    expect(result.signals.delegations).toEqual({ active: 1, due: 1 });
+    expect(result.signals.memory).toEqual({ active: 1, pinned: 1 });
+    expect(result.signals.pi_conversations).toEqual({ active: 1, total: 1 });
+    expect(result.signals.provider_health).toEqual({ provider: "codex", status: "configured" });
+    expect(result.signals.usage_cost).toEqual({ status: "not_configured", total_tokens: 0 });
   });
 
   test("records stale active work for PI without creating a hardcoded supervisor action", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "project-a");
-      const runningIssue = insertIssue(db, "project-a", "in_progress", "");
-      insertOpenRun(db, runningIssue);
-      insertAgentSession(db, "project-a", runningIssue, "2026-06-02T09:50:00Z", "running");
-      insertIssueEvent(db, runningIssue, {
-        provider: "codex",
-        raw_payload: "Reconnecting... 1/5",
-        type: "error"
-      }, "2026-06-02T09:50:10Z");
-      const failedIssue = insertIssue(db, "project-a", "failed", "timeout while reading stream");
+    insertProject(db, "project-a");
+    const runningIssue = insertIssue(db, "project-a", "in_progress", "");
+    insertOpenRun(db, runningIssue);
+    insertAgentSession(db, "project-a", runningIssue, "2026-06-02T09:50:00Z", "running");
+    insertIssueEvent(db, runningIssue, {
+      provider: "codex",
+      raw_payload: "Reconnecting... 1/5",
+      type: "error"
+    }, "2026-06-02T09:50:10Z");
+    const failedIssue = insertIssue(db, "project-a", "failed", "timeout while reading stream");
 
-      const result = await runPiHeartbeatOnce({ database: db, now: NOW, projectID: "project-a" });
+    const result = await runPiHeartbeatOnce({ database: db, now: NOW, projectID: "project-a" });
 
-      expect(result.policy.executor_busy).toBe(true);
-      expect(result.executed_actions).toEqual([]);
-      expect(result.signals.supervisor.candidates).toContainEqual(expect.objectContaining({
-        diagnosis_code: "executor_stream_disconnected",
-        issue_id: runningIssue,
-        ready: true
-      }));
-      expect(result.action_candidates).toEqual([]);
-      expect(listPiGuardianEvents(db, { projectId: "project-a" })).toContainEqual(expect.objectContaining({
-        event_type: "guardian.supervisor.candidate",
-        issue_id: runningIssue,
-        source: "supervisor"
-      }));
-      expect(listPiHeartbeatEvents(db, { heartbeatId: result.heartbeat_id }).map((event) => event.event_type))
-        .toContain("supervisor_signal");
-      expect(statusOfIssue(db, failedIssue)).toBe("failed");
-      expect(openRunCount(db)).toBe(1);
-    } finally {
-      db.close();
-    }
+    expect(result.policy.executor_busy).toBe(true);
+    expect(result.executed_actions).toEqual([]);
+    expect(result.signals.supervisor.candidates).toContainEqual(expect.objectContaining({
+      diagnosis_code: "executor_stream_disconnected",
+      issue_id: runningIssue,
+      ready: true
+    }));
+    expect(result.action_candidates).toEqual([]);
+    expect(listPiGuardianEvents(db, { projectId: "project-a" })).toContainEqual(expect.objectContaining({
+      event_type: "guardian.supervisor.candidate",
+      issue_id: runningIssue,
+      source: "supervisor"
+    }));
+    expect(listPiHeartbeatEvents(db, { heartbeatId: result.heartbeat_id }).map((event) => event.event_type))
+      .toContain("supervisor_signal");
+    expect(statusOfIssue(db, failedIssue)).toBe("failed");
+    expect(openRunCount(db)).toBe(1);
   });
 
   test("does not create supervisor PI action from completed command output keywords", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "project-a");
-      const runningIssue = insertIssue(db, "project-a", "in_progress", "");
-      insertOpenRun(db, runningIssue);
-      insertAgentSession(db, "project-a", runningIssue, "2026-06-02T09:59:30Z", "running");
-      insertIssueEvent(db, runningIssue, {
-        error: "turn failed without structured provider error",
-        raw_method: "turn/completed",
-        raw_payload: {
-          turn: {
-            items: [{
-              command: "cat fixture.log",
-              output: "unauthorized approval denied validation failed provider error",
-              status: "completed",
-              type: "commandExecution"
-            }],
-            status: "failed"
-          }
-        },
-        status: "failed",
-        type: "done"
-      }, "2026-06-02T09:59:40Z");
+    insertProject(db, "project-a");
+    const runningIssue = insertIssue(db, "project-a", "in_progress", "");
+    insertOpenRun(db, runningIssue);
+    insertAgentSession(db, "project-a", runningIssue, "2026-06-02T09:59:30Z", "running");
+    insertIssueEvent(db, runningIssue, {
+      error: "turn failed without structured provider error",
+      raw_method: "turn/completed",
+      raw_payload: {
+        turn: {
+          items: [{
+            command: "cat fixture.log",
+            output: "unauthorized approval denied validation failed provider error",
+            status: "completed",
+            type: "commandExecution"
+          }],
+          status: "failed"
+        }
+      },
+      status: "failed",
+      type: "done"
+    }, "2026-06-02T09:59:40Z");
 
-      const result = await runPiHeartbeatOnce({ database: db, now: NOW, projectID: "project-a" });
+    const result = await runPiHeartbeatOnce({ database: db, now: NOW, projectID: "project-a" });
 
-      expect(result.signals.supervisor.candidates).toEqual([]);
-      expect(result.action_candidates.map((candidate) => candidate.action_type)).not.toContain("issue.supervisor_decision");
-      expect(listPiActions(db, { issueId: runningIssue })).toEqual([]);
-    } finally {
-      db.close();
-    }
+    expect(result.signals.supervisor.candidates).toEqual([]);
+    expect(result.action_candidates.map((candidate) => candidate.action_type)).not.toContain("issue.supervisor_decision");
+    expect(listPiActions(db, { issueId: runningIssue })).toEqual([]);
   });
 
   test("supports pause resume diagnostics and releases reentry lock after failure", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "project-a");
-      pausePiHeartbeat(db, { reason: "maintenance", scopeId: "project-a", scopeType: "project" });
+    insertProject(db, "project-a");
+    pausePiHeartbeat(db, { reason: "maintenance", scopeId: "project-a", scopeType: "project" });
 
-      const skipped = await runPiHeartbeatOnce({ database: db, now: NOW, projectID: "project-a" });
-      expect(skipped).toMatchObject({ skip_reason: "heartbeat is paused", status: "skipped" });
-      expect(diagnosePiHeartbeat(db, { scopeId: "project-a", scopeType: "project" }).control?.paused).toBe(true);
+    const skipped = await runPiHeartbeatOnce({ database: db, now: NOW, projectID: "project-a" });
+    expect(skipped).toMatchObject({ skip_reason: "heartbeat is paused", status: "skipped" });
+    expect(diagnosePiHeartbeat(db, { scopeId: "project-a", scopeType: "project" }).control?.paused).toBe(true);
 
-      resumePiHeartbeat(db, { scopeId: "project-a", scopeType: "project" });
-      const failed = await runPiHeartbeatOnce({
-        collectSignals: () => { throw new Error("collector boom"); },
-        database: db,
-        now: NOW,
-        projectID: "project-a"
-      });
-      expect(failed.status).toBe("failed");
-      expect(failed.error).toBe("collector boom");
-      expect(failed.next_tick_at).toBe("2026-06-02T10:05:00Z");
+    resumePiHeartbeat(db, { scopeId: "project-a", scopeType: "project" });
+    const failed = await runPiHeartbeatOnce({
+      collectSignals: () => { throw new Error("collector boom"); },
+      database: db,
+      now: NOW,
+      projectID: "project-a"
+    });
+    expect(failed.status).toBe("failed");
+    expect(failed.error).toBe("collector boom");
+    expect(failed.next_tick_at).toBe("2026-06-02T10:05:00Z");
 
-      const recovered = await runPiHeartbeatOnce({ database: db, now: NOW, projectID: "project-a" });
-      expect(recovered.status).toBe("completed");
-    } finally {
-      db.close();
-    }
+    const recovered = await runPiHeartbeatOnce({ database: db, now: NOW, projectID: "project-a" });
+    expect(recovered.status).toBe("completed");
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-heartbeat-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function insertProject(db: RunnerDatabase, id: string): void {
   db.sqlite.run(

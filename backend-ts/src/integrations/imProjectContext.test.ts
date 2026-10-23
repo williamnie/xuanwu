@@ -1,27 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import { afterEach } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { setFeishuConversationActiveProject } from "../db/repositories/feishuConversationState.ts";
 import {
   resolveImProjectContext,
   resolveImProjectContextFromDatabase
 } from "./imProjectContext.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
 const PROJECTS = [
   { id: "xuanwu", name: "Xuanwu" },
   { id: "demo", name: "Demo Project" }
 ];
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const root = tempRoots.pop();
-    if (root) await rm(root, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("Feishu PI project context resolver", () => {
   test("resolves a project from an explicit issue reference", () => {
@@ -186,50 +179,40 @@ describe("Feishu PI project context resolver", () => {
 
   test("loads issues, projects, active state, and fallback mapping from database inputs", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "xuanwu", "Xuanwu");
-      insertProject(db, "demo", "Demo Project");
-      insertIssue(db, 386, "xuanwu");
-      setFeishuConversationActiveProject(db, {
-        activeConversationId: "feishu-chat-oc_group-20260613",
-        activeProjectId: "demo",
-        scopeKey: "feishu-chat-oc_group-20260613",
-        source: "user_switch"
-      }, new Date("2026-06-13T03:00:00Z"));
+    insertProject(db, "xuanwu", "Xuanwu");
+    insertProject(db, "demo", "Demo Project");
+    insertIssue(db, 386, "xuanwu");
+    setFeishuConversationActiveProject(db, {
+      activeConversationId: "feishu-chat-oc_group-20260613",
+      activeProjectId: "demo",
+      scopeKey: "feishu-chat-oc_group-20260613",
+      source: "user_switch"
+    }, new Date("2026-06-13T03:00:00Z"));
 
-      expect(resolveImProjectContextFromDatabase(db, {
-        mappings: [{ chatId: "oc_group", projectId: "demo" }],
-        message: { chatId: "oc_group" },
-        scopeKey: "feishu-chat-oc_group-20260613",
-        text: "开始 #386"
-      })).toMatchObject({
-        projectId: "xuanwu",
-        reason: "issue_ref_project",
-        source: "issue_ref",
-        status: "resolved"
-      });
-      expect(resolveImProjectContextFromDatabase(db, {
-        mappings: [{ chatId: "oc_group", projectId: "demo" }],
-        message: { chatId: "oc_group" },
-        scopeKey: "feishu-chat-oc_group-20260613",
-        text: "开始做吧"
-      })).toMatchObject({
-        projectId: "demo",
-        reason: "source_mapping_project",
-        source: "mapping_default",
-        status: "resolved"
-      });
-    } finally {
-      db.close();
-    }
+    expect(resolveImProjectContextFromDatabase(db, {
+      mappings: [{ chatId: "oc_group", projectId: "demo" }],
+      message: { chatId: "oc_group" },
+      scopeKey: "feishu-chat-oc_group-20260613",
+      text: "开始 #386"
+    })).toMatchObject({
+      projectId: "xuanwu",
+      reason: "issue_ref_project",
+      source: "issue_ref",
+      status: "resolved"
+    });
+    expect(resolveImProjectContextFromDatabase(db, {
+      mappings: [{ chatId: "oc_group", projectId: "demo" }],
+      message: { chatId: "oc_group" },
+      scopeKey: "feishu-chat-oc_group-20260613",
+      text: "开始做吧"
+    })).toMatchObject({
+      projectId: "demo",
+      reason: "source_mapping_project",
+      source: "mapping_default",
+      status: "resolved"
+    });
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-project-context-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function insertProject(db: RunnerDatabase, id: string, name: string): void {
   db.sqlite.run(

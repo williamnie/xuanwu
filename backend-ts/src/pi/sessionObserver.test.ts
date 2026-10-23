@@ -1,62 +1,45 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { listProjectSessionProgress, observeSessionProgress } from "./sessionObserver.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-session-observer-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("session progress observer", () => {
   test("summarizes active, done, and error sessions without long logs", async () => {
     const db = await openFixtureDatabase();
     const longLog = "line ".repeat(120);
-    try {
-      insertProject(db, "demo");
-      const active = insertIssue(db, "demo", "in_progress", "Active task", 1);
-      const done = insertIssue(db, "demo", "done", "Done task", 2);
-      const error = insertIssue(db, "demo", "failed", "Error task", 3);
-      insertSession(db, active, "thread-active", "running", 4);
-      insertSession(db, done, "thread-done", "completed", 5);
-      insertSession(db, error, "thread-error", "failed", 6);
-      insertRun(db, active, "thread-active", "in_progress", 1);
-      insertRun(db, done, "thread-done", "done", 2, "2026-01-02T00:30:00Z");
-      insertRun(db, error, "thread-error", "failed", 3, "2026-01-03T00:30:00Z", "AUTH_TOKEN=secret");
-      insertIssueLog(db, active, { type: "text", text: `working ${longLog}` }, 4);
-      insertIssueLog(db, error, { type: "error", error: `CODEX_API_KEY=secret failed ${longLog}` }, 6);
+    insertProject(db, "demo");
+    const active = insertIssue(db, "demo", "in_progress", "Active task", 1);
+    const done = insertIssue(db, "demo", "done", "Done task", 2);
+    const error = insertIssue(db, "demo", "failed", "Error task", 3);
+    insertSession(db, active, "thread-active", "running", 4);
+    insertSession(db, done, "thread-done", "completed", 5);
+    insertSession(db, error, "thread-error", "failed", 6);
+    insertRun(db, active, "thread-active", "in_progress", 1);
+    insertRun(db, done, "thread-done", "done", 2, "2026-01-02T00:30:00Z");
+    insertRun(db, error, "thread-error", "failed", 3, "2026-01-03T00:30:00Z", "AUTH_TOKEN=secret");
+    insertIssueLog(db, active, { type: "text", text: `working ${longLog}` }, 4);
+    insertIssueLog(db, error, { type: "error", error: `CODEX_API_KEY=secret failed ${longLog}` }, 6);
 
-      const activeSummary = observeSessionProgress(db, "codex:thread-active");
-      const activeSummaryByProviderID = observeSessionProgress(db, "thread-active");
-      const doneSummary = observeSessionProgress(db, "codex:thread-done");
-      const errorSummary = observeSessionProgress(db, "codex:thread-error");
+    const activeSummary = observeSessionProgress(db, "codex:thread-active");
+    const activeSummaryByProviderID = observeSessionProgress(db, "thread-active");
+    const doneSummary = observeSessionProgress(db, "codex:thread-done");
+    const errorSummary = observeSessionProgress(db, "codex:thread-error");
 
-      expect(activeSummary).toMatchObject({ progress_state: "active", session_key: "codex:thread-active" });
-      expect(activeSummaryByProviderID).toEqual(activeSummary);
-      expect(doneSummary).toMatchObject({ progress_state: "done", session_key: "codex:thread-done" });
-      expect(errorSummary).toMatchObject({ progress_state: "error", session_key: "codex:thread-error" });
-      expect(JSON.stringify(activeSummary)).not.toContain(longLog);
-      expect(JSON.stringify(errorSummary)).not.toContain("secret");
-      expect(errorSummary.summary).toContain("[redacted]");
-      expect(activeSummary.recent_events[0]?.summary.length ?? 0).toBeLessThanOrEqual(180);
-      expect(listProjectSessionProgress(db, "demo").map((item) => item.progress_state).sort()).toEqual([
-        "active", "done", "error"
-      ]);
-    } finally {
-      db.close();
-    }
+    expect(activeSummary).toMatchObject({ progress_state: "active", session_key: "codex:thread-active" });
+    expect(activeSummaryByProviderID).toEqual(activeSummary);
+    expect(doneSummary).toMatchObject({ progress_state: "done", session_key: "codex:thread-done" });
+    expect(errorSummary).toMatchObject({ progress_state: "error", session_key: "codex:thread-error" });
+    expect(JSON.stringify(activeSummary)).not.toContain(longLog);
+    expect(JSON.stringify(errorSummary)).not.toContain("secret");
+    expect(errorSummary.summary).toContain("[redacted]");
+    expect(activeSummary.recent_events[0]?.summary.length ?? 0).toBeLessThanOrEqual(180);
+    expect(listProjectSessionProgress(db, "demo").map((item) => item.progress_state).sort()).toEqual([
+      "active", "done", "error"
+    ]);
   });
 });
 

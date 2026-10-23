@@ -1,39 +1,28 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai/compat";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { listPiActions, listPiConversations, listPiMemoryItems } from "../db/repositories/pi.ts";
 import { gatePiActionEnvelope } from "../pi/actionGate.ts";
 import { createDefaultRouter } from "./server.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("Bun project PI control regressions", () => {
   test("manager cycle allows delegated SDK read-only tools", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
+    insertProject(database, "demo");
 
-      expect(delegatedSdkDecisions("demo")).toEqual([
-        { action_type: "sdk.read", decision: "execute" },
-        { action_type: "sdk.grep", decision: "execute" },
-        { action_type: "sdk.find", decision: "execute" },
-        { action_type: "sdk.ls", decision: "execute" }
-      ]);
-    } finally {
-      database.close();
-    }
+    expect(delegatedSdkDecisions("demo")).toEqual([
+      { action_type: "sdk.read", decision: "execute" },
+      { action_type: "sdk.grep", decision: "execute" },
+      { action_type: "sdk.find", decision: "execute" },
+      { action_type: "sdk.ls", decision: "execute" }
+    ]);
   });
 
   test("manager cycle rejects status snapshots instead of creating memory candidates", async () => {
@@ -71,7 +60,6 @@ describe("Bun project PI control regressions", () => {
       expect(listPiMemoryItems(database)).toEqual([]);
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -94,16 +82,9 @@ describe("Bun project PI control regressions", () => {
       expect(listPiConversations(database, { includeInternal: true, projectId: "demo" })).toHaveLength(1);
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-project-control-regression-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function delegatedSdkDecisions(projectID: string): Array<{ action_type: string; decision: string }> {
   const policy = managerPolicy(projectID);

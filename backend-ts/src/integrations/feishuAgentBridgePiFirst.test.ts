@@ -1,19 +1,15 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { createPiNotificationIntent, listPiGuardianEvents } from "../db/repositories/pi.ts";
 import { createHumanReviewRequest } from "../domain/review/humanReview.ts";
 import { buildFeishuConnectorConfig, normalizeFeishuMessageEvent } from "./feishu.ts";
 import { createFeishuAgentBridge } from "./feishuAgentBridge.ts";
 import { ingestFeishuMessageEvent } from "./feishuIngest.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) await rm(tempRoots.pop() ?? "", { recursive: true, force: true });
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("Feishu agent bridge PI-first boundary", () => {
   test("passes every semantic message to PI unchanged instead of executing command parsers", async () => {
@@ -124,12 +120,6 @@ describe("Feishu agent bridge PI-first boundary", () => {
     database.close();
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-pi-first-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function normalizeEvent(
   text: string,

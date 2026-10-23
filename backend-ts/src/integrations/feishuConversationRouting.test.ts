@@ -1,141 +1,114 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import type { FeishuNormalizedMessageEvent } from "./feishu.ts";
 import { routeFeishuConversation } from "./feishuConversationRouting.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const root = tempRoots.pop();
-    if (root) await rm(root, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("Feishu conversation routing", () => {
   test("reuses one stable conversation for ordinary chat messages", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const first = routeFeishuConversation(db, {
-        clock: fixedClock("2026-06-13T01:02:03Z"),
-        event: eventFixture({ message_id: "om_1" }),
-        prompt: "hi"
-      });
-      const second = routeFeishuConversation(db, {
-        clock: fixedClock("2026-06-13T22:00:00Z"),
-        event: eventFixture({ message_id: "om_2" }),
-        prompt: "next"
-      });
+    const first = routeFeishuConversation(db, {
+      clock: fixedClock("2026-06-13T01:02:03Z"),
+      event: eventFixture({ message_id: "om_1" }),
+      prompt: "hi"
+    });
+    const second = routeFeishuConversation(db, {
+      clock: fixedClock("2026-06-13T22:00:00Z"),
+      event: eventFixture({ message_id: "om_2" }),
+      prompt: "next"
+    });
 
-      expect(first.conversationId).toBe("feishu-chat-oc_group");
-      expect(second.conversationId).toBe("feishu-chat-oc_group");
-      expect(first.prompt).toBe("hi");
-      expect(second.prompt).toBe("next");
-      expect(db.sqlite.query<{ connector_id: string }, []>(
-        "select connector_id from im_conversation_state"
-      ).get()?.connector_id).toBe("feishu");
-    } finally {
-      db.close();
-    }
+    expect(first.conversationId).toBe("feishu-chat-oc_group");
+    expect(second.conversationId).toBe("feishu-chat-oc_group");
+    expect(first.prompt).toBe("hi");
+    expect(second.prompt).toBe("next");
+    expect(db.sqlite.query<{ connector_id: string }, []>(
+      "select connector_id from im_conversation_state"
+    ).get()?.connector_id).toBe("feishu");
   });
 
   test("keeps the stable conversation when an ordinary chat crosses days", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const today = routeFeishuConversation(db, {
-        clock: fixedClock("2026-06-13T23:59:00Z"),
-        event: eventFixture({ message_id: "om_today" }),
-        prompt: "today"
-      });
-      const tomorrow = routeFeishuConversation(db, {
-        clock: fixedClock("2026-06-14T00:01:00Z"),
-        event: eventFixture({ message_id: "om_tomorrow" }),
-        prompt: "tomorrow"
-      });
+    const today = routeFeishuConversation(db, {
+      clock: fixedClock("2026-06-13T23:59:00Z"),
+      event: eventFixture({ message_id: "om_today" }),
+      prompt: "today"
+    });
+    const tomorrow = routeFeishuConversation(db, {
+      clock: fixedClock("2026-06-14T00:01:00Z"),
+      event: eventFixture({ message_id: "om_tomorrow" }),
+      prompt: "tomorrow"
+    });
 
-      expect(today.conversationId).toBe("feishu-chat-oc_group");
-      expect(tomorrow.conversationId).toBe("feishu-chat-oc_group");
-    } finally {
-      db.close();
-    }
+    expect(today.conversationId).toBe("feishu-chat-oc_group");
+    expect(tomorrow.conversationId).toBe("feishu-chat-oc_group");
   });
 
   test("prioritizes stable thread and root ids over chat routing", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const threaded = routeFeishuConversation(db, {
-        clock: fixedClock("2026-06-13T01:02:03Z"),
-        event: eventFixture({ message_id: "om_thread", thread_id: "omt_thread" }),
-        prompt: "thread"
-      });
-      const rooted = routeFeishuConversation(db, {
-        clock: fixedClock("2026-06-14T01:02:03Z"),
-        event: eventFixture({ message_id: "om_root", root_id: "om_root_parent" }),
-        prompt: "root"
-      });
+    const threaded = routeFeishuConversation(db, {
+      clock: fixedClock("2026-06-13T01:02:03Z"),
+      event: eventFixture({ message_id: "om_thread", thread_id: "omt_thread" }),
+      prompt: "thread"
+    });
+    const rooted = routeFeishuConversation(db, {
+      clock: fixedClock("2026-06-14T01:02:03Z"),
+      event: eventFixture({ message_id: "om_root", root_id: "om_root_parent" }),
+      prompt: "root"
+    });
 
-      expect(threaded.conversationId).toBe("feishu-thread-omt_thread");
-      expect(rooted.conversationId).toBe("feishu-thread-om_root_parent");
-    } finally {
-      db.close();
-    }
+    expect(threaded.conversationId).toBe("feishu-thread-omt_thread");
+    expect(rooted.conversationId).toBe("feishu-thread-om_root_parent");
   });
 
   test("sanitizes Feishu ids while keeping stable route prefixes", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const route = routeFeishuConversation(db, {
-        clock: fixedClock("2026-06-13T01:02:03Z"),
-        event: eventFixture({ chat_id: "oc.group:1/2", message_id: "om:1/2" }),
-        prompt: "sanitize"
-      });
+    const route = routeFeishuConversation(db, {
+      clock: fixedClock("2026-06-13T01:02:03Z"),
+      event: eventFixture({ chat_id: "oc.group:1/2", message_id: "om:1/2" }),
+      prompt: "sanitize"
+    });
 
-      expect(route.scopeKey).toBe("feishu-chat-oc-group-1-2");
-      expect(route.conversationId).toBe("feishu-chat-oc-group-1-2");
-    } finally {
-      db.close();
-    }
+    expect(route.scopeKey).toBe("feishu-chat-oc-group-1-2");
+    expect(route.conversationId).toBe("feishu-chat-oc-group-1-2");
   });
 
   test("/new starts a new epoch and strips the command prompt", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const reset = routeFeishuConversation(db, {
-        clock: fixedClock("2026-06-13T01:02:03Z"),
-        event: eventFixture({ message_id: "om_new" }),
-        prompt: "/new 继续新的上下文"
-      });
-      const next = routeFeishuConversation(db, {
-        clock: fixedClock("2026-06-13T02:00:00Z"),
-        event: eventFixture({ message_id: "om_after_new" }),
-        prompt: "下一句"
-      });
-      const secondReset = routeFeishuConversation(db, {
-        clock: fixedClock("2026-06-13T03:00:00Z"),
-        event: eventFixture({ message_id: "om_new_2" }),
-        prompt: "/new"
-      });
+    const reset = routeFeishuConversation(db, {
+      clock: fixedClock("2026-06-13T01:02:03Z"),
+      event: eventFixture({ message_id: "om_new" }),
+      prompt: "/new 继续新的上下文"
+    });
+    const next = routeFeishuConversation(db, {
+      clock: fixedClock("2026-06-13T02:00:00Z"),
+      event: eventFixture({ message_id: "om_after_new" }),
+      prompt: "下一句"
+    });
+    const secondReset = routeFeishuConversation(db, {
+      clock: fixedClock("2026-06-13T03:00:00Z"),
+      event: eventFixture({ message_id: "om_new_2" }),
+      prompt: "/new"
+    });
 
-      expect(reset).toMatchObject({
-        conversationId: "feishu-chat-oc_group-n1",
-        epoch: 1,
-        isNewCommand: true,
-        prompt: "继续新的上下文"
-      });
-      expect(next.conversationId).toBe("feishu-chat-oc_group-n1");
-      expect(next.prompt).toBe("下一句");
-      expect(secondReset).toMatchObject({
-        conversationId: "feishu-chat-oc_group-n2",
-        epoch: 2,
-        isNewCommand: true,
-        prompt: ""
-      });
-    } finally {
-      db.close();
-    }
+    expect(reset).toMatchObject({
+      conversationId: "feishu-chat-oc_group-n1",
+      epoch: 1,
+      isNewCommand: true,
+      prompt: "继续新的上下文"
+    });
+    expect(next.conversationId).toBe("feishu-chat-oc_group-n1");
+    expect(next.prompt).toBe("下一句");
+    expect(secondReset).toMatchObject({
+      conversationId: "feishu-chat-oc_group-n2",
+      epoch: 2,
+      isNewCommand: true,
+      prompt: ""
+    });
   });
 
   test("adopts the newest legacy daily conversation without losing its reset epoch", async () => {
@@ -172,30 +145,20 @@ describe("Feishu conversation routing", () => {
 
   test("falls back to message scoped conversations when chat id is missing", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const route = routeFeishuConversation(db, {
-        clock: fixedClock("2026-06-13T01:02:03Z"),
-        event: eventFixture({ chat_id: "", message_id: "om_message_only" }),
-        prompt: "message scope"
-      });
+    const route = routeFeishuConversation(db, {
+      clock: fixedClock("2026-06-13T01:02:03Z"),
+      event: eventFixture({ chat_id: "", message_id: "om_message_only" }),
+      prompt: "message scope"
+    });
 
-      expect(route.scopeKey).toBe("feishu-message-om_message_only");
-      expect(route.conversationId).toBe("feishu-message-om_message_only");
-      // Message-level one-shot scopes are never persisted (design §7.1).
-      expect(db.sqlite.query<{ count: number }, []>(
-        "select count(*) as count from im_conversation_state"
-      ).get()).toEqual({ count: 0 });
-    } finally {
-      db.close();
-    }
+    expect(route.scopeKey).toBe("feishu-message-om_message_only");
+    expect(route.conversationId).toBe("feishu-message-om_message_only");
+    // Message-level one-shot scopes are never persisted (design §7.1).
+    expect(db.sqlite.query<{ count: number }, []>(
+      "select count(*) as count from im_conversation_state"
+    ).get()).toEqual({ count: 0 });
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-route-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function fixedClock(localIso: string) {
   return { now: () => localDate(localIso) };

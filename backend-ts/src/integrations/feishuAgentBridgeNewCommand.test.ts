@@ -1,21 +1,14 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { buildFeishuConnectorConfig, normalizeFeishuMessageEvent } from "./feishu.ts";
 import { createFeishuAgentBridge } from "./feishuAgentBridge.ts";
 import type { FeishuTextMessageInput } from "./feishuClient.ts";
 import { ingestFeishuMessageEvent } from "./feishuIngest.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const root = tempRoots.pop();
-    if (root) await rm(root, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("Feishu agent bridge /new command", () => {
   test("starts a new Feishu PI conversation epoch and strips the command prompt", async () => {
@@ -97,12 +90,6 @@ describe("Feishu agent bridge /new command", () => {
     database.close();
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-agent-new-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function configFixture() {
   return buildFeishuConnectorConfig({

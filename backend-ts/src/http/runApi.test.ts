@@ -1,8 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import { piManifest } from "../providers/pi/factory.ts";
 import { providerSessionDetail } from "../providers/core/sessionView.ts";
@@ -15,17 +14,11 @@ import type {
 } from "../providers/types.ts";
 import { slowRunListLogEntry } from "./runApi.ts";
 import { createDefaultRouter, createRequestHandler } from "./server.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const AUTH_TOKEN = "run-api-test-token";
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("Run HTTP API", () => {
   test("builds a bounded slow-list diagnostic without exposing filter values", () => {
@@ -53,237 +46,221 @@ describe("Run HTTP API", () => {
   test("exposes a Pi Run session reference and provider-neutral transcript drill-down", async () => {
     const db = await openFixtureDatabase();
     const provider = new PiRunDetailProvider();
-    try {
-      insertProject(db, "demo");
-      const issueID = insertIssue(db, "demo", "Pi transcript", "failed");
-      const runID = insertRun(db, issueID, "failed", {
-        endedAt: timestamp(2),
-        provider: "pi-coding-agent",
-        sessionID: "pi-session-1",
-        startedAt: timestamp(1)
-      });
-      upsertAgentSession(db, {
-        issue_id: issueID,
-        project_id: "demo",
-        provider: "pi-coding-agent",
-        provider_session_id: "pi-session-1",
-        status: "failed"
-      });
-      const router = createDefaultRouter({ database: db, providers: { "pi-coding-agent": provider } });
+    insertProject(db, "demo");
+    const issueID = insertIssue(db, "demo", "Pi transcript", "failed");
+    const runID = insertRun(db, issueID, "failed", {
+      endedAt: timestamp(2),
+      provider: "pi-coding-agent",
+      sessionID: "pi-session-1",
+      startedAt: timestamp(1)
+    });
+    upsertAgentSession(db, {
+      issue_id: issueID,
+      project_id: "demo",
+      provider: "pi-coding-agent",
+      provider_session_id: "pi-session-1",
+      status: "failed"
+    });
+    const router = createDefaultRouter({ database: db, providers: { "pi-coding-agent": provider } });
 
-      const runResponse = await router.handle(new Request(`${BASE_URL}/api/runs/${encodeURIComponent(runID)}`));
-      const runBody = await runResponse.json() as Record<string, any>;
-      const sessionRef = runBody.run.attempts[0].provider_ref.observation_ref;
-      const sessionResponse = await router.handle(new Request(
-        `${BASE_URL}/api/sessions/${encodeURIComponent(sessionRef)}`
-      ));
-      const turnsResponse = await router.handle(new Request(
-        `${BASE_URL}/api/sessions/${encodeURIComponent(sessionRef)}/turns?items_view=summary&limit=20`
-      ));
+    const runResponse = await router.handle(new Request(`${BASE_URL}/api/runs/${encodeURIComponent(runID)}`));
+    const runBody = await runResponse.json() as Record<string, any>;
+    const sessionRef = runBody.run.attempts[0].provider_ref.observation_ref;
+    const sessionResponse = await router.handle(new Request(
+      `${BASE_URL}/api/sessions/${encodeURIComponent(sessionRef)}`
+    ));
+    const turnsResponse = await router.handle(new Request(
+      `${BASE_URL}/api/sessions/${encodeURIComponent(sessionRef)}/turns?items_view=summary&limit=20`
+    ));
 
-      expect(runResponse.status).toBe(200);
-      expect(runBody.run).toMatchObject({
-        provider: "pi-coding-agent",
-        attempts: [{
-          agent_session_key: "pi-coding-agent:pi-session-1",
-          links: { provider_session: expect.stringContaining("pi-coding-agent%3Api-session-1") },
-          provider_ref: {
-            observation_ref: "pi-coding-agent:pi-session-1",
-            provider: "pi-coding-agent",
-            session_ref: "pi-session-1"
-          }
-        }]
-      });
-      expect(sessionResponse.status).toBe(200);
-      expect(await sessionResponse.json()).toMatchObject({
-        id: "pi-coding-agent:pi-session-1",
-        provider: "pi-coding-agent",
-        turns: []
-      });
-      expect(turnsResponse.status).toBe(200);
-      expect(await turnsResponse.json()).toMatchObject({
-        data: [{ items: [
-          { type: "userMessage" },
-          { type: "reasoning" },
-          { type: "agentMessage" },
-          { type: "custom_tool_call" },
-          { type: "custom_tool_call_output" }
-        ] }]
-      });
-    } finally {
-      db.close();
-    }
+    expect(runResponse.status).toBe(200);
+    expect(runBody.run).toMatchObject({
+      provider: "pi-coding-agent",
+      attempts: [{
+        agent_session_key: "pi-coding-agent:pi-session-1",
+        links: { provider_session: expect.stringContaining("pi-coding-agent%3Api-session-1") },
+        provider_ref: {
+          observation_ref: "pi-coding-agent:pi-session-1",
+          provider: "pi-coding-agent",
+          session_ref: "pi-session-1"
+        }
+      }]
+    });
+    expect(sessionResponse.status).toBe(200);
+    expect(await sessionResponse.json()).toMatchObject({
+      id: "pi-coding-agent:pi-session-1",
+      provider: "pi-coding-agent",
+      turns: []
+    });
+    expect(turnsResponse.status).toBe(200);
+    expect(await turnsResponse.json()).toMatchObject({
+      data: [{ items: [
+        { type: "userMessage" },
+        { type: "reasoning" },
+        { type: "agentMessage" },
+        { type: "custom_tool_call" },
+        { type: "custom_tool_call_output" }
+      ] }]
+    });
   });
 
   test("returns bounded agent messages for the selected Run Attempt without loading full provider history", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueID = insertIssue(db, "demo", "Codex transcript", "in_progress");
-      const runID = insertRun(db, issueID, "in_progress", {
-        provider: "codex",
-        sessionID: "thread-transcript",
-        startedAt: timestamp(1),
-        turnID: "turn-transcript"
-      });
-      const attemptID = db.sqlite.query<{ attempt_id: string }, [string]>(
-        "select attempt_id from run_attempts where run_id=?"
-      ).get(runID)?.attempt_id ?? "";
-      insertTranscriptMessage(db, issueID, runID, attemptID, 2, "commentary-1", "commentary", "我先检查当前实现。");
-      insertTranscriptMessage(db, issueID, runID, attemptID, 3, "final-1", "final_answer", "修复完成。");
-      insertTranscriptMessage(db, issueID, runID, `${attemptID}-other`, 4, "other", "commentary", "其他 Attempt");
-      const router = createDefaultRouter({ database: db });
+    insertProject(db, "demo");
+    const issueID = insertIssue(db, "demo", "Codex transcript", "in_progress");
+    const runID = insertRun(db, issueID, "in_progress", {
+      provider: "codex",
+      sessionID: "thread-transcript",
+      startedAt: timestamp(1),
+      turnID: "turn-transcript"
+    });
+    const attemptID = db.sqlite.query<{ attempt_id: string }, [string]>(
+      "select attempt_id from run_attempts where run_id=?"
+    ).get(runID)?.attempt_id ?? "";
+    insertTranscriptMessage(db, issueID, runID, attemptID, 2, "commentary-1", "commentary", "我先检查当前实现。");
+    insertTranscriptMessage(db, issueID, runID, attemptID, 3, "final-1", "final_answer", "修复完成。");
+    insertTranscriptMessage(db, issueID, runID, `${attemptID}-other`, 4, "other", "commentary", "其他 Attempt");
+    const router = createDefaultRouter({ database: db });
 
-      const response = await router.handle(new Request(
-        `${BASE_URL}/api/runs/${encodeURIComponent(runID)}/transcript?attempt_id=${encodeURIComponent(attemptID)}&limit=20`
-      ));
-      const body = await response.json() as Record<string, any>;
-      const latestPage = await router.handle(new Request(
-        `${BASE_URL}/api/runs/${encodeURIComponent(runID)}/transcript?attempt_id=${encodeURIComponent(attemptID)}&limit=1`
-      ));
-      const latestBody = await latestPage.json() as Record<string, any>;
-      const olderPage = await router.handle(new Request(
-        `${BASE_URL}/api/runs/${encodeURIComponent(runID)}/transcript?attempt_id=${encodeURIComponent(attemptID)}&limit=1&before_id=${latestBody.nextCursor}`
-      ));
+    const response = await router.handle(new Request(
+      `${BASE_URL}/api/runs/${encodeURIComponent(runID)}/transcript?attempt_id=${encodeURIComponent(attemptID)}&limit=20`
+    ));
+    const body = await response.json() as Record<string, any>;
+    const latestPage = await router.handle(new Request(
+      `${BASE_URL}/api/runs/${encodeURIComponent(runID)}/transcript?attempt_id=${encodeURIComponent(attemptID)}&limit=1`
+    ));
+    const latestBody = await latestPage.json() as Record<string, any>;
+    const olderPage = await router.handle(new Request(
+      `${BASE_URL}/api/runs/${encodeURIComponent(runID)}/transcript?attempt_id=${encodeURIComponent(attemptID)}&limit=1&before_id=${latestBody.nextCursor}`
+    ));
 
-      expect(response.status).toBe(200);
-      expect(body).toMatchObject({
-        data: [
-          { id: "commentary-1", phase: "commentary", provider_turn_id: "turn-transcript", text: "我先检查当前实现。", type: "agentMessage" },
-          { id: "final-1", phase: "final_answer", provider_turn_id: "turn-transcript", text: "修复完成。", type: "agentMessage" }
-        ],
-        nextCursor: ""
-      });
-      expect(JSON.stringify(body)).not.toContain("其他 Attempt");
-      expect(latestBody).toMatchObject({ data: [{ id: "final-1" }], nextCursor: expect.any(String) });
-      expect(await olderPage.json()).toMatchObject({ data: [{ id: "commentary-1" }], nextCursor: "" });
-    } finally {
-      db.close();
-    }
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      data: [
+        { id: "commentary-1", phase: "commentary", provider_turn_id: "turn-transcript", text: "我先检查当前实现。", type: "agentMessage" },
+        { id: "final-1", phase: "final_answer", provider_turn_id: "turn-transcript", text: "修复完成。", type: "agentMessage" }
+      ],
+      nextCursor: ""
+    });
+    expect(JSON.stringify(body)).not.toContain("其他 Attempt");
+    expect(latestBody).toMatchObject({ data: [{ id: "final-1" }], nextCursor: expect.any(String) });
+    expect(await olderPage.json()).toMatchObject({ data: [{ id: "commentary-1" }], nextCursor: "" });
   });
 
   test("lists and details a large Run set with bounded pagination and dimension filters", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      insertProject(db, "other");
-      for (let index = 1; index <= 125; index += 1) {
-        const issueID = insertIssue(db, "demo", `Work ${String(index).padStart(3, "0")}`, "done");
-        insertRun(db, issueID, "succeeded", {
-          endedAt: timestamp(index + 200),
-          sessionID: `session-${index}`,
-          startedAt: timestamp(index),
-          turnID: `turn-${index}`
-        });
-      }
-      const otherIssueID = insertIssue(db, "other", "Other Work", "failed");
-      insertRun(db, otherIssueID, "failed", { endedAt: timestamp(500), startedAt: timestamp(499) });
-      const router = createDefaultRouter({ database: db });
-
-      const response = await router.handle(new Request(
-        `${BASE_URL}/api/runs?project_id=demo&provider=codex&status=succeeded&sort=created_at&order=asc&page=3&page_size=50`
-      ));
-      const body = await response.json() as Record<string, any>;
-      const invalidPage = await router.handle(new Request(`${BASE_URL}/api/runs?page_size=101`));
-      const missingProject = await router.handle(new Request(`${BASE_URL}/api/runs?project_id=missing`));
-      const runID = String(body.items[0]?.id);
-      const workID = String(body.items[0]?.work_id);
-      const workFiltered = await router.handle(new Request(
-        `${BASE_URL}/api/runs?work_id=${encodeURIComponent(workID)}`
-      ));
-      const detail = await router.handle(new Request(`${BASE_URL}/api/runs/${encodeURIComponent(runID)}`));
-      const detailBody = await detail.json() as Record<string, any>;
-
-      expect(response.status).toBe(200);
-      expect(body).toMatchObject({
-        page: 3,
-        page_size: 50,
-        total: 125,
-        total_pages: 3
+    insertProject(db, "demo");
+    insertProject(db, "other");
+    for (let index = 1; index <= 125; index += 1) {
+      const issueID = insertIssue(db, "demo", `Work ${String(index).padStart(3, "0")}`, "done");
+      insertRun(db, issueID, "succeeded", {
+        endedAt: timestamp(index + 200),
+        sessionID: `session-${index}`,
+        startedAt: timestamp(index),
+        turnID: `turn-${index}`
       });
-      expect(body.items).toHaveLength(25);
-      expect(body).not.toHaveProperty("compatibility");
-      expect(body.items[0]).not.toHaveProperty("legacy");
-      expect(body.items[0]).toMatchObject({
-        attempt_count: 1,
-        progress: { attempt_status: "succeeded", phase: "succeeded", projection_mode: "list_summary" },
-        project_id: "demo",
-        provider: "codex",
-        status: "succeeded",
-        trigger: "initial"
-      });
-      expect(invalidPage.status).toBe(400);
-      expect(await invalidPage.json()).toEqual({ code: "invalid_request", message: "page_size must not exceed 100" });
-      expect(missingProject.status).toBe(404);
-      expect(workFiltered.status).toBe(200);
-      expect(await workFiltered.json()).toMatchObject({ items: [{ id: runID, work_id: workID }], total: 1 });
-      expect(detail.status).toBe(200);
-      expect(detailBody.run).toMatchObject({
-        attempts: [{
-          kind: "initial",
-          links: { provider_session: expect.stringContaining("/api/sessions/") },
-          provider_ref: { session_ref: expect.any(String), turn_ref: expect.any(String) },
-          status: "succeeded"
-        }],
-        cost: { usage: { completeness: "unavailable" } },
-        links: {
-          evidence: expect.stringContaining("/api/evidence?run_id="),
-          lifecycle_audit: expect.stringContaining("run.lifecycle.intent.v1"),
-          logs: expect.stringContaining("type=issue.log")
-        }
-      });
-      expect(detailBody.run.progress.projection_mode).toBe("read_through_rebuild");
-      expect(detailBody).not.toHaveProperty("compatibility");
-      expect(detailBody.run).not.toHaveProperty("legacy");
-    } finally {
-      db.close();
     }
+    const otherIssueID = insertIssue(db, "other", "Other Work", "failed");
+    insertRun(db, otherIssueID, "failed", { endedAt: timestamp(500), startedAt: timestamp(499) });
+    const router = createDefaultRouter({ database: db });
+
+    const response = await router.handle(new Request(
+      `${BASE_URL}/api/runs?project_id=demo&provider=codex&status=succeeded&sort=created_at&order=asc&page=3&page_size=50`
+    ));
+    const body = await response.json() as Record<string, any>;
+    const invalidPage = await router.handle(new Request(`${BASE_URL}/api/runs?page_size=101`));
+    const missingProject = await router.handle(new Request(`${BASE_URL}/api/runs?project_id=missing`));
+    const runID = String(body.items[0]?.id);
+    const workID = String(body.items[0]?.work_id);
+    const workFiltered = await router.handle(new Request(
+      `${BASE_URL}/api/runs?work_id=${encodeURIComponent(workID)}`
+    ));
+    const detail = await router.handle(new Request(`${BASE_URL}/api/runs/${encodeURIComponent(runID)}`));
+    const detailBody = await detail.json() as Record<string, any>;
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      page: 3,
+      page_size: 50,
+      total: 125,
+      total_pages: 3
+    });
+    expect(body.items).toHaveLength(25);
+    expect(body).not.toHaveProperty("compatibility");
+    expect(body.items[0]).not.toHaveProperty("legacy");
+    expect(body.items[0]).toMatchObject({
+      attempt_count: 1,
+      progress: { attempt_status: "succeeded", phase: "succeeded", projection_mode: "list_summary" },
+      project_id: "demo",
+      provider: "codex",
+      status: "succeeded",
+      trigger: "initial"
+    });
+    expect(invalidPage.status).toBe(400);
+    expect(await invalidPage.json()).toEqual({ code: "invalid_request", message: "page_size must not exceed 100" });
+    expect(missingProject.status).toBe(404);
+    expect(workFiltered.status).toBe(200);
+    expect(await workFiltered.json()).toMatchObject({ items: [{ id: runID, work_id: workID }], total: 1 });
+    expect(detail.status).toBe(200);
+    expect(detailBody.run).toMatchObject({
+      attempts: [{
+        kind: "initial",
+        links: { provider_session: expect.stringContaining("/api/sessions/") },
+        provider_ref: { session_ref: expect.any(String), turn_ref: expect.any(String) },
+        status: "succeeded"
+      }],
+      cost: { usage: { completeness: "unavailable" } },
+      links: {
+        evidence: expect.stringContaining("/api/evidence?run_id="),
+        lifecycle_audit: expect.stringContaining("run.lifecycle.intent.v1"),
+        logs: expect.stringContaining("type=issue.log")
+      }
+    });
+    expect(detailBody.run.progress.projection_mode).toBe("read_through_rebuild");
+    expect(detailBody).not.toHaveProperty("compatibility");
+    expect(detailBody.run).not.toHaveProperty("legacy");
   });
 
   test("requires bearer auth and performs idempotent interrupt with audited revisions", async () => {
     const db = await openFixtureDatabase();
     const provider = new ControlProvider();
-    try {
-      insertProject(db, "demo");
-      const issueID = insertIssue(db, "demo", "Interrupt", "in_progress");
-      const runID = insertRun(db, issueID, "in_progress", {
-        sessionID: "thread-interrupt",
-        startedAt: timestamp(1),
-        turnID: "turn-interrupt"
-      });
-      const handle = createRequestHandler(createDefaultRouter({ database: db, providers: { codex: provider } }), AUTH_TOKEN);
-      const payload = {
-        audit: audit("interrupt-1", "user"),
-        expected_attempt_revision: 0,
-        expected_revision: 0
-      };
+    insertProject(db, "demo");
+    const issueID = insertIssue(db, "demo", "Interrupt", "in_progress");
+    const runID = insertRun(db, issueID, "in_progress", {
+      sessionID: "thread-interrupt",
+      startedAt: timestamp(1),
+      turnID: "turn-interrupt"
+    });
+    const handle = createRequestHandler(createDefaultRouter({ database: db, providers: { codex: provider } }), AUTH_TOKEN);
+    const payload = {
+      audit: audit("interrupt-1", "user"),
+      expected_attempt_revision: 0,
+      expected_revision: 0
+    };
 
-      const unauthorized = await handle(jsonRequest(`/api/runs/${encodeURIComponent(runID)}/actions/interrupt`, payload));
-      const interrupted = await handle(authenticatedJsonRequest(
-        `/api/runs/${encodeURIComponent(runID)}/actions/interrupt`, payload
-      ));
-      const replay = await handle(authenticatedJsonRequest(
-        `/api/runs/${encodeURIComponent(runID)}/actions/interrupt`, payload
-      ));
-      const interruptedBody = await interrupted.json() as Record<string, any>;
-      const replayBody = await replay.json() as Record<string, any>;
+    const unauthorized = await handle(jsonRequest(`/api/runs/${encodeURIComponent(runID)}/actions/interrupt`, payload));
+    const interrupted = await handle(authenticatedJsonRequest(
+      `/api/runs/${encodeURIComponent(runID)}/actions/interrupt`, payload
+    ));
+    const replay = await handle(authenticatedJsonRequest(
+      `/api/runs/${encodeURIComponent(runID)}/actions/interrupt`, payload
+    ));
+    const interruptedBody = await interrupted.json() as Record<string, any>;
+    const replayBody = await replay.json() as Record<string, any>;
 
-      expect(unauthorized.status).toBe(401);
-      expect(interrupted.status).toBe(200);
-      expect(replay.status).toBe(200);
-      expect(provider.interrupts).toHaveLength(1);
-      expect(interruptedBody).toMatchObject({
-        mutation: { action: "interrupt", applied: true, audit_event_id: "interrupt-1", replayed: false },
-        run: { progress: { attempt_status: "interrupted" }, revision: 2 }
-      });
-      expect(replayBody.mutation.replayed).toBe(true);
-      expect(lifecycleEvents(db, issueID, "interrupt-1")).toEqual([
-        "run.lifecycle.intent.v1",
-        "run.lifecycle.outcome.v1"
-      ]);
-    } finally {
-      db.close();
-    }
+    expect(unauthorized.status).toBe(401);
+    expect(interrupted.status).toBe(200);
+    expect(replay.status).toBe(200);
+    expect(provider.interrupts).toHaveLength(1);
+    expect(interruptedBody).toMatchObject({
+      mutation: { action: "interrupt", applied: true, audit_event_id: "interrupt-1", replayed: false },
+      run: { progress: { attempt_status: "interrupted" }, revision: 2 }
+    });
+    expect(replayBody.mutation.replayed).toBe(true);
+    expect(lifecycleEvents(db, issueID, "interrupt-1")).toEqual([
+      "run.lifecycle.intent.v1",
+      "run.lifecycle.outcome.v1"
+    ]);
   });
 
   test("resumes the same provider session once and rejects a stale concurrent command", async () => {
@@ -351,72 +328,64 @@ describe("Run HTTP API", () => {
 
   test("serializes retry by expected revision and records rejected concurrent requests", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueID = insertIssue(db, "demo", "Retry", "failed");
-      const runID = insertRun(db, issueID, "failed", {
-        endedAt: timestamp(2),
-        startedAt: timestamp(1)
-      });
-      const handle = createRequestHandler(createDefaultRouter({ database: db }), AUTH_TOKEN);
-      const payload = { audit: audit("retry-1", "user"), expected_revision: 0 };
+    insertProject(db, "demo");
+    const issueID = insertIssue(db, "demo", "Retry", "failed");
+    const runID = insertRun(db, issueID, "failed", {
+      endedAt: timestamp(2),
+      startedAt: timestamp(1)
+    });
+    const handle = createRequestHandler(createDefaultRouter({ database: db }), AUTH_TOKEN);
+    const payload = { audit: audit("retry-1", "user"), expected_revision: 0 };
 
-      const retried = await handle(authenticatedJsonRequest(
-        `/api/runs/${encodeURIComponent(runID)}/actions/retry`, payload
-      ));
-      const replay = await handle(authenticatedJsonRequest(
-        `/api/runs/${encodeURIComponent(runID)}/actions/retry`, payload
-      ));
-      const stale = await handle(authenticatedJsonRequest(
-        `/api/runs/${encodeURIComponent(runID)}/actions/retry`, {
-          audit: audit("retry-stale", "user"),
-          expected_revision: 0
-        }
-      ));
-      const retriedBody = await retried.json() as Record<string, any>;
-      const staleBody = await stale.json() as Record<string, any>;
+    const retried = await handle(authenticatedJsonRequest(
+      `/api/runs/${encodeURIComponent(runID)}/actions/retry`, payload
+    ));
+    const replay = await handle(authenticatedJsonRequest(
+      `/api/runs/${encodeURIComponent(runID)}/actions/retry`, payload
+    ));
+    const stale = await handle(authenticatedJsonRequest(
+      `/api/runs/${encodeURIComponent(runID)}/actions/retry`, {
+        audit: audit("retry-stale", "user"),
+        expected_revision: 0
+      }
+    ));
+    const retriedBody = await retried.json() as Record<string, any>;
+    const staleBody = await stale.json() as Record<string, any>;
 
-      expect(retried.status).toBe(200);
-      expect(replay.status).toBe(200);
-      expect(stale.status).toBe(409);
-      expect(retriedBody).toMatchObject({
-        mutation: { action: "retry", applied: true, operation: "retry", requested_sequence: 2 },
-        run: { revision: 1 }
-      });
-      expect(staleBody).toMatchObject({
-        code: "run_precondition_failed",
-        mutation: { action: "retry", audit_event_id: "retry-stale", operation: "retry" },
-        violations: expect.arrayContaining([
-          "Run revision mismatch: expected 0, actual 1",
-          "a new Run request is already pending"
-        ])
-      });
-      expect(issueStatus(db, issueID)).toBe("todo");
-      expect(lifecycleEvents(db, issueID, "retry-1")).toEqual(["run.lifecycle.run_requested.v1"]);
-    } finally {
-      db.close();
-    }
+    expect(retried.status).toBe(200);
+    expect(replay.status).toBe(200);
+    expect(stale.status).toBe(409);
+    expect(retriedBody).toMatchObject({
+      mutation: { action: "retry", applied: true, operation: "retry", requested_sequence: 2 },
+      run: { revision: 1 }
+    });
+    expect(staleBody).toMatchObject({
+      code: "run_precondition_failed",
+      mutation: { action: "retry", audit_event_id: "retry-stale", operation: "retry" },
+      violations: expect.arrayContaining([
+        "Run revision mismatch: expected 0, actual 1",
+        "a new Run request is already pending"
+      ])
+    });
+    expect(issueStatus(db, issueID)).toBe("todo");
+    expect(lifecycleEvents(db, issueID, "retry-1")).toEqual(["run.lifecycle.run_requested.v1"]);
   });
 
   test("rejects untrusted actor kinds before writing lifecycle audit", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueID = insertIssue(db, "demo", "Permission", "failed");
-      const runID = insertRun(db, issueID, "failed", { endedAt: timestamp(2), startedAt: timestamp(1) });
-      const handle = createRequestHandler(createDefaultRouter({ database: db }), AUTH_TOKEN);
+    insertProject(db, "demo");
+    const issueID = insertIssue(db, "demo", "Permission", "failed");
+    const runID = insertRun(db, issueID, "failed", { endedAt: timestamp(2), startedAt: timestamp(1) });
+    const handle = createRequestHandler(createDefaultRouter({ database: db }), AUTH_TOKEN);
 
-      const response = await handle(authenticatedJsonRequest(
-        `/api/runs/${encodeURIComponent(runID)}/actions/retry`,
-        { audit: audit("llm-gate", "llm"), expected_revision: 0 }
-      ));
+    const response = await handle(authenticatedJsonRequest(
+      `/api/runs/${encodeURIComponent(runID)}/actions/retry`,
+      { audit: audit("llm-gate", "llm"), expected_revision: 0 }
+    ));
 
-      expect(response.status).toBe(400);
-      expect(await response.json()).toEqual({ code: "invalid_request", message: "audit.actor.kind is invalid" });
-      expect(lifecycleEvents(db, issueID, "llm-gate")).toEqual([]);
-    } finally {
-      db.close();
-    }
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ code: "invalid_request", message: "audit.actor.kind is invalid" });
+    expect(lifecycleEvents(db, issueID, "llm-gate")).toEqual([]);
   });
 });
 
@@ -443,12 +412,6 @@ class ControlProvider implements ExecutorProvider {
       turn_id: "turn-resumed"
     };
   }
-}
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-run-api-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
 }
 
 function insertProject(db: RunnerDatabase, id: string): void {

@@ -1,9 +1,8 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildConfig } from "../config/env.ts";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import {
   createPiNotificationIntent,
@@ -12,15 +11,9 @@ import {
 } from "../db/repositories/pi.ts";
 import type { FeishuTextMessageInput, FeishuTextMessageResult } from "../integrations/feishuClient.ts";
 import { runScheduleLayerCycle } from "./piAutoManageScheduler.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("PI auto-manage missed digest handling", () => {
   test("keeps recoverable digest and outbox incidents inside PI", async () => {
@@ -29,43 +22,33 @@ describe("PI auto-manage missed digest handling", () => {
       { messageId: "om_current_outbox" },
       { messageId: "om_missed_digest" }
     ]);
-    try {
-      insertProject(db, "demo");
-      insertRecoveredCoordinatorAlert(db);
-      insertStuckOutbox(db);
-      insertMissedIntent(db);
+    insertProject(db, "demo");
+    insertRecoveredCoordinatorAlert(db);
+    insertStuckOutbox(db);
+    insertMissedIntent(db);
 
-      const result = await runScheduleLayerCycle({
-        config: feishuConfig(),
-        database: db,
-        runProjectCycle: async () => ({}),
-        watchdogNow: new Date("2026-06-19T00:10:00Z"),
-        watchdogStaleAfterMs: 60_000
-      });
-      const alert = getPiGuardianAlert(db, result.missedIntentSweep.pendingAlertIds[0] ?? "");
+    const result = await runScheduleLayerCycle({
+      config: feishuConfig(),
+      database: db,
+      runProjectCycle: async () => ({}),
+      watchdogNow: new Date("2026-06-19T00:10:00Z"),
+      watchdogStaleAfterMs: 60_000
+    });
+    const alert = getPiGuardianAlert(db, result.missedIntentSweep.pendingAlertIds[0] ?? "");
 
-      expect(result.missedIntentSweep).toMatchObject({ pending: 1, skipped: 1, summaries: 0, windows: 1 });
-      expect(result.digestNotifications).toMatchObject({ queued: 0, scanned: 0 });
-      expect(sender.calls).toHaveLength(0);
-      expect(alert).toMatchObject({
-        direct_feishu_message_id: "",
-        direct_feishu_state: "not_attempted",
-        next_retry_at: "",
-        status: "open",
-        ui_visible: 1
-      });
-      expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(1);
-    } finally {
-      db.close();
-    }
+    expect(result.missedIntentSweep).toMatchObject({ pending: 1, skipped: 1, summaries: 0, windows: 1 });
+    expect(result.digestNotifications).toMatchObject({ queued: 0, scanned: 0 });
+    expect(sender.calls).toHaveLength(0);
+    expect(alert).toMatchObject({
+      direct_feishu_message_id: "",
+      direct_feishu_state: "not_attempted",
+      next_retry_at: "",
+      status: "open",
+      ui_visible: 1
+    });
+    expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(1);
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-missed-digest-fallback-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function insertProject(db: RunnerDatabase, id: string): void {
   db.sqlite.run(

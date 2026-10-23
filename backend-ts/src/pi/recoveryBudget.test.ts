@@ -1,131 +1,113 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { recordPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
 import type { PiGuardianEvent } from "../db/repositories/pi.ts";
 import { guardianDecisionCandidate } from "./guardianDecisionMerge.ts";
 import { readPiRecoveryBudget } from "./recoveryBudget.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
 const NOW = new Date("2026-06-18T02:00:00Z");
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) await rm(tempRoots.pop() ?? "", { recursive: true, force: true });
-});
+const fixtureDb = useTestDatabase();
 
 describe("PI recovery budget", () => {
   test("four recoveries and two waits only spend four slots", async () => {
     const db = await fixtureDb();
-    try {
-      insertProject(db, "demo"); insertIssue(db, 501, 1);
-      for (let index = 0; index < 6; index++) recordAttempt(db, {
-        id: `wait-regression-${index}`, issueID: 501, status: "planned", at: "2026-06-18T01:20:00Z",
-        actionType: index < 4 ? "session.resume_followup" : "issue.retry_after"
-      });
-      expect(readPiRecoveryBudget(db, budgetInput(501, "session.resume_followup")))
-        .toMatchObject({ issue_attempts_24h: 4, issue_budget_remaining: 2, status: "allow" });
-    } finally { db.close(); }
+    insertProject(db, "demo"); insertIssue(db, 501, 1);
+    for (let index = 0; index < 6; index++) recordAttempt(db, {
+      id: `wait-regression-${index}`, issueID: 501, status: "planned", at: "2026-06-18T01:20:00Z",
+      actionType: index < 4 ? "session.resume_followup" : "issue.retry_after"
+    });
+    expect(readPiRecoveryBudget(db, budgetInput(501, "session.resume_followup")))
+      .toMatchObject({ issue_attempts_24h: 4, issue_budget_remaining: 2, status: "allow" });
   });
   test("honors the six-attempt issue recovery limit and ignores issues.attempt_count", async () => {
     const db = await fixtureDb();
-    try {
-      insertProject(db, "demo");
-      insertIssue(db, 501, 99);
-      recordAttempt(db, { id: "old", issueID: 501, status: "failed", at: "2026-06-16T23:59:00Z" });
-      recordAttempt(db, { id: "cancelled", issueID: 501, status: "cancelled", at: "2026-06-18T01:10:00Z" });
+    insertProject(db, "demo");
+    insertIssue(db, 501, 99);
+    recordAttempt(db, { id: "old", issueID: 501, status: "failed", at: "2026-06-16T23:59:00Z" });
+    recordAttempt(db, { id: "cancelled", issueID: 501, status: "cancelled", at: "2026-06-18T01:10:00Z" });
 
-      expect(readPiRecoveryBudget(db, budgetInput(501, "issue.retry"))).toMatchObject({
-        issue_attempts_24h: 0,
-        issue_budget_remaining: 6,
-        status: "allow"
+    expect(readPiRecoveryBudget(db, budgetInput(501, "issue.retry"))).toMatchObject({
+      issue_attempts_24h: 0,
+      issue_budget_remaining: 6,
+      status: "allow"
+    });
+
+    for (const [index, status] of ["planned", "failed", "progress", "no_progress", "executing", "failed"].entries()) {
+      recordAttempt(db, {
+        id: `issue-${index + 1}`,
+        issueID: 501,
+        status,
+        at: `2026-06-18T01:2${index}:00Z`
       });
-
-      for (const [index, status] of ["planned", "failed", "progress", "no_progress", "executing", "failed"].entries()) {
-        recordAttempt(db, {
-          id: `issue-${index + 1}`,
-          issueID: 501,
-          status,
-          at: `2026-06-18T01:2${index}:00Z`
-        });
-      }
-
-      expect(readPiRecoveryBudget(db, budgetInput(501, "issue.retry"))).toMatchObject({
-        diagnosis_code: "recovery_budget_exhausted",
-        issue_attempts_24h: 6,
-        issue_budget_remaining: 0,
-        recommended_action: "budget_exhausted",
-        status: "issue_budget_exhausted"
-      });
-    } finally {
-      db.close();
     }
+
+    expect(readPiRecoveryBudget(db, budgetInput(501, "issue.retry"))).toMatchObject({
+      diagnosis_code: "recovery_budget_exhausted",
+      issue_attempts_24h: 6,
+      issue_budget_remaining: 0,
+      recommended_action: "budget_exhausted",
+      status: "issue_budget_exhausted"
+    });
   });
 
   test("exhausts the seventh session resume without blocking other issue recoveries", async () => {
     const db = await fixtureDb();
-    try {
-      insertProject(db, "demo");
-      insertIssue(db, 502, 1);
-      for (const index of [1, 2, 3, 4, 5, 6]) {
-        recordAttempt(db, {
-          actionType: "session.resume_followup",
-          id: `resume-${index}`,
-          issueID: 502,
-          sessionID: "codex:thread-502",
-          status: "progress",
-          at: `2026-06-18T01:${String(index).padStart(2, "0")}:00Z`
-        });
-      }
-
-      expect(readPiRecoveryBudget(db, budgetInput(502, "session.resume_followup"))).toMatchObject({
-        diagnosis_code: "session_recovery_exhausted",
-        recommended_action: "budget_exhausted",
-        session_resume_attempts_24h: 6,
-        session_resume_budget_remaining: 0,
-        status: "session_resume_exhausted"
+    insertProject(db, "demo");
+    insertIssue(db, 502, 1);
+    for (const index of [1, 2, 3, 4, 5, 6]) {
+      recordAttempt(db, {
+        actionType: "session.resume_followup",
+        id: `resume-${index}`,
+        issueID: 502,
+        sessionID: "codex:thread-502",
+        status: "progress",
+        at: `2026-06-18T01:${String(index).padStart(2, "0")}:00Z`
       });
-      expect(readPiRecoveryBudget(db, budgetInput(502, "issue.retry"))).toMatchObject({
-        issue_attempts_24h: 6,
-        issue_budget_remaining: 0,
-        status: "issue_budget_exhausted"
-      });
-    } finally {
-      db.close();
     }
+
+    expect(readPiRecoveryBudget(db, budgetInput(502, "session.resume_followup"))).toMatchObject({
+      diagnosis_code: "session_recovery_exhausted",
+      recommended_action: "budget_exhausted",
+      session_resume_attempts_24h: 6,
+      session_resume_budget_remaining: 0,
+      status: "session_resume_exhausted"
+    });
+    expect(readPiRecoveryBudget(db, budgetInput(502, "issue.retry"))).toMatchObject({
+      issue_attempts_24h: 6,
+      issue_budget_remaining: 0,
+      status: "issue_budget_exhausted"
+    });
   });
 
   test("keeps project recovery unlimited while retaining hourly attempt telemetry", async () => {
     const db = await fixtureDb();
-    try {
-      insertProject(db, "demo");
-      for (let index = 0; index < 30; index++) {
-        const issueID = 600 + index;
-        insertIssue(db, issueID, 1);
-        recordAttempt(db, {
-          id: `project-${index}`,
-          issueID,
-          status: "no_progress",
-          at: `2026-06-18T01:${String(20 + index).padStart(2, "0")}:00Z`
-        });
-      }
-
-      expect(readPiRecoveryBudget(db, {
-        ...budgetInput(601, "issue.retry"),
-        projectLimit: 10
-      })).toMatchObject({
-        project_attempts_1h: 30,
-        project_budget_remaining: 0,
-        project_budget_unlimited: true,
-        project_defer_until: "",
-        project_limit: 0,
-        recommended_action: "allow",
-        status: "allow"
+    insertProject(db, "demo");
+    for (let index = 0; index < 30; index++) {
+      const issueID = 600 + index;
+      insertIssue(db, issueID, 1);
+      recordAttempt(db, {
+        id: `project-${index}`,
+        issueID,
+        status: "no_progress",
+        at: `2026-06-18T01:${String(20 + index).padStart(2, "0")}:00Z`
       });
-    } finally {
-      db.close();
     }
+
+    expect(readPiRecoveryBudget(db, {
+      ...budgetInput(601, "issue.retry"),
+      projectLimit: 10
+    })).toMatchObject({
+      project_attempts_1h: 30,
+      project_budget_remaining: 0,
+      project_budget_unlimited: true,
+      project_defer_until: "",
+      project_limit: 0,
+      recommended_action: "allow",
+      status: "allow"
+    });
   });
 
   test("keeps budget exhausted guardian events actionable instead of watch aggregate", () => {
@@ -142,12 +124,6 @@ describe("PI recovery budget", () => {
     });
   });
 });
-
-async function fixtureDb(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-recovery-budget-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function budgetInput(issueID: number, actionType: string) {
   return {

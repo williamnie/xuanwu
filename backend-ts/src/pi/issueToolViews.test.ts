@@ -1,19 +1,12 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { createIssueExecutionStatus } from "./issueToolViews.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const root = tempRoots.pop();
-    if (root) await rm(root, { force: true, recursive: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("PI issue execution status completion projection", () => {
   test("reports an ended Run as PI acceptance pending without making Evidence a blocker", async () => {
@@ -60,12 +53,6 @@ describe("PI issue execution status completion projection", () => {
     }
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-issue-tool-views-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function insertProject(db: RunnerDatabase): void {
   const timestamp = "2026-07-23T09:00:00.000Z";

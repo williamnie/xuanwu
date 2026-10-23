@@ -1,22 +1,15 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildFeishuConnectorConfig, normalizeFeishuMessageEvent } from "./feishu.ts";
 import { createFeishuAgentBridge } from "./feishuAgentBridge.ts";
 import { ingestFeishuMessageEvent } from "./feishuIngest.ts";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { createPiMemoryItem } from "../db/repositories/pi.ts";
 import type { FeishuReactionInput, FeishuTextMessageInput } from "./feishuClient.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const root = tempRoots.pop();
-    if (root) await rm(root, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("Feishu agent bridge", () => {
   test("adds a quick Feishu reaction before running the PI conversation", async () => {
@@ -95,7 +88,6 @@ describe("Feishu agent bridge", () => {
       expect(warnings[0]).not.toContain("app-secret-value");
     } finally {
       console.warn = originalWarn;
-      database.close();
     }
   });
 
@@ -450,12 +442,6 @@ describe("Feishu agent bridge", () => {
     database.close();
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-agent-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function messageEvent(text: string, messageId = "om_agent_1"): Record<string, unknown> {
   return {

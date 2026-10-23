@@ -1,70 +1,53 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { listPiActions, listPiGuardianEvents, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
 import { createIssueRun } from "../db/repositories/issueRuns.ts";
 import { runGuardianDecisionOrchestratorOnce } from "../pi/guardianDecisionOrchestrator.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("provider runtime terminal PI signals", () => {
   test("signals Guardian when provider emits a terminal runtime error during an open run", async () => {
     const db = await openFixtureDatabase();
-    try {
-      seedIssue(db, 527);
-      const issueRunId = createIssueRun(db, 527).id;
+    seedIssue(db, 527);
+    const issueRunId = createIssueRun(db, 527).id;
 
-      await runIssueWithProvider(new RuntimeErrorProvider(), {
-        database: db,
-        issueId: 527,
-        issueRunId,
-        projectId: "demo",
-        cwd: "/tmp/project",
-        prompt: "issue prompt"
-      });
+    await runIssueWithProvider(new RuntimeErrorProvider(), {
+      database: db,
+      issueId: 527,
+      issueRunId,
+      projectId: "demo",
+      cwd: "/tmp/project",
+      prompt: "issue prompt"
+    });
 
-      const signal = listPiGuardianEvents(db, { issueId: 527, status: "pending" })[0];
-      expect(signal).toMatchObject({
-        event_type: "guardian.supervisor.candidate",
-        issue_id: 527,
-        project_id: "demo",
-        severity: "watch",
-        source: "supervisor"
-      });
-      expect(JSON.parse(signal?.normalized_payload_json ?? "{}")).toMatchObject({
-        allowed_actions: expect.arrayContaining(["session.resume_followup"]),
-        diagnosis_code: "provider_rate_limited",
-        provider_error_category: "rate_limit",
-        provider_session_id: "thread-overloaded",
-        provider_turn_id: "turn-overloaded"
-      });
+    const signal = listPiGuardianEvents(db, { issueId: 527, status: "pending" })[0];
+    expect(signal).toMatchObject({
+      event_type: "guardian.supervisor.candidate",
+      issue_id: 527,
+      project_id: "demo",
+      severity: "watch",
+      source: "supervisor"
+    });
+    expect(JSON.parse(signal?.normalized_payload_json ?? "{}")).toMatchObject({
+      allowed_actions: expect.arrayContaining(["session.resume_followup"]),
+      diagnosis_code: "provider_rate_limited",
+      provider_error_category: "rate_limit",
+      provider_session_id: "thread-overloaded",
+      provider_turn_id: "turn-overloaded"
+    });
 
-      const now = new Date("2026-06-22T15:40:40Z");
-      runGuardianDecisionOrchestratorOnce(db, { now });
-      runGuardianDecisionOrchestratorOnce(db, { now: new Date(now.getTime() + 31_000) });
-      expect(listPiActions(db, { issueId: 527 })).toEqual([]);
-    } finally {
-      db.close();
-    }
+    const now = new Date("2026-06-22T15:40:40Z");
+    runGuardianDecisionOrchestratorOnce(db, { now });
+    runGuardianDecisionOrchestratorOnce(db, { now: new Date(now.getTime() + 31_000) });
+    expect(listPiActions(db, { issueId: 527 })).toEqual([]);
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-runtime-terminal-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function seedIssue(db: RunnerDatabase, issueID: number): void {
   db.sqlite.run(

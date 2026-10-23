@@ -1,8 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import {
   createPiNotificationIntent,
@@ -11,124 +10,108 @@ import {
 } from "../db/repositories/pi.ts";
 import { flushAgentCommunicationTestMessages } from "../notifications/agentCommunicationGateway.testSupport.ts";
 import { queueReadyFeishuDigestNotifications } from "./feishuLifecycleNotifications.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const root = tempRoots.pop();
-    if (root) await rm(root, { recursive: true, force: true });
-  }
-});
+const fixtureDatabase = useTestDatabase();
 
 describe("Feishu run group digest notifications", () => {
   test("shares bounded retries while preserving Feishu routing and channel isolation", async () => {
     const db = await fixtureDatabase();
     const now = new Date("2026-09-29T00:00:00Z");
-    try {
-      for (let index = 0; index < 22; index += 1) {
-        const id = `digest-${String(index).padStart(2, "0")}`;
-        createPiNotificationIntent(db, {
-          id, run_group_id: id, flush_reason: "completed", flush_sequence: 1,
-          kind: "digest", state: "ready", target_channel: index === 0 ? "telegram" : "feishu",
-          target_chat_id: index === 0 || index === 21 ? "chat-ready" : ""
-        });
-      }
-      const result = queueReadyFeishuDigestNotifications(db, { now });
-      expect(result).toEqual({ failed: 20, queued: 1, scanned: 21, skipped: 0 });
-      expect(getPiNotificationIntent(db, "digest-00")?.state).toBe("ready");
-      expect(getPiNotificationIntent(db, "digest-01")).toMatchObject({
-        error: "missing_feishu_target", flush_after_at: "2026-09-29T00:15:00.000Z"
+    for (let index = 0; index < 22; index += 1) {
+      const id = `digest-${String(index).padStart(2, "0")}`;
+      createPiNotificationIntent(db, {
+        id, run_group_id: id, flush_reason: "completed", flush_sequence: 1,
+        kind: "digest", state: "ready", target_channel: index === 0 ? "telegram" : "feishu",
+        target_chat_id: index === 0 || index === 21 ? "chat-ready" : ""
       });
-      const queued = getPiNotificationIntent(db, "digest-21");
-      expect(JSON.parse(queued?.payload_json ?? "{}").agent_communication.notification_type)
-        .toBe("feishu_run_group_digest_notification");
-      expect(queueReadyFeishuDigestNotifications(db, { now }).scanned).toBe(0);
-    } finally { db.close(); }
+    }
+    const result = queueReadyFeishuDigestNotifications(db, { now });
+    expect(result).toEqual({ failed: 20, queued: 1, scanned: 21, skipped: 0 });
+    expect(getPiNotificationIntent(db, "digest-00")?.state).toBe("ready");
+    expect(getPiNotificationIntent(db, "digest-01")).toMatchObject({
+      error: "missing_feishu_target", flush_after_at: "2026-09-29T00:15:00.000Z"
+    });
+    const queued = getPiNotificationIntent(db, "digest-21");
+    expect(JSON.parse(queued?.payload_json ?? "{}").agent_communication.notification_type)
+      .toBe("feishu_run_group_digest_notification");
+    expect(queueReadyFeishuDigestNotifications(db, { now }).scanned).toBe(0);
   });
 
   test("queues a redacted digest summary through the existing outbox", async () => {
     const db = await fixtureDatabase();
-    try {
-      seedProject(db);
-      createPiRunGroup(db, {
-        id: "group-digest",
-        origin_conversation_id: "feishu-chat-oc_group-20260618",
-        project_id: "demo",
-        expected_issue_count: 6
-      });
-      const intent = createPiNotificationIntent(db, {
-        flush_reason: "completed",
-        flush_sequence: 1,
-        kind: "digest",
-        payload_json: digestPayload(),
-        project_id: "demo",
-        run_group_id: "group-digest",
-        state: "ready",
-        target_channel: "feishu"
-      });
+    seedProject(db);
+    createPiRunGroup(db, {
+      id: "group-digest",
+      origin_conversation_id: "feishu-chat-oc_group-20260618",
+      project_id: "demo",
+      expected_issue_count: 6
+    });
+    const intent = createPiNotificationIntent(db, {
+      flush_reason: "completed",
+      flush_sequence: 1,
+      kind: "digest",
+      payload_json: digestPayload(),
+      project_id: "demo",
+      run_group_id: "group-digest",
+      state: "ready",
+      target_channel: "feishu"
+    });
 
-      const result = queueReadyFeishuDigestNotifications(db);
-      await flushAgentCommunicationTestMessages(db);
-      const outbox = listSyncOutbox(db, { source: "feishu" });
-      const sent = getPiNotificationIntent(db, intent.id);
-      const content = outbox[0]?.content ?? "";
+    const result = queueReadyFeishuDigestNotifications(db);
+    await flushAgentCommunicationTestMessages(db);
+    const outbox = listSyncOutbox(db, { source: "feishu" });
+    const sent = getPiNotificationIntent(db, intent.id);
+    const content = outbox[0]?.content ?? "";
 
-      expect(result).toMatchObject({ failed: 0, queued: 1, scanned: 1, skipped: 0 });
-      expect(outbox).toHaveLength(1);
-      expect(sent).toMatchObject({ sent_outbox_id: outbox[0]?.id, state: "sent" });
-      expect(sent?.sent_at).not.toBe("");
-      expect(content).toContain("共 6");
-      expect(content).toContain("完成 1");
-      expect(content).toContain("待验证 1");
-      expect(content).toContain("失败 1");
-      expect(content).toContain("需要你处理 1");
-      expect(content).toContain("仍在跑 1");
-      expect(content).toContain("跳过 1");
-      expect(content).toContain("issue #103");
-      expect(content).toContain("issue #104");
-      expect(content).toContain("enqueue_failed");
-      expect(content).toContain("enqueue_pending_approval");
-      expect(content).toContain("skipped");
-      expect(content).not.toContain("fixture-secret");
-      expect(content).not.toContain("/Users/example");
-      expect(content).not.toContain("at run");
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ failed: 0, queued: 1, scanned: 1, skipped: 0 });
+    expect(outbox).toHaveLength(1);
+    expect(sent).toMatchObject({ sent_outbox_id: outbox[0]?.id, state: "sent" });
+    expect(sent?.sent_at).not.toBe("");
+    expect(content).toContain("共 6");
+    expect(content).toContain("完成 1");
+    expect(content).toContain("待验证 1");
+    expect(content).toContain("失败 1");
+    expect(content).toContain("需要你处理 1");
+    expect(content).toContain("仍在跑 1");
+    expect(content).toContain("跳过 1");
+    expect(content).toContain("issue #103");
+    expect(content).toContain("issue #104");
+    expect(content).toContain("enqueue_failed");
+    expect(content).toContain("enqueue_pending_approval");
+    expect(content).toContain("skipped");
+    expect(content).not.toContain("fixture-secret");
+    expect(content).not.toContain("/Users/example");
+    expect(content).not.toContain("at run");
   });
 
   test("keeps missing-target digest intents retryable without copying payload details", async () => {
     const db = await fixtureDatabase();
-    try {
-      seedProject(db);
-      createPiRunGroup(db, { id: "group-no-target", project_id: "demo", expected_issue_count: 1 });
-      const intent = createPiNotificationIntent(db, {
-        flush_reason: "completed",
-        flush_sequence: 1,
-        kind: "digest",
-        payload_json: {
-          issues: [{ issue_id: 201, reason: "TOKEN=fixture-secret at /Users/example/secret.ts" }],
-          total_count: 1
-        },
-        project_id: "demo",
-        run_group_id: "group-no-target",
-        state: "ready",
-        target_channel: "feishu"
-      });
+    seedProject(db);
+    createPiRunGroup(db, { id: "group-no-target", project_id: "demo", expected_issue_count: 1 });
+    const intent = createPiNotificationIntent(db, {
+      flush_reason: "completed",
+      flush_sequence: 1,
+      kind: "digest",
+      payload_json: {
+        issues: [{ issue_id: 201, reason: "TOKEN=fixture-secret at /Users/example/secret.ts" }],
+        total_count: 1
+      },
+      project_id: "demo",
+      run_group_id: "group-no-target",
+      state: "ready",
+      target_channel: "feishu"
+    });
 
-      const result = queueReadyFeishuDigestNotifications(db);
-      const stored = getPiNotificationIntent(db, intent.id);
+    const result = queueReadyFeishuDigestNotifications(db);
+    const stored = getPiNotificationIntent(db, intent.id);
 
-      expect(result).toMatchObject({ failed: 1, queued: 0, scanned: 1, skipped: 0 });
-      expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
-      expect(stored).toMatchObject({ sent_outbox_id: 0, state: "ready" });
-      expect(stored?.error).toContain("missing_feishu_target");
-      expect(stored?.error).not.toContain("fixture-secret");
-      expect(stored?.error).not.toContain("/Users/example");
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ failed: 1, queued: 0, scanned: 1, skipped: 0 });
+    expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
+    expect(stored).toMatchObject({ sent_outbox_id: 0, state: "ready" });
+    expect(stored?.error).toContain("missing_feishu_target");
+    expect(stored?.error).not.toContain("fixture-secret");
+    expect(stored?.error).not.toContain("/Users/example");
   });
 });
 
@@ -149,12 +132,6 @@ function digestPayload() {
     total_count: 6,
     verification_count: 1
   };
-}
-
-async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-digest-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
 }
 
 function seedProject(db: RunnerDatabase): void {

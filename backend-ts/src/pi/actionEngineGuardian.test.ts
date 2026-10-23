@@ -1,49 +1,40 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createPiAction } from "../db/repositories/pi.ts";
 import {
   acquireGuardianActionLease,
   createPendingPiAction
 } from "./actionEngine.ts";
 import type { PiGatePolicy } from "./actionGate.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) await rm(tempRoots.pop() ?? "", { recursive: true, force: true });
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("PI action engine Guardian action outlet", () => {
   test("waits for delegated async mutations before returning their final action result", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const result = await createPendingPiAction(db, {
-        authorization: {
-          authorizedActions: [{ action_type: "issue.comment", issue_id: 7, project_id: "demo" }],
-          mode: "delegated",
-          scope: { project_id: "demo" }
-        }
-      }, {
-        actionType: "issue.comment",
-        issueID: 7,
-        payload: { body: "async", issue_id: 7 },
-        projectID: "demo"
-      }, async () => {
-        await Promise.resolve();
-        return { persisted: true };
-      }) as Record<string, unknown>;
+    const result = await createPendingPiAction(db, {
+      authorization: {
+        authorizedActions: [{ action_type: "issue.comment", issue_id: 7, project_id: "demo" }],
+        mode: "delegated",
+        scope: { project_id: "demo" }
+      }
+    }, {
+      actionType: "issue.comment",
+      issueID: 7,
+      payload: { body: "async", issue_id: 7 },
+      projectID: "demo"
+    }, async () => {
+      await Promise.resolve();
+      return { persisted: true };
+    }) as Record<string, unknown>;
 
-      expect(result).toMatchObject({
-        decision: "execute",
-        result: { persisted: true },
-        status: "completed"
-      });
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({
+      decision: "execute",
+      result: { persisted: true },
+      status: "completed"
+    });
   });
 
   test("deduplicates guardian actions by idempotency key and marks legacy bypass actions", async () => {
@@ -84,39 +75,29 @@ describe("PI action engine Guardian action outlet", () => {
 
   test("reports held guardian lease before duplicate action creation", async () => {
     const db = await openFixtureDatabase();
-    try {
-      createPiAction(db, {
-        action_type: "issue.enqueue",
-        id: "held-action",
-        lease_expires_at: "2026-06-18T00:05:00Z",
-        lease_key: "demo:issue:7:issue.enqueue",
-        project_id: "demo",
-        status: "executing"
-      });
+    createPiAction(db, {
+      action_type: "issue.enqueue",
+      id: "held-action",
+      lease_expires_at: "2026-06-18T00:05:00Z",
+      lease_key: "demo:issue:7:issue.enqueue",
+      project_id: "demo",
+      status: "executing"
+    });
 
-      expect(acquireGuardianActionLease(db, {
-        actionType: "issue.enqueue",
-        idempotencyKey: "decision-2:issue.enqueue:7",
-        issueID: 7,
-        now: new Date("2026-06-18T00:00:00Z"),
-        owner: "worker-b",
-        projectID: "demo"
-      })).toMatchObject({
-        action: expect.objectContaining({ id: "held-action" }),
-        lease_key: "demo:issue:7:issue.enqueue",
-        status: "held"
-      });
-    } finally {
-      db.close();
-    }
+    expect(acquireGuardianActionLease(db, {
+      actionType: "issue.enqueue",
+      idempotencyKey: "decision-2:issue.enqueue:7",
+      issueID: 7,
+      now: new Date("2026-06-18T00:00:00Z"),
+      owner: "worker-b",
+      projectID: "demo"
+    })).toMatchObject({
+      action: expect.objectContaining({ id: "held-action" }),
+      lease_key: "demo:issue:7:issue.enqueue",
+      status: "held"
+    });
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-action-engine-guardian-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function guardianContext() {
   return {

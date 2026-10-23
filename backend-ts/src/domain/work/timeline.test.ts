@@ -1,107 +1,95 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { performance } from "node:perf_hooks";
-import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
+import { type RunnerDatabase } from "../../db/database.ts";
 import { clearEventSummaryProjection } from "../../db/repositories/eventSummaryProjection.ts";
 import { EVENT_SUMMARY_PROJECTOR_VERSION, projectPendingEventSummaries } from "../../events/eventSummaryProjector.ts";
 import { issueIDToWorkID } from "./issueAdapter.ts";
 import { queryWorkTimeline, type WorkTimelineNode } from "./timeline.ts";
+import { useTestDatabase } from "../../testing/harness.ts";
 
-const roots: string[] = [];
-
-afterEach(async () => {
-  while (roots.length > 0) await rm(roots.pop()!, { force: true, recursive: true });
-});
+const fixtureDatabase = useTestDatabase();
 
 describe("Work timeline projection", () => {
   test("combines authoritative sources in a stable cross-source order with source links", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issueID = seedTimeline(db);
-      const workID = issueIDToWorkID(issueID);
-      const result = queryWorkTimeline(db, workID, { limit: 50 });
+    const issueID = seedTimeline(db);
+    const workID = issueIDToWorkID(issueID);
+    const result = queryWorkTimeline(db, workID, { limit: 50 });
 
-      expect(result).toMatchObject({
-        has_more: false,
-        next_cursor: "",
-        schema_version: "xuanwu.work-timeline.v1",
-        source_of_truth: {
-          approval: "pi_approval_requests",
-          issue_events: "issue_events-via-event_summary_projection",
-          runs: "issue_runs",
-          work: "issues"
-        },
-        summary_projection: {
-          issue_event_projection_status: "ready",
-          scope: "page"
-        },
-        work_id: workID
-      });
-      expect(result.items.map((item) => item.event_name)).toEqual([
-        "evidence.recorded.v1",
-        "attention.status_changed.v1",
-        "run.status_changed.v1",
-        "work.status_changed.v1",
-        "issue.verification_report",
-        "issue.comment",
-        "attention.opened.v1",
-        "run.created.v1",
-        "work.created.v1"
-      ]);
-      expect(result.items.map((item) => item.kind)).toEqual([
-        "evidence", "approval", "run", "work_event",
-        "issue_event", "issue_event", "approval", "run", "work_event"
-      ]);
-      expect(result.items.every((item) => item.source_links.some((link) => link.rel === "work"))).toBe(true);
-      expect(result.items.find((item) => item.source.authority === "issue_events")?.source_links)
-        .toEqual(expect.arrayContaining([expect.objectContaining({ rel: "source" }), expect.objectContaining({ rel: "summary" })]));
-      const verification = result.items.find((item) => item.payload.issue_event_type === "issue.verification_report");
-      const actionEvidence = result.items.find((item) => item.source.authority === "pi_action_events");
-      expect(verification?.payload.source_sha256).not.toBe("spoofed");
-      expect(actionEvidence?.payload.action_id).toBe("action-1");
-      expect(new Set(result.items.map((item) => item.dedupe_key)).size).toBe(result.items.length);
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({
+      has_more: false,
+      next_cursor: "",
+      schema_version: "xuanwu.work-timeline.v1",
+      source_of_truth: {
+        approval: "pi_approval_requests",
+        issue_events: "issue_events-via-event_summary_projection",
+        runs: "issue_runs",
+        work: "issues"
+      },
+      summary_projection: {
+        issue_event_projection_status: "ready",
+        scope: "page"
+      },
+      work_id: workID
+    });
+    expect(result.items.map((item) => item.event_name)).toEqual([
+      "evidence.recorded.v1",
+      "attention.status_changed.v1",
+      "run.status_changed.v1",
+      "work.status_changed.v1",
+      "issue.verification_report",
+      "issue.comment",
+      "attention.opened.v1",
+      "run.created.v1",
+      "work.created.v1"
+    ]);
+    expect(result.items.map((item) => item.kind)).toEqual([
+      "evidence", "approval", "run", "work_event",
+      "issue_event", "issue_event", "approval", "run", "work_event"
+    ]);
+    expect(result.items.every((item) => item.source_links.some((link) => link.rel === "work"))).toBe(true);
+    expect(result.items.find((item) => item.source.authority === "issue_events")?.source_links)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ rel: "source" }), expect.objectContaining({ rel: "summary" })]));
+    const verification = result.items.find((item) => item.payload.issue_event_type === "issue.verification_report");
+    const actionEvidence = result.items.find((item) => item.source.authority === "pi_action_events");
+    expect(verification?.payload.source_sha256).not.toBe("spoofed");
+    expect(actionEvidence?.payload.action_id).toBe("action-1");
+    expect(new Set(result.items.map((item) => item.dedupe_key)).size).toBe(result.items.length);
   });
 
   test("keeps keyset pages stable when newer events arrive and rejects duplicate rebuild nodes", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issueID = seedTimeline(db);
-      const workID = issueIDToWorkID(issueID);
-      insertIssueEvent(db, issueID, "issue.comment", { body: "same timestamp" }, "2026-01-01T00:00:06Z");
-      insertIssueEvent(db, issueID, "issue.comment", { body: "same timestamp again" }, "2026-01-01T00:00:06Z");
-      projectPendingEventSummaries(db);
-      const first = queryWorkTimeline(db, workID, { limit: 3 });
-      expect(first.has_more).toBe(true);
-      expect(first.next_cursor).not.toBe("");
+    const issueID = seedTimeline(db);
+    const workID = issueIDToWorkID(issueID);
+    insertIssueEvent(db, issueID, "issue.comment", { body: "same timestamp" }, "2026-01-01T00:00:06Z");
+    insertIssueEvent(db, issueID, "issue.comment", { body: "same timestamp again" }, "2026-01-01T00:00:06Z");
+    projectPendingEventSummaries(db);
+    const first = queryWorkTimeline(db, workID, { limit: 3 });
+    expect(first.has_more).toBe(true);
+    expect(first.next_cursor).not.toBe("");
 
-      insertIssueEvent(db, issueID, "issue.comment", { body: "arrived later" }, "2026-01-01T00:00:10Z");
-      const remaining = collectPages(db, workID, first.next_cursor, 3);
-      const combined = [...first.items, ...remaining];
-      const combinedIDs = combined.map((item) => item.id);
-      expect(combined.map((item) => item.summary)).not.toContain("arrived later");
-      expect(combined).toHaveLength(11);
-      expect(new Set(combinedIDs).size).toBe(combinedIDs.length);
-      const tiedIDs = combined
-        .filter((item) => item.occurred_at === "2026-01-01T00:00:06.000Z")
-        .map((item) => item.id);
-      expect(tiedIDs).toHaveLength(2);
-      expect(tiedIDs).toEqual([...tiedIDs].sort().reverse());
+    insertIssueEvent(db, issueID, "issue.comment", { body: "arrived later" }, "2026-01-01T00:00:10Z");
+    const remaining = collectPages(db, workID, first.next_cursor, 3);
+    const combined = [...first.items, ...remaining];
+    const combinedIDs = combined.map((item) => item.id);
+    expect(combined.map((item) => item.summary)).not.toContain("arrived later");
+    expect(combined).toHaveLength(11);
+    expect(new Set(combinedIDs).size).toBe(combinedIDs.length);
+    const tiedIDs = combined
+      .filter((item) => item.occurred_at === "2026-01-01T00:00:06.000Z")
+      .map((item) => item.id);
+    expect(tiedIDs).toHaveLength(2);
+    expect(tiedIDs).toEqual([...tiedIDs].sort().reverse());
 
-      projectPendingEventSummaries(db);
-      const beforeRebuild = queryWorkTimeline(db, workID, { limit: 50 }).items.map((item) => item.id);
-      clearEventSummaryProjection(db, EVENT_SUMMARY_PROJECTOR_VERSION, "2026-01-01T01:00:00.000Z");
-      projectPendingEventSummaries(db);
-      const afterRebuild = queryWorkTimeline(db, workID, { limit: 50 }).items.map((item) => item.id);
-      expect(afterRebuild).toEqual(beforeRebuild);
-      expect(new Set(afterRebuild).size).toBe(afterRebuild.length);
-    } finally {
-      db.close();
-    }
+    projectPendingEventSummaries(db);
+    const beforeRebuild = queryWorkTimeline(db, workID, { limit: 50 }).items.map((item) => item.id);
+    clearEventSummaryProjection(db, EVENT_SUMMARY_PROJECTOR_VERSION, "2026-01-01T01:00:00.000Z");
+    projectPendingEventSummaries(db);
+    const afterRebuild = queryWorkTimeline(db, workID, { limit: 50 }).items.map((item) => item.id);
+    expect(afterRebuild).toEqual(beforeRebuild);
+    expect(new Set(afterRebuild).size).toBe(afterRebuild.length);
   });
 
   test("benchmarks a 12000-event Work query on the indexed summary projection", async () => {
@@ -153,12 +141,6 @@ function collectPages(
     cursor = page.next_cursor;
   }
   return items;
-}
-
-async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "work-timeline-"));
-  roots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
 }
 
 function seedTimeline(db: RunnerDatabase): number {

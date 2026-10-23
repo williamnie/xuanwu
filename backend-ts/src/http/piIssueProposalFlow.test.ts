@@ -1,59 +1,42 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { getIssue, listIssues, type Issue } from "../db/repositories/issues.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import { createPiRunnerActions } from "../pi/runnerActions.ts";
 import { createDefaultRouter } from "./server.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
-const tempRoots: string[] = [];
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-issue-flow-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("Bun PI issue proposal/comment flow", () => {
   test("creates triage proposal and keeps comment readable in issue detail", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const project = mustGetProject(database, "demo");
-      const issueID = insertIssue(database, project.id);
-      const actions = createPiRunnerActions(database, { project });
-      const createAction = actions.createIssueProposal({
-        description: "新增 proposal body\n\n## 验收标准\n- 用户可验收\n\n## 验证方式\n- bun test",
-        project_id: project.id,
-        title: "PI proposal"
-      }) as { action_id: string };
-      const comment = actions.commentIssue({ issue_id: issueID, body: "Looks actionable." });
-      const router = createDefaultRouter({ database });
+    insertProject(database, "demo");
+    const project = mustGetProject(database, "demo");
+    const issueID = insertIssue(database, project.id);
+    const actions = createPiRunnerActions(database, { project });
+    const createAction = actions.createIssueProposal({
+      description: "新增 proposal body\n\n## 验收标准\n- 用户可验收\n\n## 验证方式\n- bun test",
+      project_id: project.id,
+      title: "PI proposal"
+    }) as { action_id: string };
+    const comment = actions.commentIssue({ issue_id: issueID, body: "Looks actionable." });
+    const router = createDefaultRouter({ database });
 
-      const created = await postAction(router, createAction.action_id, "approve");
-      const issues = listIssues(database, { projectId: project.id });
+    const created = await postAction(router, createAction.action_id, "approve");
+    const issues = listIssues(database, { projectId: project.id });
 
-      expect(created.status).toBe(200);
-      expect(await created.json()).toMatchObject({ id: createAction.action_id, status: "completed" });
-      expect(comment).toMatchObject({ type: "issue.comment", issue_id: issueID });
-      expect(issues).toHaveLength(2);
-      expect(findIssue(issues, "PI proposal")).toMatchObject({ status: "triage" });
-      expect(getIssue(database, issueID)?.description).toBe("");
-      expect(getIssue(database, issueID)?.comment_count).toBe(1);
-      expect(listEvents(database).map((event) => event.type)).toEqual(["issue.comment", "issue.created"]);
-    } finally {
-      database.close();
-    }
+    expect(created.status).toBe(200);
+    expect(await created.json()).toMatchObject({ id: createAction.action_id, status: "completed" });
+    expect(comment).toMatchObject({ type: "issue.comment", issue_id: issueID });
+    expect(issues).toHaveLength(2);
+    expect(findIssue(issues, "PI proposal")).toMatchObject({ status: "triage" });
+    expect(getIssue(database, issueID)?.description).toBe("");
+    expect(getIssue(database, issueID)?.comment_count).toBe(1);
+    expect(listEvents(database).map((event) => event.type)).toEqual(["issue.comment", "issue.created"]);
   });
 });
 

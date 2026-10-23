@@ -1,10 +1,9 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai/compat";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { listPiActionEvents, listPiActions, listPiConversations, listPiMemoryItems } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
@@ -12,52 +11,36 @@ import { EventBus } from "../events/bus.ts";
 import { gatePiActionEnvelope } from "../pi/actionGate.ts";
 import { createDefaultRouter } from "./server.ts";
 import { managerCycleAuthorization } from "./piProjectControlAuthorization.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
-const tempRoots: string[] = [];
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-project-control-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("Bun project PI control API", () => {
   test("run-once delegates to the Agentic Worker when configured", async () => {
     const database = await openFixtureDatabase();
     const calls: unknown[] = [];
-    try {
-      insertProject(database, "demo");
-      const router = createDefaultRouter({
-        agenticClient: {
-          activity: () => ({ in_flight: 0, last_activity_at: "" }),
-          decideCommunication: async () => ({ decision: "suppress", message: "", rationale: "test" }),
-          decideSupervisor: async () => { throw new Error("not used"); },
-          health: async () => ({ ok: true, role: "agentic" }),
-          runProjectCycle: async (input) => {
-            calls.push(input);
-            return { managed: true, project_id: input.projectId, status: "completed", text: "remote" };
-          }
-        },
-        database
-      });
+    insertProject(database, "demo");
+    const router = createDefaultRouter({
+      agenticClient: {
+        activity: () => ({ in_flight: 0, last_activity_at: "" }),
+        decideCommunication: async () => ({ decision: "suppress", message: "", rationale: "test" }),
+        decideSupervisor: async () => { throw new Error("not used"); },
+        health: async () => ({ ok: true, role: "agentic" }),
+        runProjectCycle: async (input) => {
+          calls.push(input);
+          return { managed: true, project_id: input.projectId, status: "completed", text: "remote" };
+        }
+      },
+      database
+    });
 
-      const response = await post(router, "/api/projects/demo/pi/run-once");
+    const response = await post(router, "/api/projects/demo/pi/run-once");
 
-      expect(response.status).toBe(201);
-      expect(await response.json()).toMatchObject({ project_id: "demo", status: "completed", text: "remote" });
-      expect(calls).toEqual([{ maxActions: 5, projectId: "demo" }]);
-      expect(listPiConversations(database, { includeInternal: true, projectId: "demo" })).toEqual([]);
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ project_id: "demo", status: "completed", text: "remote" });
+    expect(calls).toEqual([{ maxActions: 5, projectId: "demo" }]);
+    expect(listPiConversations(database, { includeInternal: true, projectId: "demo" })).toEqual([]);
   });
 
   test("run-once starts one PI manager cycle for a project", async () => {
@@ -97,7 +80,6 @@ describe("Bun project PI control API", () => {
       expect(promptText).toContain('"failed": 1');
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -124,28 +106,23 @@ describe("Bun project PI control API", () => {
         .toMatchObject({ status: "failed" });
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
   test("issue-state endpoint returns diagnostics and batch target progress", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const weakDone = insertIssue(database, { projectId: "demo", status: "done", title: "Weak done" });
-      const pending = insertIssue(database, { projectId: "demo", status: "todo", title: "Todo target" });
-      const router = createDefaultRouter({ database });
+    insertProject(database, "demo");
+    const weakDone = insertIssue(database, { projectId: "demo", status: "done", title: "Weak done" });
+    const pending = insertIssue(database, { projectId: "demo", status: "todo", title: "Todo target" });
+    const router = createDefaultRouter({ database });
 
-      const path = `/api/projects/demo/pi/issue-state?target_issue_ids=${weakDone},${pending}&target_label=tonight&target_status=done&deadline_at=2026-01-01T23:59:59Z`;
-      const response = await router.handle(new Request(`${BASE_URL}${path}`));
-      const body = await response.json() as Record<string, unknown>;
+    const path = `/api/projects/demo/pi/issue-state?target_issue_ids=${weakDone},${pending}&target_label=tonight&target_status=done&deadline_at=2026-01-01T23:59:59Z`;
+    const response = await router.handle(new Request(`${BASE_URL}${path}`));
+    const body = await response.json() as Record<string, unknown>;
 
-      expect(response.status).toBe(200);
-      expect(body).toMatchObject({ batch_targets: [expect.objectContaining({ done: 1, label: "tonight", off_track_issue_ids: [pending] })] });
-      expect(JSON.stringify(body.diagnostics)).not.toContain(`"issue_id":${weakDone}`);
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ batch_targets: [expect.objectContaining({ done: 1, label: "tonight", off_track_issue_ids: [pending] })] });
+    expect(JSON.stringify(body.diagnostics)).not.toContain(`"issue_id":${weakDone}`);
   });
 
   test("run-once returns observations without manufacturing notifications or action candidates", async () => {
@@ -185,7 +162,6 @@ describe("Bun project PI control API", () => {
       expect(json).not.toContain("/Users/secret");
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -231,75 +207,62 @@ describe("Bun project PI control API", () => {
       expect(listPiMemoryItems(database)).toEqual([]);
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
   test("does not expose pause or resume mode endpoints", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const router = createDefaultRouter({ database });
+    insertProject(database, "demo");
+    const router = createDefaultRouter({ database });
 
-      const paused = await post(router, "/api/projects/demo/pi/pause");
-      const resumed = await post(router, "/api/projects/demo/pi/resume");
+    const paused = await post(router, "/api/projects/demo/pi/pause");
+    const resumed = await post(router, "/api/projects/demo/pi/resume");
 
-      expect(paused.status).toBe(404);
-      expect(resumed.status).toBe(404);
-    } finally {
-      database.close();
-    }
+    expect(paused.status).toBe(404);
+    expect(resumed.status).toBe(404);
   });
 
   test("authorizes project-scoped Work enqueue and explicit human review requests for a managed project", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const project = getProject(database, "demo")!;
-      const enabled = managerCycleAuthorization(project);
-      const envelope = {
-        action_type: "work.enqueue",
-        issue_id: 7,
-        payload: { action: "enqueue", work_id: "xw:work:issues:7" },
-        project_id: "demo",
-        requires_confirmation: true,
-        risk_level: "medium" as const,
-        source: "pi_manager_cycle"
-      };
+    insertProject(database, "demo");
+    const project = getProject(database, "demo")!;
+    const enabled = managerCycleAuthorization(project);
+    const envelope = {
+      action_type: "work.enqueue",
+      issue_id: 7,
+      payload: { action: "enqueue", work_id: "xw:work:issues:7" },
+      project_id: "demo",
+      requires_confirmation: true,
+      risk_level: "medium" as const,
+      source: "pi_manager_cycle"
+    };
 
-      expect(gatePiActionEnvelope(envelope, enabled)).toMatchObject({ decision: "execute" });
-      expect(gatePiActionEnvelope({ ...envelope, project_id: "other" }, enabled))
-        .toMatchObject({ decision: "deny" });
-      expect(enabled.allowedActions).toContain("work.enqueue");
-      expect(gatePiActionEnvelope({
-        action_type: "human_review.request",
-        issue_id: 7,
-        payload: { issue_id: 7, question: "是否接受当前产品范围？" },
-        project_id: "demo",
-        requires_confirmation: false,
-        risk_level: "low",
-        source: "pi_manager_cycle"
-      }, enabled)).toMatchObject({ decision: "execute" });
-      expect(enabled.allowedActions).toContain("human_review.request");
-      expect(enabled.mode).toBe("delegated");
-    } finally {
-      database.close();
-    }
+    expect(gatePiActionEnvelope(envelope, enabled)).toMatchObject({ decision: "execute" });
+    expect(gatePiActionEnvelope({ ...envelope, project_id: "other" }, enabled))
+      .toMatchObject({ decision: "deny" });
+    expect(enabled.allowedActions).toContain("work.enqueue");
+    expect(gatePiActionEnvelope({
+      action_type: "human_review.request",
+      issue_id: 7,
+      payload: { issue_id: 7, question: "是否接受当前产品范围？" },
+      project_id: "demo",
+      requires_confirmation: false,
+      risk_level: "low",
+      source: "pi_manager_cycle"
+    }, enabled)).toMatchObject({ decision: "execute" });
+    expect(enabled.allowedActions).toContain("human_review.request");
+    expect(enabled.mode).toBe("delegated");
   });
 
   test("run-once uses the bootstrapped default PI agent", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const router = createDefaultRouter({ database });
+    insertProject(database, "demo");
+    const router = createDefaultRouter({ database });
 
-      const runOnce = await post(router, "/api/projects/demo/pi/run-once");
+    const runOnce = await post(router, "/api/projects/demo/pi/run-once");
 
-      expect(runOnce.status).toBe(400);
-      expect(String((await runOnce.json() as Record<string, unknown>).message)).toContain("No API key found for openai");
-    } finally {
-      database.close();
-    }
+    expect(runOnce.status).toBe(400);
+    expect(String((await runOnce.json() as Record<string, unknown>).message)).toContain("No API key found for openai");
   });
 });
 function post(router: ReturnType<typeof createDefaultRouter>, path: string): Promise<Response> {

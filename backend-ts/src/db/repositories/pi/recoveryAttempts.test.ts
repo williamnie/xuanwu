@@ -1,8 +1,6 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../../database.ts";
 import {
   countPiRecoveryAttempts,
   getPiRecoveryAttempt,
@@ -10,126 +8,108 @@ import {
   recordPiRecoveryAttempt,
   updatePiRecoveryAttemptStatus
 } from "./recoveryAttempts.ts";
+import { useTestDatabase } from "../../../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("PI recovery attempts", () => {
   test("keeps one row per idempotency key", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const first = recordPiRecoveryAttempt(db, {
-        action_type: "issue.retry",
-        budget_window_started_at: "2026-06-18T00:00:00Z",
-        diagnosis_code: "provider_timeout",
-        id: "attempt-1",
-        idempotency_key: "recovery:demo:101:timeout:1",
-        issue_id: 101,
-        project_id: "demo",
-        source_decision_id: "decision-1"
-      });
-      const duplicate = recordPiRecoveryAttempt(db, {
-        action_type: "issue.retry",
-        budget_window_started_at: "2026-06-18T00:00:00Z",
-        diagnosis_code: "provider_timeout",
-        id: "attempt-duplicate",
-        idempotency_key: "recovery:demo:101:timeout:1",
-        issue_id: 101,
-        project_id: "demo"
-      });
+    const first = recordPiRecoveryAttempt(db, {
+      action_type: "issue.retry",
+      budget_window_started_at: "2026-06-18T00:00:00Z",
+      diagnosis_code: "provider_timeout",
+      id: "attempt-1",
+      idempotency_key: "recovery:demo:101:timeout:1",
+      issue_id: 101,
+      project_id: "demo",
+      source_decision_id: "decision-1"
+    });
+    const duplicate = recordPiRecoveryAttempt(db, {
+      action_type: "issue.retry",
+      budget_window_started_at: "2026-06-18T00:00:00Z",
+      diagnosis_code: "provider_timeout",
+      id: "attempt-duplicate",
+      idempotency_key: "recovery:demo:101:timeout:1",
+      issue_id: 101,
+      project_id: "demo"
+    });
 
-      expect(duplicate.id).toBe(first.id);
-      expect(listPiRecoveryAttempts(db, { issueId: 101, projectId: "demo" })).toHaveLength(1);
-      expect(getPiRecoveryAttempt(db, first.id)).toMatchObject({
-        id: "attempt-1",
-        idempotency_key: "recovery:demo:101:timeout:1",
-        status: "planned"
-      });
-    } finally {
-      db.close();
-    }
+    expect(duplicate.id).toBe(first.id);
+    expect(listPiRecoveryAttempts(db, { issueId: 101, projectId: "demo" })).toHaveLength(1);
+    expect(getPiRecoveryAttempt(db, first.id)).toMatchObject({
+      id: "attempt-1",
+      idempotency_key: "recovery:demo:101:timeout:1",
+      status: "planned"
+    });
   });
 
   test("supports guarded status updates", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const statuses = [
-        "planned", "executing", "progress", "no_progress", "failed", "cancelled", "superseded"
-      ] as const;
-      for (const status of statuses) {
-        const attempt = recordPiRecoveryAttempt(db, {
-          action_type: "session.resume_followup",
-          budget_window_started_at: "2026-06-18T00:00:00Z",
-          diagnosis_code: "stream_disconnected",
-          id: `attempt-${status}`,
-          idempotency_key: `resume:demo:102:${status}`,
-          issue_id: 102,
-          project_id: "demo",
-          status
-        });
-        expect(attempt.status).toBe(status);
-      }
-
-      expect(updatePiRecoveryAttemptStatus(db, "attempt-planned", {
-        executing_started_at: "2026-06-18T00:01:00Z",
-        hard_timeout_at: "2026-06-18T00:06:00Z",
-        status: "executing"
-      })).toMatchObject({
-        executing_started_at: "2026-06-18T00:01:00Z",
-        hard_timeout_at: "2026-06-18T00:06:00Z",
-        status: "executing"
-      });
-      expect(() => recordPiRecoveryAttempt(db, {
-        action_type: "issue.retry",
+    const statuses = [
+      "planned", "executing", "progress", "no_progress", "failed", "cancelled", "superseded"
+    ] as const;
+    for (const status of statuses) {
+      const attempt = recordPiRecoveryAttempt(db, {
+        action_type: "session.resume_followup",
         budget_window_started_at: "2026-06-18T00:00:00Z",
-        diagnosis_code: "bad",
-        idempotency_key: "bad-status",
+        diagnosis_code: "stream_disconnected",
+        id: `attempt-${status}`,
+        idempotency_key: `resume:demo:102:${status}`,
         issue_id: 102,
-        status: "done"
-      })).toThrow("invalid PI recovery attempt status done");
-    } finally {
-      db.close();
+        project_id: "demo",
+        status
+      });
+      expect(attempt.status).toBe(status);
     }
+
+    expect(updatePiRecoveryAttemptStatus(db, "attempt-planned", {
+      executing_started_at: "2026-06-18T00:01:00Z",
+      hard_timeout_at: "2026-06-18T00:06:00Z",
+      status: "executing"
+    })).toMatchObject({
+      executing_started_at: "2026-06-18T00:01:00Z",
+      hard_timeout_at: "2026-06-18T00:06:00Z",
+      status: "executing"
+    });
+    expect(() => recordPiRecoveryAttempt(db, {
+      action_type: "issue.retry",
+      budget_window_started_at: "2026-06-18T00:00:00Z",
+      diagnosis_code: "bad",
+      idempotency_key: "bad-status",
+      issue_id: 102,
+      status: "done"
+    })).toThrow("invalid PI recovery attempt status done");
   });
 
   test("redacts before and after snapshots", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const attempt = recordPiRecoveryAttempt(db, {
-        action_type: "session.resume_followup",
-        before_snapshot_json: { cwd: "/Users/example/private", token: "fixture-secret" },
-        budget_window_started_at: "2026-06-18T00:00:00Z",
-        diagnosis_code: "stream_disconnected",
-        id: "attempt-redacted",
-        idempotency_key: "resume:redacted",
-        issue_id: 103,
-        project_id: "demo",
-        status: "executing"
-      });
+    const attempt = recordPiRecoveryAttempt(db, {
+      action_type: "session.resume_followup",
+      before_snapshot_json: { cwd: "/Users/example/private", token: "fixture-secret" },
+      budget_window_started_at: "2026-06-18T00:00:00Z",
+      diagnosis_code: "stream_disconnected",
+      id: "attempt-redacted",
+      idempotency_key: "resume:redacted",
+      issue_id: 103,
+      project_id: "demo",
+      status: "executing"
+    });
 
-      expect(attempt.before_snapshot_json).toContain("[redacted]");
-      expect(attempt.before_snapshot_json).toContain("[redacted-path]");
-      expect(attempt.before_snapshot_json).not.toContain("fixture-secret");
-      expect(attempt.before_snapshot_json).not.toContain("/Users/example/private");
+    expect(attempt.before_snapshot_json).toContain("[redacted]");
+    expect(attempt.before_snapshot_json).toContain("[redacted-path]");
+    expect(attempt.before_snapshot_json).not.toContain("fixture-secret");
+    expect(attempt.before_snapshot_json).not.toContain("/Users/example/private");
 
-      const updated = updatePiRecoveryAttemptStatus(db, "attempt-redacted", {
-        after_snapshot_json: { path: "/tmp/private/output", api_key: "secret-after" },
-        status: "no_progress"
-      });
+    const updated = updatePiRecoveryAttemptStatus(db, "attempt-redacted", {
+      after_snapshot_json: { path: "/tmp/private/output", api_key: "secret-after" },
+      status: "no_progress"
+    });
 
-      expect(updated.after_snapshot_json).toContain("[redacted]");
-      expect(updated.after_snapshot_json).toContain("[redacted-path]");
-      expect(updated.after_snapshot_json).not.toContain("secret-after");
-      expect(updated.after_snapshot_json).not.toContain("/tmp/private/output");
-    } finally {
-      db.close();
-    }
+    expect(updated.after_snapshot_json).toContain("[redacted]");
+    expect(updated.after_snapshot_json).toContain("[redacted-path]");
+    expect(updated.after_snapshot_json).not.toContain("secret-after");
+    expect(updated.after_snapshot_json).not.toContain("/tmp/private/output");
   });
 
   test("counts issue, session, and project windows without using issues.attempt_count", async () => {
@@ -169,12 +149,6 @@ describe("PI recovery attempts", () => {
     }
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-recovery-attempts-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function attemptInput(id: string, actionType: string, status: string, createdAt: string) {
   return {

@@ -1,8 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import {
   getEventProjectionWatermark,
   listEventSummaryProjection,
@@ -25,12 +24,9 @@ import {
 import { createDefaultRouter } from "../http/server.ts";
 import { BackgroundProjectionWorker } from "./projectionWorker.ts";
 import { retireLegacyEventSummaryProjection } from "./compactEventSummaryProjectionService.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const roots: string[] = [];
-
-afterEach(async () => {
-  while (roots.length > 0) await rm(roots.pop()!, { force: true, recursive: true });
-});
+const fixtureDatabase = useTestDatabase();
 
 describe("event summary projector", () => {
   test("replays the same batch idempotently and resumes from its committed watermark", async () => {
@@ -61,14 +57,12 @@ describe("event summary projector", () => {
 
   test("compact wall budget yields between rows without advancing past unprocessed events", async () => {
     const db = await fixtureDatabase();
-    try {
-      seedIssueEvents(db);
-      const partial = projectPendingCompactEventSummaries(db, { batchSize: 100, maxWallMs: Number.MIN_VALUE });
-      expect(partial).toMatchObject({ projected_rows: 1, paused: true, watermark: { last_event_id: 1, projected_row_count: 1 } });
-      const rest = projectPendingCompactEventSummaries(db, { batchSize: 100 });
-      expect(rest).toMatchObject({ projected_rows: 3, paused: false, watermark: { last_event_id: 4, projected_row_count: 4 } });
-      expect(listCompactEventSummaryProjection(db)).toHaveLength(4);
-    } finally { db.close(); }
+    seedIssueEvents(db);
+    const partial = projectPendingCompactEventSummaries(db, { batchSize: 100, maxWallMs: Number.MIN_VALUE });
+    expect(partial).toMatchObject({ projected_rows: 1, paused: true, watermark: { last_event_id: 1, projected_row_count: 1 } });
+    const rest = projectPendingCompactEventSummaries(db, { batchSize: 100 });
+    expect(rest).toMatchObject({ projected_rows: 3, paused: false, watermark: { last_event_id: 4, projected_row_count: 4 } });
+    expect(listCompactEventSummaryProjection(db)).toHaveLength(4);
   });
 
   test("compact batches query only referenced dictionary entries and preserve collision checks", async () => {
@@ -108,211 +102,183 @@ describe("event summary projector", () => {
 
   test("keeps non-log facts exact while bounding raw issue.log summaries", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issueID = seedIssueEvents(db);
-      projectPendingEventSummaries(db);
-      const result = queryEventSummaries(db, { issueID });
-      const created = result.items.find((item) => item.type === "issue.created");
-      const log = result.items.find((item) => item.type === "issue.log");
+    const issueID = seedIssueEvents(db);
+    projectPendingEventSummaries(db);
+    const result = queryEventSummaries(db, { issueID });
+    const created = result.items.find((item) => item.type === "issue.created");
+    const log = result.items.find((item) => item.type === "issue.log");
 
-      expect(result).toMatchObject({
-        schema_version: "xuanwu.event-summary-query.v1",
-        source_of_truth: "issue_events",
-        watermark: { last_event_id: 4, lag_rows: 0, status: "ready" }
-      });
-      expect(created?.payload).toBe('{"title":"Projection fixture"}');
-      expect(created?.summary_sha256).toMatch(/^[a-f0-9]{64}$/);
-      expect(log).toMatchObject({
-        raw_method: "item/agentMessage/delta",
-        policy_id: "raw_operational",
-        retention_tier: "R1_OPERATIONAL"
-      });
-      expect(JSON.parse(log?.payload ?? "{}")).toEqual({
-        type: "agent_message_delta",
-        raw_method: "item/agentMessage/delta",
-        text: "x".repeat(16 * 1024)
-      });
-      expect(Buffer.byteLength(log?.payload ?? "")).toBeLessThan(log?.source_payload_bytes ?? 0);
-      expect(log?.source_sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(result).toMatchObject({
+      schema_version: "xuanwu.event-summary-query.v1",
+      source_of_truth: "issue_events",
+      watermark: { last_event_id: 4, lag_rows: 0, status: "ready" }
+    });
+    expect(created?.payload).toBe('{"title":"Projection fixture"}');
+    expect(created?.summary_sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(log).toMatchObject({
+      raw_method: "item/agentMessage/delta",
+      policy_id: "raw_operational",
+      retention_tier: "R1_OPERATIONAL"
+    });
+    expect(JSON.parse(log?.payload ?? "{}")).toEqual({
+      type: "agent_message_delta",
+      raw_method: "item/agentMessage/delta",
+      text: "x".repeat(16 * 1024)
+    });
+    expect(Buffer.byteLength(log?.payload ?? "")).toBeLessThan(log?.source_payload_bytes ?? 0);
+    expect(log?.source_sha256).toMatch(/^[a-f0-9]{64}$/);
 
-      const raw = db.sqlite.query<{ payload: string }, [number]>(
-        "select payload from issue_events where id=?"
-      ).get(log!.source_event_id);
-      expect(JSON.parse(raw?.payload ?? "{}").text.startsWith(JSON.parse(log!.payload).text)).toBe(true);
-    } finally {
-      db.close();
-    }
+    const raw = db.sqlite.query<{ payload: string }, [number]>(
+      "select payload from issue_events where id=?"
+    ).get(log!.source_event_id);
+    expect(JSON.parse(raw?.payload ?? "{}").text.startsWith(JSON.parse(log!.payload).text)).toBe(true);
   });
 
   test("serves cursor metadata and filtered summaries through the query API", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issueID = seedIssueEvents(db);
-      projectPendingEventSummaries(db);
-      const router = createDefaultRouter({ database: db });
-      const response = await router.handle(new Request(
-        `http://127.0.0.1:3008/api/issues/${issueID}/event-summaries?exclude_type=issue.log&limit=2`
-      ));
-      const body = await response.json() as {
-        items: Array<Record<string, unknown>>;
-        watermark: Record<string, unknown>;
-      };
+    const issueID = seedIssueEvents(db);
+    projectPendingEventSummaries(db);
+    const router = createDefaultRouter({ database: db });
+    const response = await router.handle(new Request(
+      `http://127.0.0.1:3008/api/issues/${issueID}/event-summaries?exclude_type=issue.log&limit=2`
+    ));
+    const body = await response.json() as {
+      items: Array<Record<string, unknown>>;
+      watermark: Record<string, unknown>;
+    };
 
-      expect(response.status).toBe(200);
-      expect(body.items.map((item: Record<string, unknown>) => item.type)).toEqual([
-        "issue.status_changed",
-        "issue.comment"
-      ]);
-      expect(body.watermark).toMatchObject({ last_event_id: 4, projected_row_count: 4, lag_rows: 0 });
-      expect(getEventProjectionWatermark(db).last_event_id).toBe(4);
-      const missing = await router.handle(new Request(
-        "http://127.0.0.1:3008/api/issues/999/event-summaries"
-      ));
-      expect(missing.status).toBe(404);
-    } finally {
-      db.close();
-    }
+    expect(response.status).toBe(200);
+    expect(body.items.map((item: Record<string, unknown>) => item.type)).toEqual([
+      "issue.status_changed",
+      "issue.comment"
+    ]);
+    expect(body.watermark).toMatchObject({ last_event_id: 4, projected_row_count: 4, lag_rows: 0 });
+    expect(getEventProjectionWatermark(db).last_event_id).toBe(4);
+    const missing = await router.handle(new Request(
+      "http://127.0.0.1:3008/api/issues/999/event-summaries"
+    ));
+    expect(missing.status).toBe(404);
   });
 
   test("keeps HTTP summary reads side-effect free and catches up only in the bounded background worker", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issueID = seedIssueEvents(db);
-      const before = queryEventSummaries(db, { issueID });
-      expect(before.items).toHaveLength(0);
-      expect(before.watermark).toMatchObject({ last_event_id: 0, lag_rows: 4, status: "lagging" });
+    const issueID = seedIssueEvents(db);
+    const before = queryEventSummaries(db, { issueID });
+    expect(before.items).toHaveLength(0);
+    expect(before.watermark).toMatchObject({ last_event_id: 0, lag_rows: 4, status: "lagging" });
 
-      const worker = new BackgroundProjectionWorker(db);
-      const completed = worker.runOnce();
-      expect(completed).toMatchObject({ completed_batches: 1, completed_rows: 4, error: "" });
-      expect(queryEventSummaries(db, { issueID })).toMatchObject({
-        items: expect.any(Array),
-        watermark: { last_event_id: 4, lag_rows: 0, status: "ready" }
-      });
-    } finally {
-      db.close();
-    }
+    const worker = new BackgroundProjectionWorker(db);
+    const completed = worker.runOnce();
+    expect(completed).toMatchObject({ completed_batches: 1, completed_rows: 4, error: "" });
+    expect(queryEventSummaries(db, { issueID })).toMatchObject({
+      items: expect.any(Array),
+      watermark: { last_event_id: 4, lag_rows: 0, status: "ready" }
+    });
   });
 
   test("dual-reads compact rows and fails closed on a parity conflict", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issueID = seedIssueEvents(db);
-      projectPendingEventSummaries(db);
-      projectPendingCompactEventSummaries(db);
-      updateEventSummaryProjectionSwitch(db, {
-        cutover_at: "",
-        expectedRevision: 0,
-        observation_expires_at: "2099-01-02T00:00:00.000Z",
-        observation_started_at: "2026-01-01T00:00:00.000Z",
-        read_version: "v1",
-        updatedAt: "2026-01-01T00:00:00.000Z"
-      });
+    const issueID = seedIssueEvents(db);
+    projectPendingEventSummaries(db);
+    projectPendingCompactEventSummaries(db);
+    updateEventSummaryProjectionSwitch(db, {
+      cutover_at: "",
+      expectedRevision: 0,
+      observation_expires_at: "2099-01-02T00:00:00.000Z",
+      observation_started_at: "2026-01-01T00:00:00.000Z",
+      read_version: "v1",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    });
 
-      expect(queryEventSummaries(db, { issueID }).items).toHaveLength(4);
-      db.sqlite.run("delete from event_summary_projection_compact where source_event_id=2");
-      expect(() => queryEventSummaries(db, { issueID })).toThrow("event summary projection parity conflict");
-    } finally {
-      db.close();
-    }
+    expect(queryEventSummaries(db, { issueID }).items).toHaveLength(4);
+    db.sqlite.run("delete from event_summary_projection_compact where source_event_id=2");
+    expect(() => queryEventSummaries(db, { issueID })).toThrow("event summary projection parity conflict");
   });
 
   test("uses the persisted compact watermark when the V2 reader is active", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issueID = seedIssueEvents(db);
-      const projected = projectPendingCompactEventSummaries(db);
-      updateEventSummaryProjectionSwitch(db, {
-        cutover_at: "2026-01-02T00:00:00.000Z",
-        expectedRevision: 0,
-        observation_expires_at: "2026-01-02T00:00:00.000Z",
-        observation_started_at: "2026-01-01T00:00:00.000Z",
-        read_version: "v2",
-        updatedAt: "2026-01-02T00:00:00.000Z"
-      });
+    const issueID = seedIssueEvents(db);
+    const projected = projectPendingCompactEventSummaries(db);
+    updateEventSummaryProjectionSwitch(db, {
+      cutover_at: "2026-01-02T00:00:00.000Z",
+      expectedRevision: 0,
+      observation_expires_at: "2026-01-02T00:00:00.000Z",
+      observation_started_at: "2026-01-01T00:00:00.000Z",
+      read_version: "v2",
+      updatedAt: "2026-01-02T00:00:00.000Z"
+    });
 
-      expect(projected.watermark).toMatchObject({ last_event_id: 4, projected_row_count: 4 });
-      expect(projectPendingCompactEventSummaries(db)).toMatchObject({
-        batches: 0,
-        paused: false,
-        projected_rows: 0,
-        watermark: { last_event_id: 4, projected_row_count: 4 }
-      });
-      expect(compactProjectionStatus(db)).toMatchObject({
-        last_event_id: 4,
-        projected_row_count: 4,
-        status: "ready"
-      });
-      expect(queryEventSummaries(db, { issueID }).watermark).toMatchObject({
-        projection_id: "issue_events_summary_v2",
-        last_event_id: 4,
-        projected_row_count: 4
-      });
-    } finally {
-      db.close();
-    }
+    expect(projected.watermark).toMatchObject({ last_event_id: 4, projected_row_count: 4 });
+    expect(projectPendingCompactEventSummaries(db)).toMatchObject({
+      batches: 0,
+      paused: false,
+      projected_rows: 0,
+      watermark: { last_event_id: 4, projected_row_count: 4 }
+    });
+    expect(compactProjectionStatus(db)).toMatchObject({
+      last_event_id: 4,
+      projected_row_count: 4,
+      status: "ready"
+    });
+    expect(queryEventSummaries(db, { issueID }).watermark).toMatchObject({
+      projection_id: "issue_events_summary_v2",
+      last_event_id: 4,
+      projected_row_count: 4
+    });
   });
 
   test("retains the V1 stored-reference compatibility mode across compact rebuilds", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issueID = seedIssueEvents(db);
-      const original = JSON.stringify({
-        raw_method: "item/completed",
-        text: "large output ".repeat(8_000),
-        type: "tool"
-      });
-      const plan = planIssueLogPayloadExternalization(original, 0)!;
-      persistPlannedIssueLogArtifact(db, plan);
-      db.sqlite.run(
-        "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.log', ?, ?)",
-        [issueID, plan.stored_payload, "2026-01-01T00:00:04Z"]
-      );
-      projectPendingEventSummaries(db);
-      const storedSource = listSourceIssueEvents(db, {
-        afterID: 4,
-        hydrateIssueLogs: false,
-        limit: 1
-      })[0]!;
-      upsertEventSummaryProjection(db, projectSourceIssueEvent(storedSource, "2026-01-01T00:00:05Z"));
+    const issueID = seedIssueEvents(db);
+    const original = JSON.stringify({
+      raw_method: "item/completed",
+      text: "large output ".repeat(8_000),
+      type: "tool"
+    });
+    const plan = planIssueLogPayloadExternalization(original, 0)!;
+    persistPlannedIssueLogArtifact(db, plan);
+    db.sqlite.run(
+      "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.log', ?, ?)",
+      [issueID, plan.stored_payload, "2026-01-01T00:00:04Z"]
+    );
+    projectPendingEventSummaries(db);
+    const storedSource = listSourceIssueEvents(db, {
+      afterID: 4,
+      hydrateIssueLogs: false,
+      limit: 1
+    })[0]!;
+    upsertEventSummaryProjection(db, projectSourceIssueEvent(storedSource, "2026-01-01T00:00:05Z"));
 
-      projectPendingCompactEventSummaries(db);
+    projectPendingCompactEventSummaries(db);
 
-      expect(listCompactEventSummaryProjection(db, { issueID })).toEqual(
-        listEventSummaryProjection(db, { issueID }).map((row) => ({ ...row, projected_at: "" }))
-      );
-      expect(db.sqlite.query<{ count: number }, []>(
-        "select count(*) as count from event_summary_projection_compat_modes"
-      ).get()?.count).toBe(1);
-      clearCompactEventSummaryProjection(db);
-      projectPendingCompactEventSummaries(db);
-      expect(db.sqlite.query<{ count: number }, []>(
-        "select count(*) as count from event_summary_projection_compat_modes"
-      ).get()?.count).toBe(1);
-    } finally {
-      db.close();
-    }
+    expect(listCompactEventSummaryProjection(db, { issueID })).toEqual(
+      listEventSummaryProjection(db, { issueID }).map((row) => ({ ...row, projected_at: "" }))
+    );
+    expect(db.sqlite.query<{ count: number }, []>(
+      "select count(*) as count from event_summary_projection_compat_modes"
+    ).get()?.count).toBe(1);
+    clearCompactEventSummaryProjection(db);
+    projectPendingCompactEventSummaries(db);
+    expect(db.sqlite.query<{ count: number }, []>(
+      "select count(*) as count from event_summary_projection_compat_modes"
+    ).get()?.count).toBe(1);
   });
 
   test("keeps compact summaries readable after raw source events move to cold archive", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issueID = seedIssueEvents(db);
-      projectPendingCompactEventSummaries(db);
-      const before = listCompactEventSummaryProjection(db, { issueID });
+    const issueID = seedIssueEvents(db);
+    projectPendingCompactEventSummaries(db);
+    const before = listCompactEventSummaryProjection(db, { issueID });
 
-      db.sqlite.run("delete from issue_events where issue_id=?", [issueID]);
+    db.sqlite.run("delete from issue_events where issue_id=?", [issueID]);
 
-      expect(listCompactEventSummaryProjection(db, { issueID })).toEqual(before);
-      expect(before.map((row) => row.event_created_at)).toEqual([
-        "2026-01-01T00:00:00Z",
-        "2026-01-01T00:00:01Z",
-        "2026-01-01T00:00:02Z",
-        "2026-01-01T00:00:03Z"
-      ]);
-    } finally {
-      db.close();
-    }
+    expect(listCompactEventSummaryProjection(db, { issueID })).toEqual(before);
+    expect(before.map((row) => row.event_created_at)).toEqual([
+      "2026-01-01T00:00:00Z",
+      "2026-01-01T00:00:01Z",
+      "2026-01-01T00:00:02Z",
+      "2026-01-01T00:00:03Z"
+    ]);
   });
 
   test("associates an event with a run across mixed ISO timestamp precision", async () => {
@@ -362,50 +328,40 @@ describe("event summary projector", () => {
 
   test("retires legacy projection after V2 cutover and does not rebuild it in the background", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issueID = seedIssueEvents(db);
-      projectPendingEventSummaries(db);
-      projectPendingCompactEventSummaries(db);
-      updateEventSummaryProjectionSwitch(db, {
-        cutover_at: "2026-01-02T00:00:00.000Z",
-        expectedRevision: 0,
-        observation_expires_at: "2026-01-02T00:00:00.000Z",
-        observation_started_at: "2026-01-01T00:00:00.000Z",
-        read_version: "v2",
-        updatedAt: "2026-01-02T00:00:00.000Z"
-      });
+    const issueID = seedIssueEvents(db);
+    projectPendingEventSummaries(db);
+    projectPendingCompactEventSummaries(db);
+    updateEventSummaryProjectionSwitch(db, {
+      cutover_at: "2026-01-02T00:00:00.000Z",
+      expectedRevision: 0,
+      observation_expires_at: "2026-01-02T00:00:00.000Z",
+      observation_started_at: "2026-01-01T00:00:00.000Z",
+      read_version: "v2",
+      updatedAt: "2026-01-02T00:00:00.000Z"
+    });
 
-      const retired = retireLegacyEventSummaryProjection({
-        actor: "operator",
-        actorKind: "user",
-        apply: true,
-        auditRef: "pi_action_events:legacy-retire-test",
-        confirmBackupTested: true,
-        confirmNoActiveWriters: true,
-        dbPath: db.path,
-        reason: "focused compact projection retirement test"
-      });
-      expect(retired).toMatchObject({ applied: true, after: { legacy_rows: 0 } });
+    const retired = retireLegacyEventSummaryProjection({
+      actor: "operator",
+      actorKind: "user",
+      apply: true,
+      auditRef: "pi_action_events:legacy-retire-test",
+      confirmBackupTested: true,
+      confirmNoActiveWriters: true,
+      dbPath: db.path,
+      reason: "focused compact projection retirement test"
+    });
+    expect(retired).toMatchObject({ applied: true, after: { legacy_rows: 0 } });
 
-      db.sqlite.run(
-        "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.comment', '{}', ?)",
-        [issueID, "2026-01-01T00:00:04Z"]
-      );
-      new BackgroundProjectionWorker(db).runOnce();
+    db.sqlite.run(
+      "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.comment', '{}', ?)",
+      [issueID, "2026-01-01T00:00:04Z"]
+    );
+    new BackgroundProjectionWorker(db).runOnce();
 
-      expect(listEventSummaryProjection(db, { issueID })).toHaveLength(0);
-      expect(listCompactEventSummaryProjection(db, { issueID })).toHaveLength(5);
-    } finally {
-      db.close();
-    }
+    expect(listEventSummaryProjection(db, { issueID })).toHaveLength(0);
+    expect(listCompactEventSummaryProjection(db, { issueID })).toHaveLength(5);
   });
 });
-
-async function fixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "event-summary-projector-"));
-  roots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function seedIssueEvents(db: RunnerDatabase): number {
   db.sqlite.run(`insert into projects (id, name, cwd, created_at, updated_at)

@@ -1,27 +1,14 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { EventBus } from "../events/bus.ts";
 import type { ProjectFinding } from "../pi/projectFindings.ts";
 import { publishNeedsUserFindingNotifications, publishPiNeedsUserNotification } from "./piNotifier.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-notifier-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("PI needs-user notification engine", () => {
   test("publishes redacted needs-user payloads through the event bus", async () => {
@@ -76,39 +63,35 @@ describe("PI needs-user notification engine", () => {
 
   test("records needs-user notifications with issue cooldown", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      insertIssue(database, 7, "demo");
-      const input = {
-        database,
-        findings: [findingRecord({ message: "waiting for user input" })],
-        notifyOnNeedsUser: true,
-        project: { id: "demo", name: "Demo" }
-      };
+    insertProject(database, "demo");
+    insertIssue(database, 7, "demo");
+    const input = {
+      database,
+      findings: [findingRecord({ message: "waiting for user input" })],
+      notifyOnNeedsUser: true,
+      project: { id: "demo", name: "Demo" }
+    };
 
-      const first = publishNeedsUserFindingNotifications({
-        ...input,
-        now: new Date("2026-01-01T00:00:00Z")
-      });
-      const second = publishNeedsUserFindingNotifications({
-        ...input,
-        now: new Date("2026-01-01T00:10:00Z")
-      });
-      const afterCooldown = publishNeedsUserFindingNotifications({
-        ...input,
-        now: new Date("2026-01-01T00:31:00Z")
-      });
+    const first = publishNeedsUserFindingNotifications({
+      ...input,
+      now: new Date("2026-01-01T00:00:00Z")
+    });
+    const second = publishNeedsUserFindingNotifications({
+      ...input,
+      now: new Date("2026-01-01T00:10:00Z")
+    });
+    const afterCooldown = publishNeedsUserFindingNotifications({
+      ...input,
+      now: new Date("2026-01-01T00:31:00Z")
+    });
 
-      expect(first).toHaveLength(1);
-      expect(second).toEqual([]);
-      expect(afterCooldown).toHaveLength(1);
-      expect(listNotificationRows(database)).toEqual([
-        { event: "pi.needs_user", issue_id: 7, project_id: "demo", read_at: "" },
-        { event: "pi.needs_user", issue_id: 7, project_id: "demo", read_at: "" }
-      ]);
-    } finally {
-      database.close();
-    }
+    expect(first).toHaveLength(1);
+    expect(second).toEqual([]);
+    expect(afterCooldown).toHaveLength(1);
+    expect(listNotificationRows(database)).toEqual([
+      { event: "pi.needs_user", issue_id: 7, project_id: "demo", read_at: "" },
+      { event: "pi.needs_user", issue_id: 7, project_id: "demo", read_at: "" }
+    ]);
   });
 
   test("dedupes action needs-user notifications by action id", async () => {
@@ -157,7 +140,6 @@ describe("PI needs-user notification engine", () => {
       expect(text).not.toContain("at leak");
     } finally {
       stop();
-      database.close();
     }
   });
 });

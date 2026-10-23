@@ -1,60 +1,43 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { runPiHeartbeatOnce } from "./heartbeatOrchestrator.ts";
 import { createPiMemoryItem } from "../db/repositories/pi.ts";
 import { seedMemoryExperience } from "./memoryExperienceTestFixtures.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-heartbeat-memory-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("PI heartbeat memory signals", () => {
 
   test("retrieves confirmed project memory and omits disabled candidates", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      insertMemory(db, "active-policy", 0, "Project policy: verify before commit");
-      insertMemory(db, "candidate", 1, "Unconfirmed guess should not be used");
+    insertProject(db, "demo");
+    insertMemory(db, "active-policy", 0, "Project policy: verify before commit");
+    insertMemory(db, "candidate", 1, "Unconfirmed guess should not be used");
 
-      const result = await runPiHeartbeatOnce({ database: db, projectID: "demo", now: new Date("2026-06-02T10:00:00Z") });
+    const result = await runPiHeartbeatOnce({ database: db, projectID: "demo", now: new Date("2026-06-02T10:00:00Z") });
 
-      expect(result.signals.memory_items).toEqual([
-        expect.objectContaining({
-          content: "Project policy: verify before commit",
-          id: "active-policy",
-          kind: "project_policy",
-          reference: "pi_memory_items/active-policy",
-          source_id: "259",
-          source_type: "issue"
-        })
-      ]);
-      expect(JSON.stringify(result.signals.memory_items)).not.toContain("Unconfirmed guess");
+    expect(result.signals.memory_items).toEqual([
+      expect.objectContaining({
+        content: "Project policy: verify before commit",
+        id: "active-policy",
+        kind: "project_policy",
+        reference: "pi_memory_items/active-policy",
+        source_id: "259",
+        source_type: "issue"
+      })
+    ]);
+    expect(JSON.stringify(result.signals.memory_items)).not.toContain("Unconfirmed guess");
 
-      const stored = db.sqlite.query<{ result_json: string; signals_json: string }, []>(
-        "select result_json, signals_json from pi_heartbeat_runs"
-      ).get();
-      const resultJson = JSON.parse(stored?.result_json ?? "{}");
-      const signalsJson = JSON.parse(stored?.signals_json ?? "{}");
-      expect(resultJson.signals.memory_items[0]).toMatchObject({ reference: "pi_memory_items/active-policy" });
-      expect(signalsJson.memory_items[0]).toMatchObject({ source_type: "issue", source_id: "259" });
-    } finally {
-      db.close();
-    }
+    const stored = db.sqlite.query<{ result_json: string; signals_json: string }, []>(
+      "select result_json, signals_json from pi_heartbeat_runs"
+    ).get();
+    const resultJson = JSON.parse(stored?.result_json ?? "{}");
+    const signalsJson = JSON.parse(stored?.signals_json ?? "{}");
+    expect(resultJson.signals.memory_items[0]).toMatchObject({ reference: "pi_memory_items/active-policy" });
+    expect(signalsJson.memory_items[0]).toMatchObject({ source_type: "issue", source_id: "259" });
   });
 });
 

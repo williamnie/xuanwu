@@ -1,233 +1,196 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { scanProjectFindings } from "./projectFindings.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-project-findings-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("PI failed/needs-user/hold scanner", () => {
   test("generates explainable findings for failed, needs-user, and project holds", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const failed = insertIssue(db, {
-        day: 2,
-        error: "provider failed CODEX_API_KEY=fixture-secret at /Users/secret/log.txt",
-        status: "failed",
-        title: "Failed task"
-      });
-      const needsUser = insertIssue(db, {
-        day: 3,
-        error: "bun test passed; waiting for user acceptance",
-        status: "needs_user",
-        title: "Needs user task"
-      });
-      insertIssue(db, { day: 4, status: "todo", title: "Healthy task" });
-      createProjectHoldsTable(db);
-      insertProjectHold(db, "demo");
+    insertProject(db, "demo");
+    const failed = insertIssue(db, {
+      day: 2,
+      error: "provider failed CODEX_API_KEY=fixture-secret at /Users/secret/log.txt",
+      status: "failed",
+      title: "Failed task"
+    });
+    const needsUser = insertIssue(db, {
+      day: 3,
+      error: "bun test passed; waiting for user acceptance",
+      status: "needs_user",
+      title: "Needs user task"
+    });
+    insertIssue(db, { day: 4, status: "todo", title: "Healthy task" });
+    createProjectHoldsTable(db);
+    insertProjectHold(db, "demo");
 
-      const findings = scanProjectFindings(db, "demo");
+    const findings = scanProjectFindings(db, "demo");
 
-      expect(findings.map((finding) => ({ issue_id: finding.issue_id, reason: finding.reason }))).toEqual([
-        { issue_id: failed, reason: "pi_failed" },
-        { issue_id: needsUser, reason: "pi_needs_user" },
-        { issue_id: 0, reason: "project_hold:dirty_worktree" }
-      ]);
-      expect(findings[0]?.message).toContain("provider failed");
-      expect(findings[1]?.message).toContain("waiting for user acceptance");
-      expect(findings[1]).not.toHaveProperty("action_candidate");
-      expect(findings[2]?.message).toContain("dirty worktree");
-      const json = JSON.stringify(findings);
-      expect(json).toContain("[redacted]");
-      expect(json).toContain("[redacted-path]");
-      expect(json).not.toContain("fixture-secret");
-      expect(json).not.toContain("hold-secret");
-      expect(json).not.toContain("/Users/secret");
-    } finally {
-      db.close();
-    }
+    expect(findings.map((finding) => ({ issue_id: finding.issue_id, reason: finding.reason }))).toEqual([
+      { issue_id: failed, reason: "pi_failed" },
+      { issue_id: needsUser, reason: "pi_needs_user" },
+      { issue_id: 0, reason: "project_hold:dirty_worktree" }
+    ]);
+    expect(findings[0]?.message).toContain("provider failed");
+    expect(findings[1]?.message).toContain("waiting for user acceptance");
+    expect(findings[1]).not.toHaveProperty("action_candidate");
+    expect(findings[2]?.message).toContain("dirty worktree");
+    const json = JSON.stringify(findings);
+    expect(json).toContain("[redacted]");
+    expect(json).toContain("[redacted-path]");
+    expect(json).not.toContain("fixture-secret");
+    expect(json).not.toContain("hold-secret");
+    expect(json).not.toContain("/Users/secret");
   });
 
   test("does not mutate issues, holds, events, or PI actions", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const failed = insertIssue(db, { day: 2, status: "failed", title: "Failed task" });
-      createProjectHoldsTable(db);
-      insertProjectHold(db, "demo");
-      const before = sideEffectCounts(db, failed);
+    insertProject(db, "demo");
+    const failed = insertIssue(db, { day: 2, status: "failed", title: "Failed task" });
+    createProjectHoldsTable(db);
+    insertProjectHold(db, "demo");
+    const before = sideEffectCounts(db, failed);
 
-      scanProjectFindings(db, "demo");
-      scanProjectFindings(db, "demo");
+    scanProjectFindings(db, "demo");
+    scanProjectFindings(db, "demo");
 
-      expect(sideEffectCounts(db, failed)).toEqual(before);
-    } finally {
-      db.close();
-    }
+    expect(sideEffectCounts(db, failed)).toEqual(before);
   });
 
   test("detects stale in-progress issues from issue, run, and session activity thresholds", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const stale = insertIssue(db, {
-        codexThreadID: "thread-stale",
-        day: 1,
-        status: "in_progress",
-        title: "Stale task"
-      });
-      insertRun(db, stale, { sessionID: "thread-stale", startedAt: "2026-01-01T00:05:00Z" });
-      insertSession(db, stale, { sessionID: "thread-stale", status: "completed", updatedAt: "2026-01-01T00:10:00Z" });
+    insertProject(db, "demo");
+    const stale = insertIssue(db, {
+      codexThreadID: "thread-stale",
+      day: 1,
+      status: "in_progress",
+      title: "Stale task"
+    });
+    insertRun(db, stale, { sessionID: "thread-stale", startedAt: "2026-01-01T00:05:00Z" });
+    insertSession(db, stale, { sessionID: "thread-stale", status: "completed", updatedAt: "2026-01-01T00:10:00Z" });
 
-      const findings = scanProjectFindings(db, "demo", {
-        now: new Date("2026-01-01T01:30:00Z"),
-        staleAfterMs: 60 * 60 * 1000
-      });
+    const findings = scanProjectFindings(db, "demo", {
+      now: new Date("2026-01-01T01:30:00Z"),
+      staleAfterMs: 60 * 60 * 1000
+    });
 
-      expect(findings).toContainEqual(expect.objectContaining({
-        category: "needs_user",
-        issue_id: stale,
-        reason: "stale_issue",
-        status: "in_progress"
-      }));
-      expect(findings.find((finding) => finding.issue_id === stale)?.message).toContain("inactive for 80m");
-    } finally {
-      db.close();
-    }
+    expect(findings).toContainEqual(expect.objectContaining({
+      category: "needs_user",
+      issue_id: stale,
+      reason: "stale_issue",
+      status: "in_progress"
+    }));
+    expect(findings.find((finding) => finding.issue_id === stale)?.message).toContain("inactive for 80m");
   });
 
   test("does not mark active or recently updated Codex sessions as stale", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const running = insertIssue(db, {
-        codexThreadID: "thread-active",
-        day: 1,
-        status: "in_progress",
-        title: "Active task"
-      });
-      const recent = insertIssue(db, {
-        codexThreadID: "thread-recent",
-        day: 1,
-        status: "in_progress",
-        title: "Recently updated task"
-      });
-      insertRun(db, running, { sessionID: "thread-active", startedAt: "2026-01-01T00:05:00Z" });
-      insertSession(db, running, { sessionID: "thread-active", status: "running", updatedAt: "2026-01-01T00:10:00Z" });
-      insertRun(db, recent, { sessionID: "thread-recent", startedAt: "2026-01-01T00:05:00Z" });
-      insertSession(db, recent, { sessionID: "thread-recent", status: "completed", updatedAt: "2026-01-01T01:20:00Z" });
+    insertProject(db, "demo");
+    const running = insertIssue(db, {
+      codexThreadID: "thread-active",
+      day: 1,
+      status: "in_progress",
+      title: "Active task"
+    });
+    const recent = insertIssue(db, {
+      codexThreadID: "thread-recent",
+      day: 1,
+      status: "in_progress",
+      title: "Recently updated task"
+    });
+    insertRun(db, running, { sessionID: "thread-active", startedAt: "2026-01-01T00:05:00Z" });
+    insertSession(db, running, { sessionID: "thread-active", status: "running", updatedAt: "2026-01-01T00:10:00Z" });
+    insertRun(db, recent, { sessionID: "thread-recent", startedAt: "2026-01-01T00:05:00Z" });
+    insertSession(db, recent, { sessionID: "thread-recent", status: "completed", updatedAt: "2026-01-01T01:20:00Z" });
 
-      const findings = scanProjectFindings(db, "demo", {
-        now: new Date("2026-01-01T01:30:00Z"),
-        staleAfterMs: 60 * 60 * 1000
-      });
+    const findings = scanProjectFindings(db, "demo", {
+      now: new Date("2026-01-01T01:30:00Z"),
+      staleAfterMs: 60 * 60 * 1000
+    });
 
-      expect(findings.some((finding) => finding.issue_id === running)).toBe(false);
-      expect(findings.some((finding) => finding.issue_id === recent)).toBe(false);
-    } finally {
-      db.close();
-    }
+    expect(findings.some((finding) => finding.issue_id === running)).toBe(false);
+    expect(findings.some((finding) => finding.issue_id === recent)).toBe(false);
   });
 
   test("classifies canonical failed and needs-user states", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const transient = insertIssue(db, {
-        autoRetryNextAt: "2026-01-01T02:00:00Z",
-        autoRetryReason: "Transport error: network error",
-        day: 1,
-        status: "todo",
-        title: "Retry later"
-      });
-      const transientFailed = insertIssue(db, {
-        day: 1,
-        error: "stream disconnected before completion",
-        status: "failed",
-        title: "Retryable failure"
-      });
-      const needsUser = insertIssue(db, {
-        day: 2,
-        error: "approval denied; user input required",
-        status: "failed",
-        title: "Needs user"
-      });
-      const blocked = insertIssue(db, {
-        day: 3,
-        error: "unit tests failed",
-        status: "failed",
-        title: "Blocked task"
-      });
-      const canonicalNeedsUser = insertIssue(db, {
-        day: 4,
-        error: "bun test passed; waiting for user acceptance",
-        status: "needs_user",
-        title: "Needs user task"
-      });
+    insertProject(db, "demo");
+    const transient = insertIssue(db, {
+      autoRetryNextAt: "2026-01-01T02:00:00Z",
+      autoRetryReason: "Transport error: network error",
+      day: 1,
+      status: "todo",
+      title: "Retry later"
+    });
+    const transientFailed = insertIssue(db, {
+      day: 1,
+      error: "stream disconnected before completion",
+      status: "failed",
+      title: "Retryable failure"
+    });
+    const needsUser = insertIssue(db, {
+      day: 2,
+      error: "approval denied; user input required",
+      status: "failed",
+      title: "Needs user"
+    });
+    const blocked = insertIssue(db, {
+      day: 3,
+      error: "unit tests failed",
+      status: "failed",
+      title: "Blocked task"
+    });
+    const canonicalNeedsUser = insertIssue(db, {
+      day: 4,
+      error: "bun test passed; waiting for user acceptance",
+      status: "needs_user",
+      title: "Needs user task"
+    });
 
-      const findings = scanProjectFindings(db, "demo", { now: new Date("2026-01-01T01:30:00Z") });
-      const categories = new Map(findings.map((finding) => [finding.issue_id, finding.category]));
+    const findings = scanProjectFindings(db, "demo", { now: new Date("2026-01-01T01:30:00Z") });
+    const categories = new Map(findings.map((finding) => [finding.issue_id, finding.category]));
 
-      expect(categories.has(transient)).toBe(false);
-      expect(categories.get(transientFailed)).toBe("blocked");
-      expect(categories.get(needsUser)).toBe("blocked");
-      expect(categories.get(blocked)).toBe("blocked");
-      expect(categories.get(canonicalNeedsUser)).toBe("needs_user");
-      expect(findings.find((finding) => finding.issue_id === needsUser)?.notification).toMatchObject({
-        type: "pi.project_blocked"
-      });
-      expect(findings.find((finding) => finding.issue_id === canonicalNeedsUser)?.notification).toMatchObject({
-        type: "pi.needs_user"
-      });
-    } finally {
-      db.close();
-    }
+    expect(categories.has(transient)).toBe(false);
+    expect(categories.get(transientFailed)).toBe("blocked");
+    expect(categories.get(needsUser)).toBe("blocked");
+    expect(categories.get(blocked)).toBe("blocked");
+    expect(categories.get(canonicalNeedsUser)).toBe("needs_user");
+    expect(findings.find((finding) => finding.issue_id === needsUser)?.notification).toMatchObject({
+      type: "pi.project_blocked"
+    });
+    expect(findings.find((finding) => finding.issue_id === canonicalNeedsUser)?.notification).toMatchObject({
+      type: "pi.needs_user"
+    });
   });
 
   test("uses confirmed failure pattern memory to classify retry and escalation", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const knownFailure = insertIssue(db, {
-        day: 5,
-        error: "provider returned quota exhaustion on model gpt-test",
-        status: "failed",
-        title: "Provider quota"
-      });
-      insertFailurePatternMemory(db, {
-        category: "needs_user",
-        match: "quota exhaustion",
-        recommendation: "Escalate to user before retrying provider quota failures."
-      });
+    insertProject(db, "demo");
+    const knownFailure = insertIssue(db, {
+      day: 5,
+      error: "provider returned quota exhaustion on model gpt-test",
+      status: "failed",
+      title: "Provider quota"
+    });
+    insertFailurePatternMemory(db, {
+      category: "needs_user",
+      match: "quota exhaustion",
+      recommendation: "Escalate to user before retrying provider quota failures."
+    });
 
-      const findings = scanProjectFindings(db, "demo");
-      const finding = findings.find((item) => item.issue_id === knownFailure);
+    const findings = scanProjectFindings(db, "demo");
+    const finding = findings.find((item) => item.issue_id === knownFailure);
 
-      expect(finding).toMatchObject({
-        category: "blocked",
-        reason: "failure_pattern",
-        notification: { type: "pi.project_blocked" }
-      });
-      expect(finding?.message).toContain("known failure pattern");
-      expect(finding?.message).toContain("Escalate to user");
-    } finally {
-      db.close();
-    }
+    expect(finding).toMatchObject({
+      category: "blocked",
+      reason: "failure_pattern",
+      notification: { type: "pi.project_blocked" }
+    });
+    expect(finding?.message).toContain("known failure pattern");
+    expect(finding?.message).toContain("Escalate to user");
   });
 });
 

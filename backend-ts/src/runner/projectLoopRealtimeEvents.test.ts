@@ -1,13 +1,13 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { EventBus, type AppEvent } from "../events/bus.ts";
 import { startProjectLoop } from "./projectLoopManager.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
+const openFixtureDatabase = useTestDatabase();
 
 class BlockingStreamingProvider implements ExecutorProvider {
   readonly id = "fake-execution-only" as const;
@@ -31,19 +31,6 @@ class BlockingStreamingProvider implements ExecutorProvider {
     };
   }
 }
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-realtime-events-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
 
 describe("project loop realtime issue log events", () => {
   test("publishes raw provider events to SSE even when normal log mode does not persist them", async () => {

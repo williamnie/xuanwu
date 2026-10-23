@@ -1,8 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../database.ts";
+import { type RunnerDatabase } from "../database.ts";
 import { normalizedRunEvent } from "../../providers/runEvents.ts";
 import { NORMALIZED_RUN_EVENT_CONTRACT } from "../../providers/types.ts";
 import { getRun } from "./runs.ts";
@@ -10,61 +9,51 @@ import {
   rebuildRunProgressProjection,
   runProgressProjectionStatus
 } from "./runProgress.ts";
+import { useTestDatabase } from "../../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("Run progress repository", () => {
   test("rebuilds provider phase summaries, latest progress, timeline and stalled signal from raw events", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const { issueID, runID } = insertRunningRun(db);
-      insertRunEvent(db, issueID, "2026-01-01T00:05:00.000Z", "progress", "running", "item/completed", "step complete");
-      insertRunEvent(db, issueID, "2026-01-01T00:01:00.000Z", "started", "running", "turn/started", "turn started");
-      insertRunEvent(db, issueID, "2026-01-01T00:06:00.000Z", "progress", "running", "item/completed", "step complete");
-      insertMalformedRunEvent(db, issueID, "2026-01-01T00:07:00.000Z");
+    const { issueID, runID } = insertRunningRun(db);
+    insertRunEvent(db, issueID, "2026-01-01T00:05:00.000Z", "progress", "running", "item/completed", "step complete");
+    insertRunEvent(db, issueID, "2026-01-01T00:01:00.000Z", "started", "running", "turn/started", "turn started");
+    insertRunEvent(db, issueID, "2026-01-01T00:06:00.000Z", "progress", "running", "item/completed", "step complete");
+    insertMalformedRunEvent(db, issueID, "2026-01-01T00:07:00.000Z");
 
-      const projection = rebuildRunProgressProjection(db, runID, {
-        now: new Date("2026-01-01T00:30:00.000Z"),
-        stalledAfterMs: 10 * 60 * 1000
-      });
-      const detail = getRun(db, runID);
+    const projection = rebuildRunProgressProjection(db, runID, {
+      now: new Date("2026-01-01T00:30:00.000Z"),
+      stalledAfterMs: 10 * 60 * 1000
+    });
+    const detail = getRun(db, runID);
 
-      expect(projection).toMatchObject({
-        invalid_event_count: 1,
-        latest: { kind: "progress", summary: "step complete" },
-        projection_mode: "read_through_rebuild",
-        provider_phase: "running",
-        replay: {
-          duplicate_event_count: 1,
-          source_event_count: 4,
-          unique_event_count: 2,
-          unmapped_event_count: 0
-        },
-        source_of_truth: "issue_runs+run_attempts+issue_events",
-        stalled: {
-          detected: true,
-          reason: "no_progress_for_threshold",
-          since: "2026-01-01T00:05:00.000Z"
-        },
-        timeline: [{ event_count: 2, phase: "running" }]
-      });
-      expect(projection?.phase_summary).toMatchObject([{ event_count: 2, phase: "running" }]);
-      expect(detail?.progress).toMatchObject({
-        attempt_status: "running",
-        latest: { source_event_id: expect.any(Number) },
-        phase: "running",
-        provider_phase: "running"
-      });
-    } finally {
-      db.close();
-    }
+    expect(projection).toMatchObject({
+      invalid_event_count: 1,
+      latest: { kind: "progress", summary: "step complete" },
+      projection_mode: "read_through_rebuild",
+      provider_phase: "running",
+      replay: {
+        duplicate_event_count: 1,
+        source_event_count: 4,
+        unique_event_count: 2,
+        unmapped_event_count: 0
+      },
+      source_of_truth: "issue_runs+run_attempts+issue_events",
+      stalled: {
+        detected: true,
+        reason: "no_progress_for_threshold",
+        since: "2026-01-01T00:05:00.000Z"
+      },
+      timeline: [{ event_count: 2, phase: "running" }]
+    });
+    expect(projection?.phase_summary).toMatchObject([{ event_count: 2, phase: "running" }]);
+    expect(detail?.progress).toMatchObject({
+      attempt_status: "running",
+      latest: { source_event_id: expect.any(Number) },
+      phase: "running",
+      provider_phase: "running"
+    });
   });
 
   test("treats approval wait as attention rather than a stalled execution", async () => {
@@ -119,12 +108,6 @@ describe("Run progress repository", () => {
     }
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-run-progress-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function insertRunningRun(db: RunnerDatabase): { issueID: number; runID: `xw:run:issue_runs:${string}` } {
   const at = "2026-01-01T00:00:00.000Z";

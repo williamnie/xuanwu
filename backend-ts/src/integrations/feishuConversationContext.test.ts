@@ -1,8 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { approveImReplyDraft, createImReplyDraft } from "../db/repositories/imReplyOutbox.ts";
@@ -13,114 +12,86 @@ import {
   buildFeishuConversationPromptContext,
   buildFeishuConversationPromptProjection
 } from "./feishuConversationContext.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const root = tempRoots.pop();
-    if (root) await rm(root, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("Feishu bounded conversation projection", () => {
   test("merges recent inbound messages and sent notifications without including the current message", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo", "Demo");
-      const issue = createIssue(db, { project_id: "demo", status: "todo", title: "Verify memory" });
-      saveInbound(db, "om_old", "之前说的是 #" + issue.id, "2026-07-21T01:00:00.000Z");
-      saveInbound(db, "om_current", "验收", "2026-07-21T04:00:00.000Z");
-      saveSentNotification(db, issue.id, "issue #" + issue.id + " 已完成，请回复：验收 / 需复查 API_KEY=secret-value", "2026-07-21T03:00:00.000Z");
+    insertProject(db, "demo", "Demo");
+    const issue = createIssue(db, { project_id: "demo", status: "todo", title: "Verify memory" });
+    saveInbound(db, "om_old", "之前说的是 #" + issue.id, "2026-07-21T01:00:00.000Z");
+    saveInbound(db, "om_current", "验收", "2026-07-21T04:00:00.000Z");
+    saveSentNotification(db, issue.id, "issue #" + issue.id + " 已完成，请回复：验收 / 需复查 API_KEY=secret-value", "2026-07-21T03:00:00.000Z");
 
-      const current = eventFixture({ message_id: "om_current", text: "验收" });
-      const context = buildFeishuConversationPromptContext(db, { event: current });
+    const current = eventFixture({ message_id: "om_current", text: "验收" });
+    const context = buildFeishuConversationPromptContext(db, { event: current });
 
-      expect(context).toContain("inbound");
-      expect(context).toContain("outbound issue=#" + issue.id);
-      expect(context).toContain("之前说的是 #" + issue.id);
-      expect(context).not.toContain("message=om_current");
-      expect(context).not.toContain("secret-value");
-    } finally {
-      db.close();
-    }
+    expect(context).toContain("inbound");
+    expect(context).toContain("outbound issue=#" + issue.id);
+    expect(context).toContain("之前说的是 #" + issue.id);
+    expect(context).not.toContain("message=om_current");
+    expect(context).not.toContain("secret-value");
   });
 
   test("keeps prior notification context without classifying the current message", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo", "Demo");
-      const issue = createIssue(db, { project_id: "demo", status: "todo", title: "Continue exact work" });
-      saveSentNotification(db, issue.id, "issue #" + issue.id + " 待验收", "2026-07-21T03:00:00.000Z");
-      const event = eventFixture({ text: "验收" });
+    insertProject(db, "demo", "Demo");
+    const issue = createIssue(db, { project_id: "demo", status: "todo", title: "Continue exact work" });
+    saveSentNotification(db, issue.id, "issue #" + issue.id + " 待验收", "2026-07-21T03:00:00.000Z");
+    const event = eventFixture({ text: "验收" });
 
-      const context = buildFeishuConversationPromptContext(db, { event });
-      expect(context).toContain(`outbound issue=#${issue.id}`);
-      expect(context).toContain("待验收");
-      expect(context).not.toContain("active_reply_target");
-    } finally {
-      db.close();
-    }
+    const context = buildFeishuConversationPromptContext(db, { event });
+    expect(context).toContain(`outbound issue=#${issue.id}`);
+    expect(context).toContain("待验收");
+    expect(context).not.toContain("active_reply_target");
   });
 
   test("keeps the previous inbound target visible for PI to interpret a follow-up", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo", "Demo");
-      const issue = createIssue(db, { project_id: "demo", status: "failed", title: "Retry exact work" });
-      saveInbound(db, "om_previous", `需要补充什么上下文？如何重试${issue.id}呢`, "2026-07-21T03:59:00.000Z");
-      const current = eventFixture({ text: "重试吧" });
+    insertProject(db, "demo", "Demo");
+    const issue = createIssue(db, { project_id: "demo", status: "failed", title: "Retry exact work" });
+    saveInbound(db, "om_previous", `需要补充什么上下文？如何重试${issue.id}呢`, "2026-07-21T03:59:00.000Z");
+    const current = eventFixture({ text: "重试吧" });
 
-      const context = buildFeishuConversationPromptContext(db, { event: current });
-      expect(context).toContain(`如何重试${issue.id}呢`);
-      expect(context).not.toContain("active_reply_target");
-    } finally {
-      db.close();
-    }
+    const context = buildFeishuConversationPromptContext(db, { event: current });
+    expect(context).toContain(`如何重试${issue.id}呢`);
+    expect(context).not.toContain("active_reply_target");
   });
 
   test("binds a projected event to agent start and excludes it after the committed cursor", async () => {
     const db = await openFixtureDatabase();
-    try {
-      saveInbound(db, "om_previous", "只应投影一次", "2026-07-21T03:59:00.000Z");
-      const current = eventFixture({ text: "继续" });
-      const first = buildFeishuConversationPromptProjection(db, {
-        conversationId: "feishu-chat-oc_group",
-        event: current
-      });
-      expect(first.prompt).toContain("只应投影一次");
-      const reservation = reserveImContextProjection(db, {
-        connectorID: first.connectorID,
-        conversationID: first.piConversationID,
-        events: first.events.map((event) => ({
-          direction: event.direction,
-          included: event.included,
-          messageRef: event.messageRef,
-          projectionHash: event.projectionHash,
-          sourceRowID: event.sourceRowID
-        })),
-        scopeKey: first.scopeKey,
-        turnID: "turn-presented"
-      });
-      markImContextProjectionPresented(db, reservation);
+    saveInbound(db, "om_previous", "只应投影一次", "2026-07-21T03:59:00.000Z");
+    const current = eventFixture({ text: "继续" });
+    const first = buildFeishuConversationPromptProjection(db, {
+      conversationId: "feishu-chat-oc_group",
+      event: current
+    });
+    expect(first.prompt).toContain("只应投影一次");
+    const reservation = reserveImContextProjection(db, {
+      connectorID: first.connectorID,
+      conversationID: first.piConversationID,
+      events: first.events.map((event) => ({
+        direction: event.direction,
+        included: event.included,
+        messageRef: event.messageRef,
+        projectionHash: event.projectionHash,
+        sourceRowID: event.sourceRowID
+      })),
+      scopeKey: first.scopeKey,
+      turnID: "turn-presented"
+    });
+    markImContextProjectionPresented(db, reservation);
 
-      const second = buildFeishuConversationPromptProjection(db, {
-        conversationId: "feishu-chat-oc_group",
-        event: current
-      });
-      expect(second.prompt).not.toContain("只应投影一次");
-      expect(second.events).toEqual([]);
-    } finally {
-      db.close();
-    }
+    const second = buildFeishuConversationPromptProjection(db, {
+      conversationId: "feishu-chat-oc_group",
+      event: current
+    });
+    expect(second.prompt).not.toContain("只应投影一次");
+    expect(second.events).toEqual([]);
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-context-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function insertProject(db: RunnerDatabase, id: string, name: string): void {
   db.sqlite.run(

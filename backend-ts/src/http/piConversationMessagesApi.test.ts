@@ -1,11 +1,10 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai/compat";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { listContextBundles } from "../db/repositories/contextBundles.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { listIssues } from "../db/repositories/issues.ts";
@@ -23,22 +22,10 @@ import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSes
 import { createIssueRun } from "../db/repositories/issueRuns.ts";
 import { readIssueDecisionProjection } from "../domain/review/humanReview.ts";
 import { listBuiltinAssistantTools } from "../pi/builtinToolRegistry.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
-const tempRoots: string[] = [];
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-message-api-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("Bun PI conversation message API", () => {
   test("global chat invokes human acceptance and cross-project Work/Session reads through the real tool runtime", async () => {
@@ -85,7 +72,7 @@ describe("Bun PI conversation message API", () => {
       }
       expect(actions.some(action => action.status === "denied" || action.status === "pending")).toBe(false);
       expect(readIssueDecisionProjection(database, 967)).toMatchObject({ owner: "pi", request: { status: "accepted", kind: "acceptance" } });
-    } finally { faux.unregister(); database.close(); }
+    } finally { faux.unregister(); }
   });
 
   test("streams accepted and ordered assistant deltas before PI completion", async () => {
@@ -201,7 +188,6 @@ describe("Bun PI conversation message API", () => {
       ]);
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -225,7 +211,6 @@ describe("Bun PI conversation message API", () => {
         .toMatchObject({ conversation_id: "conv-title", title: "帮我看下 Runner Markdown 渲染" });
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -290,7 +275,6 @@ describe("Bun PI conversation message API", () => {
       expect(contextEvents[0]?.payload_json).not.toContain("处理一下");
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -339,7 +323,6 @@ describe("Bun PI conversation message API", () => {
       expect(listIssues(database)).toEqual([]);
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -386,7 +369,6 @@ describe("Bun PI conversation message API", () => {
       ]));
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -413,7 +395,6 @@ describe("Bun PI conversation message API", () => {
       expect(body.text).toBe(`images=1; mime=image/png; bytes=${PNG_FIXTURE.byteLength}`);
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -461,7 +442,6 @@ describe("Bun PI conversation message API", () => {
       expect(listIssues(database, { projectId: "demo" })).toEqual([]);
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -511,7 +491,6 @@ describe("Bun PI conversation message API", () => {
       expect(provider.calls).toMatchObject([{ issueId: issues[0]?.id, projectId: "demo" }]);
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -566,7 +545,6 @@ describe("Bun PI conversation message API", () => {
       expect(provider.calls).toMatchObject([{ issueId: 501, projectId: "movo-mobile" }]);
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -620,7 +598,6 @@ describe("Bun PI conversation message API", () => {
       expect(provider.calls).toMatchObject([{ issueId: 386, projectId: "demo" }]);
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -668,7 +645,6 @@ describe("Bun PI conversation message API", () => {
       expect(provider.calls).toMatchObject([{ issueId: 387, projectId: "demo" }]);
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -715,7 +691,6 @@ describe("Bun PI conversation message API", () => {
       ]);
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -769,7 +744,6 @@ describe("Bun PI conversation message API", () => {
       });
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -811,7 +785,6 @@ describe("Bun PI conversation message API", () => {
       expect(projectAction).toMatchObject({ project_id: "demo", status: "completed" });
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -869,49 +842,44 @@ describe("Bun PI conversation message API", () => {
       });
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
   test("reads persisted PI conversation transcript for history switching", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      insertFauxAgent(database);
-      const sessionFile = writeConversationSession(database, "conv-history", [
-        sessionMessage("user-1", "user", "hello runner"),
-        sessionMessage("assistant-1", "assistant", "history reply")
-      ]);
-      insertConversation(database, {
-        id: "conv-history",
-        projectId: "demo",
-        sessionFile
-      });
-      const response = await createDefaultRouter({ database })
-        .handle(new Request(`${BASE_URL}/api/pi/conversations/conv-history`));
-      const body = await response.json() as Record<string, unknown>;
+    insertProject(database, "demo");
+    insertFauxAgent(database);
+    const sessionFile = writeConversationSession(database, "conv-history", [
+      sessionMessage("user-1", "user", "hello runner"),
+      sessionMessage("assistant-1", "assistant", "history reply")
+    ]);
+    insertConversation(database, {
+      id: "conv-history",
+      projectId: "demo",
+      sessionFile
+    });
+    const response = await createDefaultRouter({ database })
+      .handle(new Request(`${BASE_URL}/api/pi/conversations/conv-history`));
+    const body = await response.json() as Record<string, unknown>;
 
-      expect(response.status).toBe(200);
-      expect(body.message_count).toBe(2);
-      expect(body.transcript).toEqual([
-        {
-          id: "user-1",
-          role: "user",
-          text: "hello runner",
-          created_at: "2026-01-01T00:00:00Z",
-          meta: { conversation_id: "conv-history", pi_session_id: "conv-history" }
-        },
-        {
-          id: "assistant-1",
-          role: "assistant",
-          text: "history reply",
-          created_at: "2026-01-01T00:00:00Z",
-          meta: { conversation_id: "conv-history", pi_session_id: "conv-history" }
-        }
-      ]);
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(body.message_count).toBe(2);
+    expect(body.transcript).toEqual([
+      {
+        id: "user-1",
+        role: "user",
+        text: "hello runner",
+        created_at: "2026-01-01T00:00:00Z",
+        meta: { conversation_id: "conv-history", pi_session_id: "conv-history" }
+      },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        text: "history reply",
+        created_at: "2026-01-01T00:00:00Z",
+        meta: { conversation_id: "conv-history", pi_session_id: "conv-history" }
+      }
+    ]);
   });
 
   test("returns provider errors as visible Runner text", async () => {
@@ -947,7 +915,6 @@ describe("Bun PI conversation message API", () => {
       expect(JSON.stringify(body)).not.toContain("fixture-secret");
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -1007,7 +974,6 @@ describe("Bun PI conversation message API", () => {
       expect(faux.state.callCount).toBe(2);
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 
@@ -1066,7 +1032,6 @@ describe("Bun PI conversation message API", () => {
       });
     } finally {
       faux.unregister();
-      database.close();
     }
   });
 });

@@ -1,22 +1,15 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../database.ts";
+import { type RunnerDatabase } from "../database.ts";
 import {
   EVIDENCE_RECORDED_EVENT_TYPE,
   LEGACY_HUMAN_EVIDENCE_EVENT_TYPE
 } from "./evidence.ts";
 import { HANDOFF_RECORD_EVENT_TYPES } from "./handoffs.ts";
+import { useTestDatabase } from "../../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixture = useTestDatabase();
 
 describe("Issue Event query indexes", () => {
   test("uses the global type/id index for every P0 point lookup and replay shape", async () => {
@@ -121,12 +114,6 @@ describe("Issue Event query indexes", () => {
     }
   });
 });
-
-async function openFixture(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-issue-event-query-indexes-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function plan(db: RunnerDatabase, sql: string, args: Array<number | string>): string[] {
   return db.sqlite.query<{ detail: string }, Array<number | string>>(`explain query plan ${sql}`).all(...args)

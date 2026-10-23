@@ -1,108 +1,83 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { collectProjectHeartbeatSignals } from "./heartbeatSignals.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
 const NOW = new Date("2026-06-04T10:00:00Z");
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("PI heartbeat signal collector", () => {
   test("builds a structured single-project snapshot from issues, runs, sessions, and settings", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      insertPiAgent(db, "pi-default");
-      insertProjectPiSettings(db, "demo");
-      const issueID = insertIssue(db, {
-        error: "provider failed CODEX_API_KEY=fixture-secret",
-        projectID: "demo",
-        status: "failed"
-      });
-      insertRun(db, { issueID, runID: "run-a", status: "failed" });
-      insertAgentSession(db, "demo", issueID);
+    insertProject(db, "demo");
+    insertPiAgent(db, "pi-default");
+    insertProjectPiSettings(db, "demo");
+    const issueID = insertIssue(db, {
+      error: "provider failed CODEX_API_KEY=fixture-secret",
+      projectID: "demo",
+      status: "failed"
+    });
+    insertRun(db, { issueID, runID: "run-a", status: "failed" });
+    insertAgentSession(db, "demo", issueID);
 
-      const snapshot = collectProjectHeartbeatSignals(db, "demo", NOW);
+    const snapshot = collectProjectHeartbeatSignals(db, "demo", NOW);
 
-      expect(snapshot.issues).toEqual({ total: 1, status_counts: { failed: 1 } });
-      expect(snapshot.issue_runs).toMatchObject({ total: 1, open: 0, status_counts: { failed: 1 } });
-      expect(snapshot.issue_runs.recent[0]).toMatchObject({ issue_id: issueID, run_id: "run-a", status: "failed" });
-      expect(snapshot.agent_sessions).toMatchObject({ total: 1, status_counts: { done: 1 } });
-      expect(snapshot.agent_sessions.recent[0]).toMatchObject({ issue_id: issueID, session_key: "codex:thread-a" });
-      expect(snapshot.project_settings.pi_policy).toMatchObject({
-        supervisor_max_recoveries_per_issue: 6,
-        supervisor_max_recoveries_per_project_per_hour: 0
-      });
-      expect(snapshot.project_settings.pi_settings).toEqual({ managed: true });
-      expect(snapshot.project_settings.project).toMatchObject({ id: "demo", provider: "codex" });
-      expect(rowCount(db, "pi_actions")).toBe(0);
-      expect(rowCount(db, "pi_heartbeat_runs")).toBe(0);
-    } finally {
-      db.close();
-    }
+    expect(snapshot.issues).toEqual({ total: 1, status_counts: { failed: 1 } });
+    expect(snapshot.issue_runs).toMatchObject({ total: 1, open: 0, status_counts: { failed: 1 } });
+    expect(snapshot.issue_runs.recent[0]).toMatchObject({ issue_id: issueID, run_id: "run-a", status: "failed" });
+    expect(snapshot.agent_sessions).toMatchObject({ total: 1, status_counts: { done: 1 } });
+    expect(snapshot.agent_sessions.recent[0]).toMatchObject({ issue_id: issueID, session_key: "codex:thread-a" });
+    expect(snapshot.project_settings.pi_policy).toMatchObject({
+      supervisor_max_recoveries_per_issue: 6,
+      supervisor_max_recoveries_per_project_per_hour: 0
+    });
+    expect(snapshot.project_settings.pi_settings).toEqual({ managed: true });
+    expect(snapshot.project_settings.project).toMatchObject({ id: "demo", provider: "codex" });
+    expect(rowCount(db, "pi_actions")).toBe(0);
+    expect(rowCount(db, "pi_heartbeat_runs")).toBe(0);
   });
 
   test("returns safe empty data for a project with no issues, runs, sessions, or PI settings", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "empty");
+    insertProject(db, "empty");
 
-      const snapshot = collectProjectHeartbeatSignals(db, "empty", NOW);
+    const snapshot = collectProjectHeartbeatSignals(db, "empty", NOW);
 
-      expect(snapshot.issues).toEqual({ total: 0, status_counts: {} });
-      expect(snapshot.issue_runs).toEqual({ total: 0, open: 0, status_counts: {}, recent: [] });
-      expect(snapshot.agent_sessions).toEqual({ total: 0, status_counts: {}, recent: [] });
-      expect(snapshot.project_settings.pi_settings).toBeNull();
-      expect(snapshot.project?.latest_issues).toEqual([]);
-      expect(snapshot.project?.recent_runs).toEqual([]);
-      expect(snapshot.project?.recent_sessions).toEqual([]);
-    } finally {
-      db.close();
-    }
+    expect(snapshot.issues).toEqual({ total: 0, status_counts: {} });
+    expect(snapshot.issue_runs).toEqual({ total: 0, open: 0, status_counts: {}, recent: [] });
+    expect(snapshot.agent_sessions).toEqual({ total: 0, status_counts: {}, recent: [] });
+    expect(snapshot.project_settings.pi_settings).toBeNull();
+    expect(snapshot.project?.latest_issues).toEqual([]);
+    expect(snapshot.project?.recent_runs).toEqual([]);
+    expect(snapshot.project?.recent_sessions).toEqual([]);
   });
 
   test("redacts sensitive fields from project config, runtime metadata, raw refs, and errors", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertSensitiveProject(db, "secret-demo");
-      const issueID = insertIssue(db, {
-        error: "error AUTH_TOKEN=issue-secret at /Users/xiaobei/issue.log",
-        projectID: "secret-demo",
-        status: "failed"
-      });
-      insertSensitiveRun(db, issueID);
-      insertSensitiveAgentSession(db, "secret-demo", issueID);
+    insertSensitiveProject(db, "secret-demo");
+    const issueID = insertIssue(db, {
+      error: "error AUTH_TOKEN=issue-secret at /Users/xiaobei/issue.log",
+      projectID: "secret-demo",
+      status: "failed"
+    });
+    insertSensitiveRun(db, issueID);
+    insertSensitiveAgentSession(db, "secret-demo", issueID);
 
-      const snapshot = collectProjectHeartbeatSignals(db, "secret-demo", NOW);
-      const json = JSON.stringify(snapshot);
+    const snapshot = collectProjectHeartbeatSignals(db, "secret-demo", NOW);
+    const json = JSON.stringify(snapshot);
 
-      expect(json).toContain("[redacted]");
-      expect(json).toContain("[redacted-path]");
-      for (const forbidden of [
-        "provider-secret", "run-secret", "raw-secret", "title-secret", "issue-secret",
-        "runtime-secret", "Bearer abc.def", "/Users/xiaobei"
-      ]) {
-        expect(json).not.toContain(forbidden);
-      }
-    } finally {
-      db.close();
+    expect(json).toContain("[redacted]");
+    expect(json).toContain("[redacted-path]");
+    for (const forbidden of [
+      "provider-secret", "run-secret", "raw-secret", "title-secret", "issue-secret",
+      "runtime-secret", "Bearer abc.def", "/Users/xiaobei"
+    ]) {
+      expect(json).not.toContain(forbidden);
     }
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-heartbeat-signals-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function insertProject(db: RunnerDatabase, id: string): void {
   db.sqlite.run(

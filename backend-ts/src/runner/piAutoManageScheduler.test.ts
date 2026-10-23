@@ -1,8 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { createPiAction, createPiGuardianEvent, getPiGuardianWatchdogStatus, listIssueSupervisorEvents, listPiActions, listPiGuardianDecisions, listPiGuardianEvents, pausePiHeartbeat, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
@@ -21,6 +20,7 @@ import {
 } from "./piAutoManageScheduler.ts";
 import { runProjectLoopOnce } from "./projectLoop.ts";
 import { isProjectLoopActive } from "./projectLoopManager.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
 class FakePiCycleRunner {
   active = 0;
@@ -36,7 +36,6 @@ class FakePiCycleRunner {
     return { status: "completed" };
   }
 }
-
 
 class SlowSupervisorDatabase {
   readonly path: string; readonly readonly: boolean; readonly sqlite;
@@ -88,72 +87,51 @@ class FakeClock {
   }
 }
 
-const tempRoots: string[] = [];
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-auto-scheduler-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("PI auto-manage scheduler", () => {
   test("keeps scheduled maintenance deterministic without ambient project LLM sessions", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
     const clock = new FakeClock();
-    try {
-      insertProject(db, "enabled", 1);
-      insertAgent(db, "pi-default");
-      insertSettings(db, "enabled", 1, 4);
-      const scheduler = createPiAutoManageScheduler({
-        clock,
-        database: db,
-        intervalMs: 1000,
-        runProjectCycle: runner.run.bind(runner)
-      });
+    insertProject(db, "enabled", 1);
+    insertAgent(db, "pi-default");
+    insertSettings(db, "enabled", 1, 4);
+    const scheduler = createPiAutoManageScheduler({
+      clock,
+      database: db,
+      intervalMs: 1000,
+      runProjectCycle: runner.run.bind(runner)
+    });
 
-      scheduler.start();
-      expect(clock.timers.map((timer) => timer.delayMs)).toEqual([1000]);
-      await clock.runNext();
+    scheduler.start();
+    expect(clock.timers.map((timer) => timer.delayMs)).toEqual([1000]);
+    await clock.runNext();
 
-      expect(runner.calls).toEqual([]);
-      await waitUntil(() => clock.timers.length === 1);
-      scheduler.stop();
-      expect(clock.timers[0]?.canceled).toBe(true);
-    } finally {
-      db.close();
-    }
+    expect(runner.calls).toEqual([]);
+    await waitUntil(() => clock.timers.length === 1);
+    scheduler.stop();
+    expect(clock.timers[0]?.canceled).toBe(true);
   });
 
   test("guardian refreshes the watchdog heartbeat immediately on start", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
     const clock = new FakeClock();
-    try {
-      const scheduler = createPiGuardianScheduler({
-        clock,
-        database: db,
-        intervalMs: 1000,
-        runProjectCycle: runner.run.bind(runner)
-      });
+    const scheduler = createPiGuardianScheduler({
+      clock,
+      database: db,
+      intervalMs: 1000,
+      runProjectCycle: runner.run.bind(runner)
+    });
 
-      scheduler.start();
-      expect(clock.timers.map((timer) => timer.delayMs)).toEqual([0]);
-      await clock.runNext();
-      await waitUntil(() => clock.timers.length === 1);
-      expect(clock.timers[0]?.delayMs).toBe(1000);
-      expect(getPiGuardianWatchdogStatus(db)?.last_seen_at).toBeTruthy();
-      scheduler.stop();
-    } finally {
-      db.close();
-    }
+    scheduler.start();
+    expect(clock.timers.map((timer) => timer.delayMs)).toEqual([0]);
+    await clock.runNext();
+    await waitUntil(() => clock.timers.length === 1);
+    expect(clock.timers[0]?.delayMs).toBe(1000);
+    expect(getPiGuardianWatchdogStatus(db)?.last_seen_at).toBeTruthy();
+    scheduler.stop();
   });
 
   test("throttles supervisor scans separately from the faster schedule tick", async () => {
@@ -162,26 +140,22 @@ describe("PI auto-manage scheduler", () => {
     const runner = new FakePiCycleRunner();
     const clock = new FakeClock();
     const errors: unknown[] = [];
-    try {
-      const scheduler = createPiAutoManageScheduler({
-        clock, database: wrapped as unknown as RunnerDatabase, intervalMs: 1000,
-        onError: (error) => errors.push(error), runProjectCycle: runner.run.bind(runner),
-        supervisorIntervalMs: 60_000
-      });
+    const scheduler = createPiAutoManageScheduler({
+      clock, database: wrapped as unknown as RunnerDatabase, intervalMs: 1000,
+      onError: (error) => errors.push(error), runProjectCycle: runner.run.bind(runner),
+      supervisorIntervalMs: 60_000
+    });
 
-      scheduler.start();
-      await clock.runNext();
-      await waitUntil(() => wrapped.supervisorQueries >= 1 && clock.timers.length === 1);
-      const firstScanQueries = wrapped.supervisorQueries;
-      await clock.runNext();
-      await waitUntil(() => clock.timers.length === 1);
+    scheduler.start();
+    await clock.runNext();
+    await waitUntil(() => wrapped.supervisorQueries >= 1 && clock.timers.length === 1);
+    const firstScanQueries = wrapped.supervisorQueries;
+    await clock.runNext();
+    await waitUntil(() => clock.timers.length === 1);
 
-      expect(wrapped.supervisorQueries).toBe(firstScanQueries);
-      expect(errors).toEqual([]);
-      scheduler.stop();
-    } finally {
-      db.close();
-    }
+    expect(wrapped.supervisorQueries).toBe(firstScanQueries);
+    expect(errors).toEqual([]);
+    scheduler.stop();
   });
 
   test("continues Guardian maintenance without launching project cycles while idle", async () => {
@@ -190,33 +164,29 @@ describe("PI auto-manage scheduler", () => {
     const clock = new FakeClock();
     const errors: unknown[] = [];
     const runner = new FakePiCycleRunner();
-    try {
-      insertProject(db, "enabled", 1);
-      insertAgent(db, "pi-default");
-      insertSettings(db, "enabled", 1, 2);
-      const scheduler = createPiAutoManageScheduler({
-        clock,
-        database: wrapped as unknown as RunnerDatabase,
-        intervalMs: 5,
-        onError: (error) => errors.push(error),
-        runProjectCycle: runner.run.bind(runner),
-        supervisorIntervalMs: 60_000
-      });
+    insertProject(db, "enabled", 1);
+    insertAgent(db, "pi-default");
+    insertSettings(db, "enabled", 1, 2);
+    const scheduler = createPiAutoManageScheduler({
+      clock,
+      database: wrapped as unknown as RunnerDatabase,
+      intervalMs: 5,
+      onError: (error) => errors.push(error),
+      runProjectCycle: runner.run.bind(runner),
+      supervisorIntervalMs: 60_000
+    });
 
-      scheduler.start();
-      for (let tick = 1; tick <= 4; tick += 1) {
-        await clock.runNext();
-        await waitUntil(() => wrapped.watchdogWrites === tick && clock.timers.length === 1);
-      }
-
-      expect(errors).toEqual([]);
-      expect(wrapped.watchdogWrites).toBe(4);
-      expect(runner.calls).toEqual([]);
-      scheduler.stop();
-      expect(clock.timers[0]?.canceled).toBe(true);
-    } finally {
-      db.close();
+    scheduler.start();
+    for (let tick = 1; tick <= 4; tick += 1) {
+      await clock.runNext();
+      await waitUntil(() => wrapped.watchdogWrites === tick && clock.timers.length === 1);
     }
+
+    expect(errors).toEqual([]);
+    expect(wrapped.watchdogWrites).toBe(4);
+    expect(runner.calls).toEqual([]);
+    scheduler.stop();
+    expect(clock.timers[0]?.canceled).toBe(true);
   });
 
   test("reports both Guardian and Agentic scheduler cycles as Core maintenance activity", async () => {
@@ -235,56 +205,48 @@ describe("PI auto-manage scheduler", () => {
         inFlight -= 1;
       }
     };
-    try {
-      const input = {
-        database: db,
-        intervalMs: 5,
-        runProjectCycle: runner.run.bind(runner),
-        runSupervisor: false,
-        runWithinActivity
-      };
-      const guardian = createPiGuardianScheduler({ ...input, clock: guardianClock });
-      const agentic = createPiAgenticScheduler({ ...input, clock: agenticClock });
+    const input = {
+      database: db,
+      intervalMs: 5,
+      runProjectCycle: runner.run.bind(runner),
+      runSupervisor: false,
+      runWithinActivity
+    };
+    const guardian = createPiGuardianScheduler({ ...input, clock: guardianClock });
+    const agentic = createPiAgenticScheduler({ ...input, clock: agenticClock });
 
-      guardian.start();
-      agentic.start();
-      await guardianClock.runNext();
-      await waitUntil(() => guardianClock.timers.length === 1);
-      await agenticClock.runNext();
-      await waitUntil(() => agenticClock.timers.length === 1);
+    guardian.start();
+    agentic.start();
+    await guardianClock.runNext();
+    await waitUntil(() => guardianClock.timers.length === 1);
+    await agenticClock.runNext();
+    await waitUntil(() => agenticClock.timers.length === 1);
 
-      expect(activityCalls).toBe(2);
-      expect(inFlight).toBe(0);
-      guardian.stop();
-      agentic.stop();
-    } finally {
-      db.close();
-    }
+    expect(activityCalls).toBe(2);
+    expect(inFlight).toBe(0);
+    guardian.stop();
+    agentic.stop();
   });
 
   test("supports a one-time initial offset before returning to the normal interval", async () => {
     const db = await openFixtureDatabase();
     const clock = new FakeClock();
     const runner = new FakePiCycleRunner();
-    try {
-      const scheduler = createPiAgenticScheduler({
-        clock,
-        database: db,
-        initialDelayMs: 15_000,
-        intervalMs: 30_000,
-        runProjectCycle: runner.run.bind(runner),
-        runSupervisor: false
-      });
+    const scheduler = createPiAgenticScheduler({
+      clock,
+      database: db,
+      initialDelayMs: 15_000,
+      intervalMs: 30_000,
+      runProjectCycle: runner.run.bind(runner),
+      runSupervisor: false
+    });
 
-      scheduler.start();
-      expect(clock.timers.map((timer) => timer.delayMs)).toEqual([15_000]);
-      await clock.runNext();
-      await waitUntil(() => clock.timers.length === 1);
-      expect(clock.timers.map((timer) => timer.delayMs)).toEqual([30_000]);
-      scheduler.stop();
-    } finally {
-      db.close();
-    }
+    scheduler.start();
+    expect(clock.timers.map((timer) => timer.delayMs)).toEqual([15_000]);
+    await clock.runNext();
+    await waitUntil(() => clock.timers.length === 1);
+    expect(clock.timers.map((timer) => timer.delayMs)).toEqual([30_000]);
+    scheduler.stop();
   });
 
   test("keeps Guardian ticking while an independent agentic cycle is awaiting the model", async () => {
@@ -342,166 +304,137 @@ describe("PI auto-manage scheduler", () => {
       agentic.stop();
     } finally {
       releaseAgentic();
-      db.close();
     }
   });
 
   test("idles safely when there are no enabled projects", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
-    try {
-      const result = await runPiAutoManageCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
+    const result = await runPiAutoManageCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
 
-      expect(result).toEqual({ projects: 0, started: 0, skipped: 0 });
-      expect(runner.calls).toEqual([]);
-    } finally {
-      db.close();
-    }
+    expect(result).toEqual({ projects: 0, started: 0, skipped: 0 });
+    expect(runner.calls).toEqual([]);
   });
 
   test("scans every project with a PI binding", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
-    try {
-      insertProject(db, "paused", 1);
-      insertProject(db, "missing-agent", 1);
-      insertProject(db, "enabled", 1);
-      insertAgent(db, "pi-default");
-      insertSettings(db, "enabled", 1, 3);
+    insertProject(db, "paused", 1);
+    insertProject(db, "missing-agent", 1);
+    insertProject(db, "enabled", 1);
+    insertAgent(db, "pi-default");
+    insertSettings(db, "enabled", 1, 3);
 
-      const result = await runPiAutoManageCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
+    const result = await runPiAutoManageCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
 
-      expect(result).toEqual({ projects: 1, started: 1, skipped: 0 });
-      expect(runner.calls).toEqual([{ projectId: "enabled" }]);
-    } finally {
-      db.close();
-    }
+    expect(result).toEqual({ projects: 1, started: 1, skipped: 0 });
+    expect(runner.calls).toEqual([{ projectId: "enabled" }]);
   });
 
   test("does not run auto-managed project cycles while heartbeat is paused", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
-    try {
-      insertProject(db, "paused-heartbeat", 1);
-      insertAgent(db, "pi-default");
-      insertSettings(db, "paused-heartbeat", 1, 7);
-      pausePiHeartbeat(db, { scopeId: "paused-heartbeat", scopeType: "project" });
+    insertProject(db, "paused-heartbeat", 1);
+    insertAgent(db, "pi-default");
+    insertSettings(db, "paused-heartbeat", 1, 7);
+    pausePiHeartbeat(db, { scopeId: "paused-heartbeat", scopeType: "project" });
 
-      const result = await runPiAutoManageCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
+    const result = await runPiAutoManageCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
 
-      expect(result).toEqual({ projects: 1, started: 0, skipped: 1 });
-      expect(runner.calls).toEqual([]);
-    } finally {
-      db.close();
-    }
+    expect(result).toEqual({ projects: 1, started: 0, skipped: 1 });
+    expect(runner.calls).toEqual([]);
   });
 
   test("ignores legacy delegation carriers without launching ambient project cycles", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
-    try {
-      insertProject(db, "enabled", 1);
-      insertAgent(db, "pi-default");
-      insertSettings(db, "enabled", 1, 5);
-      insertDelegation(db, "delegation-bad", "missing-project");
+    insertProject(db, "enabled", 1);
+    insertAgent(db, "pi-default");
+    insertSettings(db, "enabled", 1, 5);
+    insertDelegation(db, "delegation-bad", "missing-project");
 
-      const result = await runScheduleLayerCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
+    const result = await runScheduleLayerCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
 
-      expect(result.delegations).toEqual({ scanned: 0, started: 0, skipped: 0 });
-      expect(result).toMatchObject({ projects: 0, started: 0, skipped: 0, supervisor: { decisions: 0, failed: 0 } });
-      expect(runner.calls).toEqual([]);
-      expect(heartbeatRunCount(db)).toBe(0);
-    } finally {
-      db.close();
-    }
+    expect(result.delegations).toEqual({ scanned: 0, started: 0, skipped: 0 });
+    expect(result).toMatchObject({ projects: 0, started: 0, skipped: 0, supervisor: { decisions: 0, failed: 0 } });
+    expect(runner.calls).toEqual([]);
+    expect(heartbeatRunCount(db)).toBe(0);
   });
 
   test("runs Guardian decision merge during schedule layer cycles", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
-    try {
-      createPiGuardianEvent(db, {
-        event_type: "guardian.supervisor.candidate",
-        id: "scheduled-guardian-signal",
-        idempotency_key: "guardian.supervisor.candidate:demo:901:scheduled",
-        issue_id: 901,
-        normalized_payload_json: { diagnosis_code: "provider_timeout" },
-        project_id: "demo",
-        severity: "watch",
-        source: "supervisor",
-        source_event_id: "scheduled-guardian-signal",
-        status: "pending"
-      });
+    createPiGuardianEvent(db, {
+      event_type: "guardian.supervisor.candidate",
+      id: "scheduled-guardian-signal",
+      idempotency_key: "guardian.supervisor.candidate:demo:901:scheduled",
+      issue_id: 901,
+      normalized_payload_json: { diagnosis_code: "provider_timeout" },
+      project_id: "demo",
+      severity: "watch",
+      source: "supervisor",
+      source_event_id: "scheduled-guardian-signal",
+      status: "pending"
+    });
 
-      const result = await runScheduleLayerCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
+    const result = await runScheduleLayerCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
 
-      expect(result.guardianDecisions).toMatchObject({ created: 1, scanned: 1 });
-      expect(listPiGuardianDecisions(db, { issueId: 901, projectId: "demo" })).toHaveLength(1);
-    } finally {
-      db.close();
-    }
+    expect(result.guardianDecisions).toMatchObject({ created: 1, scanned: 1 });
+    expect(listPiGuardianDecisions(db, { issueId: 901, projectId: "demo" })).toHaveLength(1);
   });
 
   test("drains the pending Guardian inbox during one schedule layer cycle", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
-    try {
-      for (let index = 1; index <= 55; index += 1) {
-        createPiGuardianEvent(db, {
-          event_type: "guardian.supervisor.candidate",
-          id: `scheduled-guardian-signal-${index}`,
-          idempotency_key: `guardian.supervisor.candidate:demo:${1000 + index}:scheduled`,
-          issue_id: 1000 + index,
-          normalized_payload_json: { diagnosis_code: "provider_timeout" },
-          project_id: "demo",
-          severity: "urgent",
-          source: "supervisor",
-          source_event_id: `scheduled-guardian-signal-${index}`,
-          status: "pending"
-        });
-      }
-
-      const result = await runScheduleLayerCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
-
-      expect(result.guardianDecisions).toMatchObject({ created: 55, scanned: 55 });
-      expect(listPiGuardianEvents(db, { projectId: "demo", status: "pending" })).toEqual([]);
-    } finally {
-      db.close();
+    for (let index = 1; index <= 55; index += 1) {
+      createPiGuardianEvent(db, {
+        event_type: "guardian.supervisor.candidate",
+        id: `scheduled-guardian-signal-${index}`,
+        idempotency_key: `guardian.supervisor.candidate:demo:${1000 + index}:scheduled`,
+        issue_id: 1000 + index,
+        normalized_payload_json: { diagnosis_code: "provider_timeout" },
+        project_id: "demo",
+        severity: "urgent",
+        source: "supervisor",
+        source_event_id: `scheduled-guardian-signal-${index}`,
+        status: "pending"
+      });
     }
+
+    const result = await runScheduleLayerCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
+
+    expect(result.guardianDecisions).toMatchObject({ created: 55, scanned: 55 });
+    expect(listPiGuardianEvents(db, { projectId: "demo", status: "pending" })).toEqual([]);
   });
 
   test("executes approved supervisor resume follow-up during schedule layer cycle", async () => {
     const db = await openFixtureDatabase();
     const provider = new ResumeProvider();
     const runner = new FakePiCycleRunner();
-    try {
-      insertProject(db, "demo", 1);
-      insertIssueRunSession(db, 519);
-      insertSettings(db, "demo", 0, 5);
+    insertProject(db, "demo", 1);
+    insertIssueRunSession(db, 519);
+    insertSettings(db, "demo", 0, 5);
 
-      const first = await runScheduleLayerCycle({
-        database: db,
-        providers: { codex: provider },
-        runProjectCycle: runner.run.bind(runner),
-        runSupervisorDecision: async () => ({
-          decision: resumeDecision(),
-          raw_text: JSON.stringify(resumeDecision()),
-          valid: true
-        }),
-        watchdogNow: NOW
-      });
+    const first = await runScheduleLayerCycle({
+      database: db,
+      providers: { codex: provider },
+      runProjectCycle: runner.run.bind(runner),
+      runSupervisorDecision: async () => ({
+        decision: resumeDecision(),
+        raw_text: JSON.stringify(resumeDecision()),
+        valid: true
+      }),
+      watchdogNow: NOW
+    });
 
-      expect(first.supervisor).toMatchObject({ decisions: 1, failed: 0, signaled: 1 });
-      expect(first.guardianActionDispatch).toMatchObject({ completed: 0, failed: 0, scanned: 0 });
-      expect(provider.calls).toEqual([{ prompt: expect.stringContaining("继续"), sessionId: "thread-519" }]);
-      expect(listPiActions(db, { issueId: 519 })[0]).toMatchObject({
-        action_type: "session.resume_followup",
-        status: "completed"
-      });
-      expect(listIssueSupervisorEvents(db, { issueId: 519 }).map((event) => event.event_type)).toContain("result");
-    } finally {
-      db.close();
-    }
+    expect(first.supervisor).toMatchObject({ decisions: 1, failed: 0, signaled: 1 });
+    expect(first.guardianActionDispatch).toMatchObject({ completed: 0, failed: 0, scanned: 0 });
+    expect(provider.calls).toEqual([{ prompt: expect.stringContaining("继续"), sessionId: "thread-519" }]);
+    expect(listPiActions(db, { issueId: 519 })[0]).toMatchObject({
+      action_type: "session.resume_followup",
+      status: "completed"
+    });
+    expect(listIssueSupervisorEvents(db, { issueId: 519 }).map((event) => event.event_type)).toContain("result");
   });
 
   test("escalates a deterministic failed autonomous issue instead of spending a blind retry", async () => {
@@ -549,7 +482,6 @@ describe("PI auto-manage scheduler", () => {
       expect(listPiRecoveryAttempts(db, { issueId: 520 })).toEqual([]);
     } finally {
       detach();
-      db.close();
     }
   });
 
@@ -603,106 +535,90 @@ describe("PI auto-manage scheduler", () => {
     const db = await openFixtureDatabase();
     const provider = new WatchdogSessionProvider();
     const runner = new FakePiCycleRunner();
-    try {
-      insertProject(db, "demo", 1);
-      insertTodoIssue(db, 801, "Stale todo", "2026-06-22T08:00:00Z");
+    insertProject(db, "demo", 1);
+    insertTodoIssue(db, 801, "Stale todo", "2026-06-22T08:00:00Z");
 
-      const result = await runScheduleLayerCycle({
-        database: db,
-        providers: { codex: provider },
-        runProjectCycle: runner.run.bind(runner),
-        runSupervisor: false,
-        watchdogNow: NOW
-      });
+    const result = await runScheduleLayerCycle({
+      database: db,
+      providers: { codex: provider },
+      runProjectCycle: runner.run.bind(runner),
+      runSupervisor: false,
+      watchdogNow: NOW
+    });
 
-      expect(result.issueWatchdog).toMatchObject({ candidates: 1, escalated: 0, kicked: 1 });
-      expect(runner.calls).toEqual([]);
-      await waitUntil(() => provider.inputs.length === 1);
-      expect(provider.inputs.map((input) => input.issueId)).toEqual([801]);
-      expect(getIssue(db, 801)).toMatchObject({ attempt_count: 1, status: "in_progress" });
-      expect(getAgentSession(db, "codex:thread-801")).toMatchObject({ issue_id: 801, status: "running" });
-      await waitUntil(() => !isProjectLoopActive("demo"));
-    } finally {
-      db.close();
-    }
+    expect(result.issueWatchdog).toMatchObject({ candidates: 1, escalated: 0, kicked: 1 });
+    expect(runner.calls).toEqual([]);
+    await waitUntil(() => provider.inputs.length === 1);
+    expect(provider.inputs.map((input) => input.issueId)).toEqual([801]);
+    expect(getIssue(db, 801)).toMatchObject({ attempt_count: 1, status: "in_progress" });
+    expect(getAgentSession(db, "codex:thread-801")).toMatchObject({ issue_id: 801, status: "running" });
+    await waitUntil(() => !isProjectLoopActive("demo"));
   });
 
   test("always-on issue watchdog re-kicks stale todos that remain sessionless after a kick", async () => {
     const db = await openFixtureDatabase();
     const provider = new WatchdogSessionProvider();
     const runner = new FakePiCycleRunner();
-    try {
-      insertProject(db, "demo", 1);
-      insertTodoIssue(db, 802, "Still stale todo", "2026-06-22T08:00:00Z");
-      insertIssueWatchdogKick(db, 802, "2026-06-22T08:10:00Z");
+    insertProject(db, "demo", 1);
+    insertTodoIssue(db, 802, "Still stale todo", "2026-06-22T08:00:00Z");
+    insertIssueWatchdogKick(db, 802, "2026-06-22T08:10:00Z");
 
-      const result = await runScheduleLayerCycle({
-        database: db,
-        providers: { codex: provider },
-        runProjectCycle: runner.run.bind(runner),
-        runSupervisor: false,
-        watchdogNow: NOW
-      });
+    const result = await runScheduleLayerCycle({
+      database: db,
+      providers: { codex: provider },
+      runProjectCycle: runner.run.bind(runner),
+      runSupervisor: false,
+      watchdogNow: NOW
+    });
 
-      expect(result.issueWatchdog).toMatchObject({ candidates: 1, escalated: 0, kicked: 1 });
-      await waitUntil(() => provider.inputs.length === 1);
-      expect(provider.inputs.map((input) => input.issueId)).toEqual([802]);
-      expect(listNotifications(db, { projectID: "demo", unreadOnly: true })).toEqual([]);
-      await waitUntil(() => !isProjectLoopActive("demo"));
-    } finally {
-      db.close();
-    }
+    expect(result.issueWatchdog).toMatchObject({ candidates: 1, escalated: 0, kicked: 1 });
+    await waitUntil(() => provider.inputs.length === 1);
+    expect(provider.inputs.map((input) => input.issueId)).toEqual([802]);
+    expect(listNotifications(db, { projectID: "demo", unreadOnly: true })).toEqual([]);
+    await waitUntil(() => !isProjectLoopActive("demo"));
   });
 
   test("routes a provider initialize outage to PI acceptance without a hardcoded retry", async () => {
     const db = await openFixtureDatabase();
     const provider = new InitializeTimeoutProvider();
     const runner = new FakePiCycleRunner();
-    try {
-      insertProviderOutageRegressionProject(db);
+    insertProviderOutageRegressionProject(db);
 
-      await runProjectLoopOnce({
-        database: db,
-        projectId: "demo",
-        providers: { claude: provider }
-      });
+    await runProjectLoopOnce({
+      database: db,
+      projectId: "demo",
+      providers: { claude: provider }
+    });
 
-      expectDeferredOutageClaim(db, provider);
+    expectDeferredOutageClaim(db, provider);
 
-      const result = await runOutageScheduleClosure(db, runner);
+    const result = await runOutageScheduleClosure(db, runner);
 
-      expect(result.first.supervisor).toMatchObject({ scanned: 0, signaled: 0 });
-      expect(result.first.guardianDecisions).toMatchObject({ created: 1 });
-      expect(result.second.guardianActionDispatch).toMatchObject({ completed: 0, failed: 0, scanned: 0 });
-      expect(runner.calls).toEqual([]);
-      expect(getIssue(db, 702)).toMatchObject({ attempt_count: 0, status: "todo" });
+    expect(result.first.supervisor).toMatchObject({ scanned: 0, signaled: 0 });
+    expect(result.first.guardianDecisions).toMatchObject({ created: 1 });
+    expect(result.second.guardianActionDispatch).toMatchObject({ completed: 0, failed: 0, scanned: 0 });
+    expect(runner.calls).toEqual([]);
+    expect(getIssue(db, 702)).toMatchObject({ attempt_count: 0, status: "todo" });
 
-      expect(listPiActions(db, { issueId: 701 })).toEqual([]);
-      expect(getIssue(db, 701)).toMatchObject({
-        auto_retry_reason: "",
-        status: "in_progress"
-      });
-    } finally {
-      db.close();
-    }
+    expect(listPiActions(db, { issueId: 701 })).toEqual([]);
+    expect(getIssue(db, 701)).toMatchObject({
+      auto_retry_reason: "",
+      status: "in_progress"
+    });
   });
 
   test("does not run delegation heartbeats while project heartbeat is paused", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
-    try {
-      insertProject(db, "project-a", 1);
-      insertDelegation(db, "delegation-paused", "project-a");
-      pausePiHeartbeat(db, { scopeId: "project-a", scopeType: "project" });
+    insertProject(db, "project-a", 1);
+    insertDelegation(db, "delegation-paused", "project-a");
+    pausePiHeartbeat(db, { scopeId: "project-a", scopeType: "project" });
 
-      const result = await runScheduleLayerCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
+    const result = await runScheduleLayerCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
 
-      expect(result.delegations).toEqual({ scanned: 0, skipped: 0, started: 0 });
-      expect(result.supervisor).toMatchObject({ decisions: 0, failed: 0 });
-      expect(heartbeatRunCount(db)).toBe(0);
-    } finally {
-      db.close();
-    }
+    expect(result.delegations).toEqual({ scanned: 0, skipped: 0, started: 0 });
+    expect(result.supervisor).toMatchObject({ decisions: 0, failed: 0 });
+    expect(heartbeatRunCount(db)).toBe(0);
   });
 
   test("skips reentrant cycles for the same project", async () => {
@@ -710,22 +626,18 @@ describe("PI auto-manage scheduler", () => {
     const runner = new FakePiCycleRunner();
     let release!: () => void;
     runner.deferred = new Promise<void>((resolve) => { release = resolve; });
-    try {
-      insertProject(db, "enabled", 1);
-      insertAgent(db, "pi-default");
-      insertSettings(db, "enabled", 1, 2);
+    insertProject(db, "enabled", 1);
+    insertAgent(db, "pi-default");
+    insertSettings(db, "enabled", 1, 2);
 
-      const first = runPiAutoManageCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
-      await waitUntil(() => runner.active === 1);
-      const second = await runPiAutoManageCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
-      release();
+    const first = runPiAutoManageCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
+    await waitUntil(() => runner.active === 1);
+    const second = await runPiAutoManageCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
+    release();
 
-      expect(await first).toEqual({ projects: 1, started: 1, skipped: 0 });
-      expect(second).toEqual({ projects: 1, started: 0, skipped: 1 });
-      expect(runner.calls).toEqual([{ projectId: "enabled" }]);
-    } finally {
-      db.close();
-    }
+    expect(await first).toEqual({ projects: 1, started: 1, skipped: 0 });
+    expect(second).toEqual({ projects: 1, started: 0, skipped: 1 });
+    expect(runner.calls).toEqual([{ projectId: "enabled" }]);
   });
 });
 

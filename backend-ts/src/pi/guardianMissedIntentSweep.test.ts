@@ -1,8 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import {
   createPiNotificationIntent,
@@ -20,261 +19,224 @@ import { runGuardianMissedIntentSweepOnce } from "./guardianMissedIntentSweep.ts
 import { resolveRecoveredAlerts } from "./guardianWatchdogMaintenance.ts";
 import type { PiGuardianWatchdogComponent } from "./guardianWatchdog.ts";
 import type { PiGuardianWatchdogSummary } from "./guardianWatchdog.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
+const openFixtureDatabase = useTestDatabase();
 const NOW = "2026-06-19T00:10:00Z";
-
-afterEach(async () => {
-  while (tempRoots.length > 0) await rm(tempRoots.pop() ?? "", { recursive: true, force: true });
-});
 
 describe("PI Guardian missed intent sweep", () => {
   test("a recovery digest carries the verified recovered state, not the old open alert", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      insertOutageAlert(db, "scheduler_stalled");
-      insertMissedIntent(db, "known-route", { issueID: 911, kind: "issue_done", state: "ready" });
-      const watchdog = recoveredWatchdog("scheduler");
-      runGuardianMissedIntentSweepOnce(db, { now: NOW, watchdog });
-      resolveRecoveredAlerts(db, watchdog.checks, NOW);
-      const payload = JSON.parse(recoveryDigests(db)[0]!.payload_json);
-      expect(payload).toMatchObject({ needs_user_count: 0, alerts: [{
-        status: "resolved", message: "scheduler recovered", recovered_at: NOW
-      }] });
-      expect(listPiGuardianAlerts(db, { alertType: "scheduler_stalled" })[0]?.status).toBe("resolved");
-    } finally { db.close(); }
+    insertProject(db, "demo");
+    insertOutageAlert(db, "scheduler_stalled");
+    insertMissedIntent(db, "known-route", { issueID: 911, kind: "issue_done", state: "ready" });
+    const watchdog = recoveredWatchdog("scheduler");
+    runGuardianMissedIntentSweepOnce(db, { now: NOW, watchdog });
+    resolveRecoveredAlerts(db, watchdog.checks, NOW);
+    const payload = JSON.parse(recoveryDigests(db)[0]!.payload_json);
+    expect(payload).toMatchObject({ needs_user_count: 0, alerts: [{
+      status: "resolved", message: "scheduler recovered", recovered_at: NOW
+    }] });
+    expect(listPiGuardianAlerts(db, { alertType: "scheduler_stalled" })[0]?.status).toBe("resolved");
   });
 
   test.each(["failed", "unknown", "mixed"])("does not claim recovery when component health is %s", async (health) => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      insertOutageAlert(db, "scheduler_stalled");
-      const watchdog: PiGuardianWatchdogSummary = {
-        alerts: 0, errors: 0, scanned: 1,
-        checks: health === "unknown" ? [] : [
-          { component: "scheduler", ok: false },
-          ...(health === "mixed" ? [{ component: "scheduler" as const, ok: true }] : [])
-        ]
-      };
-      const result = runGuardianMissedIntentSweepOnce(db, { now: NOW, watchdog });
-      resolveRecoveredAlerts(db, watchdog.checks, NOW);
-      expect(result.scannedAlerts).toBe(0);
-      expect(recoveryDigests(db)).toHaveLength(0);
-      expect(listPiGuardianAlerts(db, { alertType: "scheduler_stalled" })[0]?.status).toBe("open");
-    } finally { db.close(); }
+    insertProject(db, "demo");
+    insertOutageAlert(db, "scheduler_stalled");
+    const watchdog: PiGuardianWatchdogSummary = {
+      alerts: 0, errors: 0, scanned: 1,
+      checks: health === "unknown" ? [] : [
+        { component: "scheduler", ok: false },
+        ...(health === "mixed" ? [{ component: "scheduler" as const, ok: true }] : [])
+      ]
+    };
+    const result = runGuardianMissedIntentSweepOnce(db, { now: NOW, watchdog });
+    resolveRecoveredAlerts(db, watchdog.checks, NOW);
+    expect(result.scannedAlerts).toBe(0);
+    expect(recoveryDigests(db)).toHaveLength(0);
+    expect(listPiGuardianAlerts(db, { alertType: "scheduler_stalled" })[0]?.status).toBe("open");
   });
 
   test("creates one idempotent recovery digest for recovered outage window missed intents", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      insertOutageAlert(db, "outbox_stalled");
-      insertMissedIntent(db, "intent-failed", { issueID: 901, kind: "issue_failed", state: "failed" });
-      insertMissedIntent(db, "intent-ready", { issueID: 902, kind: "issue_done", state: "ready" });
-      insertMissedIntent(db, "intent-overdue", {
-        flushAfter: "2026-06-19T00:03:00Z",
-        issueID: 903,
-        kind: "issue_pending_verification",
-        state: "aggregated"
-      });
+    insertProject(db, "demo");
+    insertOutageAlert(db, "outbox_stalled");
+    insertMissedIntent(db, "intent-failed", { issueID: 901, kind: "issue_failed", state: "failed" });
+    insertMissedIntent(db, "intent-ready", { issueID: 902, kind: "issue_done", state: "ready" });
+    insertMissedIntent(db, "intent-overdue", {
+      flushAfter: "2026-06-19T00:03:00Z",
+      issueID: 903,
+      kind: "issue_pending_verification",
+      state: "aggregated"
+    });
 
-      const first = runGuardianMissedIntentSweepOnce(db, { now: NOW, watchdog: recoveredWatchdog("outbox") });
-      const second = runGuardianMissedIntentSweepOnce(db, { now: NOW, watchdog: recoveredWatchdog("outbox") });
-      const digests = recoveryDigests(db);
-      const payload = JSON.parse(digests[0]?.payload_json ?? "{}");
+    const first = runGuardianMissedIntentSweepOnce(db, { now: NOW, watchdog: recoveredWatchdog("outbox") });
+    const second = runGuardianMissedIntentSweepOnce(db, { now: NOW, watchdog: recoveredWatchdog("outbox") });
+    const digests = recoveryDigests(db);
+    const payload = JSON.parse(digests[0]?.payload_json ?? "{}");
 
-      expect(first).toMatchObject({ errors: 0, missedIntents: 3, openAlerts: 1, summaries: 1, windows: 1 });
-      expect(second).toMatchObject({ errors: 0, summaries: 0, windows: 1 });
-      expect(digests).toHaveLength(1);
-      expect(digests[0]).toMatchObject({ flush_reason: "recovery", state: "ready", target_channel: "feishu" });
-      expect(payload).toMatchObject({ failed_count: 1, total_count: 4 });
-      expect(payload.issues.map((issue: { issue_id: number }) => issue.issue_id).sort()).toEqual([901, 902, 903]);
-      expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
-      expect(listPiGuardianDecisions(db)).toHaveLength(0);
-      expect(listPiNotificationIntents(db, { issueId: 901 })[0]).toMatchObject({ state: "aggregated" });
-    } finally {
-      db.close();
-    }
+    expect(first).toMatchObject({ errors: 0, missedIntents: 3, openAlerts: 1, summaries: 1, windows: 1 });
+    expect(second).toMatchObject({ errors: 0, summaries: 0, windows: 1 });
+    expect(digests).toHaveLength(1);
+    expect(digests[0]).toMatchObject({ flush_reason: "recovery", state: "ready", target_channel: "feishu" });
+    expect(payload).toMatchObject({ failed_count: 1, total_count: 4 });
+    expect(payload.issues.map((issue: { issue_id: number }) => issue.issue_id).sort()).toEqual([901, 902, 903]);
+    expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
+    expect(listPiGuardianDecisions(db)).toHaveLength(0);
+    expect(listPiNotificationIntents(db, { issueId: 901 })[0]).toMatchObject({ state: "aggregated" });
   });
 
   test("keeps open outage alert and records missed_digest_pending when digest target is unavailable", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      insertOutageAlert(db, "coordinator_stalled");
+    insertProject(db, "demo");
+    insertOutageAlert(db, "coordinator_stalled");
 
-      const result = runGuardianMissedIntentSweepOnce(db, {
-        fallbackConnectorID: "feishu",
-        now: NOW,
-        watchdog: recoveredWatchdog("coordinator")
-      });
-      const alerts = listPiGuardianAlerts(db, { projectId: "demo", status: "open" });
-      const pending = alerts.find((alert) => alert.alert_type === "missed_digest_pending");
+    const result = runGuardianMissedIntentSweepOnce(db, {
+      fallbackConnectorID: "feishu",
+      now: NOW,
+      watchdog: recoveredWatchdog("coordinator")
+    });
+    const alerts = listPiGuardianAlerts(db, { projectId: "demo", status: "open" });
+    const pending = alerts.find((alert) => alert.alert_type === "missed_digest_pending");
 
-      expect(result).toMatchObject({ errors: 0, openAlerts: 1, pending: 1, summaries: 1, windows: 1 });
-      expect(recoveryDigests(db)).toHaveLength(1);
-      expect(alerts.map((alert) => alert.alert_type).sort()).toEqual([
-        "coordinator_stalled",
-        "missed_digest_pending"
-      ]);
-      expect(pending).toMatchObject({ status: "open", ui_visible: 1 });
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ errors: 0, openAlerts: 1, pending: 1, summaries: 1, windows: 1 });
+    expect(recoveryDigests(db)).toHaveLength(1);
+    expect(alerts.map((alert) => alert.alert_type).sort()).toEqual([
+      "coordinator_stalled",
+      "missed_digest_pending"
+    ]);
+    expect(pending).toMatchObject({ status: "open", ui_visible: 1 });
   });
 
   test("keeps pending alert without recovery digest while digest pipeline remains unavailable", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      insertOutageAlert(db, "outbox_stalled");
-      insertMissedIntent(db, "intent-pending", { issueID: 904, kind: "issue_done", state: "ready" });
+    insertProject(db, "demo");
+    insertOutageAlert(db, "outbox_stalled");
+    insertMissedIntent(db, "intent-pending", { issueID: 904, kind: "issue_done", state: "ready" });
 
-      const result = runGuardianMissedIntentSweepOnce(db, {
-        now: NOW,
-        watchdog: {
-          alerts: 0,
-          checks: [
-            { component: "outbox", ok: true },
-            { component: "digest", ok: false }
-          ],
-          errors: 0,
-          scanned: 2
-        }
-      });
+    const result = runGuardianMissedIntentSweepOnce(db, {
+      now: NOW,
+      watchdog: {
+        alerts: 0,
+        checks: [
+          { component: "outbox", ok: true },
+          { component: "digest", ok: false }
+        ],
+        errors: 0,
+        scanned: 2
+      }
+    });
 
-      expect(result).toMatchObject({ pending: 1, skipped: 1, summaries: 0, windows: 1 });
-      expect(recoveryDigests(db)).toHaveLength(0);
-      expect(listPiGuardianAlerts(db, { alertType: "missed_digest_pending", status: "open" })).toHaveLength(1);
-      expect(listPiNotificationIntents(db, { issueId: 904 })[0]).toMatchObject({ state: "ready" });
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ pending: 1, skipped: 1, summaries: 0, windows: 1 });
+    expect(recoveryDigests(db)).toHaveLength(0);
+    expect(listPiGuardianAlerts(db, { alertType: "missed_digest_pending", status: "open" })).toHaveLength(1);
+    expect(listPiNotificationIntents(db, { issueId: 904 })[0]).toMatchObject({ state: "ready" });
   });
 
   test("recovers a pending digest through the latest project notification target", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      insertOutageAlert(db, "coordinator_stalled");
-      const first = runGuardianMissedIntentSweepOnce(db, {
-        now: NOW,
-        watchdog: recoveredWatchdog("coordinator")
-      });
-      expect(first.pending).toBe(1);
+    insertProject(db, "demo");
+    insertOutageAlert(db, "coordinator_stalled");
+    const first = runGuardianMissedIntentSweepOnce(db, {
+      now: NOW,
+      watchdog: recoveredWatchdog("coordinator")
+    });
+    expect(first.pending).toBe(1);
 
-      createPiNotificationIntent(db, {
-        conversation_id: "feishu-chat-oc_recovered",
-        id: "known-target",
-        idempotency_key: "known-target",
-        kind: "pi_action_pending",
-        project_id: "demo",
-        state: "sent",
-        target_channel: "feishu",
-        target_chat_id: "oc_recovered"
-      });
-      const second = runGuardianMissedIntentSweepOnce(db, {
-        now: "2026-06-19T00:11:00Z",
-        watchdog: recoveredWatchdog("coordinator")
-      });
-      const digest = recoveryDigests(db)[0]!;
+    createPiNotificationIntent(db, {
+      conversation_id: "feishu-chat-oc_recovered",
+      id: "known-target",
+      idempotency_key: "known-target",
+      kind: "pi_action_pending",
+      project_id: "demo",
+      state: "sent",
+      target_channel: "feishu",
+      target_chat_id: "oc_recovered"
+    });
+    const second = runGuardianMissedIntentSweepOnce(db, {
+      now: "2026-06-19T00:11:00Z",
+      watchdog: recoveredWatchdog("coordinator")
+    });
+    const digest = recoveryDigests(db)[0]!;
 
-      expect(second.pending).toBe(0);
-      expect(digest).toMatchObject({
-        conversation_id: "feishu-chat-oc_recovered",
-        state: "ready",
-        target_chat_id: "oc_recovered"
-      });
-      expect(listPiGuardianAlerts(db, {
-        alertType: "missed_digest_pending",
-        projectId: "demo",
-        status: "open"
-      })).toHaveLength(0);
-    } finally {
-      db.close();
-    }
+    expect(second.pending).toBe(0);
+    expect(digest).toMatchObject({
+      conversation_id: "feishu-chat-oc_recovered",
+      state: "ready",
+      target_chat_id: "oc_recovered"
+    });
+    expect(listPiGuardianAlerts(db, {
+      alertType: "missed_digest_pending",
+      projectId: "demo",
+      status: "open"
+    })).toHaveLength(0);
   });
 
   test("keeps missed digest recovery inside PI instead of sending direct Feishu noise", async () => {
     const db = await openFixtureDatabase();
     const sender = new FakeGuardianSender([{ messageId: "om_missed_digest_1" }]);
-    try {
-      insertProject(db, "demo");
-      insertOutageAlert(db, "outbox_stalled");
-      insertMissedIntent(db, "intent-pending-direct", { issueID: 905, kind: "issue_done", state: "ready" });
+    insertProject(db, "demo");
+    insertOutageAlert(db, "outbox_stalled");
+    insertMissedIntent(db, "intent-pending-direct", { issueID: 905, kind: "issue_done", state: "ready" });
 
-      const first = runGuardianMissedIntentSweepOnce(db, {
-        now: NOW,
-        watchdog: unavailableDigestWatchdog()
-      });
-      await sendMissedDigestPendingFallback(db, first.pendingAlertIds, guardianDelivery(db, sender, new Date(NOW)));
-      const alert = getPiGuardianAlert(db, first.pendingAlertIds[0] ?? "");
+    const first = runGuardianMissedIntentSweepOnce(db, {
+      now: NOW,
+      watchdog: unavailableDigestWatchdog()
+    });
+    await sendMissedDigestPendingFallback(db, first.pendingAlertIds, guardianDelivery(db, sender, new Date(NOW)));
+    const alert = getPiGuardianAlert(db, first.pendingAlertIds[0] ?? "");
 
-      expect(first.pendingAlertIds).toHaveLength(1);
-      expect(sender.calls).toHaveLength(0);
-      expect(alert).toMatchObject({
-        direct_feishu_message_id: "",
-        direct_feishu_state: "not_attempted",
-        next_retry_at: "",
-        retry_count: 0,
-        status: "open",
-        ui_visible: 1
-      });
+    expect(first.pendingAlertIds).toHaveLength(1);
+    expect(sender.calls).toHaveLength(0);
+    expect(alert).toMatchObject({
+      direct_feishu_message_id: "",
+      direct_feishu_state: "not_attempted",
+      next_retry_at: "",
+      retry_count: 0,
+      status: "open",
+      ui_visible: 1
+    });
 
-      const repeat = runGuardianMissedIntentSweepOnce(db, {
-        now: "2026-06-19T00:11:00Z",
-        watchdog: unavailableDigestWatchdog()
-      });
-      await sendMissedDigestPendingFallback(
-        db,
-        repeat.pendingAlertIds,
-        guardianDelivery(db, sender, new Date("2026-06-19T00:11:00Z"))
-      );
+    const repeat = runGuardianMissedIntentSweepOnce(db, {
+      now: "2026-06-19T00:11:00Z",
+      watchdog: unavailableDigestWatchdog()
+    });
+    await sendMissedDigestPendingFallback(
+      db,
+      repeat.pendingAlertIds,
+      guardianDelivery(db, sender, new Date("2026-06-19T00:11:00Z"))
+    );
 
-      expect(repeat.pendingAlertIds).toEqual(first.pendingAlertIds);
-      expect(sender.calls).toHaveLength(0);
-    } finally {
-      db.close();
-    }
+    expect(repeat.pendingAlertIds).toEqual(first.pendingAlertIds);
+    expect(sender.calls).toHaveLength(0);
   });
 
   test("does not consume direct Feishu retries for a PI-owned missed digest", async () => {
     const db = await openFixtureDatabase();
     const sender = new FakeGuardianSender([new Error("temporary Feishu outage")]);
-    try {
-      insertProject(db, "demo");
-      insertOutageAlert(db, "outbox_stalled");
-      insertMissedIntent(db, "intent-pending-failed", { issueID: 906, kind: "issue_done", state: "ready" });
+    insertProject(db, "demo");
+    insertOutageAlert(db, "outbox_stalled");
+    insertMissedIntent(db, "intent-pending-failed", { issueID: 906, kind: "issue_done", state: "ready" });
 
-      const result = runGuardianMissedIntentSweepOnce(db, {
-        now: NOW,
-        watchdog: unavailableDigestWatchdog()
-      });
-      await sendMissedDigestPendingFallback(db, result.pendingAlertIds, guardianDelivery(db, sender, new Date(NOW)));
-      const alert = getPiGuardianAlert(db, result.pendingAlertIds[0] ?? "");
+    const result = runGuardianMissedIntentSweepOnce(db, {
+      now: NOW,
+      watchdog: unavailableDigestWatchdog()
+    });
+    await sendMissedDigestPendingFallback(db, result.pendingAlertIds, guardianDelivery(db, sender, new Date(NOW)));
+    const alert = getPiGuardianAlert(db, result.pendingAlertIds[0] ?? "");
 
-      expect(sender.calls).toHaveLength(0);
-      expect(alert).toMatchObject({
-        direct_feishu_error: "",
-        direct_feishu_state: "not_attempted",
-        next_retry_at: "",
-        retry_count: 0,
-        status: "open",
-        ui_visible: 1
-      });
-    } finally {
-      db.close();
-    }
+    expect(sender.calls).toHaveLength(0);
+    expect(alert).toMatchObject({
+      direct_feishu_error: "",
+      direct_feishu_state: "not_attempted",
+      next_retry_at: "",
+      retry_count: 0,
+      status: "open",
+      ui_visible: 1
+    });
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-missed-sweep-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function insertProject(db: RunnerDatabase, id: string): void {
   db.sqlite.run(

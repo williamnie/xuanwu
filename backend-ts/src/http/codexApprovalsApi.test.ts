@@ -1,16 +1,11 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { EventBus } from "../events/bus.ts";
 import { CodexStdioJsonRpcTransport, type CodexJsonRpcProcess } from "../providers/codex/jsonRpc.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) await rm(tempRoots.pop()!, { force: true, recursive: true });
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("Codex approvals compatibility API", () => {
   test("auto-approves exact low-risk app-server approval requests before audit events", async () => {
@@ -56,16 +51,9 @@ describe("Codex approvals compatibility API", () => {
       expect(events).toEqual([]);
     } finally {
       unsubscribe();
-      database.close();
     }
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "codex-approval-api-"));
-  tempRoots.push(root);
-  return await openDatabase({ stateDir: root });
-}
 
 function codexConfig() {
   return {

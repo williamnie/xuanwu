@@ -1,37 +1,29 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { retryIssue } from "../db/repositories/issueActions.ts";
 import { createPiAction } from "../db/repositories/pi.ts";
 import { listPiRecoveryAttempts } from "../db/repositories/pi/recoveryAttempts.ts";
 import { dispatchPiAction } from "./piActionDispatch.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) await rm(tempRoots.pop() ?? "", { recursive: true, force: true });
-});
+const fixtureDb = useTestDatabase();
 
 describe("PI supervisor issue retry recovery attempts", () => {
   test("issue.retry_after records planned recovery attempt", async () => {
     const db = await fixtureDb();
-    try {
-      insertProject(db, "demo");
-      insertIssueRunSession(db, 306);
+    insertProject(db, "demo");
+    insertIssueRunSession(db, 306);
 
-      await dispatchPiAction({ database: db }, retryAfterAction(db, 306));
+    await dispatchPiAction({ database: db }, retryAfterAction(db, 306));
 
-      expect(listPiRecoveryAttempts(db, { issueId: 306 })).toContainEqual(expect.objectContaining({
-        action_type: "issue.retry_after",
-        diagnosis_code: "provider_rate_limited",
-        source_decision_id: "retry-after-action-306",
-        status: "planned"
-      }));
-    } finally {
-      db.close();
-    }
+    expect(listPiRecoveryAttempts(db, { issueId: 306 })).toContainEqual(expect.objectContaining({
+      action_type: "issue.retry_after",
+      diagnosis_code: "provider_rate_limited",
+      source_decision_id: "retry-after-action-306",
+      status: "planned"
+    }));
   });
 
   test("issue.retry writes progress attempt and ignores attempt_count budget", async () => {
@@ -59,36 +51,26 @@ describe("PI supervisor issue retry recovery attempts", () => {
 
   test("issue.retry records no_progress when an equivalent new Run request is already pending", async () => {
     const db = await fixtureDb();
-    try {
-      insertProject(db, "demo");
-      insertIssueRunSession(db, 311);
-      db.sqlite.run("update issues set status='failed' where id=311");
-      db.sqlite.run(
-        "update issue_runs set status='failed', ended_at='2026-06-10T07:00:00Z' where issue_id=311"
-      );
-      retryIssue(db, 311);
+    insertProject(db, "demo");
+    insertIssueRunSession(db, 311);
+    db.sqlite.run("update issues set status='failed' where id=311");
+    db.sqlite.run(
+      "update issue_runs set status='failed', ended_at='2026-06-10T07:00:00Z' where issue_id=311"
+    );
+    retryIssue(db, 311);
 
-      const result = await dispatchPiAction({ database: db }, retryAction(db, 311, "retry-noop-action"));
+    const result = await dispatchPiAction({ database: db }, retryAction(db, 311, "retry-noop-action"));
 
-      expect(result).toMatchObject({ id: 311, status: "todo" });
-      expect(listPiRecoveryAttempts(db, { issueId: 311 })).toContainEqual(expect.objectContaining({
-        action_type: "issue.retry",
-        ignored_reasons_json: "[\"retry_no_state_change\"]",
-        progress_detected: 0,
-        progress_reasons_json: "[]",
-        status: "no_progress"
-      }));
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ id: 311, status: "todo" });
+    expect(listPiRecoveryAttempts(db, { issueId: 311 })).toContainEqual(expect.objectContaining({
+      action_type: "issue.retry",
+      ignored_reasons_json: "[\"retry_no_state_change\"]",
+      progress_detected: 0,
+      progress_reasons_json: "[]",
+      status: "no_progress"
+    }));
   });
 });
-
-async function fixtureDb(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-issue-recovery-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function insertProject(db: RunnerDatabase, id: string): void {
   db.sqlite.run(`insert into projects (id, name, cwd, provider, auto_run, created_at, updated_at)

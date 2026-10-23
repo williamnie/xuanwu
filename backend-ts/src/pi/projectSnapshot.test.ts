@@ -1,96 +1,75 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { createProjectStatusSnapshot } from "./projectSnapshot.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-project-snapshot-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("PI project status snapshot", () => {
   test("summarizes issues, runs, and sessions for normal project state", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo", "/Users/secret/work/xuanwu");
-      const todo = insertIssue(db, { day: 1, projectID: "demo", status: "todo", title: "Todo issue" });
-      const done = insertIssue(db, { day: 2, projectID: "demo", status: "done", title: "Done issue" });
-      insertRun(db, { attempt: 1, issueID: todo, runID: "run-todo", status: "in_progress" });
-      insertRun(db, { attempt: 1, endedAt: "2026-01-02T00:30:00Z", issueID: done, runID: "run-done", status: "done" });
-      insertSession(db, { issueID: todo, projectID: "demo", sessionKey: "codex:thread-1", status: "running" });
+    insertProject(db, "demo", "/Users/secret/work/xuanwu");
+    const todo = insertIssue(db, { day: 1, projectID: "demo", status: "todo", title: "Todo issue" });
+    const done = insertIssue(db, { day: 2, projectID: "demo", status: "done", title: "Done issue" });
+    insertRun(db, { attempt: 1, issueID: todo, runID: "run-todo", status: "in_progress" });
+    insertRun(db, { attempt: 1, endedAt: "2026-01-02T00:30:00Z", issueID: done, runID: "run-done", status: "done" });
+    insertSession(db, { issueID: todo, projectID: "demo", sessionKey: "codex:thread-1", status: "running" });
 
-      const snapshot = createProjectStatusSnapshot(db, "demo");
+    const snapshot = createProjectStatusSnapshot(db, "demo");
 
-      expect(snapshot.issue_status_counts).toEqual({ done: 1, todo: 1 });
-      expect(snapshot.run_status_counts).toEqual({ done: 1, in_progress: 1 });
-      expect(snapshot.session_status_counts).toEqual({ running: 1 });
-      expect(snapshot.latest_issues.map((issue) => issue.id)).toEqual([done, todo]);
-      expect(snapshot.recent_runs[0]).toMatchObject({ issue_id: done, run_id: "run-done", status: "done" });
-      expect(snapshot.recent_sessions[0]).toMatchObject({ session_key: "codex:thread-1", status: "running" });
-      expect(snapshot.session_progress[0]).toMatchObject({ progress_state: "active", session_key: "codex:thread-1" });
-      expect(snapshot.compact_summary).toContain("issues total=2");
-      expect(JSON.stringify(snapshot)).not.toContain("/Users/secret");
-    } finally {
-      db.close();
-    }
+    expect(snapshot.issue_status_counts).toEqual({ done: 1, todo: 1 });
+    expect(snapshot.run_status_counts).toEqual({ done: 1, in_progress: 1 });
+    expect(snapshot.session_status_counts).toEqual({ running: 1 });
+    expect(snapshot.latest_issues.map((issue) => issue.id)).toEqual([done, todo]);
+    expect(snapshot.recent_runs[0]).toMatchObject({ issue_id: done, run_id: "run-done", status: "done" });
+    expect(snapshot.recent_sessions[0]).toMatchObject({ session_key: "codex:thread-1", status: "running" });
+    expect(snapshot.session_progress[0]).toMatchObject({ progress_state: "active", session_key: "codex:thread-1" });
+    expect(snapshot.compact_summary).toContain("issues total=2");
+    expect(JSON.stringify(snapshot)).not.toContain("/Users/secret");
   });
 
   test("redacts failed issue and run errors in recent error summary", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo", "/Users/secret/work/xuanwu");
-      const failed = insertIssue(db, {
-        day: 3,
-        error: "provider failed CODEX_API_KEY=fixture-secret at /Users/secret/.codex/key.txt",
-        projectID: "demo",
-        status: "failed",
-        title: "Failed issue"
-      });
-      insertRun(db, {
-        attempt: 1,
-        endedAt: "2026-01-03T00:30:00Z",
-        error: "runtime failed: Bearer abc.def at /Users/secret/log.txt",
-        issueID: failed,
-        runID: "run-failed",
-        status: "failed"
-      });
-      insertIssueLog(db, failed, {
-        error: "tool failed AUTH_TOKEN=event-secret at /Users/secret/event.log",
-        provider: "codex",
-        type: "error"
-      });
+    insertProject(db, "demo", "/Users/secret/work/xuanwu");
+    const failed = insertIssue(db, {
+      day: 3,
+      error: "provider failed CODEX_API_KEY=fixture-secret at /Users/secret/.codex/key.txt",
+      projectID: "demo",
+      status: "failed",
+      title: "Failed issue"
+    });
+    insertRun(db, {
+      attempt: 1,
+      endedAt: "2026-01-03T00:30:00Z",
+      error: "runtime failed: Bearer abc.def at /Users/secret/log.txt",
+      issueID: failed,
+      runID: "run-failed",
+      status: "failed"
+    });
+    insertIssueLog(db, failed, {
+      error: "tool failed AUTH_TOKEN=event-secret at /Users/secret/event.log",
+      provider: "codex",
+      type: "error"
+    });
 
-      const snapshot = createProjectStatusSnapshot(db, "demo");
-      const json = JSON.stringify(snapshot);
+    const snapshot = createProjectStatusSnapshot(db, "demo");
+    const json = JSON.stringify(snapshot);
 
-      expect(snapshot.issue_status_counts).toEqual({ failed: 1 });
-      expect(snapshot.findings[0]).toMatchObject({ issue_id: failed, reason: "pi_failed" });
-      expect(snapshot.recent_errors.map((error) => error.source)).toEqual([
-        "event",
-        "run",
-        "issue"
-      ]);
-      expect(json).toContain("[redacted]");
-      expect(json).toContain("[redacted-path]");
-      expect(json).not.toContain("fixture-secret");
-      expect(json).not.toContain("abc.def");
-      expect(json).not.toContain("event-secret");
-      expect(json).not.toContain("/Users/secret");
-    } finally {
-      db.close();
-    }
+    expect(snapshot.issue_status_counts).toEqual({ failed: 1 });
+    expect(snapshot.findings[0]).toMatchObject({ issue_id: failed, reason: "pi_failed" });
+    expect(snapshot.recent_errors.map((error) => error.source)).toEqual([
+      "event",
+      "run",
+      "issue"
+    ]);
+    expect(json).toContain("[redacted]");
+    expect(json).toContain("[redacted-path]");
+    expect(json).not.toContain("fixture-secret");
+    expect(json).not.toContain("abc.def");
+    expect(json).not.toContain("event-secret");
+    expect(json).not.toContain("/Users/secret");
   });
 
   test("includes active project holds without leaking path secrets", async () => {
@@ -131,68 +110,60 @@ describe("PI project status snapshot", () => {
 
   test("aggregates full status counts while bounding recent project rows", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo", "/tmp/demo");
-      for (let index = 1; index <= 12; index += 1) {
-        const issueID = insertIssue(db, {
-          day: index,
-          projectID: "demo",
-          status: index % 2 === 0 ? "done" : "cancelled",
-          title: `Issue ${index}`
-        });
-        insertRun(db, {
-          attempt: 1,
-          endedAt: `2026-01-${String(index).padStart(2, "0")}T00:30:00Z`,
-          issueID,
-          runID: `run-${index}`,
-          status: "done"
-        });
-        insertSession(db, {
-          issueID,
-          projectID: "demo",
-          sessionKey: `codex:thread-${String(index).padStart(2, "0")}`,
-          status: "completed"
-        });
-      }
-
-      const snapshot = createProjectStatusSnapshot(db, "demo");
-
-      expect(snapshot.total_issues).toBe(12);
-      expect(snapshot.issue_status_counts).toEqual({ cancelled: 6, done: 6 });
-      expect(snapshot.run_status_counts).toEqual({ done: 12 });
-      expect(snapshot.session_status_counts).toEqual({ completed: 12 });
-      expect(snapshot.latest_issues).toHaveLength(8);
-      expect(snapshot.recent_runs).toHaveLength(8);
-      expect(snapshot.recent_sessions).toHaveLength(8);
-      expect(snapshot.session_progress).toHaveLength(6);
-    } finally {
-      db.close();
+    insertProject(db, "demo", "/tmp/demo");
+    for (let index = 1; index <= 12; index += 1) {
+      const issueID = insertIssue(db, {
+        day: index,
+        projectID: "demo",
+        status: index % 2 === 0 ? "done" : "cancelled",
+        title: `Issue ${index}`
+      });
+      insertRun(db, {
+        attempt: 1,
+        endedAt: `2026-01-${String(index).padStart(2, "0")}T00:30:00Z`,
+        issueID,
+        runID: `run-${index}`,
+        status: "done"
+      });
+      insertSession(db, {
+        issueID,
+        projectID: "demo",
+        sessionKey: `codex:thread-${String(index).padStart(2, "0")}`,
+        status: "completed"
+      });
     }
+
+    const snapshot = createProjectStatusSnapshot(db, "demo");
+
+    expect(snapshot.total_issues).toBe(12);
+    expect(snapshot.issue_status_counts).toEqual({ cancelled: 6, done: 6 });
+    expect(snapshot.run_status_counts).toEqual({ done: 12 });
+    expect(snapshot.session_status_counts).toEqual({ completed: 12 });
+    expect(snapshot.latest_issues).toHaveLength(8);
+    expect(snapshot.recent_runs).toHaveLength(8);
+    expect(snapshot.recent_sessions).toHaveLength(8);
+    expect(snapshot.session_progress).toHaveLength(6);
   });
 
   test("bounds finding details while retaining exact issue totals", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo", "/tmp/demo");
-      for (let index = 1; index <= 12; index += 1) {
-        insertIssue(db, {
-          day: index,
-          error: `failure ${index}`,
-          projectID: "demo",
-          status: "failed",
-          title: `Failed issue ${index}`
-        });
-      }
-
-      const snapshot = createProjectStatusSnapshot(db, "demo");
-
-      expect(snapshot.total_issues).toBe(12);
-      expect(snapshot.issue_status_counts).toEqual({ failed: 12 });
-      expect(snapshot.findings).toHaveLength(8);
-      expect(snapshot.recent_errors).toHaveLength(8);
-    } finally {
-      db.close();
+    insertProject(db, "demo", "/tmp/demo");
+    for (let index = 1; index <= 12; index += 1) {
+      insertIssue(db, {
+        day: index,
+        error: `failure ${index}`,
+        projectID: "demo",
+        status: "failed",
+        title: `Failed issue ${index}`
+      });
     }
+
+    const snapshot = createProjectStatusSnapshot(db, "demo");
+
+    expect(snapshot.total_issues).toBe(12);
+    expect(snapshot.issue_status_counts).toEqual({ failed: 12 });
+    expect(snapshot.findings).toHaveLength(8);
+    expect(snapshot.recent_errors).toHaveLength(8);
   });
 
   test("keeps a project hold visible when issue findings fill the bound", async () => {

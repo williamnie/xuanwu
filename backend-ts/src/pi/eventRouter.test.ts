@@ -1,8 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { createContextBundle, type ContextBundleTrigger } from "../db/repositories/contextBundles.ts";
 import { createExternalEvent, listExternalEvents } from "../db/repositories/externalEvents.ts";
 import { createAttentionInboxItem, createIntakeRun, listIntakeRuns } from "../db/repositories/intakeRuns.ts";
@@ -15,15 +14,9 @@ import {
   routeRawEventToIntake
 } from "./eventRouter.ts";
 import type { LlmIntakeModel } from "./llmIntake.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const root = tempRoots.pop();
-    if (root) await rm(root, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("PI event router", () => {
   test("source profiles expose default intake and action policy", () => {
@@ -49,124 +42,98 @@ describe("PI event router", () => {
 
   test("source policy can disable raw event collection before intake", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const model = countingIgnoredModel();
-      const mention = event(db, "m-disabled", "@PI 看一下");
+    const model = countingIgnoredModel();
+    const mention = event(db, "m-disabled", "@PI 看一下");
 
-      const route = await routeRawEventToIntake(db, mention, [mention], model.run, {
-        policy: { collect_raw_events: false, profile: "company_chat" }
-      });
+    const route = await routeRawEventToIntake(db, mention, [mention], model.run, {
+      policy: { collect_raw_events: false, profile: "company_chat" }
+    });
 
-      expect(route).toMatchObject({ reason: "collect_raw_events_disabled", status: "skipped" });
-      expect(model.calls()).toBe(0);
-    } finally {
-      db.close();
-    }
+    expect(route).toMatchObject({ reason: "collect_raw_events_disabled", status: "skipped" });
+    expect(model.calls()).toBe(0);
   });
 
   test("mention_only only routes mention reply and user-trigger bundles to intake", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const model = countingIgnoredModel();
-      const noise = event(db, "m1", "今晚吃啥？");
-      const mention = event(db, "m2", "@PI 看看这个报错");
-      const reply = event(db, "m3", "补充一下错误码", { normalized_message: { reply_to_bot: true } });
+    const model = countingIgnoredModel();
+    const noise = event(db, "m1", "今晚吃啥？");
+    const mention = event(db, "m2", "@PI 看看这个报错");
+    const reply = event(db, "m3", "补充一下错误码", { normalized_message: { reply_to_bot: true } });
 
-      const noiseRoute = await routeRawEventToIntake(db, noise, [noise], model.run, { policy: { profile: "company_chat" } });
-      const mentionRoute = await routeRawEventToIntake(db, mention, [mention], model.run, { policy: { profile: "company_chat" } });
-      const replyRoute = await routeRawEventToIntake(db, reply, [reply], model.run, { policy: { profile: "company_chat" } });
-      const manualRoute = await routeContextBundleToIntake(db, bundle(db, "manual"), model.run, { policy: { profile: "company_chat" } });
-      const scheduleRoute = await routeContextBundleToIntake(db, bundle(db, "schedule"), model.run, { policy: { profile: "company_chat" } });
+    const noiseRoute = await routeRawEventToIntake(db, noise, [noise], model.run, { policy: { profile: "company_chat" } });
+    const mentionRoute = await routeRawEventToIntake(db, mention, [mention], model.run, { policy: { profile: "company_chat" } });
+    const replyRoute = await routeRawEventToIntake(db, reply, [reply], model.run, { policy: { profile: "company_chat" } });
+    const manualRoute = await routeContextBundleToIntake(db, bundle(db, "manual"), model.run, { policy: { profile: "company_chat" } });
+    const scheduleRoute = await routeContextBundleToIntake(db, bundle(db, "schedule"), model.run, { policy: { profile: "company_chat" } });
 
-      expect(noiseRoute).toMatchObject({ reason: "trigger_continuous_not_allowed", status: "skipped" });
-      expect(mentionRoute.status).toBe("routed");
-      expect(replyRoute.status).toBe("routed");
-      expect(manualRoute.status).toBe("routed");
-      expect(scheduleRoute).toMatchObject({ reason: "trigger_schedule_not_allowed", status: "skipped" });
-      expect(model.calls()).toBe(3);
-    } finally {
-      db.close();
-    }
+    expect(noiseRoute).toMatchObject({ reason: "trigger_continuous_not_allowed", status: "skipped" });
+    expect(mentionRoute.status).toBe("routed");
+    expect(replyRoute.status).toBe("routed");
+    expect(manualRoute.status).toBe("routed");
+    expect(scheduleRoute).toMatchObject({ reason: "trigger_schedule_not_allowed", status: "skipped" });
+    expect(model.calls()).toBe(3);
   });
 
   test("scheduled_llm_triage can route scheduled intake and dedupes context bundles", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const model = countingIgnoredModel();
-      const scheduled = bundle(db, "schedule");
+    const model = countingIgnoredModel();
+    const scheduled = bundle(db, "schedule");
 
-      const first = await routeContextBundleToIntake(db, scheduled, model.run, { policy: { profile: "ops_chat" } });
-      const duplicate = await routeContextBundleToIntake(db, scheduled, model.run, { policy: { profile: "ops_chat" } });
-      const retried = await routeContextBundleToIntake(db, scheduled, model.run, { policy: { profile: "ops_chat" }, retry: true });
+    const first = await routeContextBundleToIntake(db, scheduled, model.run, { policy: { profile: "ops_chat" } });
+    const duplicate = await routeContextBundleToIntake(db, scheduled, model.run, { policy: { profile: "ops_chat" } });
+    const retried = await routeContextBundleToIntake(db, scheduled, model.run, { policy: { profile: "ops_chat" }, retry: true });
 
-      expect(first.status).toBe("routed");
-      expect(duplicate).toMatchObject({ reason: "duplicate_context_bundle", status: "skipped" });
-      expect(retried.status).toBe("routed");
-      expect(model.calls()).toBe(2);
-      expect(listIntakeRuns(db, { bundleId: scheduled.id })).toHaveLength(2);
-    } finally {
-      db.close();
-    }
+    expect(first.status).toBe("routed");
+    expect(duplicate).toMatchObject({ reason: "duplicate_context_bundle", status: "skipped" });
+    expect(retried.status).toBe("routed");
+    expect(model.calls()).toBe(2);
+    expect(listIntakeRuns(db, { bundleId: scheduled.id })).toHaveLength(2);
   });
 
   test("raw events are not routed twice unless retry is explicit", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const model = countingIgnoredModel();
-      const mention = event(db, "m1", "@PI 帮我看一下");
+    const model = countingIgnoredModel();
+    const mention = event(db, "m1", "@PI 帮我看一下");
 
-      const first = await routeRawEventToIntake(db, mention, listExternalEvents(db), model.run, { policy: { profile: "company_chat" } });
-      const duplicate = await routeRawEventToIntake(db, mention, listExternalEvents(db), model.run, { policy: { profile: "company_chat" } });
-      const retried = await routeRawEventToIntake(db, mention, listExternalEvents(db), model.run, { policy: { profile: "company_chat" }, retry: true });
+    const first = await routeRawEventToIntake(db, mention, listExternalEvents(db), model.run, { policy: { profile: "company_chat" } });
+    const duplicate = await routeRawEventToIntake(db, mention, listExternalEvents(db), model.run, { policy: { profile: "company_chat" } });
+    const retried = await routeRawEventToIntake(db, mention, listExternalEvents(db), model.run, { policy: { profile: "company_chat" }, retry: true });
 
-      expect(first.status).toBe("routed");
-      expect(duplicate).toMatchObject({ reason: "duplicate_raw_event", status: "skipped" });
-      expect(retried.status).toBe("routed");
-      expect(model.calls()).toBe(2);
-    } finally {
-      db.close();
-    }
+    expect(first.status).toBe("routed");
+    expect(duplicate).toMatchObject({ reason: "duplicate_raw_event", status: "skipped" });
+    expect(retried.status).toBe("routed");
+    expect(model.calls()).toBe(2);
   });
 
   test("inbox items route to domain skill by action mode and dedupe proposals", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const lowRisk = inboxItem(db, "status_question", ["issue.status_lookup"], "low");
-      const bug = inboxItem(db, "bug_report", ["issue.create"], "high");
+    const lowRisk = inboxItem(db, "status_question", ["issue.status_lookup"], "low");
+    const bug = inboxItem(db, "bug_report", ["issue.create"], "high");
 
-      expect(decideInboxRoute(bug, { profile: "company_chat" })).toEqual({
-        decision: "ask_user",
-        reason: "project_confirmation_required"
-      });
-      const first = await routeInboxItemToDomainSkill(db, lowRisk, {
-        policy: { profile: "private_dm" },
-        project: { project_confirmed: true, project_id: "demo" }
-      });
-      const duplicate = await routeInboxItemToDomainSkill(db, lowRisk, {
-        policy: { profile: "private_dm" },
-        project: { project_confirmed: true, project_id: "demo" }
-      });
-      const retried = await routeInboxItemToDomainSkill(db, lowRisk, {
-        policy: { profile: "private_dm" },
-        project: { project_confirmed: true, project_id: "demo" },
-        retry: true
-      });
+    expect(decideInboxRoute(bug, { profile: "company_chat" })).toEqual({
+      decision: "ask_user",
+      reason: "project_confirmation_required"
+    });
+    const first = await routeInboxItemToDomainSkill(db, lowRisk, {
+      policy: { profile: "private_dm" },
+      project: { project_confirmed: true, project_id: "demo" }
+    });
+    const duplicate = await routeInboxItemToDomainSkill(db, lowRisk, {
+      policy: { profile: "private_dm" },
+      project: { project_confirmed: true, project_id: "demo" }
+    });
+    const retried = await routeInboxItemToDomainSkill(db, lowRisk, {
+      policy: { profile: "private_dm" },
+      project: { project_confirmed: true, project_id: "demo" },
+      retry: true
+    });
 
-      expect(first).toMatchObject({ decision: "auto_low_risk", status: "routed" });
-      expect(duplicate).toMatchObject({ reason: "duplicate_inbox_item", status: "skipped" });
-      expect(retried).toMatchObject({ decision: "auto_low_risk", status: "routed" });
-      expect(listPiActions(db, { status: "proposal" })).toHaveLength(1);
-    } finally {
-      db.close();
-    }
+    expect(first).toMatchObject({ decision: "auto_low_risk", status: "routed" });
+    expect(duplicate).toMatchObject({ reason: "duplicate_inbox_item", status: "skipped" });
+    expect(retried).toMatchObject({ decision: "auto_low_risk", status: "routed" });
+    expect(listPiActions(db, { status: "proposal" })).toHaveLength(1);
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-event-router-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function countingIgnoredModel(): { calls: () => number; run: LlmIntakeModel } {
   let count = 0;

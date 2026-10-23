@@ -1,8 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import {
   createPiNotificationIntent,
   getPiGuardianWatchdogStatus,
@@ -14,67 +13,57 @@ import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
 import { FeishuClientError } from "../integrations/feishuClient.ts";
 import { sendDirectFeishuGuardianAlert } from "../integrations/feishuGuardianAlerts.ts";
 import { runPiGuardianWatchdogOnce } from "./guardianWatchdog.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
+const openFixtureDatabase = useTestDatabase();
 const NOW = new Date("2026-06-19T01:00:00Z");
 const STALE_MS = 60_000;
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
 
 describe("PI Guardian watchdog detector", () => {
   test("detects old ready digests without active run groups, including failures in backoff", async () => {
     const db = await openFixtureDatabase();
-    try {
-      for (const id of ["stuck", "retrying", "fresh", "linked", "aggregated"]) {
-        createPiNotificationIntent(db, {
-          id, idempotency_key: id, kind: "digest", project_id: "demo",
-          run_group_id: id, flush_reason: "completed", flush_sequence: 1, target_channel: "telegram",
-          ready_at: id === "fresh" ? NOW.toISOString() : "2026-06-19T00:00:00Z",
-          state: id === "aggregated" ? "aggregated" : "ready",
-          sent_outbox_id: id === "linked" ? 1 : 0,
-          error: id === "retrying" ? "missing_im_target" : "",
-          flush_after_at: id === "retrying" ? "2026-06-19T01:15:00Z" : ""
-        });
-      }
-      db.sqlite.run("update pi_notification_intents set created_at='2026-06-19T00:00:00Z'");
-      const result = await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
-      expect(result.checks.filter((check) => check.component === "digest")).toEqual([
-        expect.objectContaining({
-          alert_type: "digest_flush_stalled", ok: false, project_id: "demo",
-          evidence: expect.objectContaining({ count: 2, reason: "ready_notifications_stalled" })
-        })
-      ]);
-      expect(sideEffectCounts(db).outbox).toBe(0);
-      db.sqlite.run("update pi_notification_intents set state='agent_pending' where id in ('stuck','retrying')");
-      const recovered = await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
-      expect(recovered.checks.filter((check) => check.component === "digest")).toEqual([
-        { component: "digest", ok: true }
-      ]);
-    } finally { db.close(); }
+    for (const id of ["stuck", "retrying", "fresh", "linked", "aggregated"]) {
+      createPiNotificationIntent(db, {
+        id, idempotency_key: id, kind: "digest", project_id: "demo",
+        run_group_id: id, flush_reason: "completed", flush_sequence: 1, target_channel: "telegram",
+        ready_at: id === "fresh" ? NOW.toISOString() : "2026-06-19T00:00:00Z",
+        state: id === "aggregated" ? "aggregated" : "ready",
+        sent_outbox_id: id === "linked" ? 1 : 0,
+        error: id === "retrying" ? "missing_im_target" : "",
+        flush_after_at: id === "retrying" ? "2026-06-19T01:15:00Z" : ""
+      });
+    }
+    db.sqlite.run("update pi_notification_intents set created_at='2026-06-19T00:00:00Z'");
+    const result = await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
+    expect(result.checks.filter((check) => check.component === "digest")).toEqual([
+      expect.objectContaining({
+        alert_type: "digest_flush_stalled", ok: false, project_id: "demo",
+        evidence: expect.objectContaining({ count: 2, reason: "ready_notifications_stalled" })
+      })
+    ]);
+    expect(sideEffectCounts(db).outbox).toBe(0);
+    db.sqlite.run("update pi_notification_intents set state='agent_pending' where id in ('stuck','retrying')");
+    const recovered = await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
+    expect(recovered.checks.filter((check) => check.component === "digest")).toEqual([
+      { component: "digest", ok: true }
+    ]);
   });
 
   test("reports granular stage timings without exposing SQL payloads", async () => {
     const db = await openFixtureDatabase();
     const timings: Array<{ stage: string; status: string }> = [];
-    try {
-      await runPiGuardianWatchdogOnce(db, {
-        checks: [{ component: "pi_runtime", run: () => ({ component: "pi_runtime", ok: true }) }],
-        now: NOW,
-        timingObserver: (timing) => timings.push({ stage: timing.stage, status: timing.status })
-      });
+    await runPiGuardianWatchdogOnce(db, {
+      checks: [{ component: "pi_runtime", run: () => ({ component: "pi_runtime", ok: true }) }],
+      now: NOW,
+      timingObserver: (timing) => timings.push({ stage: timing.stage, status: timing.status })
+    });
 
-      expect(timings).toEqual([
-        { stage: "approval_expiry", status: "succeeded" },
-        { stage: "suppress_unroutable_intents", status: "succeeded" },
-        { stage: "probe:pi_runtime", status: "succeeded" },
-        { stage: "write_status", status: "succeeded" }
-      ]);
-    } finally { db.close(); }
+    expect(timings).toEqual([
+      { stage: "approval_expiry", status: "succeeded" },
+      { stage: "suppress_unroutable_intents", status: "succeeded" },
+      { stage: "probe:pi_runtime", status: "succeeded" },
+      { stage: "write_status", status: "succeeded" }
+    ]);
   });
 
   test("writes UI alert before durable Feishu delivery and records its sent receipt", async () => {
@@ -83,45 +72,41 @@ describe("PI Guardian watchdog detector", () => {
       const alert = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
       expect(alert).toMatchObject({ direct_feishu_state: "not_attempted", ui_visible: 1 });
     });
-    try {
-      insertProject(db, "demo");
+    insertProject(db, "demo");
 
-      await runPiGuardianWatchdogOnce(db, {
-        checks: [failingProbe()],
-        delivery: guardianDelivery(db, sender),
-        now: NOW,
-        staleAfterMs: STALE_MS
-      });
-      const alerts = listPiGuardianAlerts(db, { projectId: "demo", status: "open" });
+    await runPiGuardianWatchdogOnce(db, {
+      checks: [failingProbe()],
+      delivery: guardianDelivery(db, sender),
+      now: NOW,
+      staleAfterMs: STALE_MS
+    });
+    const alerts = listPiGuardianAlerts(db, { projectId: "demo", status: "open" });
 
-      expect(alerts).toHaveLength(1);
-      expect(alerts[0]).toMatchObject({
-        direct_feishu_message_id: "om_guardian_sent_1",
-        direct_feishu_state: "sent",
-        next_retry_at: "2026-06-19T01:15:00Z",
-        retry_count: 0,
-        status: "open",
-        ui_visible: 1
-      });
-      expect(sender.calls).toHaveLength(1);
-      expect(sender.calls[0]).toMatchObject({ receiveId: "oc_guardian", receiveIdType: "chat_id" });
-      expect(sender.calls[0]?.text).toContain("玄武 Supervisor：项目 PI Runtime 不可用");
-      expect(sender.calls[0]?.text).toContain("发生了什么：项目的 PI Agent、会话或运行配置不可用");
-      expect(sender.calls[0]?.text).toContain("需要你处理：检查项目的 PI Agent 是否存在并启用");
-      expect(sender.calls[0]?.text).toContain("影响位置：项目 demo");
-      expect(sender.calls[0]?.text).not.toContain("alert=");
-      expect(sender.calls[0]?.text).not.toContain("severity=");
-      expect(sender.calls[0]?.text).not.toContain("fixture-token");
-      expect(sender.calls[0]?.text).not.toContain("/Users/demo");
-      expect(sideEffectCounts(db)).toEqual({
-        conversations: 0,
-        drafts: 1,
-        intents: 0,
-        outbox: 1
-      });
-    } finally {
-      db.close();
-    }
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({
+      direct_feishu_message_id: "om_guardian_sent_1",
+      direct_feishu_state: "sent",
+      next_retry_at: "2026-06-19T01:15:00Z",
+      retry_count: 0,
+      status: "open",
+      ui_visible: 1
+    });
+    expect(sender.calls).toHaveLength(1);
+    expect(sender.calls[0]).toMatchObject({ receiveId: "oc_guardian", receiveIdType: "chat_id" });
+    expect(sender.calls[0]?.text).toContain("玄武 Supervisor：项目 PI Runtime 不可用");
+    expect(sender.calls[0]?.text).toContain("发生了什么：项目的 PI Agent、会话或运行配置不可用");
+    expect(sender.calls[0]?.text).toContain("需要你处理：检查项目的 PI Agent 是否存在并启用");
+    expect(sender.calls[0]?.text).toContain("影响位置：项目 demo");
+    expect(sender.calls[0]?.text).not.toContain("alert=");
+    expect(sender.calls[0]?.text).not.toContain("severity=");
+    expect(sender.calls[0]?.text).not.toContain("fixture-token");
+    expect(sender.calls[0]?.text).not.toContain("/Users/demo");
+    expect(sideEffectCounts(db)).toEqual({
+      conversations: 0,
+      drafts: 1,
+      intents: 0,
+      outbox: 1
+    });
   });
 
   test("keeps UI alert open when direct Feishu falls back to retry", async () => {
@@ -132,37 +117,33 @@ describe("PI Guardian watchdog detector", () => {
         retryAfterSeconds: 30
       })
     ]);
-    try {
-      insertProject(db, "demo");
+    insertProject(db, "demo");
 
-      await runPiGuardianWatchdogOnce(db, {
-        checks: [failingProbe()],
-        delivery: guardianDelivery(db, sender),
-        now: NOW,
-        staleAfterMs: STALE_MS
-      });
-      const alert = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
+    await runPiGuardianWatchdogOnce(db, {
+      checks: [failingProbe()],
+      delivery: guardianDelivery(db, sender),
+      now: NOW,
+      staleAfterMs: STALE_MS
+    });
+    const alert = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
 
-      expect(alert).toMatchObject({
-        direct_feishu_state: "retry",
-        max_retry_count: 3,
-        next_retry_at: "2026-06-19T01:15:00Z",
-        retry_count: 1,
-        status: "open",
-        ui_visible: 1
-      });
-      expect(alert.direct_feishu_error).toContain("[redacted");
-      expect(alert.direct_feishu_error).not.toContain("fixture-token");
-      expect(alert.direct_feishu_error).not.toContain("/Users/demo");
-      expect(sideEffectCounts(db)).toEqual({
-        conversations: 0,
-        drafts: 1,
-        intents: 0,
-        outbox: 1
-      });
-    } finally {
-      db.close();
-    }
+    expect(alert).toMatchObject({
+      direct_feishu_state: "retry",
+      max_retry_count: 3,
+      next_retry_at: "2026-06-19T01:15:00Z",
+      retry_count: 1,
+      status: "open",
+      ui_visible: 1
+    });
+    expect(alert.direct_feishu_error).toContain("[redacted");
+    expect(alert.direct_feishu_error).not.toContain("fixture-token");
+    expect(alert.direct_feishu_error).not.toContain("/Users/demo");
+    expect(sideEffectCounts(db)).toEqual({
+      conversations: 0,
+      drafts: 1,
+      intents: 0,
+      outbox: 1
+    });
   });
 
   test("backs off urgent alert retries and keeps UI visible after max cap", async () => {
@@ -172,52 +153,48 @@ describe("PI Guardian watchdog detector", () => {
       new FeishuClientError("temporary outage 2", { kind: "temporary" }),
       new FeishuClientError("temporary outage 3", { kind: "temporary" })
     ]);
-    try {
-      insertProject(db, "demo");
+    insertProject(db, "demo");
 
-      await runPiGuardianWatchdogOnce(db, {
-        checks: [failingProbe()],
-        delivery: guardianDelivery(db, sender),
-        now: NOW,
-        staleAfterMs: STALE_MS
-      });
-      await runPiGuardianWatchdogOnce(db, {
-        checks: [failingProbe()],
-        delivery: guardianDelivery(db, sender),
-        now: new Date("2026-06-19T01:10:00Z"),
-        staleAfterMs: STALE_MS
-      });
-      await runPiGuardianWatchdogOnce(db, {
-        checks: [failingProbe()],
-        delivery: guardianDelivery(db, sender),
-        now: new Date("2026-06-19T01:15:00Z"),
-        staleAfterMs: STALE_MS
-      });
-      await runPiGuardianWatchdogOnce(db, {
-        checks: [failingProbe()],
-        delivery: guardianDelivery(db, sender),
-        now: new Date("2026-06-19T02:15:00Z"),
-        staleAfterMs: STALE_MS
-      });
-      await runPiGuardianWatchdogOnce(db, {
-        checks: [failingProbe()],
-        delivery: guardianDelivery(db, sender),
-        now: new Date("2026-06-19T06:15:00Z"),
-        staleAfterMs: STALE_MS
-      });
-      const alert = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
+    await runPiGuardianWatchdogOnce(db, {
+      checks: [failingProbe()],
+      delivery: guardianDelivery(db, sender),
+      now: NOW,
+      staleAfterMs: STALE_MS
+    });
+    await runPiGuardianWatchdogOnce(db, {
+      checks: [failingProbe()],
+      delivery: guardianDelivery(db, sender),
+      now: new Date("2026-06-19T01:10:00Z"),
+      staleAfterMs: STALE_MS
+    });
+    await runPiGuardianWatchdogOnce(db, {
+      checks: [failingProbe()],
+      delivery: guardianDelivery(db, sender),
+      now: new Date("2026-06-19T01:15:00Z"),
+      staleAfterMs: STALE_MS
+    });
+    await runPiGuardianWatchdogOnce(db, {
+      checks: [failingProbe()],
+      delivery: guardianDelivery(db, sender),
+      now: new Date("2026-06-19T02:15:00Z"),
+      staleAfterMs: STALE_MS
+    });
+    await runPiGuardianWatchdogOnce(db, {
+      checks: [failingProbe()],
+      delivery: guardianDelivery(db, sender),
+      now: new Date("2026-06-19T06:15:00Z"),
+      staleAfterMs: STALE_MS
+    });
+    const alert = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
 
-      expect(sender.calls).toHaveLength(3);
-      expect(alert).toMatchObject({
-        direct_feishu_state: "failed",
-        next_retry_at: "",
-        retry_count: 3,
-        status: "open",
-        ui_visible: 1
-      });
-    } finally {
-      db.close();
-    }
+    expect(sender.calls).toHaveLength(3);
+    expect(alert).toMatchObject({
+      direct_feishu_state: "failed",
+      next_retry_at: "",
+      retry_count: 3,
+      status: "open",
+      ui_visible: 1
+    });
   });
 
   test("retries unacknowledged sent urgent alerts with backoff and max cap", async () => {
@@ -229,90 +206,82 @@ describe("PI Guardian watchdog detector", () => {
       { messageId: "om_retry_3" },
       { messageId: "om_unexpected" }
     ]);
-    try {
-      insertProject(db, "demo");
+    insertProject(db, "demo");
 
-      await runPiGuardianWatchdogOnce(db, {
-        checks: [failingProbe()],
-        delivery: guardianDelivery(db, sender),
-        now: NOW,
-        staleAfterMs: STALE_MS
-      });
-      await runPiGuardianWatchdogOnce(db, {
-        checks: [failingProbe()],
-        delivery: guardianDelivery(db, sender),
-        now: new Date("2026-06-19T01:10:00Z"),
-        staleAfterMs: STALE_MS
-      });
-      await runPiGuardianWatchdogOnce(db, {
-        checks: [failingProbe()],
-        delivery: guardianDelivery(db, sender),
-        now: new Date("2026-06-19T01:15:00Z"),
-        staleAfterMs: STALE_MS
-      });
-      await runPiGuardianWatchdogOnce(db, {
-        checks: [failingProbe()],
-        delivery: guardianDelivery(db, sender),
-        now: new Date("2026-06-19T02:15:00Z"),
-        staleAfterMs: STALE_MS
-      });
-      await runPiGuardianWatchdogOnce(db, {
-        checks: [failingProbe()],
-        delivery: guardianDelivery(db, sender),
-        now: new Date("2026-06-19T06:15:00Z"),
-        staleAfterMs: STALE_MS
-      });
-      await runPiGuardianWatchdogOnce(db, {
-        checks: [failingProbe()],
-        delivery: guardianDelivery(db, sender),
-        now: new Date("2026-06-19T10:15:00Z"),
-        staleAfterMs: STALE_MS
-      });
-      const alert = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
+    await runPiGuardianWatchdogOnce(db, {
+      checks: [failingProbe()],
+      delivery: guardianDelivery(db, sender),
+      now: NOW,
+      staleAfterMs: STALE_MS
+    });
+    await runPiGuardianWatchdogOnce(db, {
+      checks: [failingProbe()],
+      delivery: guardianDelivery(db, sender),
+      now: new Date("2026-06-19T01:10:00Z"),
+      staleAfterMs: STALE_MS
+    });
+    await runPiGuardianWatchdogOnce(db, {
+      checks: [failingProbe()],
+      delivery: guardianDelivery(db, sender),
+      now: new Date("2026-06-19T01:15:00Z"),
+      staleAfterMs: STALE_MS
+    });
+    await runPiGuardianWatchdogOnce(db, {
+      checks: [failingProbe()],
+      delivery: guardianDelivery(db, sender),
+      now: new Date("2026-06-19T02:15:00Z"),
+      staleAfterMs: STALE_MS
+    });
+    await runPiGuardianWatchdogOnce(db, {
+      checks: [failingProbe()],
+      delivery: guardianDelivery(db, sender),
+      now: new Date("2026-06-19T06:15:00Z"),
+      staleAfterMs: STALE_MS
+    });
+    await runPiGuardianWatchdogOnce(db, {
+      checks: [failingProbe()],
+      delivery: guardianDelivery(db, sender),
+      now: new Date("2026-06-19T10:15:00Z"),
+      staleAfterMs: STALE_MS
+    });
+    const alert = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
 
-      expect(sender.calls).toHaveLength(4);
-      expect(alert).toMatchObject({
-        direct_feishu_message_id: "om_retry_3",
-        direct_feishu_state: "sent",
-        next_retry_at: "",
-        retry_count: 3,
-        status: "open",
-        ui_visible: 1
-      });
-    } finally {
-      db.close();
-    }
+    expect(sender.calls).toHaveLength(4);
+    expect(alert).toMatchObject({
+      direct_feishu_message_id: "om_retry_3",
+      direct_feishu_state: "sent",
+      next_retry_at: "",
+      retry_count: 3,
+      status: "open",
+      ui_visible: 1
+    });
   });
 
   for (const status of ["acked", "suppressed"] as const) {
     test(`does not reopen or retry ${status} alerts for the same watchdog condition`, async () => {
       const db = await openFixtureDatabase();
       const sender = new FakeGuardianFeishuSender([{ messageId: "om_guardian_sent_1" }]);
-      try {
-        insertProject(db, "demo");
-        await runPiGuardianWatchdogOnce(db, {
-          checks: [failingProbe()],
-          delivery: guardianDelivery(db, sender),
-          now: NOW,
-          staleAfterMs: STALE_MS
-        });
-        const firstAlert = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
-        if (!firstAlert) throw new Error("expected open alert");
-        markAlertStatus(db, firstAlert.id, status);
+      insertProject(db, "demo");
+      await runPiGuardianWatchdogOnce(db, {
+        checks: [failingProbe()],
+        delivery: guardianDelivery(db, sender),
+        now: NOW,
+        staleAfterMs: STALE_MS
+      });
+      const firstAlert = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
+      if (!firstAlert) throw new Error("expected open alert");
+      markAlertStatus(db, firstAlert.id, status);
 
-        await runPiGuardianWatchdogOnce(db, {
-          checks: [failingProbe()],
-          delivery: guardianDelivery(db, sender),
-          now: new Date("2026-06-19T01:15:00Z"),
-          staleAfterMs: STALE_MS
-        });
+      await runPiGuardianWatchdogOnce(db, {
+        checks: [failingProbe()],
+        delivery: guardianDelivery(db, sender),
+        now: new Date("2026-06-19T01:15:00Z"),
+        staleAfterMs: STALE_MS
+      });
 
-        expect(sender.calls).toHaveLength(1);
-        expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" })).toHaveLength(0);
-        expect(listPiGuardianAlerts(db, { projectId: "demo", status })).toHaveLength(1);
-      } finally {
-        db.close();
-      }
+      expect(sender.calls).toHaveLength(1);
+      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" })).toHaveLength(0);
+      expect(listPiGuardianAlerts(db, { projectId: "demo", status })).toHaveLength(1);
     });
   }
 
@@ -323,255 +292,217 @@ describe("PI Guardian watchdog detector", () => {
       { messageId: "om_guardian_first" },
       { messageId: "om_guardian_recurrence" }
     ]);
-    try {
-      insertProject(db, "demo");
-      await runPiGuardianWatchdogOnce(db, {
-        checks: [failingProbe()], delivery: guardianDelivery(db, sender), now: NOW, staleAfterMs: STALE_MS
-      });
-      const first = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
-      if (!first) throw new Error("expected first alert");
-      markAlertStatus(db, first.id, "resolved");
+    insertProject(db, "demo");
+    await runPiGuardianWatchdogOnce(db, {
+      checks: [failingProbe()], delivery: guardianDelivery(db, sender), now: NOW, staleAfterMs: STALE_MS
+    });
+    const first = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
+    if (!first) throw new Error("expected first alert");
+    markAlertStatus(db, first.id, "resolved");
 
-      await runPiGuardianWatchdogOnce(db, {
-        checks: [failingProbe()], delivery: guardianDelivery(db, sender),
-        now: new Date("2026-06-19T01:15:00Z"), staleAfterMs: STALE_MS
-      });
+    await runPiGuardianWatchdogOnce(db, {
+      checks: [failingProbe()], delivery: guardianDelivery(db, sender),
+      now: new Date("2026-06-19T01:15:00Z"), staleAfterMs: STALE_MS
+    });
 
-      expect(sender.calls).toHaveLength(2);
-      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "resolved" })).toHaveLength(1);
-      const recurrence = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
-      expect(recurrence).toMatchObject({ status: "open" });
-      expect(recurrence?.id).not.toBe(first.id);
-    } finally {
-      db.close();
-    }
+    expect(sender.calls).toHaveLength(2);
+    expect(listPiGuardianAlerts(db, { projectId: "demo", status: "resolved" })).toHaveLength(1);
+    const recurrence = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
+    expect(recurrence).toMatchObject({ status: "open" });
+    expect(recurrence?.id).not.toBe(first.id);
   });
 
   test("writes PI runtime alert, refreshes liveness, and avoids PI/outbox side effects", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      insertProjectPiSettings(db, "demo");
-      db.sqlite.run("update pi_agents set enabled=0 where id='runner-default'");
+    insertProject(db, "demo");
+    insertProjectPiSettings(db, "demo");
+    db.sqlite.run("update pi_agents set enabled=0 where id='runner-default'");
 
-      const result = await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
-      const alerts = listPiGuardianAlerts(db, { projectId: "demo", status: "open" });
+    const result = await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
+    const alerts = listPiGuardianAlerts(db, { projectId: "demo", status: "open" });
 
-      expect(result).toMatchObject({ alerts: 1, errors: 0 });
-      expect(result.checks.map((check) => check.component).sort()).toEqual([
-        "approval", "coordinator", "digest", "inbox", "outbox", "pi_runtime", "scheduler"
-      ]);
-      expect(result.checks.find((check) => check.component === "pi_runtime")).toMatchObject({
-        alert_type: "pi_runtime_down",
-        ok: false,
-        project_id: "demo"
-      });
-      expect(alerts).toHaveLength(1);
-      expect(alerts[0]).toMatchObject({
-        alert_type: "pi_runtime_down",
-        project_id: "demo",
-        status: "open",
-        ui_visible: 1,
-        watchdog_seen_at: "2026-06-19T01:00:00Z"
-      });
-      expect(getPiGuardianWatchdogStatus(db)).toMatchObject({
-        last_error: "",
-        last_seen_at: "2026-06-19T01:00:00Z",
-        last_success_at: "2026-06-19T01:00:00Z"
-      });
-      expect(sideEffectCounts(db)).toEqual({
-        conversations: 0,
-        drafts: 0,
-        intents: 0,
-        outbox: 0
-      });
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ alerts: 1, errors: 0 });
+    expect(result.checks.map((check) => check.component).sort()).toEqual([
+      "approval", "coordinator", "digest", "inbox", "outbox", "pi_runtime", "scheduler"
+    ]);
+    expect(result.checks.find((check) => check.component === "pi_runtime")).toMatchObject({
+      alert_type: "pi_runtime_down",
+      ok: false,
+      project_id: "demo"
+    });
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({
+      alert_type: "pi_runtime_down",
+      project_id: "demo",
+      status: "open",
+      ui_visible: 1,
+      watchdog_seen_at: "2026-06-19T01:00:00Z"
+    });
+    expect(getPiGuardianWatchdogStatus(db)).toMatchObject({
+      last_error: "",
+      last_seen_at: "2026-06-19T01:00:00Z",
+      last_success_at: "2026-06-19T01:00:00Z"
+    });
+    expect(sideEffectCounts(db)).toEqual({
+      conversations: 0,
+      drafts: 0,
+      intents: 0,
+      outbox: 0
+    });
   });
 
   test("detects stuck outbox and refreshes the same open alert", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertStuckOutbox(db, "2026-06-19T00:00:00Z");
+    insertStuckOutbox(db, "2026-06-19T00:00:00Z");
 
-      const first = await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
-      const firstAlert = listPiGuardianAlerts(db, { alertType: "outbox_stalled", status: "open" })[0];
-      const second = await runPiGuardianWatchdogOnce(db, {
-        now: new Date("2026-06-19T01:05:00Z"),
-        schedulerStaleAfterMs: 10 * 60_000,
-        staleAfterMs: STALE_MS
-      });
-      const alerts = listPiGuardianAlerts(db, { alertType: "outbox_stalled", status: "open" });
+    const first = await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
+    const firstAlert = listPiGuardianAlerts(db, { alertType: "outbox_stalled", status: "open" })[0];
+    const second = await runPiGuardianWatchdogOnce(db, {
+      now: new Date("2026-06-19T01:05:00Z"),
+      schedulerStaleAfterMs: 10 * 60_000,
+      staleAfterMs: STALE_MS
+    });
+    const alerts = listPiGuardianAlerts(db, { alertType: "outbox_stalled", status: "open" });
 
-      expect(first.checks.find((check) => check.component === "outbox")).toMatchObject({
-        alert_type: "outbox_stalled",
-        ok: false
-      });
-      expect(first.alerts).toBe(1);
-      expect(second.alerts).toBe(1);
-      expect(alerts).toHaveLength(1);
-      expect(alerts[0].id).toBe(firstAlert?.id);
-      expect(alerts[0].watchdog_seen_at).toBe("2026-06-19T01:05:00Z");
-      expect(sideEffectCounts(db)).toEqual({
-        conversations: 0,
-        drafts: 0,
-        intents: 0,
-        outbox: 1
-      });
-    } finally {
-      db.close();
-    }
+    expect(first.checks.find((check) => check.component === "outbox")).toMatchObject({
+      alert_type: "outbox_stalled",
+      ok: false
+    });
+    expect(first.alerts).toBe(1);
+    expect(second.alerts).toBe(1);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].id).toBe(firstAlert?.id);
+    expect(alerts[0].watchdog_seen_at).toBe("2026-06-19T01:05:00Z");
+    expect(sideEffectCounts(db)).toEqual({
+      conversations: 0,
+      drafts: 0,
+      intents: 0,
+      outbox: 1
+    });
   });
 
   test("does not report an outbox row whose notification intent was suppressed", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertSuppressedStuckOutbox(db, "2026-06-19T00:00:00Z");
+    insertSuppressedStuckOutbox(db, "2026-06-19T00:00:00Z");
 
-      const result = await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
+    const result = await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
 
-      expect(result.checks.find((check) => check.component === "outbox")).toMatchObject({ ok: true });
-      expect(listPiGuardianAlerts(db, { alertType: "outbox_stalled", status: "open" })).toEqual([]);
-      expect(sideEffectCounts(db).outbox).toBe(1);
-    } finally {
-      db.close();
-    }
+    expect(result.checks.find((check) => check.component === "outbox")).toMatchObject({ ok: true });
+    expect(listPiGuardianAlerts(db, { alertType: "outbox_stalled", status: "open" })).toEqual([]);
+    expect(sideEffectCounts(db).outbox).toBe(1);
   });
 
   test("ignores unroutable lifecycle intents when checking coordinator stalls", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      insertUnroutableLifecycleIntent(db, "intent-start", 501, "issue_start");
-      insertUnroutableLifecycleIntent(db, "intent-done", 502, "issue_done");
+    insertProject(db, "demo");
+    insertUnroutableLifecycleIntent(db, "intent-start", 501, "issue_start");
+    insertUnroutableLifecycleIntent(db, "intent-done", 502, "issue_done");
 
-      const result = await runPiGuardianWatchdogOnce(db, {
-        now: NOW,
-        staleAfterMs: STALE_MS
-      });
-      const coordinator = result.checks.find((check) => check.component === "coordinator");
+    const result = await runPiGuardianWatchdogOnce(db, {
+      now: NOW,
+      staleAfterMs: STALE_MS
+    });
+    const coordinator = result.checks.find((check) => check.component === "coordinator");
 
-      expect(coordinator).toMatchObject({ ok: true });
-      expect(listPiGuardianAlerts(db, { alertType: "coordinator_stalled", status: "open" })).toHaveLength(0);
-      expect(listPiNotificationIntents(db, { projectId: "demo" })).toEqual(expect.arrayContaining([
-        expect.objectContaining({
-          decision: "suppress",
-          error: "missing_feishu_link",
-          id: "intent-start",
-          state: "suppressed"
-        }),
-        expect.objectContaining({
-          decision: "suppress",
-          error: "missing_feishu_link",
-          id: "intent-done",
-          state: "suppressed"
-        })
-      ]));
-    } finally {
-      db.close();
-    }
+    expect(coordinator).toMatchObject({ ok: true });
+    expect(listPiGuardianAlerts(db, { alertType: "coordinator_stalled", status: "open" })).toHaveLength(0);
+    expect(listPiNotificationIntents(db, { projectId: "demo" })).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        decision: "suppress",
+        error: "missing_feishu_link",
+        id: "intent-start",
+        state: "suppressed"
+      }),
+      expect.objectContaining({
+        decision: "suppress",
+        error: "missing_feishu_link",
+        id: "intent-done",
+        state: "suppressed"
+      })
+    ]));
   });
 
   test("keeps recovered coordinator alert open for the scheduler missed-intent sweep", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      insertStaleNotificationIntent(db);
-      await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
-      const alert = listPiGuardianAlerts(db, { alertType: "coordinator_stalled", status: "open" })[0];
-      if (!alert) throw new Error("expected coordinator alert");
-      db.sqlite.run("update pi_notification_intents set state='suppressed', updated_at=? where id='intent-stale'", [
-        "2026-06-19T01:01:00Z"
-      ]);
+    insertProject(db, "demo");
+    insertStaleNotificationIntent(db);
+    await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
+    const alert = listPiGuardianAlerts(db, { alertType: "coordinator_stalled", status: "open" })[0];
+    if (!alert) throw new Error("expected coordinator alert");
+    db.sqlite.run("update pi_notification_intents set state='suppressed', updated_at=? where id='intent-stale'", [
+      "2026-06-19T01:01:00Z"
+    ]);
 
-      const result = await runPiGuardianWatchdogOnce(db, {
-        now: new Date("2026-06-19T01:05:00Z"),
-        staleAfterMs: STALE_MS
-      });
+    const result = await runPiGuardianWatchdogOnce(db, {
+      now: new Date("2026-06-19T01:05:00Z"),
+      staleAfterMs: STALE_MS
+    });
 
-      expect(result.checks.find((check) => check.component === "coordinator")).toMatchObject({ ok: true });
-      expect(listPiGuardianAlerts(db, { alertType: "coordinator_stalled", status: "open" })).toMatchObject([
-        expect.objectContaining({
-          id: alert.id,
-          message: "coordinator stalled: 1 stale item(s)",
-          status: "open",
-          watchdog_seen_at: "2026-06-19T01:00:00Z"
-        })
-      ]);
-      expect(listPiGuardianAlerts(db, { alertType: "coordinator_stalled", status: "resolved" })).toHaveLength(0);
-    } finally {
-      db.close();
-    }
+    expect(result.checks.find((check) => check.component === "coordinator")).toMatchObject({ ok: true });
+    expect(listPiGuardianAlerts(db, { alertType: "coordinator_stalled", status: "open" })).toMatchObject([
+      expect.objectContaining({
+        id: alert.id,
+        message: "coordinator stalled: 1 stale item(s)",
+        status: "open",
+        watchdog_seen_at: "2026-06-19T01:00:00Z"
+      })
+    ]);
+    expect(listPiGuardianAlerts(db, { alertType: "coordinator_stalled", status: "resolved" })).toHaveLength(0);
   });
 
   test("detects coordinator digest approval scheduler and inbox issues", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertStaleNotificationIntent(db);
-      insertOverdueRunGroup(db);
-      insertFailedApprovalResolver(db);
-      insertPendingGuardianInboxEvent(db);
-      upsertPiGuardianWatchdogStatus(db, {
-        last_seen_at: "2026-06-19T00:00:00Z",
-        last_success_at: "2026-06-19T00:00:00Z"
-      });
+    insertStaleNotificationIntent(db);
+    insertOverdueRunGroup(db);
+    insertFailedApprovalResolver(db);
+    insertPendingGuardianInboxEvent(db);
+    upsertPiGuardianWatchdogStatus(db, {
+      last_seen_at: "2026-06-19T00:00:00Z",
+      last_success_at: "2026-06-19T00:00:00Z"
+    });
 
-      const result = await runPiGuardianWatchdogOnce(db, {
-        now: NOW,
-        schedulerStaleAfterMs: STALE_MS,
-        staleAfterMs: STALE_MS
-      });
-      const alertTypes = listPiGuardianAlerts(db, { status: "open" })
-        .map((alert) => alert.alert_type)
-        .sort();
+    const result = await runPiGuardianWatchdogOnce(db, {
+      now: NOW,
+      schedulerStaleAfterMs: STALE_MS,
+      staleAfterMs: STALE_MS
+    });
+    const alertTypes = listPiGuardianAlerts(db, { status: "open" })
+      .map((alert) => alert.alert_type)
+      .sort();
 
-      expect(result.alerts).toBe(5);
-      expect(alertTypes).toEqual([
-        "approval_fast_path_error",
-        "coordinator_stalled",
-        "digest_flush_stalled",
-        "guardian_inbox_stalled",
-        "scheduler_stalled"
-      ]);
-    } finally {
-      db.close();
-    }
+    expect(result.alerts).toBe(5);
+    expect(alertTypes).toEqual([
+      "approval_fast_path_error",
+      "coordinator_stalled",
+      "digest_flush_stalled",
+      "guardian_inbox_stalled",
+      "scheduler_stalled"
+    ]);
   });
 
   test("records detector failure in last_error without throwing", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const result = await runPiGuardianWatchdogOnce(db, {
-        checks: [{
-          component: "coordinator",
-          run: () => {
-            throw new Error("probe failed with API_KEY=fixture-token at /Users/demo/private.log");
-          }
-        }],
-        now: NOW
-      });
-      const status = getPiGuardianWatchdogStatus(db);
+    const result = await runPiGuardianWatchdogOnce(db, {
+      checks: [{
+        component: "coordinator",
+        run: () => {
+          throw new Error("probe failed with API_KEY=fixture-token at /Users/demo/private.log");
+        }
+      }],
+      now: NOW
+    });
+    const status = getPiGuardianWatchdogStatus(db);
 
-      expect(result).toMatchObject({ alerts: 0, errors: 1 });
-      expect(status).toMatchObject({
-        last_seen_at: "2026-06-19T01:00:00Z",
-        last_success_at: ""
-      });
-      expect(status?.last_error).toContain("[redacted]");
-      expect(status?.last_error).not.toContain("fixture-token");
-      expect(status?.last_error).not.toContain("/Users/demo");
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ alerts: 0, errors: 1 });
+    expect(status).toMatchObject({
+      last_seen_at: "2026-06-19T01:00:00Z",
+      last_success_at: ""
+    });
+    expect(status?.last_error).toContain("[redacted]");
+    expect(status?.last_error).not.toContain("fixture-token");
+    expect(status?.last_error).not.toContain("/Users/demo");
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-guardian-watchdog-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function insertProject(db: RunnerDatabase, id: string): void {
   db.sqlite.run(

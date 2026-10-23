@@ -1,29 +1,15 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import type { ExecutorProvider } from "../providers/types.ts";
 import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
 import { createDefaultRouter } from "./server.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const CALLBACK_WAIT_ATTEMPTS = 20;
 const CALLBACK_WAIT_INTERVAL_MS = 5;
-const tempRoots: string[] = [];
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-system-restart-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase();
 
 describe("System restart API", () => {
   test("schedules a supervised restart and stops provider transports first", async () => {
@@ -31,35 +17,31 @@ describe("System restart API", () => {
     let stopped = 0;
     let restarted = 0;
     const audit: SystemRestartAuditEvent[] = [];
-    try {
-      const router = createDefaultRouter({
-        auditSystemRestart: (event) => audit.push(event),
-        database,
-        providers: { codex: fakeCodexProvider(async () => { stopped += 1; }) },
-        restartDelayMs: 0,
-        restartProcess: () => { restarted += 1; }
-      });
+    const router = createDefaultRouter({
+      auditSystemRestart: (event) => audit.push(event),
+      database,
+      providers: { codex: fakeCodexProvider(async () => { stopped += 1; }) },
+      restartDelayMs: 0,
+      restartProcess: () => { restarted += 1; }
+    });
 
-      const response = await router.handle(new Request(`${BASE_URL}/api/system/restart`, {
-        method: "POST",
-        body: JSON.stringify({}),
-        headers: { "content-type": "application/json" }
-      }));
+    const response = await router.handle(new Request(`${BASE_URL}/api/system/restart`, {
+      method: "POST",
+      body: JSON.stringify({}),
+      headers: { "content-type": "application/json" }
+    }));
 
-      expect(response.status).toBe(202);
-      expect(await response.json()).toMatchObject({ ok: true, restart_scheduled: true });
-      await waitFor(() => restarted === 1);
-      expect(stopped).toBe(1);
-      expect(audit).toHaveLength(1);
-      expect(audit[0]).toMatchObject({
-        action: "system.restart",
-        actor: "authorized_api",
-        decision: "accepted",
-        source: "advanced_runtime"
-      });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(202);
+    expect(await response.json()).toMatchObject({ ok: true, restart_scheduled: true });
+    await waitFor(() => restarted === 1);
+    expect(stopped).toBe(1);
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({
+      action: "system.restart",
+      actor: "authorized_api",
+      decision: "accepted",
+      source: "advanced_runtime"
+    });
   });
 
   test("rejects unmanaged restart and records the failed attempt", async () => {

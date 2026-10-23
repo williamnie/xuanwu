@@ -1,20 +1,13 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { listPiActionEvents } from "../db/repositories/pi.ts";
 import { invokeReadOnlyAssistantTool } from "./readOnlyToolInvocation.ts";
 import { objectValue } from "../util/values.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const root = tempRoots.pop();
-    if (root) await rm(root, { recursive: true, force: true });
-  }
-});
+const openFixture = useTestDatabase();
 
 describe("HTTP read-only url_fetch provider", () => {
   test("revalidates every redirect before fetching its target", async () => {
@@ -41,7 +34,7 @@ describe("HTTP read-only url_fetch provider", () => {
         expect(JSON.stringify(result)).not.toContain("user:password");
       }
       expect(visited).toEqual(["/chain", "/file", "/data", "/credentials", "/secret"]);
-    } finally { server.stop(true); db.close(); }
+    } finally { server.stop(true); }
   });
 
   test("fetches HTTP 200, non-2xx, and redirects through url_fetch", async () => {
@@ -89,7 +82,6 @@ describe("HTTP read-only url_fetch provider", () => {
       ]));
     } finally {
       server.stop(true);
-      db.close();
     }
   });
 
@@ -115,7 +107,6 @@ describe("HTTP read-only url_fetch provider", () => {
       expect(JSON.stringify(auditPayloads(db, "conv-http-large"))).not.toContain("L".repeat(512));
     } finally {
       server.stop(true);
-      db.close();
     }
   });
 
@@ -135,7 +126,6 @@ describe("HTTP read-only url_fetch provider", () => {
       });
     } finally {
       server.stop(true);
-      db.close();
     }
   });
 });
@@ -148,12 +138,6 @@ async function callUrlFetch(db: RunnerDatabase, conversationID: string, input: R
     providerID: "http-readonly",
     toolName: "url_fetch"
   });
-}
-
-async function openFixture(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-http-tools-"));
-  tempRoots.push(root);
-  return await openDatabase({ stateDir: join(root, "state") });
 }
 
 function auditPayloads(db: RunnerDatabase, conversationId: string): Array<Record<string, any>> {

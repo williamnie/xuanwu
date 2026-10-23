@@ -1,8 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createExternalLink } from "../db/repositories/externalLinks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
@@ -10,236 +9,196 @@ import { createPiRunGroup, getPiGuardianAlert, upsertPiGuardianAlert } from "../
 import { buildFeishuConnectorConfig } from "./feishu.ts";
 import type { FeishuTextMessageInput, FeishuTextMessageResult } from "./feishuClient.ts";
 import { sendDirectFeishuGuardianAlert } from "./feishuGuardianAlerts.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
+const openFixtureDatabase = useTestDatabase();
 const NOW = new Date("2026-06-23T01:00:00Z");
 const NOW_TEXT = "2026-06-23T01:00:00Z";
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
 
 describe("PI Guardian direct Feishu alert target routing", () => {
   test("keeps PI-handled system alerts in Guardian instead of routing them to the default chat", async () => {
     const db = await openFixtureDatabase();
     const sender = new FakeGuardianSender("om_default");
-    try {
-      const alert = upsertPiGuardianAlert(db, alertInput({
-        alert_type: "digest_flush_stalled",
-        id: "alert-default",
-        message: "digest coordinator stalled",
-        project_id: ""
-      }));
+    const alert = upsertPiGuardianAlert(db, alertInput({
+      alert_type: "digest_flush_stalled",
+      id: "alert-default",
+      message: "digest coordinator stalled",
+      project_id: ""
+    }));
 
-      await sendDirectFeishuGuardianAlert(db, alert, {
-        config: feishuConfig({
-          feishuAllowedChatIds: "oc_default",
-          feishuDefaultChatId: "oc_default"
-        }),
-        now: NOW,
-        sender
-      });
+    await sendDirectFeishuGuardianAlert(db, alert, {
+      config: feishuConfig({
+        feishuAllowedChatIds: "oc_default",
+        feishuDefaultChatId: "oc_default"
+      }),
+      now: NOW,
+      sender
+    });
 
-      expect(sender.calls).toHaveLength(0);
-      expect(getPiGuardianAlert(db, alert.id)).toMatchObject({
-        direct_feishu_message_id: "",
-        direct_feishu_state: "not_attempted",
-        status: "open",
-        ui_visible: 1
-      });
-    } finally {
-      db.close();
-    }
+    expect(sender.calls).toHaveLength(0);
+    expect(getPiGuardianAlert(db, alert.id)).toMatchObject({
+      direct_feishu_message_id: "",
+      direct_feishu_state: "not_attempted",
+      status: "open",
+      ui_visible: 1
+    });
   });
 
   test("routes an alert only after PI handling time is exhausted", async () => {
     const db = await openFixtureDatabase();
     const sender = new FakeGuardianSender("om_escalated");
-    try {
-      const inserted = upsertPiGuardianAlert(db, alertInput({
-        alert_type: "digest_flush_stalled",
-        id: "alert-escalated",
-        message: "digest coordinator remains stalled",
-        project_id: ""
-      }));
-      db.sqlite.run("update pi_guardian_alerts set created_at=? where id=?", [
-        "2026-06-23T00:00:00Z", inserted.id
-      ]);
-      const alert = getPiGuardianAlert(db, inserted.id)!;
+    const inserted = upsertPiGuardianAlert(db, alertInput({
+      alert_type: "digest_flush_stalled",
+      id: "alert-escalated",
+      message: "digest coordinator remains stalled",
+      project_id: ""
+    }));
+    db.sqlite.run("update pi_guardian_alerts set created_at=? where id=?", [
+      "2026-06-23T00:00:00Z", inserted.id
+    ]);
+    const alert = getPiGuardianAlert(db, inserted.id)!;
 
-      await sendDirectFeishuGuardianAlert(db, alert, {
-        config: feishuConfig({
-          feishuAllowedChatIds: "oc_default",
-          feishuDefaultChatId: "oc_default"
-        }),
-        now: NOW,
-        sender
-      });
+    await sendDirectFeishuGuardianAlert(db, alert, {
+      config: feishuConfig({
+        feishuAllowedChatIds: "oc_default",
+        feishuDefaultChatId: "oc_default"
+      }),
+      now: NOW,
+      sender
+    });
 
-      expect(sender.calls).toMatchObject([{ receiveId: "oc_default", receiveIdType: "chat_id" }]);
-      expect(sender.calls[0]?.text).toContain("玄武 Supervisor：摘要发送延迟");
-      expect(sender.calls[0]?.text).toContain("发生了什么：摘要发送超过预期时间");
-      expect(sender.calls[0]?.text).toContain("PI 处理：PI 会重试摘要生成和发送");
-      expect(sender.calls[0]?.text).toContain("需要你处理：若持续超过 30 分钟");
-      expect(sender.calls[0]?.text).toContain("当前状态：当前故障 · 需要你处理");
-      expect(sender.calls[0]?.text).toContain("首次发现：2026-06-23 08:00:00（北京时间）");
-      expect(sender.calls[0]?.text).not.toContain("alert=");
-      expect(sender.calls[0]?.text).not.toContain("severity=");
-      expect(getPiGuardianAlert(db, alert.id)).toMatchObject({
-        direct_feishu_message_id: "om_escalated",
-        direct_feishu_state: "sent"
-      });
-    } finally {
-      db.close();
-    }
+    expect(sender.calls).toMatchObject([{ receiveId: "oc_default", receiveIdType: "chat_id" }]);
+    expect(sender.calls[0]?.text).toContain("玄武 Supervisor：摘要发送延迟");
+    expect(sender.calls[0]?.text).toContain("发生了什么：摘要发送超过预期时间");
+    expect(sender.calls[0]?.text).toContain("PI 处理：PI 会重试摘要生成和发送");
+    expect(sender.calls[0]?.text).toContain("需要你处理：若持续超过 30 分钟");
+    expect(sender.calls[0]?.text).toContain("当前状态：当前故障 · 需要你处理");
+    expect(sender.calls[0]?.text).toContain("首次发现：2026-06-23 08:00:00（北京时间）");
+    expect(sender.calls[0]?.text).not.toContain("alert=");
+    expect(sender.calls[0]?.text).not.toContain("severity=");
+    expect(getPiGuardianAlert(db, alert.id)).toMatchObject({
+      direct_feishu_message_id: "om_escalated",
+      direct_feishu_state: "sent"
+    });
   });
 
   test("routes system alert to default user target when default chat is empty", async () => {
     const db = await openFixtureDatabase();
     const sender = new FakeGuardianSender("om_default_user");
-    try {
-      const alert = upsertPiGuardianAlert(db, alertInput({
-        id: "alert-default-user",
-        message: "system coordinator stalled",
-        project_id: ""
-      }));
+    const alert = upsertPiGuardianAlert(db, alertInput({
+      id: "alert-default-user",
+      message: "system coordinator stalled",
+      project_id: ""
+    }));
 
-      await sendDirectFeishuGuardianAlert(db, alert, {
-        config: feishuConfig({
-          feishuAllowedUserIds: "ou_default",
-          feishuDefaultUserId: "ou_default"
-        }),
-        now: NOW,
-        sender
-      });
+    await sendDirectFeishuGuardianAlert(db, alert, {
+      config: feishuConfig({
+        feishuAllowedUserIds: "ou_default",
+        feishuDefaultUserId: "ou_default"
+      }),
+      now: NOW,
+      sender
+    });
 
-      expect(sender.calls).toMatchObject([{ receiveId: "ou_default", receiveIdType: "open_id" }]);
-      expect(getPiGuardianAlert(db, alert.id)).toMatchObject({
-        direct_feishu_message_id: "om_default_user",
-        direct_feishu_state: "sent"
-      });
-    } finally {
-      db.close();
-    }
+    expect(sender.calls).toMatchObject([{ receiveId: "ou_default", receiveIdType: "open_id" }]);
+    expect(getPiGuardianAlert(db, alert.id)).toMatchObject({
+      direct_feishu_message_id: "om_default_user",
+      direct_feishu_state: "sent"
+    });
   });
 
   test("uses project mapping before default target", async () => {
     const db = await openFixtureDatabase();
     const sender = new FakeGuardianSender("om_project");
-    try {
-      insertProject(db, "demo");
-      const alert = upsertPiGuardianAlert(db, alertInput({ id: "alert-project", project_id: "demo" }));
+    insertProject(db, "demo");
+    const alert = upsertPiGuardianAlert(db, alertInput({ id: "alert-project", project_id: "demo" }));
 
-      await sendDirectFeishuGuardianAlert(db, alert, {
-        config: feishuConfig({
-          feishuAllowedChatIds: "oc_default,oc_project",
-          feishuDefaultChatId: "oc_default",
-          feishuProjectMappings: "chat:oc_project=demo"
-        }),
-        now: NOW,
-        sender
-      });
+    await sendDirectFeishuGuardianAlert(db, alert, {
+      config: feishuConfig({
+        feishuAllowedChatIds: "oc_default,oc_project",
+        feishuDefaultChatId: "oc_default",
+        feishuProjectMappings: "chat:oc_project=demo"
+      }),
+      now: NOW,
+      sender
+    });
 
-      expect(sender.calls).toMatchObject([{ receiveId: "oc_project", receiveIdType: "chat_id" }]);
-    } finally {
-      db.close();
-    }
+    expect(sender.calls).toMatchObject([{ receiveId: "oc_project", receiveIdType: "chat_id" }]);
   });
 
   test("uses issue conversation target before project and default targets", async () => {
     const db = await openFixtureDatabase();
     const sender = new FakeGuardianSender("om_issue_reply");
-    try {
-      insertProject(db, "demo");
-      const issueID = linkedFeishuIssue(db, "demo", "oc_issue");
-      const alert = upsertPiGuardianAlert(db, alertInput({
-        id: "alert-issue",
-        issue_id: issueID,
-        project_id: "demo"
-      }));
+    insertProject(db, "demo");
+    const issueID = linkedFeishuIssue(db, "demo", "oc_issue");
+    const alert = upsertPiGuardianAlert(db, alertInput({
+      id: "alert-issue",
+      issue_id: issueID,
+      project_id: "demo"
+    }));
 
-      await sendDirectFeishuGuardianAlert(db, alert, {
-        config: feishuConfig({
-          feishuAllowedChatIds: "oc_default,oc_project,oc_issue",
-          feishuDefaultChatId: "oc_default",
-          feishuProjectMappings: "chat:oc_project=demo"
-        }),
-        now: NOW,
-        sender
-      });
+    await sendDirectFeishuGuardianAlert(db, alert, {
+      config: feishuConfig({
+        feishuAllowedChatIds: "oc_default,oc_project,oc_issue",
+        feishuDefaultChatId: "oc_default",
+        feishuProjectMappings: "chat:oc_project=demo"
+      }),
+      now: NOW,
+      sender
+    });
 
-      expect(sender.calls).toMatchObject([{ receiveId: "oc_issue", receiveIdType: "chat_id" }]);
-    } finally {
-      db.close();
-    }
+    expect(sender.calls).toMatchObject([{ receiveId: "oc_issue", receiveIdType: "chat_id" }]);
   });
 
   test("uses run group conversation target before project and default targets", async () => {
     const db = await openFixtureDatabase();
     const sender = new FakeGuardianSender("om_group_reply");
-    try {
-      insertProject(db, "demo");
-      createPiRunGroup(db, {
-        expected_issue_count: 1,
-        id: "group-conversation",
-        origin_conversation_id: "feishu-chat-oc_conversation-20260623",
-        project_id: "demo"
-      });
-      const alert = upsertPiGuardianAlert(db, alertInput({
-        id: "alert-conversation",
-        project_id: "demo",
-        run_group_id: "group-conversation"
-      }));
+    insertProject(db, "demo");
+    createPiRunGroup(db, {
+      expected_issue_count: 1,
+      id: "group-conversation",
+      origin_conversation_id: "feishu-chat-oc_conversation-20260623",
+      project_id: "demo"
+    });
+    const alert = upsertPiGuardianAlert(db, alertInput({
+      id: "alert-conversation",
+      project_id: "demo",
+      run_group_id: "group-conversation"
+    }));
 
-      await sendDirectFeishuGuardianAlert(db, alert, {
-        config: feishuConfig({
-          feishuAllowedChatIds: "oc_default,oc_project,oc_conversation",
-          feishuDefaultChatId: "oc_default",
-          feishuProjectMappings: "chat:oc_project=demo"
-        }),
-        now: NOW,
-        sender
-      });
+    await sendDirectFeishuGuardianAlert(db, alert, {
+      config: feishuConfig({
+        feishuAllowedChatIds: "oc_default,oc_project,oc_conversation",
+        feishuDefaultChatId: "oc_default",
+        feishuProjectMappings: "chat:oc_project=demo"
+      }),
+      now: NOW,
+      sender
+    });
 
-      expect(sender.calls).toMatchObject([{ receiveId: "oc_conversation", receiveIdType: "chat_id" }]);
-    } finally {
-      db.close();
-    }
+    expect(sender.calls).toMatchObject([{ receiveId: "oc_conversation", receiveIdType: "chat_id" }]);
   });
 
   test("keeps UI-only fallback and records clear error when target is missing", async () => {
     const db = await openFixtureDatabase();
     const sender = new FakeGuardianSender("om_unexpected");
-    try {
-      const alert = upsertPiGuardianAlert(db, alertInput({ id: "alert-missing", project_id: "" }));
+    const alert = upsertPiGuardianAlert(db, alertInput({ id: "alert-missing", project_id: "" }));
 
-      await sendDirectFeishuGuardianAlert(db, alert, {
-        config: feishuConfig(),
-        now: NOW,
-        sender
-      });
+    await sendDirectFeishuGuardianAlert(db, alert, {
+      config: feishuConfig(),
+      now: NOW,
+      sender
+    });
 
-      expect(sender.calls).toHaveLength(0);
-      expect(getPiGuardianAlert(db, alert.id)).toMatchObject({
-        direct_feishu_error: "missing direct Feishu target",
-        direct_feishu_state: "retry",
-        status: "open",
-        ui_visible: 1
-      });
-    } finally {
-      db.close();
-    }
+    expect(sender.calls).toHaveLength(0);
+    expect(getPiGuardianAlert(db, alert.id)).toMatchObject({
+      direct_feishu_error: "missing direct Feishu target",
+      direct_feishu_state: "retry",
+      status: "open",
+      ui_visible: 1
+    });
   });
 });
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-guardian-alerts-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
 
 function alertInput(input: {
   alert_type?: string; id: string; issue_id?: number; message?: string; project_id: string;

@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { describe, expect, test } from "bun:test";
+import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { listStoredEvidence } from "../db/repositories/evidence.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
@@ -20,8 +20,9 @@ import { createFakeQoderSdkFacade } from "../providers/qoder/sdkFacade.ts";
 import type { QoderRuntimeProbe } from "../providers/qoder/runtime.ts";
 import { claudeManifest } from "../providers/claude/factory.ts";
 import { claudeExecutionPolicyAdapter } from "../providers/claude/executionPolicy.ts";
+import { useTestDatabase } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
+const openFixtureDatabase = useTestDatabase();
 
 function runIssueWithProvider(
   provider: Parameters<typeof runIssueWithProviderRuntime>[0],
@@ -52,7 +53,6 @@ class FakeExecutionProvider implements ExecutorProvider {
     };
   }
 }
-
 
 class IdleStatusProvider implements ExecutorProvider {
   readonly id = "codex" as const;
@@ -220,81 +220,60 @@ class SessionThenThrowProvider implements ExecutorProvider {
   }
 }
 
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-provider-runtime-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
-
 describe("executor provider runtime seam", () => {
   test("flushes artifact logs in source order before terminal reconciliation and snapshots mutable inputs", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueId = insertIssue(db, "demo");
-      const source: ProviderEvent = {
-        provider: "codex", type: "raw", text: "original".repeat(12_000), raw: { method: "custom/large" }
-      };
-      const original = source.text;
-      const provider = {
-        id: "codex" as const,
-        capabilities: ["issue_execution"] as const,
-        async run(input: ProviderRunInput) {
-          input.onEvent?.(source);
-          source.text = "mutated";
-          input.onEvent?.({ provider: "codex", type: "raw", text: "second", raw: { method: "custom/small" } });
-          input.onEvent?.({ provider: "codex", type: "done", status: "completed", raw: { method: "turn/completed" } });
-          return { runId: "ordered" };
-        }
-      };
-      await runIssueWithProvider(provider, { database: db, issueId, projectId: "demo", cwd: "/tmp/project", prompt: "ordered" });
-      const events = listIssueEvents(db, issueId);
-      const logs = events.filter((event) => event.type === "issue.log");
-      expect(logs.map((event) => JSON.parse(event.payload).text)).toEqual([original, "second", undefined]);
-      const acceptance = events.find((event) => event.type === "issue.pi_acceptance_requested.v1");
-      expect(acceptance).toBeDefined();
-      expect(acceptance!.id).toBeGreaterThan(logs.at(-1)!.id);
-    } finally {
-      db.close();
-    }
+    insertProject(db, "demo");
+    const issueId = insertIssue(db, "demo");
+    const source: ProviderEvent = {
+      provider: "codex", type: "raw", text: "original".repeat(12_000), raw: { method: "custom/large" }
+    };
+    const original = source.text;
+    const provider = {
+      id: "codex" as const,
+      capabilities: ["issue_execution"] as const,
+      async run(input: ProviderRunInput) {
+        input.onEvent?.(source);
+        source.text = "mutated";
+        input.onEvent?.({ provider: "codex", type: "raw", text: "second", raw: { method: "custom/small" } });
+        input.onEvent?.({ provider: "codex", type: "done", status: "completed", raw: { method: "turn/completed" } });
+        return { runId: "ordered" };
+      }
+    };
+    await runIssueWithProvider(provider, { database: db, issueId, projectId: "demo", cwd: "/tmp/project", prompt: "ordered" });
+    const events = listIssueEvents(db, issueId);
+    const logs = events.filter((event) => event.type === "issue.log");
+    expect(logs.map((event) => JSON.parse(event.payload).text)).toEqual([original, "second", undefined]);
+    const acceptance = events.find((event) => event.type === "issue.pi_acceptance_requested.v1");
+    expect(acceptance).toBeDefined();
+    expect(acceptance!.id).toBeGreaterThan(logs.at(-1)!.id);
   });
 
   test("artifact I/O failure rejects Run flush and prevents success reconciliation", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueId = insertIssue(db, "demo");
-      const root = join(dirname(db.path), "artifacts");
-      await mkdir(root, { recursive: true });
-      await writeFile(join(root, "issue-logs"), "not a directory");
-      let completed = false;
-      const provider = {
-        id: "codex" as const,
-        capabilities: ["issue_execution"] as const,
-        async run(input: ProviderRunInput) {
-          input.onEvent?.({ provider: "codex", type: "raw", text: "x".repeat(100_000), raw: { method: "custom/large" } });
-          input.onEvent?.({ provider: "codex", type: "done", status: "completed", raw: { method: "turn/completed" } });
-          return { runId: "must-fail-flush" };
-        }
-      };
-      await expect(runIssueWithProvider(provider, {
-        database: db, issueId, projectId: "demo", cwd: "/tmp/project", prompt: "failure",
-        onRunComplete: () => { completed = true; }
-      })).rejects.toThrow();
-      expect(completed).toBe(false);
-      expect(listIssueEvents(db, issueId).filter((event) => event.type === "issue.pi_acceptance_requested.v1")).toHaveLength(0);
-      expect(listIssueRuns(db, issueId).at(-1)?.ended_at).toBe("");
-      expect(getIssue(db, issueId)?.issue_log_mode).toBe("normal");
-    } finally {
-      db.close();
-    }
+    insertProject(db, "demo");
+    const issueId = insertIssue(db, "demo");
+    const root = join(dirname(db.path), "artifacts");
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, "issue-logs"), "not a directory");
+    let completed = false;
+    const provider = {
+      id: "codex" as const,
+      capabilities: ["issue_execution"] as const,
+      async run(input: ProviderRunInput) {
+        input.onEvent?.({ provider: "codex", type: "raw", text: "x".repeat(100_000), raw: { method: "custom/large" } });
+        input.onEvent?.({ provider: "codex", type: "done", status: "completed", raw: { method: "turn/completed" } });
+        return { runId: "must-fail-flush" };
+      }
+    };
+    await expect(runIssueWithProvider(provider, {
+      database: db, issueId, projectId: "demo", cwd: "/tmp/project", prompt: "failure",
+      onRunComplete: () => { completed = true; }
+    })).rejects.toThrow();
+    expect(completed).toBe(false);
+    expect(listIssueEvents(db, issueId).filter((event) => event.type === "issue.pi_acceptance_requested.v1")).toHaveLength(0);
+    expect(listIssueRuns(db, issueId).at(-1)?.ended_at).toBe("");
+    expect(getIssue(db, issueId)?.issue_log_mode).toBe("normal");
   });
 
   test("P10: Pi 已是 executor provider id（RPC adapter 注册后）", () => {
@@ -387,172 +366,156 @@ describe("executor provider runtime seam", () => {
 
   test("persists an early Pi Session even when the provider later fails", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueId = insertIssue(db, "demo");
+    insertProject(db, "demo");
+    const issueId = insertIssue(db, "demo");
 
-      await expect(runIssueWithProvider(new SessionThenThrowProvider(), {
-        database: db,
-        issueId,
-        projectId: "demo",
-        cwd: "/tmp/project",
-        prompt: "issue prompt"
-      })).rejects.toThrow("idle timeout");
+    await expect(runIssueWithProvider(new SessionThenThrowProvider(), {
+      database: db,
+      issueId,
+      projectId: "demo",
+      cwd: "/tmp/project",
+      prompt: "issue prompt"
+    })).rejects.toThrow("idle timeout");
 
-      expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
-        provider: "pi-coding-agent",
-        provider_session_id: "pi-durable-session",
-        provider_turn_id: ""
-      });
-      expect(getAgentSession(db, "pi-coding-agent:pi-durable-session")).toMatchObject({
-        issue_id: issueId,
-        provider: "pi-coding-agent",
-        provider_session_id: "pi-durable-session",
-        status: "failed"
-      });
-    } finally {
-      db.close();
-    }
+    expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
+      provider: "pi-coding-agent",
+      provider_session_id: "pi-durable-session",
+      provider_turn_id: ""
+    });
+    expect(getAgentSession(db, "pi-coding-agent:pi-durable-session")).toMatchObject({
+      issue_id: issueId,
+      provider: "pi-coding-agent",
+      provider_session_id: "pi-durable-session",
+      status: "failed"
+    });
   });
 
   test("persists provider session refs into issue_runs and agent_sessions", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueId = insertIssue(db, "demo");
+    insertProject(db, "demo");
+    const issueId = insertIssue(db, "demo");
 
-      await runIssueWithProvider(new FakeExecutionProvider(), {
-        database: db,
-        issueId,
-        projectId: "demo",
-        cwd: "/tmp/project",
-        prompt: "issue prompt",
-        serviceTier: "priority",
-        serviceTierSource: "issue"
-      });
+    await runIssueWithProvider(new FakeExecutionProvider(), {
+      database: db,
+      issueId,
+      projectId: "demo",
+      cwd: "/tmp/project",
+      prompt: "issue prompt",
+      serviceTier: "priority",
+      serviceTierSource: "issue"
+    });
 
-      expect(listIssueRuns(db, issueId)).toMatchObject([{
-        attempt: 1,
-        provider: "fake-execution-only",
-        provider_session_id: "fake-session",
-        provider_turn_id: "fake-turn",
-        codex_thread_id: "",
-        codex_turn_id: "",
-        runtime_metadata_json: "{\"run_id\":\"fake-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"},\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"}"
-      }]);
-      expect(getAgentSession(db, "fake-execution-only:fake-session")).toMatchObject({
-        provider: "fake-execution-only",
-        provider_session_id: "fake-session",
-        project_id: "demo",
-        issue_id: issueId,
-        raw_ref: "{\"provider_turn_id\":\"fake-turn\",\"run_id\":\"fake-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"},\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"}"
-      });
-      const issueEvents = listIssueEvents(db, issueId, { types: ["issue.log"] });
-      expect(issueEvents).toMatchObject([{
-        issue_id: issueId,
-        type: "issue.log"
-      }]);
-      expect(JSON.parse(issueEvents[0]!.payload)).toMatchObject({
-        provider: "fake-execution-only",
-        runtime_evidence_correlation: {
-          attempt_id: "xw:run:issue_runs:issue-1-attempt-1~attempt:1",
-          contract: "xw.runtime-evidence-correlation.v1",
-          issue_run_id: "issue-1-attempt-1",
-          run_id: "xw:run:issue_runs:issue-1-attempt-1"
-        },
-        text: "fake provider log",
-        type: "provider.message"
-      });
-    } finally {
-      db.close();
-    }
+    expect(listIssueRuns(db, issueId)).toMatchObject([{
+      attempt: 1,
+      provider: "fake-execution-only",
+      provider_session_id: "fake-session",
+      provider_turn_id: "fake-turn",
+      codex_thread_id: "",
+      codex_turn_id: "",
+      runtime_metadata_json: "{\"run_id\":\"fake-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"},\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"}"
+    }]);
+    expect(getAgentSession(db, "fake-execution-only:fake-session")).toMatchObject({
+      provider: "fake-execution-only",
+      provider_session_id: "fake-session",
+      project_id: "demo",
+      issue_id: issueId,
+      raw_ref: "{\"provider_turn_id\":\"fake-turn\",\"run_id\":\"fake-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"},\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"}"
+    });
+    const issueEvents = listIssueEvents(db, issueId, { types: ["issue.log"] });
+    expect(issueEvents).toMatchObject([{
+      issue_id: issueId,
+      type: "issue.log"
+    }]);
+    expect(JSON.parse(issueEvents[0]!.payload)).toMatchObject({
+      provider: "fake-execution-only",
+      runtime_evidence_correlation: {
+        attempt_id: "xw:run:issue_runs:issue-1-attempt-1~attempt:1",
+        contract: "xw.runtime-evidence-correlation.v1",
+        issue_run_id: "issue-1-attempt-1",
+        run_id: "xw:run:issue_runs:issue-1-attempt-1"
+      },
+      text: "fake provider log",
+      type: "provider.message"
+    });
   });
 
   test("Qoder init persists a recoverable Session before an SDK failure", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueId = insertIssue(db, "demo");
-      const sessionId = "qoder-early-session";
-      const { facade } = createFakeQoderSdkFacade([qoderInit(sessionId), "throw"]);
-      const provider = new QoderExecutorProvider(buildConfig().providers.qoder!, {
-        facade,
-        invocationIdFactory: () => "qoder-inv-early",
-        readiness: qoderReadyProbe(),
-        sessionIdFactory: () => sessionId
-      });
+    insertProject(db, "demo");
+    const issueId = insertIssue(db, "demo");
+    const sessionId = "qoder-early-session";
+    const { facade } = createFakeQoderSdkFacade([qoderInit(sessionId), "throw"]);
+    const provider = new QoderExecutorProvider(buildConfig().providers.qoder!, {
+      facade,
+      invocationIdFactory: () => "qoder-inv-early",
+      readiness: qoderReadyProbe(),
+      sessionIdFactory: () => sessionId
+    });
 
-      await expect(runIssueWithProvider(provider, {
-        database: db,
-        issueId,
-        projectId: "demo",
-        cwd: "/tmp/project",
-        prompt: "issue prompt"
-      })).rejects.toThrow("sdk failure");
+    await expect(runIssueWithProvider(provider, {
+      database: db,
+      issueId,
+      projectId: "demo",
+      cwd: "/tmp/project",
+      prompt: "issue prompt"
+    })).rejects.toThrow("sdk failure");
 
-      expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
-        provider: "qoder",
-        provider_session_id: sessionId,
-        provider_turn_id: ""
-      });
-      expect(getAgentSession(db, `qoder:${sessionId}`)).toMatchObject({
-        issue_id: issueId,
-        provider: "qoder",
-        provider_session_id: sessionId,
-        status: "failed"
-      });
-    } finally {
-      db.close();
-    }
+    expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
+      provider: "qoder",
+      provider_session_id: sessionId,
+      provider_turn_id: ""
+    });
+    expect(getAgentSession(db, `qoder:${sessionId}`)).toMatchObject({
+      issue_id: issueId,
+      provider: "qoder",
+      provider_session_id: sessionId,
+      status: "failed"
+    });
   });
 
   test("Qoder main result persists invocation, Session and message refs through the existing runtime", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueId = insertIssue(db, "demo");
-      const sessionId = "qoder-terminal-session";
-      const { facade } = createFakeQoderSdkFacade([qoderInit(sessionId), qoderResult(sessionId)]);
-      const provider = new QoderExecutorProvider(buildConfig().providers.qoder!, {
-        facade,
-        invocationIdFactory: () => "qoder-inv-terminal",
-        readiness: qoderReadyProbe(),
-        sessionIdFactory: () => sessionId
-      });
+    insertProject(db, "demo");
+    const issueId = insertIssue(db, "demo");
+    const sessionId = "qoder-terminal-session";
+    const { facade } = createFakeQoderSdkFacade([qoderInit(sessionId), qoderResult(sessionId)]);
+    const provider = new QoderExecutorProvider(buildConfig().providers.qoder!, {
+      facade,
+      invocationIdFactory: () => "qoder-inv-terminal",
+      readiness: qoderReadyProbe(),
+      sessionIdFactory: () => sessionId
+    });
 
-      const result = await runIssueWithProvider(provider, {
-        database: db,
-        issueId,
-        projectId: "demo",
-        cwd: "/tmp/project",
-        prompt: "issue prompt"
-      });
+    const result = await runIssueWithProvider(provider, {
+      database: db,
+      issueId,
+      projectId: "demo",
+      cwd: "/tmp/project",
+      prompt: "issue prompt"
+    });
 
-      expect(result).toEqual({
-        runId: "qoder-inv-terminal",
-        session: { provider: "qoder", sessionId, turnId: "qoder-result-1" }
-      });
-      expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
-        provider: "qoder",
-        provider_session_id: sessionId,
-        provider_turn_id: "qoder-result-1",
-        runtime_metadata_json: "{\"run_id\":\"qoder-inv-terminal\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"\",\"service_tier_source\":\"standard\"}}"
-      });
-      expect(JSON.parse(getAgentSession(db, `qoder:${sessionId}`)?.raw_ref ?? "{}")).toEqual({
-        provider_turn_id: "qoder-result-1",
-        run_id: "qoder-inv-terminal",
-        resolved_settings: {
-          approval_policy: "",
-          model: "",
-          reasoning_effort: "",
-          sandbox: "",
-          service_tier: "",
-          service_tier_source: "standard"
-        }
-      });
-    } finally {
-      db.close();
-    }
+    expect(result).toEqual({
+      runId: "qoder-inv-terminal",
+      session: { provider: "qoder", sessionId, turnId: "qoder-result-1" }
+    });
+    expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
+      provider: "qoder",
+      provider_session_id: sessionId,
+      provider_turn_id: "qoder-result-1",
+      runtime_metadata_json: "{\"run_id\":\"qoder-inv-terminal\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"\",\"service_tier_source\":\"standard\"}}"
+    });
+    expect(JSON.parse(getAgentSession(db, `qoder:${sessionId}`)?.raw_ref ?? "{}")).toEqual({
+      provider_turn_id: "qoder-result-1",
+      run_id: "qoder-inv-terminal",
+      resolved_settings: {
+        approval_policy: "",
+        model: "",
+        reasoning_effort: "",
+        sandbox: "",
+        service_tier: "",
+        service_tier_source: "standard"
+      }
+    });
   });
 
   test("keeps completed PTY output as an artifact without synthesizing verification Evidence", async () => {
@@ -642,123 +605,111 @@ describe("executor provider runtime seam", () => {
 
   test("persists Codex thread idle status without raw telemetry flipping it back to running", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueId = insertIssue(db, "demo");
+    insertProject(db, "demo");
+    const issueId = insertIssue(db, "demo");
 
-      await runIssueWithProvider(new IdleStatusProvider(), {
-        database: db,
-        issueId,
-        projectId: "demo",
-        cwd: "/tmp/project",
-        prompt: "issue prompt"
-      });
+    await runIssueWithProvider(new IdleStatusProvider(), {
+      database: db,
+      issueId,
+      projectId: "demo",
+      cwd: "/tmp/project",
+      prompt: "issue prompt"
+    });
 
-      expect(getAgentSession(db, "codex:thread-idle")).toMatchObject({
-        issue_id: issueId,
-        provider: "codex",
-        provider_session_id: "thread-idle",
-        status: "idle"
-      });
-      expect(listIssueRuns(db, issueId)).toMatchObject([{
-        provider: "codex",
-        provider_session_id: "thread-idle",
-        provider_turn_id: "turn-idle"
-      }]);
-    } finally {
-      db.close();
-    }
+    expect(getAgentSession(db, "codex:thread-idle")).toMatchObject({
+      issue_id: issueId,
+      provider: "codex",
+      provider_session_id: "thread-idle",
+      status: "idle"
+    });
+    expect(listIssueRuns(db, issueId)).toMatchObject([{
+      provider: "codex",
+      provider_session_id: "thread-idle",
+      provider_turn_id: "turn-idle"
+    }]);
   });
 
   test("keeps a Claude run separate from stale Codex thread fields when status is closed during execution", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueId = insertIssue(db, "demo");
-      const codexRun = createIssueRun(db, issueId);
-      updateIssueRuntime(db, issueId, {
+    insertProject(db, "demo");
+    const issueId = insertIssue(db, "demo");
+    const codexRun = createIssueRun(db, issueId);
+    updateIssueRuntime(db, issueId, {
+      provider: "codex",
+      provider_session_id: "codex-thread",
+      provider_turn_id: "codex-turn",
+      metadata: { run_id: "codex-run" }
+    });
+    closeRun(db, codexRun.id);
+
+    await runIssueWithProvider(new ClosingClaudeProvider(db), {
+      database: db,
+      issueId,
+      projectId: "demo",
+      cwd: "/tmp/project",
+      prompt: "issue prompt"
+    });
+
+    expect(listIssueRuns(db, issueId)).toMatchObject([
+      {
+        attempt: 1,
         provider: "codex",
         provider_session_id: "codex-thread",
         provider_turn_id: "codex-turn",
-        metadata: { run_id: "codex-run" }
-      });
-      closeRun(db, codexRun.id);
-
-      await runIssueWithProvider(new ClosingClaudeProvider(db), {
-        database: db,
-        issueId,
-        projectId: "demo",
-        cwd: "/tmp/project",
-        prompt: "issue prompt"
-      });
-
-      expect(listIssueRuns(db, issueId)).toMatchObject([
-        {
-          attempt: 1,
-          provider: "codex",
-          provider_session_id: "codex-thread",
-          provider_turn_id: "codex-turn",
-          codex_thread_id: "codex-thread",
-          codex_turn_id: "codex-turn",
-          runtime_metadata_json: "{\"run_id\":\"codex-run\"}"
-        },
-        {
-          attempt: 2,
-          status: "done",
-          provider: "claude",
-          provider_session_id: "claude-session",
-          provider_turn_id: "claude-turn",
-          codex_thread_id: "",
-          codex_turn_id: "",
-          exit_reason: "pi_semantic_decision",
-          runtime_metadata_json: "{\"run_id\":\"claude-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"\",\"service_tier_source\":\"standard\"}}"
-        }
-      ]);
-      expect(getAgentSession(db, "claude:claude-session")).toMatchObject({
+        codex_thread_id: "codex-thread",
+        codex_turn_id: "codex-turn",
+        runtime_metadata_json: "{\"run_id\":\"codex-run\"}"
+      },
+      {
+        attempt: 2,
+        status: "done",
         provider: "claude",
         provider_session_id: "claude-session",
-        issue_id: issueId,
-        raw_ref: "{\"provider_turn_id\":\"claude-turn\",\"run_id\":\"claude-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"\",\"service_tier_source\":\"standard\"}}"
-      });
-    } finally {
-      db.close();
-    }
+        provider_turn_id: "claude-turn",
+        codex_thread_id: "",
+        codex_turn_id: "",
+        exit_reason: "pi_semantic_decision",
+        runtime_metadata_json: "{\"run_id\":\"claude-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"\",\"service_tier_source\":\"standard\"}}"
+      }
+    ]);
+    expect(getAgentSession(db, "claude:claude-session")).toMatchObject({
+      provider: "claude",
+      provider_session_id: "claude-session",
+      issue_id: issueId,
+      raw_ref: "{\"provider_turn_id\":\"claude-turn\",\"run_id\":\"claude-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"\",\"service_tier_source\":\"standard\"}}"
+    });
   });
 
   test("normal mode keeps live hooks and terminal state without persisting stream deltas", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueId = insertIssue(db, "demo", "normal");
-      const provider = new LongSessionProvider();
-      const runtimeEvents: ProviderEvent[] = [];
-      const liveEvents: unknown[] = [];
+    insertProject(db, "demo");
+    const issueId = insertIssue(db, "demo", "normal");
+    const provider = new LongSessionProvider();
+    const runtimeEvents: ProviderEvent[] = [];
+    const liveEvents: unknown[] = [];
 
-      await runIssueWithProvider(provider, {
-        database: db,
-        issueId,
-        projectId: "demo",
-        cwd: "/tmp/project",
-        prompt: "normal logs",
-        bus: { publish: (event) => liveEvents.push(event) },
-        onRuntimeEvent: (event) => runtimeEvents.push(event)
-      });
+    await runIssueWithProvider(provider, {
+      database: db,
+      issueId,
+      projectId: "demo",
+      cwd: "/tmp/project",
+      prompt: "normal logs",
+      bus: { publish: (event) => liveEvents.push(event) },
+      onRuntimeEvent: (event) => runtimeEvents.push(event)
+    });
 
-      const events = listIssueEvents(db, issueId);
-      const logEvents = events.filter((event) => event.type === "issue.log");
-      expect(runtimeEvents).toHaveLength(514);
-      expect(logEvents).toHaveLength(1);
-      expect(JSON.parse(logEvents[0]?.payload ?? "{}")).toMatchObject({
-        raw_method: "turn/completed",
-        status: "completed"
-      });
-      expect(liveEvents.filter((event) => (event as { type?: string }).type === "issue.log")).toHaveLength(1);
-      const session = getAgentSession(db, "codex:thread-long");
-      expect(session).toMatchObject({ status: "completed" });
-      expect(JSON.parse(session?.raw_ref ?? "{}")).toMatchObject({ provider_turn_id: "turn-long" });
-    } finally {
-      db.close();
-    }
+    const events = listIssueEvents(db, issueId);
+    const logEvents = events.filter((event) => event.type === "issue.log");
+    expect(runtimeEvents).toHaveLength(514);
+    expect(logEvents).toHaveLength(1);
+    expect(JSON.parse(logEvents[0]?.payload ?? "{}")).toMatchObject({
+      raw_method: "turn/completed",
+      status: "completed"
+    });
+    expect(liveEvents.filter((event) => (event as { type?: string }).type === "issue.log")).toHaveLength(1);
+    const session = getAgentSession(db, "codex:thread-long");
+    expect(session).toMatchObject({ status: "completed" });
+    expect(JSON.parse(session?.raw_ref ?? "{}")).toMatchObject({ provider_turn_id: "turn-long" });
   });
 
   test("replays a long Session from aggregated logs with fewer rows and bytes", async () => {
@@ -816,93 +767,81 @@ describe("executor provider runtime seam", () => {
 
   test("P1: execution-only Provider 完成 Attempt 不写 Session", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueId = insertIssue(db, "demo");
-      const provider = new ExecutionOnlyRuntimeProvider();
-      const events: ProviderEvent[] = [];
+    insertProject(db, "demo");
+    const issueId = insertIssue(db, "demo");
+    const provider = new ExecutionOnlyRuntimeProvider();
+    const events: ProviderEvent[] = [];
 
-      const result = await runIssueWithProvider(provider, {
-        database: db,
-        issueId,
-        projectId: "demo",
-        cwd: "/tmp/p1-execution-only",
-        prompt: "execute",
-        onLog: (event) => events.push(event)
-      });
+    const result = await runIssueWithProvider(provider, {
+      database: db,
+      issueId,
+      projectId: "demo",
+      cwd: "/tmp/p1-execution-only",
+      prompt: "execute",
+      onLog: (event) => events.push(event)
+    });
 
-      expect(result.session).toBeUndefined();
-      expect(events.some((event) => event.session !== undefined)).toBe(false);
-      expect(listIssueRuns(db, issueId).at(-1)?.provider_session_id ?? "").toBe("");
-    } finally {
-      db.close();
-    }
+    expect(result.session).toBeUndefined();
+    expect(events.some((event) => event.session !== undefined)).toBe(false);
+    expect(listIssueRuns(db, issueId).at(-1)?.provider_session_id ?? "").toBe("");
   });
 
   test("策略组合不受支持时记录配置错误且不启动 Provider Session", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "policy-error");
-      const issueId = insertIssue(db, "policy-error");
-      const provider = new UnsupportedPolicyRuntimeProvider();
+    insertProject(db, "policy-error");
+    const issueId = insertIssue(db, "policy-error");
+    const provider = new UnsupportedPolicyRuntimeProvider();
 
-      await expect(runIssueWithProvider(provider, {
-        database: db,
-        issueId,
-        projectId: "policy-error",
-        cwd: "/tmp/policy-error",
-        prompt: "execute",
-        executionPolicyRequest: {
-          contract: "xw.execution-policy.v1",
-          access: "provider-native-development",
-          approval: "ask-sensitive"
-        },
-        executionPolicyResolutionSource: "explicit"
-      })).rejects.toThrow("cannot provide the required host approval");
+    await expect(runIssueWithProvider(provider, {
+      database: db,
+      issueId,
+      projectId: "policy-error",
+      cwd: "/tmp/policy-error",
+      prompt: "execute",
+      executionPolicyRequest: {
+        contract: "xw.execution-policy.v1",
+        access: "provider-native-development",
+        approval: "ask-sensitive"
+      },
+      executionPolicyResolutionSource: "explicit"
+    })).rejects.toThrow("cannot provide the required host approval");
 
-      expect(provider.runCalls).toBe(0);
-      const run = listIssueRuns(db, issueId).at(-1);
-      expect(run?.provider_session_id).toBe("");
-      expect(JSON.parse(run?.runtime_metadata_json ?? "{}")).toMatchObject({
-        configuration_error: { code: "policy_combination_unsupported" },
-        provider: "claude",
-        resolution_source: "explicit",
-        transport: "stdio-json"
-      });
-      expect(listIssueEvents(db, issueId).some((event) => event.payload.includes("execution-policy/resolve_error"))).toBe(true);
-    } finally {
-      db.close();
-    }
+    expect(provider.runCalls).toBe(0);
+    const run = listIssueRuns(db, issueId).at(-1);
+    expect(run?.provider_session_id).toBe("");
+    expect(JSON.parse(run?.runtime_metadata_json ?? "{}")).toMatchObject({
+      configuration_error: { code: "policy_combination_unsupported" },
+      provider: "claude",
+      resolution_source: "explicit",
+      transport: "stdio-json"
+    });
+    expect(listIssueEvents(db, issueId).some((event) => event.payload.includes("execution-policy/resolve_error"))).toBe(true);
   });
 
   test("成功解析时记录 Provider policy capability contract 而不是 resolved policy contract", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "policy-metadata");
-      const issueId = insertIssue(db, "policy-metadata");
-      const provider = new SupportedPolicyRuntimeProvider();
+    insertProject(db, "policy-metadata");
+    const issueId = insertIssue(db, "policy-metadata");
+    const provider = new SupportedPolicyRuntimeProvider();
 
-      await runIssueWithProvider(provider, {
-        database: db,
-        issueId,
-        projectId: "policy-metadata",
-        cwd: "/tmp/policy-metadata",
-        prompt: "execute",
-        executionPolicyRequest: {
-          contract: "xw.execution-policy.v1",
-          access: "unrestricted-host",
-          approval: "unattended"
-        },
-        executionPolicyResolutionSource: "explicit"
-      });
+    await runIssueWithProvider(provider, {
+      database: db,
+      issueId,
+      projectId: "policy-metadata",
+      cwd: "/tmp/policy-metadata",
+      prompt: "execute",
+      executionPolicyRequest: {
+        contract: "xw.execution-policy.v1",
+        access: "unrestricted-host",
+        approval: "unattended"
+      },
+      executionPolicyResolutionSource: "explicit"
+    });
 
-      expect(JSON.parse(listIssueRuns(db, issueId).at(-1)?.runtime_metadata_json ?? "{}")).toMatchObject({
-        provider_policy_capability_revision: "xw.provider-execution-policy-capabilities.v1",
-        resolved_execution_policy: { contract: "xw.resolved-execution-policy.v1" }
-      });
-    } finally {
-      db.close();
-    }
+    expect(JSON.parse(listIssueRuns(db, issueId).at(-1)?.runtime_metadata_json ?? "{}")).toMatchObject({
+      provider_policy_capability_revision: "xw.provider-execution-policy-capabilities.v1",
+      resolved_execution_policy: { contract: "xw.resolved-execution-policy.v1" }
+    });
   });
 });
 
