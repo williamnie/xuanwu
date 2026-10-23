@@ -3,7 +3,7 @@ import { dirname, isAbsolute, relative, resolve } from "node:path";
 import type { CanUseTool, CanUseToolOptions, Options, PermissionResult } from "@qoder-ai/qoder-agent-sdk";
 import { redactionRegistry } from "../../security/redactionRegistry.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
-import { constrainApprovalGrantScope } from "../../pi/approvalGrantScope.ts";
+import { constrainApprovalGrantScope } from "../../pi/actions/approvalGrantScope.ts";
 import { normalizedRunEvent } from "../runEvents.ts";
 import type { ApprovalDecision, ProviderEvent, SessionRef } from "../types.ts";
 import type { ResolvedExecutionPolicy } from "../core/policyContracts.ts";

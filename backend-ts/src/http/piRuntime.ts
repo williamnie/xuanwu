@@ -1,4 +1,4 @@
-import { createPiModelRuntime, piCredentialPaths, selectedCredentialSource } from "../pi/piModelRuntime.ts";
+import { createPiModelRuntime, piCredentialPaths, selectedCredentialSource } from "../pi/runtime/piModelRuntime.ts";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { getModel, getProviders, type KnownProvider, type Model } from "@earendil-works/pi-ai/compat";
@@ -8,8 +8,8 @@ import type { RunnerConfig } from "../config/env.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { PiAgent } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
-import type { PiGatePolicy } from "../pi/actionGate.ts";
-import { PI_SAFE_ACTION_TYPES } from "../pi/actionGate.ts";
+import type { PiGatePolicy } from "../pi/actions/actionGate.ts";
+import { PI_SAFE_ACTION_TYPES } from "../pi/actions/actionGate.ts";
 import type { EventBus } from "../events/bus.ts";
 import { loadSmokeRuntime, resolveDefaultRepoRoot, type SmokeRuntime } from "../spikes/piSmokeSupport.ts";
 import { installPiSdkToolAudit } from "./piSdkToolAudit.ts";
@@ -20,18 +20,18 @@ import {
   createPiRuntimeToolKit,
   recordPiRuntimeToolRegistryAudit,
   unavailablePiRuntimeToolRegistryAudit
-} from "../pi/piRuntimeTools.ts";
-import type { SupervisorContextResolution } from "../pi/supervisorContextResolver.ts";
+} from "../pi/tools/piRuntimeTools.ts";
+import type { SupervisorContextResolution } from "../pi/supervisor/supervisorContextResolver.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import type { ProviderCatalogEntry } from "../providers/core/catalog.ts";
-import { SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES } from "../pi/supervisorControlContracts.ts";
+import { SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES } from "../pi/supervisor/supervisorControlContracts.ts";
 import { installPiProviderSecretOverride } from "../security/secrets/piProviderRuntime.ts";
 import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
-import type { PiChatToolMode, PiRuntimePromptProfile } from "../pi/runtimePromptProfile.ts";
+import type { PiChatToolMode, PiRuntimePromptProfile } from "../pi/runtime/runtimePromptProfile.ts";
 import {
   buildPiRuntimeContextEnvelope,
   recordPiRuntimeContextEnvelopeAudit
-} from "../pi/runtimeContextEnvelope.ts";
+} from "../pi/runtime/runtimeContextEnvelope.ts";
 import type { AppLanguage } from "../i18n/language.ts";
 import { errorMessage } from "../util/values.ts";
 
@@ -62,7 +62,7 @@ export type RuntimeSessionInput = {
   onIssueEnqueued?: (projectID: string) => void;
   project?: Project;
   promptProfile: PiRuntimePromptProfile;
-  memoryReflection?: import("../pi/memoryReflectionQueue.ts").ReflectionLease;
+  memoryReflection?: import("../pi/memory/memoryReflectionQueue.ts").ReflectionLease;
   issueRunID?: string;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   restartDelayMs?: number;

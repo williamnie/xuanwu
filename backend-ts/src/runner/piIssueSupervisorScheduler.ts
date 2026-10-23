@@ -11,16 +11,16 @@ import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts
 import {
   buildIssueSupervisorRecoveryContextAsync,
   type IssueSupervisorRecoveryContext
-} from "../pi/issueSupervisorContext.ts";
-import { supervisorCandidateReady } from "../pi/issueSupervisorSignalCollector.ts";
-import { isTransientRecoveryDiagnosis } from "../pi/recoveryDiagnosis.ts";
+} from "../pi/supervisor/issueSupervisorContext.ts";
+import { supervisorCandidateReady } from "../pi/supervisor/issueSupervisorSignalCollector.ts";
+import { isTransientRecoveryDiagnosis } from "../pi/supervisor/recoveryDiagnosis.ts";
 import {
   runPiSupervisorDecision,
   type PiSupervisorDecisionRuntimeResult
-} from "../pi/issueSupervisorDecision.ts";
-import { applyIssueSupervisorDecisionActions } from "../pi/issueSupervisorActions.ts";
-import { ingestPiGuardianEvent } from "../pi/guardianEventIngest.ts";
-import { iso } from "../pi/heartbeatOrchestratorSupport.ts";
+} from "../pi/supervisor/issueSupervisorDecision.ts";
+import { applyIssueSupervisorDecisionActions } from "../pi/supervisor/issueSupervisorActions.ts";
+import { ingestPiGuardianEvent } from "../pi/guardian/guardianEventIngest.ts";
+import { iso } from "../pi/heartbeat/heartbeatOrchestratorSupport.ts";
 import { reconcileCurrentProviderTurn } from "./providerSessionReconciliation.ts";
 import {
   refreshSupervisorProgressResult,

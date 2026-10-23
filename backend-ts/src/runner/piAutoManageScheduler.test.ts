@@ -9,7 +9,7 @@ import { listPiRecoveryAttempts } from "../db/repositories/pi/recoveryAttempts.t
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { EventBus, type AppEvent } from "../events/bus.ts";
-import type { PiSupervisorDecisionJson } from "../pi/issueSupervisorRecovery.ts";
+import type { PiSupervisorDecisionJson } from "../pi/supervisor/issueSupervisorRecovery.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import {
   createPiAgenticScheduler,

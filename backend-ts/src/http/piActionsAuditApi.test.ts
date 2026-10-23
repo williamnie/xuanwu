@@ -5,7 +5,7 @@ import { type RunnerDatabase } from "../db/database.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { createPiAction, getPiAction, listPiActionEvents } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
-import { createPiRunnerActions } from "../pi/runnerActions.ts";
+import { createPiRunnerActions } from "../pi/runnerTools/runnerActions.ts";
 import { createDefaultRouter } from "./server.ts";
 import { useTestDatabase } from "../testing/harness.ts";
 

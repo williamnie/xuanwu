@@ -3,7 +3,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { ExternalEventRecord } from "../db/repositories/externalEvents.ts";
 import { listProjects } from "../db/repositories/projects.ts";
 import type { EventBus } from "../events/bus.ts";
-import { decidePiAttention, type PiAttentionDecision } from "../pi/attentionRouter.ts";
+import { decidePiAttention, type PiAttentionDecision } from "../pi/intake/attentionRouter.ts";
 import {
   normalizeFeishuMessageEvent,
   type FeishuConnectorConfig,

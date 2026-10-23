@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { type RunnerDatabase } from "../db/database.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { EventBus } from "../events/bus.ts";
-import type { ProjectFinding } from "../pi/projectFindings.ts";
+import type { ProjectFinding } from "../pi/reports/projectFindings.ts";
 import { publishNeedsUserFindingNotifications, publishPiNeedsUserNotification } from "./piNotifier.ts";
 import { useTestDatabase } from "../testing/harness.ts";
 

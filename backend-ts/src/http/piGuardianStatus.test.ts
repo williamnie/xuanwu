@@ -6,7 +6,7 @@ import { buildConfig } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { createPiNotificationIntent, upsertPiGuardianWatchdogStatus } from "../db/repositories/pi.ts";
-import { createIssueCompletionAutomation } from "../pi/issueCompletionAutomation.ts";
+import { createIssueCompletionAutomation } from "../pi/issues/issueCompletionAutomation.ts";
 import { createDefaultRouter, registerSystemStatusRoute } from "./server.ts";
 import { isoSeconds } from "../util/values.ts";
 import { useDatabaseCleanup } from "../testing/harness.ts";

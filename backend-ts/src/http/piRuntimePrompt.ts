@@ -1,4 +1,4 @@
-import { ISSUE_PLANNING_POLICY } from "../pi/issuePlanningPolicy.ts";
+import { ISSUE_PLANNING_POLICY } from "../pi/issues/issuePlanningPolicy.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { PiAgent, PiPersona } from "../db/repositories/pi.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
@@ -6,16 +6,16 @@ import { publicMcpRegistry } from "../mcp/registry.ts";
 import {
   buildPiRuntimeContextEnvelope,
   piRuntimeContextEnvelopePrompt
-} from "../pi/runtimeContextEnvelope.ts";
+} from "../pi/runtime/runtimeContextEnvelope.ts";
 import { buildSkillPromptContext, recordSkillPromptContextAudit } from "../skills/promptContext.ts";
 import { parseSkillPolicy } from "../skills/intents.ts";
-import { supervisorContextPrompt } from "../pi/supervisorContextResolver.ts";
-import { buildSupervisorCommitmentPromptContext } from "../pi/supervisorCommitments.ts";
+import { supervisorContextPrompt } from "../pi/supervisor/supervisorContextResolver.ts";
+import { buildSupervisorCommitmentPromptContext } from "../pi/supervisor/supervisorCommitments.ts";
 import { promptInjectionDefenseSystemPrompt } from "../security/promptInjectionDefense.ts";
 import type { RuntimeSessionInput } from "./piRuntime.ts";
 import { appLanguage, piLanguageContract, type AppLanguage } from "../i18n/language.ts";
-import { buildPiPersonaPromptSection } from "../pi/personaPrompt.ts";
-import { PI_RUNTIME_PROMPT_PROFILES } from "../pi/runtimePromptProfile.ts";
+import { buildPiPersonaPromptSection } from "../pi/runtime/personaPrompt.ts";
+import { PI_RUNTIME_PROMPT_PROFILES } from "../pi/runtime/runtimePromptProfile.ts";
 import { cleanString } from "../util/values.ts";
 
 export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string {

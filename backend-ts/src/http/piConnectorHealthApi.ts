@@ -8,8 +8,8 @@ import {
   probeConnectorConnection,
   type ConnectorProbeResult
 } from "../integrations/connectorDiagnostics.ts";
-import { browserConnectorHealth } from "../pi/browserConnectorHealth.ts";
-import { checkCliConnectorHealth } from "../pi/cliConnectorHealth.ts";
+import { browserConnectorHealth } from "../pi/tools/browserConnectorHealth.ts";
+import { checkCliConnectorHealth } from "../pi/intake/cliConnectorHealth.ts";
 import { SecretStoreError } from "../security/secrets/contracts.ts";
 import { createDatabaseSecretService, type SecretService } from "../security/secrets/service.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";

@@ -5,15 +5,15 @@ import {
   type PiGuardianAlert
 } from "../db/repositories/pi.ts";
 import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
-import { formatGuardianAlertText } from "../pi/guardianAlertText.ts";
+import { formatGuardianAlertText } from "../pi/guardian/guardianAlertText.ts";
 import {
   failedGuardianAlertRetryPatch,
   sentGuardianAlertRetryPatch,
   shouldAttemptGuardianAlertFeishu
-} from "../pi/guardianAlertRetryPolicy.ts";
+} from "../pi/guardian/guardianAlertRetryPolicy.ts";
 import {
   guardianAlertPresentation
-} from "../pi/guardianAlertPresentation.ts";
+} from "../pi/guardian/guardianAlertPresentation.ts";
 import type { FeishuConnectorConfig } from "./feishu.ts";
 import {
   createFeishuMessageClient,

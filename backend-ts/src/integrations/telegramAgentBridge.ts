@@ -4,7 +4,7 @@ import { createExternalLink, listExternalLinksByExternal } from "../db/repositor
 import { ensureImInteractionBinding } from "../db/repositories/imInteractionBindings.ts";
 import { consumeImProjectSelection, createImProjectSelection, getImProjectSelection } from "../db/repositories/imProjectSelections.ts";
 import { listProjects } from "../db/repositories/projects.ts";
-import { ingestPiGuardianEvent } from "../pi/guardianEventIngest.ts";
+import { ingestPiGuardianEvent } from "../pi/guardian/guardianEventIngest.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { ChannelConnector } from "./channelConnectorContracts.ts";
 import { resolveImActionTarget } from "./imActionTarget.ts";

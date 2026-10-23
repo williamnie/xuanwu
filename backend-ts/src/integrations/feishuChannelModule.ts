@@ -2,7 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import type { OutboundEnvelope } from "./channelConnectorContracts.ts";
-import type { GuardianAlertDelivery } from "../pi/guardianAlertDelivery.ts";
+import type { GuardianAlertDelivery } from "../pi/guardian/guardianAlertDelivery.ts";
 import type { FeishuConnectorConfig } from "./feishu.ts";
 import {
   createFeishuMessageClient,

@@ -8,7 +8,7 @@ import { createExternalLink } from "../db/repositories/externalLinks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import { upsertPiGuardianAlert } from "../db/repositories/pi.ts";
-import type { GuardianAlertDelivery } from "../pi/guardianAlertDelivery.ts";
+import type { GuardianAlertDelivery } from "../pi/guardian/guardianAlertDelivery.ts";
 import { createBuiltinImChannelRegistry } from "./feishuChannelModule.ts";
 import { createImGuardianAlertDelivery } from "./imGuardianAlerts.ts";
 import { createTelegramChannelModule } from "./telegramChannelModule.ts";

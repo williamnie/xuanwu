@@ -1,8 +1,8 @@
 import type { RunnerConfig } from "../config/env.ts";
 import { getStoredAssistantTool } from "../db/repositories/toolRegistry.ts";
-import { invokeReadOnlyAssistantTool, ToolInvocationNotFoundError } from "../pi/readOnlyToolInvocation.ts";
-import { loadAssistantToolRegistrySnapshot } from "../pi/toolRegistrySnapshot.ts";
-import type { AssistantTool, ToolProvider } from "../pi/toolProviderEnvelope.ts";
+import { invokeReadOnlyAssistantTool, ToolInvocationNotFoundError } from "../pi/tools/readOnlyToolInvocation.ts";
+import { loadAssistantToolRegistrySnapshot } from "../pi/tools/toolRegistrySnapshot.ts";
+import type { AssistantTool, ToolProvider } from "../pi/tools/toolProviderEnvelope.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 import type { RunnerDatabase } from "../db/database.ts";

@@ -8,7 +8,7 @@ import {
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import type { RunnerConfig } from "../config/env.ts";
-import { publishPiActionEvent, recordPiActionAuditEvent } from "../pi/actionEngine.ts";
+import { publishPiActionEvent, recordPiActionAuditEvent } from "../pi/actions/actionEngine.ts";
 import { HttpError } from "./errors.ts";
 import { dispatchPiAction, type ProjectLoopStarter } from "./piActionDispatch.ts";
 import { grantPiMcpCapabilityApproval } from "../db/repositories/pi.ts";
@@ -16,7 +16,7 @@ import { readMcpCapability, readMcpServer } from "../mcp/registry.ts";
 import { mcpCapabilityFingerprint } from "../mcp/approvalPolicy.ts";
 import { getPiMcpCapability } from "../db/repositories/piMcpCapabilities.ts";
 import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
-import { evaluatePiActionFreshness } from "../pi/actionFreshness.ts";
+import { evaluatePiActionFreshness } from "../pi/actions/actionFreshness.ts";
 import { cleanString } from "../util/values.ts";
 
 export type PiActionDecisionContext = {

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { type RunnerDatabase } from "../db/database.ts";
 import { getIssue, listIssues, type Issue } from "../db/repositories/issues.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
-import { createPiRunnerActions } from "../pi/runnerActions.ts";
+import { createPiRunnerActions } from "../pi/runnerTools/runnerActions.ts";
 import { createDefaultRouter } from "./server.ts";
 import { useTestDatabase } from "../testing/harness.ts";
 

@@ -15,7 +15,7 @@ import {
   type FeishuProjectSelectionAction
 } from "./feishuProjectSelectionBridge.ts";
 import type { FeishuIngestResult } from "./feishuIngest.ts";
-import { ingestPiGuardianEvent } from "../pi/guardianEventIngest.ts";
+import { ingestPiGuardianEvent } from "../pi/guardian/guardianEventIngest.ts";
 import { resolveFeishuActionTarget } from "./feishuActionTarget.ts";
 import { createImConversationCoordinator } from "./imConversationCoordinator.ts";
 import type { ChannelConnector } from "./channelConnectorContracts.ts";

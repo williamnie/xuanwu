@@ -33,7 +33,7 @@ type QueueNotificationOutboxResult = {
 };
 
 // The production delivery authority for `operation_kind='im_reply'` rows is
-// the registry-driven `dispatchImOutbox` in pi/imReplyOutboxDispatcher.ts.
+// the registry-driven `dispatchImOutbox` in pi/notifications/imReplyOutboxDispatcher.ts.
 // There is intentionally no second channel-sender dispatcher here: outbox
 // rows claim/send/receipt exactly once through the generic dispatcher.
 

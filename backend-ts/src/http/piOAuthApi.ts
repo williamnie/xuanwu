@@ -1,4 +1,4 @@
-import { codexLoginService, createPiModelRuntime, selectedCredentialSource, type CredentialSource } from "../pi/piModelRuntime.ts";
+import { codexLoginService, createPiModelRuntime, selectedCredentialSource, type CredentialSource } from "../pi/runtime/piModelRuntime.ts";
 import { dirname, join } from "node:path";
 import type { OAuthAuthInfo, OAuthCredentials, OAuthPrompt } from "@earendil-works/pi-ai";
 import type { RunnerDatabase } from "../db/database.ts";

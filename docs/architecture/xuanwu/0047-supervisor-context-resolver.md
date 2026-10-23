@@ -4,7 +4,7 @@
 - 日期：2026-07-17
 - 路线 issue：XW P06.04 / Runner #683
 - 硬依赖：XW P06.03 / #682、XW P02.06 / #652（均为 `done`）
-- 可执行实现：`backend-ts/src/pi/supervisorContextResolver.ts`
+- 可执行实现：`backend-ts/src/pi/supervisor/supervisorContextResolver.ts`
 - Runtime 接入：`backend-ts/src/http/piConversationApi.ts`、`backend-ts/src/http/piRuntimePrompt.ts`
 - canonical 级别：本文、`SUPERVISOR_CONTEXT_RESOLUTION_SCHEMA` 与 `resolveSupervisorContext()` 共同构成本阶段逐 turn target resolution、candidate scoring、歧义和 provenance 的 source of truth
 
@@ -72,7 +72,7 @@
 
 ```bash
 cd backend-ts
-bun test src/pi/supervisorContextResolver.test.ts
+bun test src/pi/supervisor/supervisorContextResolver.test.ts
 bun test src/http/piConversationMessagesApi.test.ts
 bun test src/integrations/feishuProjectContext.test.ts src/integrations/feishuAgentBridge.test.ts
 ```

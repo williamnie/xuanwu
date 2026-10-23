@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { listBuiltinAssistantTools } from "../pi/builtinToolRegistry.ts";
+import { listBuiltinAssistantTools } from "../pi/tools/builtinToolRegistry.ts";
 import {
   validateWorkflowVerificationPolicy
 } from "../domain/evidence/policy.ts";

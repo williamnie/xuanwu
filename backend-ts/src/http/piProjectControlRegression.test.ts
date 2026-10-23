@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai/compat";
 import { type RunnerDatabase } from "../db/database.ts";
 import { listPiActions, listPiConversations, listPiMemoryItems } from "../db/repositories/pi.ts";
-import { gatePiActionEnvelope } from "../pi/actionGate.ts";
+import { gatePiActionEnvelope } from "../pi/actions/actionGate.ts";
 import { createDefaultRouter } from "./server.ts";
 import { useTestDatabase } from "../testing/harness.ts";
 

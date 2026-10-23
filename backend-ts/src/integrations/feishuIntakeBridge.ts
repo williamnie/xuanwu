@@ -6,8 +6,8 @@ import {
   type DomainRouteResult,
   type EventRouterSourcePolicy,
   type IntakeRouteResult
-} from "../pi/eventRouter.ts";
-import type { LlmIntakeModel, LlmIntakeOptions } from "../pi/llmIntake.ts";
+} from "../pi/intake/eventRouter.ts";
+import type { LlmIntakeModel, LlmIntakeOptions } from "../pi/intake/llmIntake.ts";
 import type { FeishuIngestResult } from "./feishuIngest.ts";
 
 export type FeishuGenericIntakeOptions = {

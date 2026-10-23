@@ -130,7 +130,7 @@ Codex 会话未指定标题时，玄武在第一条任务消息启动后，使�
 - `POST /api/sessions` 的 Codex 请求可传可选 `title`；非空时直接使用该名称，不调用标题模型。已有非空名称的会话不会在后续消息或恢复时重新生成。
 - 自动命名在后台运行，最多等待 20 秒，不重试 LLM；模型配置缺失、输出无效、返回 `null`、超时或失败均保留原名。Issue 的默认名称仍为 `Issue #<id>`。
 - 写入前重新读取会话名称，并监听改名通知；生成期间发生用户改名则放弃自动写入。仅调用 `thread/name/set`，不更改项目名称、内容、项目归属、排序、置顶或归档状态。
-- 命名结果由 Codex 持久化，不批量改写已有会话。Prompt 和格式校验见 `backend-ts/src/pi/sessionTitlePrompt.ts`。
+- 命名结果由 Codex 持久化，不批量改写已有会话。Prompt 和格式校验见 `backend-ts/src/pi/runtime/sessionTitlePrompt.ts`。
 
 ## Agent/provider 通过 CLI 或 API 反向更新 Runner
 

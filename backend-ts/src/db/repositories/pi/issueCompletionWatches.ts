@@ -1,5 +1,5 @@
 import type { RunnerDatabase } from "../../database.ts";
-import { getIssueCompletionAutomation } from "../../../pi/issueCompletionAutomation.ts";
+import { getIssueCompletionAutomation } from "../../../pi/issues/issueCompletionAutomation.ts";
 import { getIssue, type Issue } from "../issues.ts";
 import {
   cleanString,

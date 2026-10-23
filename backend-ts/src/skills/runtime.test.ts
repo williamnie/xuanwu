@@ -8,7 +8,7 @@ import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createAttentionInboxItem, createIntakeRun } from "../db/repositories/intakeRuns.ts";
 import { listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
 import { resolvePiActionDecision } from "../http/piActionDecision.ts";
-import { runDomainSkillAndMarkProposal } from "../pi/domainSkillRun.ts";
+import { runDomainSkillAndMarkProposal } from "../pi/tools/domainSkillRun.ts";
 import type { WorkflowStage } from "../workflows/manifest.ts";
 import { DEFAULT_DOMAIN_SKILL_ID } from "./builtinDomainProposal.ts";
 import type { SkillMetadata } from "./registry.ts";

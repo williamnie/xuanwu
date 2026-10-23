@@ -7,8 +7,8 @@ import { createAuthTokenManager, requireBearerAuth } from "../http/auth.ts";
 import { runProjectPiCycle } from "../http/piProjectControlApi.ts";
 import { parseListenAddress } from "../config/listenAddress.ts";
 import { decideAgentCommunicationWithRuntime } from "../notifications/agentCommunicationGateway.ts";
-import { runPiSupervisorDecision } from "../pi/issueSupervisorDecision.ts";
-import { runPiIssueAcceptance } from "../pi/issueAcceptance.ts";
+import { runPiSupervisorDecision } from "../pi/supervisor/issueSupervisorDecision.ts";
+import { runPiIssueAcceptance } from "../pi/issues/issueAcceptance.ts";
 import { assertCompletionCardIntegrity } from "../domain/acceptance/completionCard.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import {

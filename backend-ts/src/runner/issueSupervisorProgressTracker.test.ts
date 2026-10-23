@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { type RunnerDatabase } from "../db/database.ts";
 import { recordPiRecoveryAttempt, getPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
 import { createIssueSupervisorEvent, listIssueSupervisorEvents } from "../db/repositories/pi.ts";
-import { buildIssueSupervisorRecoveryContext } from "../pi/issueSupervisorContext.ts";
+import { buildIssueSupervisorRecoveryContext } from "../pi/supervisor/issueSupervisorContext.ts";
 import { refreshSupervisorProgressResult } from "./issueSupervisorProgressTracker.ts";
 import { useTestDatabase } from "../testing/harness.ts";
 

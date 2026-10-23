@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { type RunnerDatabase } from "../db/database.ts";
 import { listPiActions, listPiGuardianEvents, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
 import { createIssueRun } from "../db/repositories/issueRuns.ts";
-import { runGuardianDecisionOrchestratorOnce } from "../pi/guardianDecisionOrchestrator.ts";
+import { runGuardianDecisionOrchestratorOnce } from "../pi/guardian/guardianDecisionOrchestrator.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
 import { useTestDatabase } from "../testing/harness.ts";

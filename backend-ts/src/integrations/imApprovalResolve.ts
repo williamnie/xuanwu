@@ -5,7 +5,7 @@ import {
   resolvePiApprovalRequestRecord
 } from "../db/repositories/pi/approvalLifecycle.ts";
 import type { ApprovalDecision, ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
-import { constrainApprovalGrantScope } from "../pi/approvalGrantScope.ts";
+import { constrainApprovalGrantScope } from "../pi/actions/approvalGrantScope.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
 type ImApprovalResolveInput = {

@@ -10,7 +10,7 @@ import { updateAttentionInboxItemStatus } from "../db/repositories/intakeRuns.ts
 import type { EventBus } from "../events/bus.ts";
 import { resolvePiApprovalRequestFromFeishu } from "../integrations/feishuApprovalRequests.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
-import { recordPiActionAuditEvent } from "../pi/actionEngine.ts";
+import { recordPiActionAuditEvent } from "../pi/actions/actionEngine.ts";
 import { executeApprovedPiAction, resolvePiActionDecision } from "./piActionDecision.ts";
 import { approveAndExecuteActionProposal } from "./piActionProposalExecution.ts";
 import type { ProjectLoopStarter } from "./piActionDispatch.ts";

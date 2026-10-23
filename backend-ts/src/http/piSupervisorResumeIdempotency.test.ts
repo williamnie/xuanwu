@@ -6,7 +6,7 @@ import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { listIssueRuns } from "../db/repositories/issues.ts";
 import { createPiAction, createPiMemoryItem, updatePiMemoryItem } from "../db/repositories/pi.ts";
-import { appendRunMemoryPrompt, readRunMemorySnapshot } from "../pi/runMemoryContext.ts";
+import { appendRunMemoryPrompt, readRunMemorySnapshot } from "../pi/memory/runMemoryContext.ts";
 import { listPiRecoveryAttempts, recordPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { dispatchPiAction } from "./piActionDispatch.ts";

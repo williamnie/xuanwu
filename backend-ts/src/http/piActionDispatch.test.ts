@@ -11,7 +11,7 @@ import { createIssueRun } from "../db/repositories/issueRuns.ts";
 import { createPiAction, getPiIssueCompletionWatch, listIssueSupervisorEvents } from "../db/repositories/pi.ts";
 import { getIssueAsWork } from "../domain/work/issueAdapter.ts";
 import { createHumanReviewRequest, readIssueDecisionProjection } from "../domain/review/humanReview.ts";
-import { resolvePiNotificationPreference } from "../pi/notificationPreferenceResolver.ts";
+import { resolvePiNotificationPreference } from "../pi/notifications/notificationPreferenceResolver.ts";
 import { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { dispatchPiAction } from "./piActionDispatch.ts";

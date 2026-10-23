@@ -5,7 +5,7 @@ import type { ChannelConnector } from "../integrations/channelConnectorContracts
 import { telegramConnectorStatus } from "../integrations/telegramConfig.ts";
 import type { TelegramConnectorConfig } from "../integrations/telegramTypes.ts";
 import { queueNotificationOutbox } from "../notifications/notificationOutbox.ts";
-import { dispatchImOutbox } from "../pi/imReplyOutboxDispatcher.ts";
+import { dispatchImOutbox } from "../pi/notifications/imReplyOutboxDispatcher.ts";
 import {
   checkReleaseUpdate,
   defaultReleaseUpdaterPath,

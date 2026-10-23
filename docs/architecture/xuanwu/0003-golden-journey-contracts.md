@@ -193,7 +193,7 @@ node --test frontend/src/pages/work/taskListModel.test.js frontend/src/pages/Wor
 当前可执行基线：
 
 ```bash
-bun test backend-ts/src/pi/issue-supervisor-recovery.test.ts backend-ts/src/http/piSupervisorResumeIdempotency.test.ts
+bun test backend-ts/src/pi/supervisor/issue-supervisor-recovery.test.ts backend-ts/src/http/piSupervisorResumeIdempotency.test.ts
 node --test frontend/src/pages/command-center/attentionModel.test.js
 ```
 
@@ -247,7 +247,7 @@ node --test frontend/src/pages/command-center/attentionModel.test.js
 当前可执行基线：
 
 ```bash
-bun test backend-ts/src/pi/runnerBatchTriageScope.test.ts backend-ts/src/runner/projectLoop.test.ts backend-ts/src/db/repositories/pi/runGroupLifecycle.test.ts
+bun test backend-ts/src/pi/runnerTools/runnerBatchTriageScope.test.ts backend-ts/src/runner/projectLoop.test.ts backend-ts/src/db/repositories/pi/runGroupLifecycle.test.ts
 node --test frontend/src/pages/sessions/projectOrder.test.js frontend/src/pages/projectHold.test.js
 ```
 
@@ -355,7 +355,7 @@ node --test frontend/src/pages/command-center/attentionModel.test.js
 当前可执行基线：
 
 ```bash
-bun test backend-ts/src/pi/heartbeatOrchestrator.test.ts backend-ts/src/runner/piAutoManageSchedulerWatchdog.test.ts backend-ts/src/pi/heartbeatConcurrency.test.ts
+bun test backend-ts/src/pi/heartbeat/heartbeatOrchestrator.test.ts backend-ts/src/runner/piAutoManageSchedulerWatchdog.test.ts backend-ts/src/pi/heartbeat/heartbeatConcurrency.test.ts
 node --test frontend/src/pages/command-center/attentionModel.test.js frontend/src/pages/projectHold.test.js
 ```
 

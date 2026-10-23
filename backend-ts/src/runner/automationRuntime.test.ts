@@ -17,7 +17,7 @@ import {
   upsertProjectPiPolicy
 } from "../db/repositories/pi.ts";
 import { getIssueAsWork } from "../domain/work/issueAdapter.ts";
-import { createSupervisorCommitment } from "../pi/supervisorCommitments.ts";
+import { createSupervisorCommitment } from "../pi/supervisor/supervisorCommitments.ts";
 import type { ExecutorProvider, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
 import { INVESTIGATE_WORKFLOW_REF } from "../workflows/investigate.ts";
 import { createPiAutoManageScheduler, runScheduleLayerCycle } from "./piAutoManageScheduler.ts";

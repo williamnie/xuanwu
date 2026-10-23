@@ -2,7 +2,7 @@ import type { RunnerDatabase } from "../../db/database.ts";
 import { getIssue } from "../../db/repositories/issues.ts";
 import { getProject } from "../../db/repositories/projects.ts";
 import { getPiDelegation } from "../../db/repositories/pi.ts";
-import { gatePiActionEnvelope, type PiGatePolicy } from "../../pi/actionGate.ts";
+import { gatePiActionEnvelope, type PiGatePolicy } from "../../pi/actions/actionGate.ts";
 import { JEV_CAPABILITY_ID, JEV_SKILL_ID, JEV_TOOL_NAME, jevCredentialStatus, jevPackage, readJevConfig, record, type JevScope, type JevSkillConfig } from "./config.ts";
 
 export type JevContext = {

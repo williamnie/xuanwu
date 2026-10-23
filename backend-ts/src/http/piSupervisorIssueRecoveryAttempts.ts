@@ -7,7 +7,7 @@ import {
   type PiRecoveryAttempt,
   type PiRecoveryAttemptStatus
 } from "../db/repositories/pi/recoveryAttempts.ts";
-import { readPiRecoveryBudget } from "../pi/recoveryBudget.ts";
+import { readPiRecoveryBudget } from "../pi/supervisor/recoveryBudget.ts";
 import { readProjectPiPolicy } from "../db/repositories/pi.ts";
 import { cleanString } from "../util/values.ts";
 

@@ -1,6 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getPiGuardianWatchdogStatus } from "../db/repositories/pi.ts";
-import { issueCompletionAutomationCounts } from "../pi/issueCompletionAutomation.ts";
+import { issueCompletionAutomationCounts } from "../pi/issues/issueCompletionAutomation.ts";
 import { isoSeconds } from "../util/values.ts";
 
 const PI_GUARDIAN_WATCHDOG_STALE_AFTER_MS = 120_000;

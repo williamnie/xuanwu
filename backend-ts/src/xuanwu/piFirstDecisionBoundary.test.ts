@@ -29,9 +29,9 @@ describe("PI-first decision boundary", () => {
       "backend-ts/src/http/piConversationApi.ts",
       "backend-ts/src/http/piRuntime.ts",
       "backend-ts/src/integrations/feishuAgentBridge.ts",
-      "backend-ts/src/pi/attentionRouter.ts",
-      "backend-ts/src/pi/guardianDecisionActionCandidates.ts",
-      "backend-ts/src/pi/heartbeatOrchestrator.ts",
+      "backend-ts/src/pi/intake/attentionRouter.ts",
+      "backend-ts/src/pi/guardian/guardianDecisionActionCandidates.ts",
+      "backend-ts/src/pi/heartbeat/heartbeatOrchestrator.ts",
       "backend-ts/src/runner/piIssueSupervisorScheduler.ts"
     ].map(source).join("\n");
     for (const forbidden of [

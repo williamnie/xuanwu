@@ -174,8 +174,8 @@ Issue #966 收紧自动经验写入；正式项目启用和最终体验验收由
 本地验证：
 
 ```bash
-bun test backend-ts/src/pi/memoryTools.test.ts backend-ts/src/pi/memoryAutoEnable.test.ts backend-ts/src/pi/memoryContext.test.ts backend-ts/src/http/piMemoryApi.test.ts
-bun test backend-ts/src/http/piProjectControlApi.test.ts backend-ts/src/pi/actionEngine.test.ts backend-ts/src/pi/internalReadAuthorization.test.ts
+bun test backend-ts/src/pi/memory/memoryTools.test.ts backend-ts/src/pi/memory/memoryAutoEnable.test.ts backend-ts/src/pi/memory/memoryContext.test.ts backend-ts/src/http/piMemoryApi.test.ts
+bun test backend-ts/src/http/piProjectControlApi.test.ts backend-ts/src/pi/actions/actionEngine.test.ts backend-ts/src/pi/actions/internalReadAuthorization.test.ts
 git diff --check
 ```
 
@@ -192,6 +192,6 @@ git diff --check
 本地定向验证覆盖双进程同 key/并发修正、重启后归属与去重、事务故障回滚、停用/遗忘不复活、显式恢复、历史查询与迁移重复执行：
 
 ```bash
-bun test backend-ts/src/pi/memoryTools.test.ts backend-ts/src/pi/memoryAutoEnable.test.ts backend-ts/src/http/piMemoryApi.test.ts backend-ts/src/db/reusablePiMemoryMigration.test.ts
+bun test backend-ts/src/pi/memory/memoryTools.test.ts backend-ts/src/pi/memory/memoryAutoEnable.test.ts backend-ts/src/http/piMemoryApi.test.ts backend-ts/src/db/reusablePiMemoryMigration.test.ts
 git diff --check
 ```

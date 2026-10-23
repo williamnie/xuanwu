@@ -1,15 +1,15 @@
-import { seedMemoryExperience } from "../pi/memoryExperienceTestFixtures.ts";
+import { seedMemoryExperience } from "../pi/memory/memoryExperienceTestFixtures.ts";
 import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createPiMemoryItem, listPiMemoryItems, type PiMemoryItem } from "../db/repositories/pi.ts";
-import { buildPiMemoryPromptContext } from "../pi/memoryContext.ts";
+import { buildPiMemoryPromptContext } from "../pi/memory/memoryContext.ts";
 import { createDefaultRouter, createRequestHandler } from "./server.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
-import { appendRunMemoryPrompt, readRunMemorySnapshot, recordExecutorMemoryCitations } from "../pi/runMemoryContext.ts";
-import { createPiMemoryTools } from "../pi/memoryTools.ts";
-import { createMemoryReflectionTools } from "../pi/memoryReflectionTools.ts";
-import { requestMemoryReflection, setMemoryReflectionEnabled } from "../pi/memoryReflectionQueue.ts";
+import { appendRunMemoryPrompt, readRunMemorySnapshot, recordExecutorMemoryCitations } from "../pi/memory/runMemoryContext.ts";
+import { createPiMemoryTools } from "../pi/memory/memoryTools.ts";
+import { createMemoryReflectionTools } from "../pi/memory/memoryReflectionTools.ts";
+import { requestMemoryReflection, setMemoryReflectionEnabled } from "../pi/memory/memoryReflectionQueue.ts";
 import { runMemoryReflectionOnce } from "../agentic/memoryReflectionWorker.ts";
 import { useTestDatabase } from "../testing/harness.ts";
 

@@ -13,7 +13,7 @@ import { createDefaultRouter } from "../../http/server.ts";
 import { buildDeliveryEffectiveness } from "../../observability/deliveryEffectiveness.ts";
 import { applyPiAcceptanceDecision } from "../../runner/piAcceptanceApplication.ts";
 import { reconcileProviderOutcome } from "../../runner/providerOutcome.ts";
-import type { PiAcceptanceDecision } from "../../pi/issueAcceptance.ts";
+import type { PiAcceptanceDecision } from "../../pi/issues/issueAcceptance.ts";
 import { buildIssueCompletionCard } from "../acceptance/completionCard.ts";
 import { prepareReservedIssueRun } from "../run/runPreparation.ts";
 import { useDatabaseCleanup } from "../../testing/harness.ts";

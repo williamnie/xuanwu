@@ -28,7 +28,7 @@ import {
 import { dispatchFeishuOutbox, type FeishuMessageSender } from "./feishuOutboxDispatcherCompat.ts";
 import type { ImChannelRegistry } from "./imChannelContracts.ts";
 import type { ChannelConnector } from "./channelConnectorContracts.ts";
-import { dispatchImOutbox } from "../pi/imReplyOutboxDispatcher.ts";
+import { dispatchImOutbox } from "../pi/notifications/imReplyOutboxDispatcher.ts";
 import { routeNotification } from "../notifications/unifiedNotificationPipeline.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import {

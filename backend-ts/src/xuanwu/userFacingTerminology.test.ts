@@ -17,22 +17,22 @@ const USER_VISIBLE_SOURCES = [
   "backend-ts/src/integrations/feishuPiActionCards.ts",
   "backend-ts/src/notifications/piNeedsUserAction.ts",
   "backend-ts/src/notifications/piNotifier.ts",
-  "backend-ts/src/pi/agentOrchestrationPayloads.ts",
-  "backend-ts/src/pi/builtinToolRegistry.ts",
-  "backend-ts/src/pi/digestFormatter.ts",
-  "backend-ts/src/pi/guardianMissedDigestFallback.ts",
-  "backend-ts/src/pi/guardianWatchdog.ts",
-  "backend-ts/src/pi/intakeSkillInput.ts",
-  "backend-ts/src/pi/issueProposalContext.ts",
-  "backend-ts/src/pi/issueSupervisorDecision.ts",
-  "backend-ts/src/pi/llmIntake.ts",
-  "backend-ts/src/pi/mcpToolDefinitions.ts",
-  "backend-ts/src/pi/memoryContext.ts",
-  "backend-ts/src/pi/memoryTools.ts",
-  "backend-ts/src/pi/nonIssueProposalActions.ts",
-  "backend-ts/src/pi/repoContextPack.ts",
-  "backend-ts/src/pi/runnerActionTools.ts",
-  "backend-ts/src/pi/supervisorCommitments.ts",
+  "backend-ts/src/pi/runtime/agentOrchestrationPayloads.ts",
+  "backend-ts/src/pi/tools/builtinToolRegistry.ts",
+  "backend-ts/src/pi/notifications/digestFormatter.ts",
+  "backend-ts/src/pi/guardian/guardianMissedDigestFallback.ts",
+  "backend-ts/src/pi/guardian/guardianWatchdog.ts",
+  "backend-ts/src/pi/intake/intakeSkillInput.ts",
+  "backend-ts/src/pi/runnerTools/issueProposalContext.ts",
+  "backend-ts/src/pi/supervisor/issueSupervisorDecision.ts",
+  "backend-ts/src/pi/intake/llmIntake.ts",
+  "backend-ts/src/pi/mcp/mcpToolDefinitions.ts",
+  "backend-ts/src/pi/memory/memoryContext.ts",
+  "backend-ts/src/pi/memory/memoryTools.ts",
+  "backend-ts/src/pi/actions/nonIssueProposalActions.ts",
+  "backend-ts/src/pi/tools/repoContextPack.ts",
+  "backend-ts/src/pi/runnerTools/runnerActionTools.ts",
+  "backend-ts/src/pi/supervisor/supervisorCommitments.ts",
   "backend-ts/src/runner/automationWorkRunExecutor.ts",
   "backend-ts/src/runner/watchAutomationRuntime.ts"
 ];
@@ -88,7 +88,7 @@ describe("Xuanwu user-facing terminology", () => {
     expect(source("backend-ts/src/db/schema/003_pi_runtime.ts")).toContain("create table if not exists pi_agents");
     expect(source("backend-ts/src/db/schema/003_pi_runtime.ts")).toContain("pi_agent_id text not null");
     expect(source("backend-ts/src/providers/codex/adapter.ts")).toContain('name: "xuanwu"');
-    expect(source("backend-ts/src/pi/attentionRouter.ts")).toContain('|| "@PI"');
+    expect(source("backend-ts/src/pi/intake/attentionRouter.ts")).toContain('|| "@PI"');
   });
 });
 

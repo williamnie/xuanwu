@@ -5,7 +5,7 @@ import {
   resolveSourcePolicy,
   SOURCE_PROFILES,
   type SourceProfile
-} from "../pi/eventRouter.ts";
+} from "../pi/intake/eventRouter.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
 import { cleanString } from "../util/values.ts";

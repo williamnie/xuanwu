@@ -43,7 +43,7 @@
 
 ```sh
 bun test backend-ts/src/http/piMemoryApi.test.ts backend-ts/src/http/readApiContract.test.ts backend-ts/src/xuanwu/capabilityDispositionInventory.test.ts
-bun test backend-ts/src/pi/memoryReflectionRuntime.test.ts backend-ts/src/agentic/memoryReflectionWorker.test.ts backend-ts/src/pi/memoryContext.test.ts backend-ts/src/pi/memoryTools.test.ts backend-ts/src/pi/runMemoryContext.test.ts
+bun test backend-ts/src/pi/memory/memoryReflectionRuntime.test.ts backend-ts/src/agentic/memoryReflectionWorker.test.ts backend-ts/src/pi/memory/memoryContext.test.ts backend-ts/src/pi/memory/memoryTools.test.ts backend-ts/src/pi/memory/runMemoryContext.test.ts
 git diff --check
 ```
 

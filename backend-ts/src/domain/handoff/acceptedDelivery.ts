@@ -3,7 +3,7 @@ import type { RunnerDatabase } from "../../db/database.ts";
 import { listIssueRuns } from "../../db/repositories/issues.ts";
 import { getProject } from "../../db/repositories/projects.ts";
 import { listStoredEvidence } from "../../db/repositories/evidence.ts";
-import type { PiAcceptanceDecision } from "../../pi/issueAcceptance.ts";
+import type { PiAcceptanceDecision } from "../../pi/issues/issueAcceptance.ts";
 import { COMPLETION_GIT_OBSERVATION_EVENT_TYPE, type CompletionCard } from "../acceptance/completionCard.ts";
 import { redactEvidenceRecord, type EvidenceRecord } from "../evidence/contracts.ts";
 import { readIssueRunGitWorkspaceBaseline, type CapturedGitWorkspaceBaseline } from "../evidence/runGitWorkspaceBaseline.ts";

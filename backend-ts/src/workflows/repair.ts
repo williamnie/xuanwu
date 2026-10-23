@@ -1,8 +1,8 @@
 import type { WorkflowVerificationPolicy } from "../domain/evidence/policy.ts";
-import type { PiRecoveryBudgetDecision } from "../pi/recoveryBudget.ts";
+import type { PiRecoveryBudgetDecision } from "../pi/supervisor/recoveryBudget.ts";
 import {
   type RecoveryDiagnosisClassification
-} from "../pi/recoveryDiagnosis.ts";
+} from "../pi/supervisor/recoveryDiagnosis.ts";
 import {
   type WorkflowManifest
 } from "./manifest.ts";

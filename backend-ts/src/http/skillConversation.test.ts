@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai/compat";
 import { openDatabase } from "../db/database.ts";
 import { listPiActions, listPiActionEvents } from "../db/repositories/pi.ts";
-import { loadAssistantToolRegistrySnapshot } from "../pi/toolRegistrySnapshot.ts";
+import { loadAssistantToolRegistrySnapshot } from "../pi/tools/toolRegistrySnapshot.ts";
 import { readSkillCatalog } from "../skills/managedStore.ts";
 import { createDefaultRouter } from "./server.ts";
 import { finalPiConversationSseData } from "./piConversationSse.testSupport.ts";

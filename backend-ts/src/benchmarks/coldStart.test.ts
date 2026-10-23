@@ -9,7 +9,7 @@ describe("cold-start memory benchmark", () => {
     const core = source("../runtime/core.ts");
     const conversation = source("../http/piConversationApi.ts");
     const oauth = source("../http/piOAuthApi.ts");
-    const supervisor = source("../pi/issueSupervisorDecision.ts");
+    const supervisor = source("../pi/supervisor/issueSupervisorDecision.ts");
 
     expect(main).not.toMatch(/^import \{ runCli \}/m);
     expect(main).not.toMatch(/^import \{ runPiConversationPrompt \}/m);
@@ -23,7 +23,7 @@ describe("cold-start memory benchmark", () => {
     expect(oauth).not.toMatch(/^import \{ AuthStorage \} from "@earendil-works\/pi-coding-agent"/m);
     expect(oauth).toContain('await import("@earendil-works/pi-coding-agent")');
     expect(supervisor).not.toMatch(/^import \{ createPiRuntimeSession \}/m);
-    expect(supervisor).toContain('await import("../http/piRuntime.ts")');
+    expect(supervisor).toContain('await import("../../http/piRuntime.ts")');
   });
 });
 

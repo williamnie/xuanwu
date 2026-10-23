@@ -39,13 +39,13 @@ import { piConversationPromptImages } from "./piConversationImages.ts";
 import { piConversationDetail, resolvePiConversationSessionFile } from "./piConversationTranscript.ts";
 import type { PiRuntimeResult, PiRuntimeSession } from "./piRuntime.ts";
 import { piTurnSessionEvent, publishPiSessionEvent, type PiTurnSessionEvent } from "./piSessionEvents.ts";
-import { PI_READ_ONLY_ACTION_TYPES } from "../pi/actionGate.ts";
+import { PI_READ_ONLY_ACTION_TYPES } from "../pi/actions/actionGate.ts";
 import {
   recordSupervisorContextResolutionAudit,
   resolveSupervisorContext,
   type SupervisorContextResolution
-} from "../pi/supervisorContextResolver.ts";
-import { linkSupervisorCommitmentsForConversation } from "../pi/supervisorCommitments.ts";
+} from "../pi/supervisor/supervisorContextResolver.ts";
+import { linkSupervisorCommitmentsForConversation } from "../pi/supervisor/supervisorCommitments.ts";
 import {
   isReviewConversationIntent,
   reviewConversationAuthorization,
@@ -60,7 +60,7 @@ import {
   renderImConversationPrompt,
   type ImConversationPromptProjection
 } from "../integrations/imConversationContext.ts";
-import { resolvePiChatToolMode } from "../pi/runtimePromptProfile.ts";
+import { resolvePiChatToolMode } from "../pi/runtime/runtimePromptProfile.ts";
 import {
   appLanguage,
   inferAppLanguageFromText,

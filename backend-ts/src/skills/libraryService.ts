@@ -3,7 +3,7 @@ import { readFile, realpath, stat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { RunnerDatabase } from "../db/database.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
-import { loadAssistantToolRegistrySnapshot } from "../pi/toolRegistrySnapshot.ts";
+import { loadAssistantToolRegistrySnapshot } from "../pi/tools/toolRegistrySnapshot.ts";
 import { libraryRegistryOptions, managedSkillPolicy } from "./libraryContext.ts";
 import { readSkillRegistry, resolveSkillFile } from "./registry.ts";
 import { currentSkillRevision, readSkillCatalog, validateManagedSkill, visibleManagedSkills } from "./managedStore.ts";

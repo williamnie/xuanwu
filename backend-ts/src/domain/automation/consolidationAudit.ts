@@ -170,8 +170,8 @@ function sourceConsumerAudit(sourceRoot: string, sqlite: Database) {
     ["backend-ts/src/http/readApiRoutes.ts", ["router.get(\"/api/cron-tasks\""]],
     ["backend-ts/src/http/frontendCompatApi.ts", ["router.post(\"/api/cron-tasks\"", "router.patch(\"/api/cron-tasks/", "router.delete(\"/api/cron-tasks/"]],
     ["backend-ts/src/http/piApi.ts", ["registerPiAutomationRoutes(", "registerPiDelegationRoutes(", "registerPiIssueCompletionWatchRoutes("]],
-    ["backend-ts/src/pi/heartbeatSignals.ts", ["from cron_tasks", "from pi_delegations"]],
-    ["backend-ts/src/pi/runnerIssueScheduleActions.ts", ["createCronTask("]],
+    ["backend-ts/src/pi/heartbeat/heartbeatSignals.ts", ["from cron_tasks", "from pi_delegations"]],
+    ["backend-ts/src/pi/runnerTools/runnerIssueScheduleActions.ts", ["createCronTask("]],
     ["frontend/src/api/automation.js", ["/api/cron-tasks", "/api/pi/automations"]],
     ["frontend/src/api/assistant.js", ["/api/pi/delegations"]]
   ] as const;

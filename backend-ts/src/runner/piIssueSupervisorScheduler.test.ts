@@ -15,8 +15,8 @@ import {
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { recordPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
-import type { PiSupervisorDecisionRuntimeResult } from "../pi/issueSupervisorDecision.ts";
-import type { PiSupervisorDecisionJson } from "../pi/issueSupervisorRecovery.ts";
+import type { PiSupervisorDecisionRuntimeResult } from "../pi/supervisor/issueSupervisorDecision.ts";
+import type { PiSupervisorDecisionJson } from "../pi/supervisor/issueSupervisorRecovery.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { runPiIssueSupervisorSchedulerOnce } from "./piIssueSupervisorScheduler.ts";
 import { useDatabaseCleanup } from "../testing/harness.ts";

@@ -9,7 +9,7 @@ import {
   type ToolPermission,
   type ToolProvider,
   type ToolProviderKind
-} from "../../pi/toolProviderEnvelope.ts";
+} from "../../pi/tools/toolProviderEnvelope.ts";
 
 type ProviderRow = {
   audit_json: string;

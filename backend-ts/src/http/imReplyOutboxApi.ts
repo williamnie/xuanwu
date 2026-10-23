@@ -10,7 +10,7 @@ import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
 import { createFeishuMessageClient } from "../integrations/feishuClient.ts";
 import { dispatchFeishuOutbox, type FeishuMessageSender } from "../integrations/feishuOutboxDispatcherCompat.ts";
 import type { ImChannelRegistry } from "../integrations/imChannelContracts.ts";
-import { dispatchImOutbox } from "../pi/imReplyOutboxDispatcher.ts";
+import { dispatchImOutbox } from "../pi/notifications/imReplyOutboxDispatcher.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
 import { cleanString } from "../util/values.ts";

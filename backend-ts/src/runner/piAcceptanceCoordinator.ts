@@ -1,4 +1,4 @@
-import { reconcileMemoryReflectionEvents } from "../pi/memoryReflectionQueue.ts";
+import { reconcileMemoryReflectionEvents } from "../pi/memory/memoryReflectionQueue.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue, listIssueRuns, listIssues, type Issue } from "../db/repositories/issues.ts";
 import { getProjectPiSettings, isPiHeartbeatPaused } from "../db/repositories/pi.ts";
@@ -19,7 +19,7 @@ import {
   recordPiAcceptanceActivity
 } from "../domain/review/piAcceptanceActivity.ts";
 import type { EventBus } from "../events/bus.ts";
-import type { PiAcceptanceRuntimeResult } from "../pi/issueAcceptance.ts";
+import type { PiAcceptanceRuntimeResult } from "../pi/issues/issueAcceptance.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { applyPiAcceptanceDecision } from "./piAcceptanceApplication.ts";

@@ -2,11 +2,11 @@ import type {
   AgentCommunicationDecision,
   AgentCommunicationDecisionInput
 } from "../notifications/agentCommunicationGateway.ts";
-import type { IssueSupervisorRecoveryContext } from "../pi/issueSupervisorContext.ts";
-import type { PiSupervisorDecisionRuntimeResult } from "../pi/issueSupervisorDecision.ts";
+import type { IssueSupervisorRecoveryContext } from "../pi/supervisor/issueSupervisorContext.ts";
+import type { PiSupervisorDecisionRuntimeResult } from "../pi/supervisor/issueSupervisorDecision.ts";
 import type { PiAutoManageProjectCycleInput } from "../runner/piAutoManageScheduler.ts";
 import type { CompletionCard } from "../domain/acceptance/completionCard.ts";
-import type { PiAcceptanceRuntimeResult } from "../pi/issueAcceptance.ts";
+import type { PiAcceptanceRuntimeResult } from "../pi/issues/issueAcceptance.ts";
 
 export const AGENTIC_HEALTH_PATH = "/health";
 export const AGENTIC_PROJECT_CYCLE_PATH = "/api/internal/agentic/project-cycle";

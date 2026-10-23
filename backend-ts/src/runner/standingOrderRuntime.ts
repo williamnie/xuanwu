@@ -6,8 +6,8 @@ import {
 } from "../db/repositories/pi.ts";
 import type { AutomationDefinition, VersionedAutomationTrigger } from "../domain/automation/contracts.ts";
 import { getIssueAsWork } from "../domain/work/issueAdapter.ts";
-import { collectProjectHeartbeatSignals } from "../pi/heartbeatSignals.ts";
-import { listSupervisorCommitments } from "../pi/supervisorCommitments.ts";
+import { collectProjectHeartbeatSignals } from "../pi/heartbeat/heartbeatSignals.ts";
+import { listSupervisorCommitments } from "../pi/supervisor/supervisorCommitments.ts";
 import { quietHoursResumeAt } from "../schedule/cronSchedule.ts";
 import type {
   AutomationExecutionPreparation,

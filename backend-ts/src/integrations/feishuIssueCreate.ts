@@ -5,8 +5,8 @@ import { ISSUE_TITLE_MAX_RUNES, createIssue } from "../db/repositories/issueCrea
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { getProject, type Project, ProjectNotFoundError } from "../db/repositories/projects.ts";
 import type { RunnerDatabase } from "../db/database.ts";
-import { createRepoContextPack } from "../pi/repoContextPack.ts";
-import { renderRepoContextPackIssueMarkdown } from "../pi/issueProposalContext.ts";
+import { createRepoContextPack } from "../pi/tools/repoContextPack.ts";
+import { renderRepoContextPackIssueMarkdown } from "../pi/runnerTools/issueProposalContext.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
 type JsonObject = Record<string, unknown>;

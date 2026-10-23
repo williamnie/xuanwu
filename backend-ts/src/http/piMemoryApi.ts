@@ -1,5 +1,5 @@
 import { getProject } from "../db/repositories/projects.ts";
-import { memoryReflectionEnabled, setMemoryReflectionEnabled } from "../pi/memoryReflectionQueue.ts";
+import { memoryReflectionEnabled, setMemoryReflectionEnabled } from "../pi/memory/memoryReflectionQueue.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import {
   deletePiMemoryItem,
@@ -11,8 +11,8 @@ import {
   type PiMemoryItemFilter,
   type PiMemoryItemInput
 } from "../db/repositories/pi.ts";
-import { applyPiMemoryBatchAction, type PiMemoryBatchAction } from "../pi/memoryLifecycle.ts";
-import { assertMemoryContentSafe, reusableMemoryRejection } from "../pi/memoryPolicy.ts";
+import { applyPiMemoryBatchAction, type PiMemoryBatchAction } from "../pi/memory/memoryLifecycle.ts";
+import { assertMemoryContentSafe, reusableMemoryRejection } from "../pi/memory/memoryPolicy.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 import { readMemoryDiagnostics } from "./piMemoryDiagnostics.ts";

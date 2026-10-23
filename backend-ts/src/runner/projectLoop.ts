@@ -21,7 +21,7 @@ import { listSkillRegistry } from "../skills/registry.ts";
 import { libraryRegistryOptions, managedSkillPolicy } from "../skills/libraryContext.ts";
 import { currentSkillRevision, revisionPath, visibleManagedSkills } from "../skills/managedStore.ts";
 import { dirname } from "node:path";
-import { resolveExecutorSelection, type AgentRecommendation } from "../pi/agentOrchestration.ts";
+import { resolveExecutorSelection, type AgentRecommendation } from "../pi/runtime/agentOrchestration.ts";
 import {
   isExecutorProviderId,
   isProviderInterruptedError,

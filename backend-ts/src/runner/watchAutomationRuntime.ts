@@ -17,7 +17,7 @@ import type { AutomationAudit } from "../domain/automation/contracts.ts";
 import { queueExistingNotificationIntent } from "../notifications/unifiedNotificationPipeline.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
-import { recordSupervisorCommitmentTerminalOutcome } from "../pi/supervisorCommitments.ts";
+import { recordSupervisorCommitmentTerminalOutcome } from "../pi/supervisor/supervisorCommitments.ts";
 import { cleanString } from "../util/values.ts";
 
 type WatchAutomationCycleResult = {

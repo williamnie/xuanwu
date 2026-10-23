@@ -4,8 +4,8 @@
 - 日期：2026-07-17
 - 路线 issue：XW P06.06 / Runner #685
 - 硬依赖：XW P02.06 / #652、P03.05 / #660、P04.09 / #671、P05.08 / #679（均为 `done`）
-- 可执行实现：`backend-ts/src/pi/supervisorControlTools.ts`
-- Registry contract：`backend-ts/src/pi/supervisorControlContracts.ts`、`backend-ts/src/pi/builtinToolRegistry.ts`
+- 可执行实现：`backend-ts/src/pi/supervisor/supervisorControlTools.ts`
+- Registry contract：`backend-ts/src/pi/supervisor/supervisorControlContracts.ts`、`backend-ts/src/pi/tools/builtinToolRegistry.ts`
 
 ## 1. 决策
 
@@ -72,8 +72,8 @@ preview 的截断 envelope，而不是在 details 或 audit 中保留大对象�
 
 ```bash
 cd backend-ts
-bun test src/pi/supervisorControlTools.test.ts
-bun test src/pi/piRuntimeTools.test.ts src/http/piToolRegistryApi.test.ts src/pi/actionEngine.test.ts
+bun test src/pi/supervisor/supervisorControlTools.test.ts
+bun test src/pi/tools/piRuntimeTools.test.ts src/http/piToolRegistryApi.test.ts src/pi/actions/actionEngine.test.ts
 bun test src/http/workApi.test.ts src/http/runApi.test.ts src/http/evidenceApi.test.ts src/http/handoffApi.test.ts
 ```
 

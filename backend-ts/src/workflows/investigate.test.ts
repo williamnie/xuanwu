@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { listBrowserAssistantTools } from "../pi/browserToolProvider.ts";
-import { listBuiltinAssistantTools } from "../pi/builtinToolRegistry.ts";
-import { listHttpAssistantTools } from "../pi/httpToolProvider.ts";
+import { listBrowserAssistantTools } from "../pi/tools/browserToolProvider.ts";
+import { listBuiltinAssistantTools } from "../pi/tools/builtinToolRegistry.ts";
+import { listHttpAssistantTools } from "../pi/tools/httpToolProvider.ts";
 import { validateWorkflowVerificationPolicy } from "../domain/evidence/policy.ts";
 import { validateWorkflowManifest } from "./manifest.ts";
 import { createWorkflowRegistry } from "./registry.ts";

@@ -1,6 +1,6 @@
 import { Value } from "typebox/value";
 import type { RunnerDatabase } from "../db/database.ts";
-import { createSkillLibraryTools, experienceTemplateSchema } from "../pi/skillLibraryTools.ts";
+import { createSkillLibraryTools, experienceTemplateSchema } from "../pi/tools/skillLibraryTools.ts";
 import { Type } from "@earendil-works/pi-ai";
 import { selectExperienceTemplate } from "../skills/experienceTemplates.ts";
 import { libraryProject, listSkillLibrary, publicManagedSkill, requireManagedSkill, verifyLibrarySkill } from "../skills/libraryService.ts";

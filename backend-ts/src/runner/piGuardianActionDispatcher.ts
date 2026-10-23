@@ -9,7 +9,7 @@ import {
   dispatchPiAction,
   type PiActionDispatchContext
 } from "../http/piActionDispatch.ts";
-import { recordPiActionAuditEvent } from "../pi/actionEngine.ts";
+import { recordPiActionAuditEvent } from "../pi/actions/actionEngine.ts";
 import { errorMessage } from "../util/values.ts";
 
 type PiGuardianActionDispatchInput = {

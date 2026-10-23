@@ -11,7 +11,7 @@ import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import { createPiAction, listPiGuardianEvents, listPiNotificationIntents } from "../db/repositories/pi.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { flushAgentCommunicationTestMessages } from "../notifications/agentCommunicationGateway.testSupport.ts";
-import { createBatchRunGroup, updateRunGroupEnqueueResult } from "../pi/runGroupService.ts";
+import { createBatchRunGroup, updateRunGroupEnqueueResult } from "../pi/reports/runGroupService.ts";
 import { buildFeishuConnectorConfig } from "./feishu.ts";
 import { queueFeishuIssueStatusNotification } from "./feishuLifecycleNotifications.ts";
 import { useDatabaseCleanup } from "../testing/harness.ts";

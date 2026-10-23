@@ -12,7 +12,7 @@ import { prepareReservedIssueRun } from "../../domain/run/runPreparation.ts";
 import { buildIssueCompletionCard } from "../../domain/acceptance/completionCard.ts";
 import { reconcileProviderOutcome } from "../../runner/providerOutcome.ts";
 import { applyPiAcceptanceDecision } from "../../runner/piAcceptanceApplication.ts";
-import type { PiAcceptanceDecision } from "../../pi/issueAcceptance.ts";
+import type { PiAcceptanceDecision } from "../../pi/issues/issueAcceptance.ts";
 import { buildGitHubIssueSyncConfig } from "./issueSyncConfig.ts";
 import { getGitHubIssueCase, observeGitHubIssue, updateGitHubIssueCase } from "./issueCaseStore.ts";
 import { GitHubIssueClient } from "./issueClient.ts";

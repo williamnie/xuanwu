@@ -5,7 +5,7 @@ import {
   type ProjectVerificationOverride,
   type WorkflowVerificationPolicy
 } from "../domain/evidence/policy.ts";
-import { TOOL_PERMISSIONS, type ToolPermission } from "../pi/toolProviderEnvelope.ts";
+import { TOOL_PERMISSIONS, type ToolPermission } from "../pi/tools/toolProviderEnvelope.ts";
 import {
   applyWorkflowProjectOverride,
   parseWorkflowManifestRef,

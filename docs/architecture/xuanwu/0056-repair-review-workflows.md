@@ -20,7 +20,7 @@ Work/Run/Handoff 状态机或 provider adapter。P06.12 runtime 尚未接管 sta
 
 ## 2. Repair：诊断、预算、恢复和 handoff/replan
 
-Repair 直接复用 `backend-ts/src/pi/recoveryDiagnosis.ts`、`recoveryBudget.ts`，并消费 PI 已选择的
+Repair 直接复用 `backend-ts/src/pi/supervisor/recoveryDiagnosis.ts`、`recoveryBudget.ts`，并消费 PI 已选择的
 `action_candidate`：
 
 1. trusted P04 Evidence 必须证明 deterministic `diagnosis_code`；Agent/LLM prose 不能自行把 permanent failure 改成
@@ -86,8 +86,8 @@ destructive action 必须另行扩 manifest revision 并经过显式权限/审�
 cd backend-ts
 bun test src/workflows/repairReview.test.ts \
   src/workflows/registry.test.ts \
-  src/pi/recoveryDiagnosis.test.ts \
-  src/pi/recoveryBudget.test.ts \
+  src/pi/supervisor/recoveryDiagnosis.test.ts \
+  src/pi/supervisor/recoveryBudget.test.ts \
   src/domain/handoff/reviewerLoop.test.ts \
   src/domain/evidence/verifierReview.test.ts
 ```

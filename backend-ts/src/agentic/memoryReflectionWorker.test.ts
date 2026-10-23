@@ -6,14 +6,14 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { listPiMemoryItems, listPiMemoryHistory, updatePiMemoryItem, deletePiMemoryItem } from "../db/repositories/pi.ts";
-import { seedMemoryExperience } from "../pi/memoryExperienceTestFixtures.ts";
-import { createMemoryReflectionTools } from "../pi/memoryReflectionTools.ts";
+import { seedMemoryExperience } from "../pi/memory/memoryExperienceTestFixtures.ts";
+import { createMemoryReflectionTools } from "../pi/memory/memoryReflectionTools.ts";
 import {
   claimMemoryReflection, getMemoryReflection, memoryReflectionEnabled, reconcileMemoryReflectionEvents,
   REFLECTION_LIMITS, requestMemoryReflection, setMemoryReflectionEnabled, type MemoryReflection
-} from "../pi/memoryReflectionQueue.ts";
+} from "../pi/memory/memoryReflectionQueue.ts";
 import { runMemoryReflectionOnce } from "./memoryReflectionWorker.ts";
-import { recordReflectionAttempt, unknownReflectionUsage } from "../pi/memoryReflectionTelemetry.ts";
+import { recordReflectionAttempt, unknownReflectionUsage } from "../pi/memory/memoryReflectionTelemetry.ts";
 
 const roots: string[] = [];
 const databases: RunnerDatabase[] = [];

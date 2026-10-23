@@ -1,4 +1,4 @@
-import { safelyRequestMemoryReflection } from "../pi/memoryReflectionQueue.ts";
+import { safelyRequestMemoryReflection } from "../pi/memory/memoryReflectionQueue.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { insertIssueRunRecord } from "../db/repositories/issueRuns.ts";
@@ -12,8 +12,8 @@ import {
 } from "../domain/acceptance/completionCard.ts";
 import { createHumanReviewRequest, readIssueDecisionProjection } from "../domain/review/humanReview.ts";
 import type { EventBus } from "../events/bus.ts";
-import { resolveExecutorSelection } from "../pi/agentOrchestration.ts";
-import type { PiAcceptanceDecision } from "../pi/issueAcceptance.ts";
+import { resolveExecutorSelection } from "../pi/runtime/agentOrchestration.ts";
+import type { PiAcceptanceDecision } from "../pi/issues/issueAcceptance.ts";
 import {
   isExecutorProviderId,
   isProviderInterruptedError,

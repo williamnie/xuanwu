@@ -9,7 +9,7 @@ import {
 import {
   PiNotificationPreferenceValidationError,
   writePiNotificationPreference
-} from "../pi/notificationPreferenceService.ts";
+} from "../pi/notifications/notificationPreferenceService.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 import { cleanString, objectValue } from "../util/values.ts";

@@ -1,6 +1,6 @@
 import { getIssue } from "../db/repositories/issues.ts";
 import { getProject } from "../db/repositories/projects.ts";
-import { resolveExecutorSelection } from "../pi/agentOrchestration.ts";
+import { resolveExecutorSelection } from "../pi/runtime/agentOrchestration.ts";
 import { recoverIssueWithProvider } from "../runner/providerRuntime.ts";
 import type { ExecutorProvider, SessionMessageResult, SessionRef } from "../providers/types.ts";
 import type { SupervisorDispatchContext } from "./piSupervisorActionDispatch.ts";

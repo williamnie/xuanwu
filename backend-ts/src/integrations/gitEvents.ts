@@ -8,7 +8,7 @@ import { createContextBundle } from "../db/repositories/contextBundles.ts";
 import { createIntakeRun } from "../db/repositories/intakeRuns.ts";
 import { upsertAttentionInboxItemByEvidence } from "../db/repositories/attentionInboxItemUpsert.ts";
 import { getIssueBackedWork, workIDToIssueID } from "../domain/work/issueAdapter.ts";
-import { buildContextBundleFromEvents } from "../pi/contextBundleBuilder.ts";
+import { buildContextBundleFromEvents } from "../pi/intake/contextBundleBuilder.ts";
 import {
   CHANNEL_CONNECTOR_CONTRACT_VERSION,
   validateInboundEnvelope,

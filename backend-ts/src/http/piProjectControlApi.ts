@@ -14,9 +14,9 @@ import {
 } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import type { EventBus } from "../events/bus.ts";
-import { createProjectStatusSnapshot } from "../pi/projectSnapshot.ts";
-import { diagnoseIssueState } from "../pi/issueStateManager.ts";
-import { MEMORY_EXPERIENCE_INSTRUCTIONS } from "../pi/memoryExperience.ts";
+import { createProjectStatusSnapshot } from "../pi/reports/projectSnapshot.ts";
+import { diagnoseIssueState } from "../pi/issues/issueStateManager.ts";
+import { MEMORY_EXPERIENCE_INSTRUCTIONS } from "../pi/memory/memoryExperience.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
 import { parseSkillPolicy } from "../skills/intents.ts";
 import { HttpError, json } from "./errors.ts";

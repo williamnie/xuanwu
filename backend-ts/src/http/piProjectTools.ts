@@ -1,24 +1,24 @@
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { Project } from "../db/repositories/projects.ts";
-import { createSkillLibraryTools } from "../pi/skillLibraryTools.ts";
-import { SKILL_LIBRARY_TOOL_NAMES } from "../pi/skillLibraryContracts.ts";
-import { createPiMemoryTools, PI_MEMORY_TOOL_NAMES } from "../pi/memoryTools.ts";
+import { createSkillLibraryTools } from "../pi/tools/skillLibraryTools.ts";
+import { SKILL_LIBRARY_TOOL_NAMES } from "../pi/tools/skillLibraryContracts.ts";
+import { createPiMemoryTools, PI_MEMORY_TOOL_NAMES } from "../pi/memory/memoryTools.ts";
 import {
   createPiNotificationPreferenceTools,
   PI_NOTIFICATION_PREFERENCE_TOOL_NAMES
-} from "../pi/notificationPreferenceTools.ts";
-import { createPiRunnerActions, type PiRunnerActionContext } from "../pi/runnerActions.ts";
-import { PI_MCP_TOOL_NAMES } from "../pi/mcpToolDefinitions.ts";
-import { createPiRunnerActionTools, PI_RUNNER_ACTION_TOOL_NAMES } from "../pi/runnerActionTools.ts";
+} from "../pi/notifications/notificationPreferenceTools.ts";
+import { createPiRunnerActions, type PiRunnerActionContext } from "../pi/runnerTools/runnerActions.ts";
+import { PI_MCP_TOOL_NAMES } from "../pi/mcp/mcpToolDefinitions.ts";
+import { createPiRunnerActionTools, PI_RUNNER_ACTION_TOOL_NAMES } from "../pi/runnerTools/runnerActionTools.ts";
 import {
   createPiSupervisorControlTools,
   SUPERVISOR_CONTROL_TOOL_NAMES
-} from "../pi/supervisorControlTools.ts";
+} from "../pi/supervisor/supervisorControlTools.ts";
 import {
   createPiLocalWorkspaceTools,
   PI_LOCAL_WORKSPACE_TOOL_NAMES
-} from "../pi/localWorkspaceTools.ts";
+} from "../pi/tools/localWorkspaceTools.ts";
 
 export const PI_READ_ONLY_TOOLS = ["read", "grep", "find", "ls"] as const;
 export const PI_ALLOWED_TOOLS = [

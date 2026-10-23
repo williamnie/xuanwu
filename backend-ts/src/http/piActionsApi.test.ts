@@ -7,7 +7,7 @@ import { createPiAction, getPiAction, listPiActions, updatePiAction } from "../d
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
-import { createPiRunnerActions } from "../pi/runnerActions.ts";
+import { createPiRunnerActions } from "../pi/runnerTools/runnerActions.ts";
 import { registerPiActionRoutes } from "./piActionsApi.ts";
 import { createRouter, type Router } from "./router.ts";
 import { createDefaultRouter } from "./server.ts";

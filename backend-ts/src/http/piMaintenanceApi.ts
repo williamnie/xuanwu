@@ -1,5 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { applyStalePendingActions, dryRunStalePendingActions } from "../pi/stalePendingActions.ts";
+import { applyStalePendingActions, dryRunStalePendingActions } from "../pi/actions/stalePendingActions.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 import { cleanString } from "../util/values.ts";

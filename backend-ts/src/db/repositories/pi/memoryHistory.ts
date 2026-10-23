@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../../database.ts";
-import { parseMemoryExperience } from "../../../pi/memoryExperience.ts";
+import { parseMemoryExperience } from "../../../pi/memory/memoryExperience.ts";
 import type { PiMemoryItem } from "./memoryItems.ts";
 
 type PiMemoryCorrection = { expected_revision: number; disposition: "narrow" | "disable"; reason: string };

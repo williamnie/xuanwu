@@ -57,11 +57,11 @@ Marker 只降低模型误跟随概率，不是安全 authority。即使模型完
 ```bash
 cd backend-ts
 bun test src/security/promptInjectionDefense.test.ts \
-  src/pi/contextBundleBuilder.test.ts \
-  src/pi/actionGate.test.ts \
-  src/pi/readOnlyToolInvocation.test.ts \
-  src/pi/httpToolCall.test.ts \
-  src/pi/runnerActionTools.test.ts \
+  src/pi/intake/contextBundleBuilder.test.ts \
+  src/pi/actions/actionGate.test.ts \
+  src/pi/tools/readOnlyToolInvocation.test.ts \
+  src/pi/tools/httpToolCall.test.ts \
+  src/pi/runnerTools/runnerActionTools.test.ts \
   src/http/piRuntimePrompt.test.ts
 ```
 

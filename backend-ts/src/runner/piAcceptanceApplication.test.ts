@@ -1,9 +1,9 @@
-import { setMemoryReflectionEnabled } from "../pi/memoryReflectionQueue.ts";
+import { setMemoryReflectionEnabled } from "../pi/memory/memoryReflectionQueue.ts";
 import { evidenceReuseFixture, reuseReport } from "../domain/acceptance/evidenceReuseTestSupport.ts";
 import { EXECUTION_EVIDENCE_REVOKED_EVENT } from "../domain/acceptance/priorExecutionEvidence.ts";
 import { writeFile } from "node:fs/promises";
 import { githubWorkAcceptanceProblem } from "../integrations/github/issueWorkflow.ts";
-import { seedMemoryExperience } from "../pi/memoryExperienceTestFixtures.ts";
+import { seedMemoryExperience } from "../pi/memory/memoryExperienceTestFixtures.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -21,8 +21,8 @@ import {
   readIssueDecisionProjection,
   reviewHumanIssue
 } from "../domain/review/humanReview.ts";
-import type { PiAcceptanceDecision } from "../pi/issueAcceptance.ts";
-import { diagnoseIssueState } from "../pi/issueStateManager.ts";
+import type { PiAcceptanceDecision } from "../pi/issues/issueAcceptance.ts";
+import { diagnoseIssueState } from "../pi/issues/issueStateManager.ts";
 import type {
   ExecutorProvider,
   ProviderRecoveryInput,

@@ -8,7 +8,7 @@ import {
   type SyncOutboxRecord
 } from "../db/repositories/imReplyOutbox.ts";
 import { markSyncOutboxFailed } from "../db/repositories/imReplyOutboxDispatch.ts";
-import { dispatchImOutbox } from "../pi/imReplyOutboxDispatcher.ts";
+import { dispatchImOutbox } from "../pi/notifications/imReplyOutboxDispatcher.ts";
 import {
   assertOutboundEnvelope,
   type ChannelConnector,

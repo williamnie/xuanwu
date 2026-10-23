@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { decidePiAttention, type PiAttentionDecision } from "../pi/attentionRouter.ts";
+import { decidePiAttention, type PiAttentionDecision } from "../pi/intake/attentionRouter.ts";
 import { listProjects } from "../db/repositories/projects.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import {

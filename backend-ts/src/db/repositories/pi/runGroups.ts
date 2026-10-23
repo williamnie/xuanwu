@@ -14,7 +14,7 @@ import {
 import {
   deriveRunGroupReportView,
   isRunGroupItemReportable
-} from "../../../pi/runGroupReportStatus.ts";
+} from "../../../pi/reports/runGroupReportStatus.ts";
 import { placeholders } from "../../sql.ts";
 
 export type PiRunGroup = {

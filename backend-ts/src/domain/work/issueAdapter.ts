@@ -11,7 +11,7 @@ import {
 import { countIssues, getIssue, listIssues, type Issue, type IssueFilter } from "../../db/repositories/issues.ts";
 import { updateIssue } from "../../db/repositories/issueUpdate.ts";
 import { getProject } from "../../db/repositories/projects.ts";
-import { resolveExecutorSelection, type AgentRecommendation } from "../../pi/agentOrchestration.ts";
+import { resolveExecutorSelection, type AgentRecommendation } from "../../pi/runtime/agentOrchestration.ts";
 import { makeDomainID, parseDomainID, type DomainActor } from "../../xuanwu/coreDomainContracts.ts";
 import {
   evaluateWorkTransition,

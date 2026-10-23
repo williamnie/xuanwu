@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai/compat";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listPiActionEvents, listPiActions, type PiActionEvent } from "../db/repositories/pi.ts";
-import { URL_FETCH_TOOL_NAME } from "../pi/httpToolProvider.ts";
+import { URL_FETCH_TOOL_NAME } from "../pi/tools/httpToolProvider.ts";
 import { createPiRuntimeSession } from "./piRuntime.ts";
 import { useDatabaseCleanup } from "../testing/harness.ts";
 

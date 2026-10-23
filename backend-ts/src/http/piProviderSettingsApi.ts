@@ -1,5 +1,5 @@
-import { credentialSource, selectedCredentialSource, type CredentialSource } from "../pi/piModelRuntime.ts";
-import { codexLoginFailureCode } from "../pi/codexLoginCredentials.ts";
+import { credentialSource, selectedCredentialSource, type CredentialSource } from "../pi/runtime/piModelRuntime.ts";
+import { codexLoginFailureCode } from "../pi/runtime/codexLoginCredentials.ts";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { getModel, getModels, getProviders, type KnownProvider, type Model } from "@earendil-works/pi-ai/compat";

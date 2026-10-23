@@ -8,7 +8,7 @@ import {
   type ProjectVerificationOverride,
   type WorkflowVerificationPolicy
 } from "../domain/evidence/policy.ts";
-import { TOOL_PERMISSIONS, type ToolPermission } from "../pi/toolProviderEnvelope.ts";
+import { TOOL_PERMISSIONS, type ToolPermission } from "../pi/tools/toolProviderEnvelope.ts";
 import { isRecord } from "../util/values.ts";
 
 export const WORKFLOW_MANIFEST_SCHEMA_VERSION = "xuanwu.workflow-manifest.v1" as const;

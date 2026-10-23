@@ -3,11 +3,11 @@ import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { RunnerDatabase } from "../db/database.ts";
 import { createPiAction, updatePiAction, type PiAction } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
-import { gatePiActionEnvelope, type PiGatePolicy } from "../pi/actionGate.ts";
-import { normalizePiActionEnvelope } from "../pi/actionEnvelope.ts";
-import { publishPiActionEvent, recordPiActionAuditEvent } from "../pi/actionEngine.ts";
-import { recordToolCallAuditEvent } from "../pi/toolCallAudit.ts";
-import type { PiRuntimeToolAuditTarget } from "../pi/piRuntimeTools.ts";
+import { gatePiActionEnvelope, type PiGatePolicy } from "../pi/actions/actionGate.ts";
+import { normalizePiActionEnvelope } from "../pi/actions/actionEnvelope.ts";
+import { publishPiActionEvent, recordPiActionAuditEvent } from "../pi/actions/actionEngine.ts";
+import { recordToolCallAuditEvent } from "../pi/actions/toolCallAudit.ts";
+import type { PiRuntimeToolAuditTarget } from "../pi/tools/piRuntimeTools.ts";
 import { cleanString } from "../util/values.ts";
 
 type SdkAuditContext = {

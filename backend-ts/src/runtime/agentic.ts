@@ -1,4 +1,4 @@
-import { startCodexLoginMaintenance } from "../pi/codexLoginMaintenance.ts";
+import { startCodexLoginMaintenance } from "../pi/runtime/codexLoginMaintenance.ts";
 import { startMemoryReflectionWorker } from "../agentic/memoryReflectionWorker.ts";
 import { startAgenticServer } from "../agentic/server.ts";
 import { bunBuildInfo } from "../buildInfo.ts";

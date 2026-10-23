@@ -2,10 +2,10 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getPiRunGroup, type PiGuardianAlert } from "../db/repositories/pi.ts";
 import { getSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import { queueNotificationOutbox } from "../notifications/notificationOutbox.ts";
-import type { GuardianAlertDelivery } from "../pi/guardianAlertDelivery.ts";
-import { guardianAlertPresentation } from "../pi/guardianAlertPresentation.ts";
-import { formatGuardianAlertText } from "../pi/guardianAlertText.ts";
-import { dispatchImOutbox } from "../pi/imReplyOutboxDispatcher.ts";
+import type { GuardianAlertDelivery } from "../pi/guardian/guardianAlertDelivery.ts";
+import { guardianAlertPresentation } from "../pi/guardian/guardianAlertPresentation.ts";
+import { formatGuardianAlertText } from "../pi/guardian/guardianAlertText.ts";
+import { dispatchImOutbox } from "../pi/notifications/imReplyOutboxDispatcher.ts";
 import type { ImChannelRegistry } from "./imChannelContracts.ts";
 import {
   resolveImNotificationConnectorID,

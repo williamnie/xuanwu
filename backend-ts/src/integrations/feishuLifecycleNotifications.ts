@@ -9,15 +9,15 @@ import {
   listPiNotificationIntents,
   type PiNotificationIntent
 } from "../db/repositories/pi.ts";
-import { issueCompletionAutomationOwnsTargetForIssue } from "../pi/issueCompletionAutomation.ts";
+import { issueCompletionAutomationOwnsTargetForIssue } from "../pi/issues/issueCompletionAutomation.ts";
 import type { FeishuConnectorConfig } from "./feishu.ts";
-import { queueReadyDigestNotifications, type DigestNotificationQueueOptions } from "../pi/digestNotifications.ts";
-import { ingestIssueLifecycleEvent } from "../pi/guardianEventIngest.ts";
+import { queueReadyDigestNotifications, type DigestNotificationQueueOptions } from "../pi/notifications/digestNotifications.ts";
+import { ingestIssueLifecycleEvent } from "../pi/guardian/guardianEventIngest.ts";
 import {
   coordinateIssueLifecycleNotification,
   suppressLifecycleIntent,
   type LifecycleIntentResult
-} from "../pi/notificationCoordinator.ts";
+} from "../pi/notifications/notificationCoordinator.ts";
 import { queueExistingNotificationIntent } from "../notifications/unifiedNotificationPipeline.ts";
 import { formatIssueStatusNotification } from "./feishuNotificationFormatters.ts";
 import {

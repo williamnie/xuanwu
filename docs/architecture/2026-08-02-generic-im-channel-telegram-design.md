@@ -602,8 +602,8 @@ A4 的 consumer migration 以实施当日 fresh `rg '\bfeishu_message_id\b'` 结
 - `notifications/notificationOutbox.ts`：legacy fixture dispatcher 的 receipt 写入；
 - `integrations/feishuConversationContext.ts`：出站上下文 message ref；
 - `integrations/feishuActionTarget.ts`：action target；
-- `pi/guardianWatchdog.ts`：sent/receipt 判断；
-- `pi/imReplyOutboxDispatcher.ts`：生产投递与 receipt 适配；
+- `pi/guardian/guardianWatchdog.ts`：sent/receipt 判断；
+- `pi/notifications/imReplyOutboxDispatcher.ts`：生产投递与 receipt 适配；
 - schema `024_im_reply_outbox_dispatch.ts`：legacy 列定义及兼容期注释。
 
 测试文件也要随 contract 更新。`direct_feishu_message_id` 等 Guardian direct carrier 是另一套字段语义，必须单独评估，不能机械替换为 `provider_request_ref`；当前代码中没有直接消费 `feishu_message_id` 的文件也不能只因名称相近加入迁移清单。

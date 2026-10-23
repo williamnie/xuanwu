@@ -5,7 +5,7 @@ import {
   updatePiNotificationIntent,
   type PiNotificationIntent
 } from "../db/repositories/pi.ts";
-import { resolvePiNotificationPreference } from "../pi/notificationPreferenceResolver.ts";
+import { resolvePiNotificationPreference } from "../pi/notifications/notificationPreferenceResolver.ts";
 import { quietHoursResumeAt } from "../schedule/cronSchedule.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import {

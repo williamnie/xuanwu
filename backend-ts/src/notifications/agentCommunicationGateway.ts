@@ -18,7 +18,7 @@ import {
   parseStructuredAssistantOutput,
   structuredAssistantProviderError,
   type StructuredOutputSession
-} from "../pi/structuredAssistantOutput.ts";
+} from "../pi/runtime/structuredAssistantOutput.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { queueNotificationOutbox } from "./notificationOutbox.ts";
 import { agentCommunicationIncident, resolveAgentCommunicationIncident } from "./agentCommunicationIncidents.ts";

@@ -73,7 +73,7 @@ scope 或 Action Gate decision。
 
 ```bash
 cd backend-ts
-bun test src/skills/runtime.test.ts src/skills/registry.test.ts src/http/piSkillsApi.test.ts src/pi/eventRouter.test.ts
+bun test src/skills/runtime.test.ts src/skills/registry.test.ts src/http/piSkillsApi.test.ts src/pi/intake/eventRouter.test.ts
 ```
 
 测试必须覆盖真实 `pi-domain-proposal` smoke、坏 execution/输入/输出、write tool 越权、timeout 后 capability 关闭、

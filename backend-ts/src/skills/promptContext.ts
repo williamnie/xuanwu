@@ -2,7 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent, getPiDelegation } from "../db/repositories/pi.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import type { Project } from "../db/repositories/projects.ts";
-import type { PiGatePolicy } from "../pi/actionGate.ts";
+import type { PiGatePolicy } from "../pi/actions/actionGate.ts";
 import { formatUntrustedContent } from "../security/promptInjectionDefense.ts";
 import { mergeSkillIntents, parseSkillIntentList, parseSkillPolicy } from "./intents.ts";
 import { listSkillRegistry, type SkillMetadata } from "./registry.ts";

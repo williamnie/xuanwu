@@ -10,11 +10,11 @@ import {
   xuanwuPiRoleContractPrompt,
   xuanwuSupervisorCompatibilityPrompt
 } from "./piRuntimePrompt.ts";
-import { PI_PERSONA_PROMPT_HEADER } from "../pi/personaPrompt.ts";
-import { PI_RUNTIME_PROMPT_PROFILES } from "../pi/runtimePromptProfile.ts";
-import { ISSUE_PLANNING_POLICY } from "../pi/issuePlanningPolicy.ts";
+import { PI_PERSONA_PROMPT_HEADER } from "../pi/runtime/personaPrompt.ts";
+import { PI_RUNTIME_PROMPT_PROFILES } from "../pi/runtime/runtimePromptProfile.ts";
+import { ISSUE_PLANNING_POLICY } from "../pi/issues/issuePlanningPolicy.ts";
 import { readFileSync } from "node:fs";
-import { buildPiRuntimeContextEnvelope, piRuntimeContextEnvelopePrompt } from "../pi/runtimeContextEnvelope.ts";
+import { buildPiRuntimeContextEnvelope, piRuntimeContextEnvelopePrompt } from "../pi/runtime/runtimeContextEnvelope.ts";
 import { useDatabaseCleanup } from "../testing/harness.ts";
 
 const trackDatabase = useDatabaseCleanup();

@@ -1,5 +1,5 @@
 import { effectiveCodexHome } from "../../config/codexServer.ts";
-import { CodexLoginError } from "../../pi/codexLoginCredentials.ts";
+import { CodexLoginError } from "../../pi/runtime/codexLoginCredentials.ts";
 import { CodexAdapter } from "./adapter.ts";
 import { localImageInput, textInput } from "./threadLifecycle.ts";
 import { normalizedRunEvent } from "../runEvents.ts";

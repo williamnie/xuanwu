@@ -28,7 +28,7 @@ export const GOLDEN_JOURNEY_SCENARIOS: readonly GoldenJourneyScenario[] = [
   {
     api_paths: ["/api/issues", "/api/issues/{issue_id}/supervisor", "/api/command-center/summary?sections=attention"],
     backend_tests: [
-      "backend-ts/src/pi/issue-supervisor-recovery.test.ts",
+      "backend-ts/src/pi/supervisor/issue-supervisor-recovery.test.ts",
       "backend-ts/src/http/piSupervisorResumeIdempotency.test.ts"
     ],
     fixture_projects: 1,
@@ -40,7 +40,7 @@ export const GOLDEN_JOURNEY_SCENARIOS: readonly GoldenJourneyScenario[] = [
   {
     api_paths: ["/api/projects", "/api/issues", "/api/works"],
     backend_tests: [
-      "backend-ts/src/pi/runnerBatchTriageScope.test.ts",
+      "backend-ts/src/pi/runnerTools/runnerBatchTriageScope.test.ts",
       "backend-ts/src/runner/projectLoop.test.ts",
       "backend-ts/src/db/repositories/pi/runGroupLifecycle.test.ts"
     ],
@@ -69,9 +69,9 @@ export const GOLDEN_JOURNEY_SCENARIOS: readonly GoldenJourneyScenario[] = [
   {
     api_paths: ["/api/automations", "/api/pi/guardian/notification-intents", "/api/command-center/summary?sections=attention"],
     backend_tests: [
-      "backend-ts/src/pi/heartbeatOrchestrator.test.ts",
+      "backend-ts/src/pi/heartbeat/heartbeatOrchestrator.test.ts",
       "backend-ts/src/runner/piAutoManageSchedulerWatchdog.test.ts",
-      "backend-ts/src/pi/heartbeatConcurrency.test.ts"
+      "backend-ts/src/pi/heartbeat/heartbeatConcurrency.test.ts"
     ],
     fixture_projects: 1,
     frontend_route: "#/automations",

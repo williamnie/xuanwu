@@ -12,7 +12,7 @@ import { createPiActionEvent, createPiDelegation, createPiMemoryItem, getPiMemor
 import { adoptImConversationState, getImConversationState } from "../db/repositories/imConversationState.ts";
 import { EventBus } from "../events/bus.ts";
 import { buildImConversationPromptProjection } from "../integrations/imConversationContext.ts";
-import { HTTP_READONLY_PROVIDER_ID, URL_FETCH_TOOL_NAME } from "../pi/httpToolProvider.ts";
+import { HTTP_READONLY_PROVIDER_ID, URL_FETCH_TOOL_NAME } from "../pi/tools/httpToolProvider.ts";
 import {
   createPiRuntimeSession,
   PI_RUNNER_CHAT_ACTIONS

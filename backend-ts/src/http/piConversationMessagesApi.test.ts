@@ -21,7 +21,7 @@ import { createDefaultRouter } from "./server.ts";
 import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import { createIssueRun } from "../db/repositories/issueRuns.ts";
 import { readIssueDecisionProjection } from "../domain/review/humanReview.ts";
-import { listBuiltinAssistantTools } from "../pi/builtinToolRegistry.ts";
+import { listBuiltinAssistantTools } from "../pi/tools/builtinToolRegistry.ts";
 import { useTestDatabase } from "../testing/harness.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";

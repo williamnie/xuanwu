@@ -1,0 +1,336 @@
+import { describe, expect, test } from "bun:test";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { type RunnerDatabase } from "../../db/database.ts";
+import {
+  createPiAction,
+  createPiGuardianEvent,
+  listPiActions,
+  listPiGuardianDecisions,
+  type PiGuardianDecision
+} from "../../db/repositories/pi.ts";
+import { runGuardianDecisionOrchestratorOnce } from "./guardianDecisionOrchestrator.ts";
+import { useTestDatabase } from "../../testing/harness.ts";
+
+const openFixtureDatabase = useTestDatabase();
+
+describe("PI Guardian decision action outlet", () => {
+  test("creates one gated PI action for duplicate heartbeat action candidates", async () => {
+    const db = await openFixtureDatabase();
+    heartbeatActionEvent(db, "heartbeat-action-1", 501);
+    heartbeatActionEvent(db, "heartbeat-action-2", 501);
+
+    const summary = runGuardianDecisionOrchestratorOnce(db, {
+      now: new Date("2026-06-18T00:03:00Z")
+    });
+    const [decision] = listPiGuardianDecisions(db, { decisionKind: "recovery", issueId: 501, projectId: "demo" });
+
+    expect(summary).toMatchObject({ created: 1, lease_skipped: 0, merged: 1, scanned: 2 });
+    expect(decision).toMatchObject({ state: "proposed" });
+    expect(mergeMeta(decision)).toMatchObject({
+      base_key: "recovery:demo:issue:501:issue.enqueue",
+      event_count: 2
+    });
+    expect(listPiActions(db, { issueId: 501 })).toHaveLength(0);
+
+    const settled = runGuardianDecisionOrchestratorOnce(db, {
+      now: new Date("2026-06-18T00:03:31Z")
+    });
+
+    expect(settled).toMatchObject({ leases_acquired: 1, scanned: 0 });
+    expect(listPiActions(db, { issueId: 501 })[0]).toMatchObject({
+      action_type: "issue.enqueue",
+      gate_decision: "ask",
+      guardian_decision_id: decision.id,
+      legacy_bypass_reason: "",
+      status: "pending"
+    });
+    expect(listPiGuardianDecisions(db, { decisionKind: "recovery", issueId: 501, projectId: "demo" })[0])
+      .toMatchObject({ state: "completed" });
+  });
+
+  test("skips action creation while the same guardian action lease is held", async () => {
+    const db = await openFixtureDatabase();
+    createPiAction(db, {
+      action_type: "issue.enqueue",
+      id: "held-guardian-action",
+      issue_id: 502,
+      lease_expires_at: "2026-06-18T00:09:00Z",
+      lease_key: "demo:issue:502:issue.enqueue",
+      project_id: "demo",
+      status: "executing"
+    });
+    heartbeatActionEvent(db, "heartbeat-action-held-2", 502);
+    const queued = runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:04:10Z") });
+    const summary = runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:04:41Z") });
+    const decisions = listPiGuardianDecisions(db, { decisionKind: "recovery", issueId: 502, projectId: "demo" });
+
+    expect(queued).toMatchObject({ created: 1, scanned: 1 });
+    expect(summary).toMatchObject({ lease_skipped: 1, leases_acquired: 0, scanned: 0 });
+    expect(listPiActions(db, { issueId: 502 }).map((action) => action.id)).toEqual(["held-guardian-action"]);
+    expect(decisions).toHaveLength(1);
+    expect(decisions[0]).toMatchObject({ rationale: "lease_held", state: "skipped" });
+  });
+
+  test("turns transient supervisor candidates into gated recovery actions after merge window", async () => {
+    const db = await openFixtureDatabase();
+    supervisorCandidateEvent(db, "supervisor-transient", {
+      allowed_actions: ["session.resume_followup"],
+      budget_remaining: 1,
+      diagnosis_code: "provider_timeout",
+      provider: "codex",
+      provider_session_id: "thread-601",
+      provider_turn_id: "turn-old",
+      reason: "provider timed out after stream stall",
+    }, 601, "session.resume_followup");
+
+    runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:00:00Z") });
+    const settled = runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:00:31Z") });
+    const [action] = listPiActions(db, { issueId: 601 });
+
+    expect(settled).toMatchObject({ leases_acquired: 1, scanned: 0 });
+    expect(action).toMatchObject({
+      action_type: "session.resume_followup",
+      gate_decision: "execute",
+      guardian_decision_id: expect.stringContaining("recovery:demo:issue:601:provider_timeout"),
+      status: "approved"
+    });
+    expect(JSON.parse(action?.payload_json ?? "{}")).toMatchObject({
+      expected_provider_turn_id: "turn-old",
+      expected_run_id: "issue-601-attempt-1",
+      expected_session_updated_at: "2026-06-18T00:00:00Z",
+      issue_id: 601,
+      provider_session_id: "thread-601"
+    });
+  });
+
+  test("automatically approves a fresh issue retry for a transient startup timeout", async () => {
+    const db = await openFixtureDatabase();
+    supervisorCandidateEvent(db, "supervisor-startup-timeout", {
+      allowed_actions: ["issue.retry", "needs_user.escalate"],
+      budget_remaining: 2,
+      diagnosis_code: "provider_transient_network_error",
+      provider: "codex",
+      provider_error_category: "network",
+      reason: "codex app-server request timed out after 90000ms: thread/start",
+      session_status: "unknown",
+    }, 670, "issue.retry");
+
+    runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:01:00Z") });
+    runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:01:31Z") });
+    const [action] = listPiActions(db, { issueId: 670 });
+
+    expect(action).toMatchObject({
+      action_type: "issue.retry",
+      gate_decision: "execute",
+      status: "approved"
+    });
+    expect(JSON.parse(action?.payload_json ?? "{}")).toMatchObject({
+      diagnosis_code: "provider_transient_network_error",
+      issue_id: 670,
+      provider: "codex"
+    });
+  });
+
+  test("routes needs-context supervisor candidates to needs-user escalation actions", async () => {
+    const db = await openFixtureDatabase();
+    supervisorCandidateEvent(db, "supervisor-needs-context", {
+      allowed_actions: ["needs_user.escalate"],
+      budget_remaining: 1,
+      diagnosis_code: "missing_user_input",
+      reason: "agent needs the missing production tenant name",
+    }, 602, "needs_user.escalate");
+
+    const queued = runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:01:00Z") });
+    const summary = runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:01:31Z") });
+    const [action] = listPiActions(db, { issueId: 602 });
+
+    expect(queued).toMatchObject({ created: 1, scanned: 1 });
+    expect(summary).toMatchObject({ leases_acquired: 1, scanned: 0 });
+    expect(action).toMatchObject({
+      action_type: "needs_user.escalate",
+      gate_decision: "execute",
+      status: "approved"
+    });
+    expect(JSON.parse(action?.payload_json ?? "{}")).toMatchObject({
+      diagnosis_code: "missing_user_input",
+      issue_id: 602,
+      message: expect.stringContaining("missing production tenant")
+    });
+  });
+
+  test("routes provider runtime unavailable through gate as needs-user escalation", async () => {
+    const db = await openFixtureDatabase();
+    supervisorCandidateEvent(db, "supervisor-provider-outage", {
+      allowed_actions: ["session.resume_followup"],
+      budget_remaining: 0,
+      cooldown_until: "2026-06-18T00:10:00Z",
+      diagnosis_code: "provider_runtime_unavailable",
+      provider: "claude",
+      reason: "latest provider error has no recoverable provider session",
+    }, 605, "needs_user.escalate");
+
+    runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:02:00Z") });
+    runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:02:31Z") });
+    const actions = listPiActions(db, { issueId: 605 });
+    const payload = JSON.parse(actions[0]?.payload_json ?? "{}");
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ action_type: "needs_user.escalate", gate_decision: "execute", status: "approved" });
+    expect(payload.message).toContain("provider：claude");
+    expect(payload.message).toContain("issue id：605");
+    expect(payload.message).toContain("诊断码：provider_runtime_unavailable");
+    expect(payload.message).toContain("错误摘要：latest provider error has no recoverable provider session");
+    expect(payload.message).toContain("请检查/重启 Codex app-server 或 Claude Code provider 后再 retry");
+  });
+
+  test("lets recovery gate deny exhausted budget and snooze cooldown candidates", async () => {
+    const db = await openFixtureDatabase();
+    supervisorCandidateEvent(db, "supervisor-budget-exhausted", {
+      allowed_actions: ["session.resume_followup"],
+      budget_remaining: 0,
+      diagnosis_code: "provider_timeout",
+      provider: "codex",
+      provider_session_id: "thread-603",
+      provider_turn_id: "turn-old",
+      reason: "provider timed out",
+    }, 603, "session.resume_followup");
+    supervisorCandidateEvent(db, "supervisor-cooldown", {
+      allowed_actions: ["session.resume_followup"],
+      budget_remaining: 1,
+      cooldown_until: "2026-06-18T00:05:00Z",
+      diagnosis_code: "provider_timeout",
+      provider: "codex",
+      provider_session_id: "thread-604",
+      provider_turn_id: "turn-old",
+      reason: "provider timed out",
+    }, 604, "session.resume_followup");
+
+    runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:02:00Z") });
+    runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:02:31Z") });
+
+    expect(listPiActions(db, { issueId: 603 })[0]).toMatchObject({
+      action_type: "session.resume_followup",
+      gate_decision: "deny",
+      gate_reason: expect.stringContaining("budget"),
+      status: "denied"
+    });
+    expect(listPiActions(db, { issueId: 604 })[0]).toMatchObject({
+      action_type: "session.resume_followup",
+      gate_decision: "snooze",
+      gate_reason: expect.stringContaining("cooldown"),
+      status: "snoozed"
+    });
+  });
+});
+
+function heartbeatActionEvent(db: RunnerDatabase, id: string, issueID: number): void {
+  createPiGuardianEvent(db, {
+    event_type: "guardian.heartbeat.action_candidate",
+    id,
+    idempotency_key: `guardian.heartbeat.action_candidate:demo:${issueID}:issue.enqueue:${id}`,
+    issue_id: issueID,
+    normalized_payload_json: {
+      action_type: "issue.enqueue",
+      diagnosis_code: "issue.enqueue",
+      original_payload: { issue_id: issueID },
+      rationale: "todo issue has no active session",
+      risk_level: "medium",
+      signal_type: "heartbeat.action_candidate"
+    },
+    project_id: "demo",
+    severity: "watch",
+    source: "heartbeat",
+    source_event_id: id,
+    status: "pending"
+  });
+}
+
+function supervisorCandidateEvent(
+  db: RunnerDatabase,
+  id: string,
+  payload: Record<string, unknown>,
+  issueID: number,
+  actionType: string
+): void {
+  const selectedAction = {
+    action_type: actionType,
+    gate_policy: {
+      allowed_actions: [actionType],
+      authorizedActions: [{
+        action_type: actionType,
+        issue_id: issueID,
+        project_id: "demo"
+      }],
+      budget_remaining: payload.budget_remaining,
+      cooldown_until: payload.cooldown_until,
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    },
+    issue_id: issueID,
+    payload: {
+      decision_id: `pi:${id}`,
+      diagnosis_code: payload.diagnosis_code,
+      expected_issue_status: "in_progress",
+      expected_issue_updated_at: "2026-06-18T00:00:00Z",
+      expected_provider_session_id: payload.provider_session_id,
+      expected_provider_turn_id: payload.provider_turn_id,
+      expected_run_id: `issue-${issueID}-attempt-1`,
+      expected_run_status: "in_progress",
+      expected_session_status: "running",
+      expected_session_updated_at: "2026-06-18T00:00:00Z",
+      issue_id: issueID,
+      message: actionType === "needs_user.escalate"
+        ? needsUserFixtureMessage(issueID, payload)
+        : undefined,
+      provider: payload.provider,
+      provider_session_id: payload.provider_session_id,
+      provider_turn_id: payload.provider_turn_id,
+      prompt: actionType === "session.resume_followup"
+        ? `Continue after PI decision: ${String(payload.reason ?? "")}`
+        : undefined,
+      reason: payload.reason
+    },
+    project_id: "demo",
+    rationale: payload.reason,
+    risk_level: "medium"
+  };
+  createPiGuardianEvent(db, {
+    event_type: "guardian.supervisor.candidate",
+    id,
+    idempotency_key: `guardian.supervisor.candidate:demo:${issueID}:${id}`,
+    issue_id: issueID,
+    normalized_payload_json: {
+      issue_status: "in_progress",
+      issue_updated_at: "2026-06-18T00:00:00Z",
+      project_id: "demo",
+      ready: true,
+      run_id: `issue-${issueID}-attempt-1`,
+      run_status: "in_progress",
+      session_status: "running",
+      session_updated_at: "2026-06-18T00:00:00Z",
+      signal_type: "supervisor.candidate",
+      ...payload,
+      actions: [selectedAction]
+    },
+    project_id: "demo",
+    severity: "watch",
+    source: "supervisor",
+    source_event_id: id,
+    status: "pending"
+  });
+}
+
+function needsUserFixtureMessage(issueID: number, payload: Record<string, unknown>): string {
+  if (payload.diagnosis_code !== "provider_runtime_unavailable") return String(payload.reason ?? "");
+  return "Supervisor 判断 executor provider 当前不可用，无法继续自动恢复。" +
+    `provider：${String(payload.provider ?? "unknown")}；issue id：${issueID}；` +
+    `诊断码：provider_runtime_unavailable；错误摘要：${String(payload.reason ?? "")}。` +
+    "请检查/重启 Codex app-server 或 Claude Code provider 后再 retry。";
+}
+
+function mergeMeta(decision: PiGuardianDecision): Record<string, unknown> {
+  const evidence = JSON.parse(decision.evidence_json) as Array<Record<string, unknown>>;
+  const row = evidence.find((item) => typeof item.guardian_decision_merge === "object");
+  return row?.guardian_decision_merge as Record<string, unknown>;
+}

@@ -15,7 +15,7 @@ import {
 import { queueDailyNotificationDigests } from "./dailyDigest.ts";
 import { flushAgentCommunicationTestMessages } from "./agentCommunicationGateway.testSupport.ts";
 import { runAgentCommunicationGatewayOnce } from "./agentCommunicationGateway.ts";
-import { dispatchImOutbox } from "../pi/imReplyOutboxDispatcher.ts";
+import { dispatchImOutbox } from "../pi/notifications/imReplyOutboxDispatcher.ts";
 import type { ChannelConnector, ConnectorDeliveryReceipt } from "../integrations/channelConnectorContracts.ts";
 import { routeNotification } from "./unifiedNotificationPipeline.ts";
 import { queueFeishuHandoffNotification } from "../integrations/feishuNotifications.ts";

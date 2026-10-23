@@ -2,7 +2,7 @@ import { getPiApprovalRequest, upsertPiApprovalRequest } from "../db/repositorie
 import { resolvePiApprovalRequestRecord } from "../db/repositories/pi/approvalLifecycle.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ProviderEvent } from "../providers/types.ts";
-import { recordApprovalFastAudit } from "../pi/approvalFastAudit.ts";
+import { recordApprovalFastAudit } from "../pi/actions/approvalFastAudit.ts";
 import { cleanString, objectValue } from "../util/values.ts";
 
 type ApprovalRuntimeContext = {

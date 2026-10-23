@@ -10,8 +10,8 @@ import {
   type ActionProposalRecord,
   type PiAction
 } from "../db/repositories/pi.ts";
-import { createPendingPiAction, recordPiActionAuditEvent } from "../pi/actionEngine.ts";
-import { decideSourcePermission, type SourcePermissionDecision } from "../pi/sourcePermissionPolicy.ts";
+import { createPendingPiAction, recordPiActionAuditEvent } from "../pi/actions/actionEngine.ts";
+import { decideSourcePermission, type SourcePermissionDecision } from "../pi/actions/sourcePermissionPolicy.ts";
 import { executeApprovedPiAction, resolvePiActionDecision, type PiActionDecisionContext } from "./piActionDecision.ts";
 import { HttpError } from "./errors.ts";
 import { cleanString, stringList } from "../util/values.ts";

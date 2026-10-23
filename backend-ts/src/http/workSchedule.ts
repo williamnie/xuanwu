@@ -6,7 +6,7 @@ import { readWorkspaceWaits } from "../db/repositories/workspaceWaits.ts";
 import { readProjectIssueDependencies } from "../domain/work/issueDependency.ts";
 import { issueIDToWorkID, workIDToIssueID } from "../domain/work/issueAdapter.ts";
 import type { WorkLedgerEntry } from "../domain/work/contracts.ts";
-import { resolveExecutorSelection } from "../pi/agentOrchestration.ts";
+import { resolveExecutorSelection } from "../pi/runtime/agentOrchestration.ts";
 import { isExecutorProviderId } from "../providers/types.ts";
 import { readProjectLoopSnapshot } from "../runner/projectLoopManager.ts";
 import { evaluateQueueCandidate, providerAvailability, projectCapacityAvailable, type WorkSchedule } from "../runner/queueEligibility.ts";

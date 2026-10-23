@@ -38,13 +38,13 @@ import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import type { Router } from "./router.ts";
 import { resolveAttentionDecision } from "./attentionDecisionService.ts";
-import { guardianAlertPresentation } from "../pi/guardianAlertPresentation.ts";
+import { guardianAlertPresentation } from "../pi/guardian/guardianAlertPresentation.ts";
 import { handoffHref } from "../notifications/handoffNotifier.ts";
 import {
   guardianOperationsSnapshot,
   latestGuardianOperationsReport
-} from "../pi/guardianOperationsDailyReport.ts";
-import { piActionGateDiagnostic } from "../pi/actionGateDiagnostic.ts";
+} from "../pi/guardian/guardianOperationsDailyReport.ts";
+import { piActionGateDiagnostic } from "../pi/actions/actionGateDiagnostic.ts";
 import { buildCommandCenterInbox, commandCenterInboxReaders, type InboxItem, type InboxReaders } from "./commandCenterInbox.ts";
 import { cleanString } from "../util/values.ts";
 

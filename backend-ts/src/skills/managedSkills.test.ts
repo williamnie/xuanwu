@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { createDefaultRouter } from "../http/server.ts";
-import { createSkillLibraryTools } from "../pi/skillLibraryTools.ts";
+import { createSkillLibraryTools } from "../pi/tools/skillLibraryTools.ts";
 import { loadSmokeRuntime, resolveDefaultRepoRoot } from "../spikes/piSmokeSupport.ts";
 import { createPiRuntimeResourceLoader } from "../http/piRuntimeResources.ts";
 import { installManagedSkill, changeManagedSkill, readSkillCatalog, currentSkillRevision, revisionPath } from "./managedStore.ts";

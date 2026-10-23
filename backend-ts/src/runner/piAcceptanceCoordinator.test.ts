@@ -1,4 +1,4 @@
-import { setMemoryReflectionEnabled } from "../pi/memoryReflectionQueue.ts";
+import { setMemoryReflectionEnabled } from "../pi/memory/memoryReflectionQueue.ts";
 import { evidenceReuseFixture, reuseReport } from "../domain/acceptance/evidenceReuseTestSupport.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -21,7 +21,7 @@ import {
   readIssueDecisionProjection,
   reviewHumanIssue
 } from "../domain/review/humanReview.ts";
-import type { PiAcceptanceRuntimeResult } from "../pi/issueAcceptance.ts";
+import type { PiAcceptanceRuntimeResult } from "../pi/issues/issueAcceptance.ts";
 import type { ExecutorProvider, ProviderRecoveryInput, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
 import { runPiAcceptanceCoordinatorOnce } from "./piAcceptanceCoordinator.ts";
 import { useDatabaseCleanup } from "../testing/harness.ts";

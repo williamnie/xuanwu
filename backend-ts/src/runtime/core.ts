@@ -1,4 +1,4 @@
-import { startCodexLoginMaintenance } from "../pi/codexLoginMaintenance.ts";
+import { startCodexLoginMaintenance } from "../pi/runtime/codexLoginMaintenance.ts";
 import { join } from "node:path";
 import { createHttpAgenticWorkerClient } from "../agentic/client.ts";
 import type { AgenticWorkerClient } from "../agentic/protocol.ts";
@@ -81,7 +81,7 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
       appEventSink: (event) => bus?.publish(event),
       ownershipFile: codexOwnershipFile,
       generateTitle: async (input, signal) => {
-        const { generateSessionTitle } = await import("../pi/sessionTitleGenerator.ts");
+        const { generateSessionTitle } = await import("../pi/runtime/sessionTitleGenerator.ts");
         return generateSessionTitle(database, input, signal);
       }
     }));
@@ -330,7 +330,7 @@ async function startAutoRunLoops(
   agenticClient: AgenticWorkerClient,
   processGroupMemory: ProcessGroupMemoryObserver,
   imChannels: ReturnType<typeof createBuiltinImChannelRegistry>,
-  guardianAlertDelivery: import("../pi/guardianAlertDelivery.ts").GuardianAlertDelivery
+  guardianAlertDelivery: import("../pi/guardian/guardianAlertDelivery.ts").GuardianAlertDelivery
 ): Promise<void> {
   await recoverInProgressIssues({ database }).catch((error) => {
     console.error(JSON.stringify({ ok: false, service: "xuanwu backend-ts", error: safeError(error) }));

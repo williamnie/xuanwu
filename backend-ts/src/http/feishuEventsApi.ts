@@ -20,8 +20,8 @@ import {
   type FeishuGenericIntakeOptions
 } from "../integrations/feishuIntakeBridge.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
-import type { EventRouterSourcePolicy } from "../pi/eventRouter.ts";
-import type { LlmIntakeModel } from "../pi/llmIntake.ts";
+import type { EventRouterSourcePolicy } from "../pi/intake/eventRouter.ts";
+import type { LlmIntakeModel } from "../pi/intake/llmIntake.ts";
 import { json, jsonError } from "./errors.ts";
 import type { Router } from "./router.ts";
 import {

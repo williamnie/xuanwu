@@ -1,7 +1,7 @@
 import { redactSensitiveText } from "../../util/redact.ts";
-import { evaluateApprovalFastPolicy, type ApprovalFastDecision } from "../../pi/approvalFastPolicy.ts";
-import { constrainApprovalGrantScope, type ScopedApprovalDecision } from "../../pi/approvalGrantScope.ts";
-import { parseCodexApprovalRequest } from "../../pi/approvalRequestParser.ts";
+import { evaluateApprovalFastPolicy, type ApprovalFastDecision } from "../../pi/actions/approvalFastPolicy.ts";
+import { constrainApprovalGrantScope, type ScopedApprovalDecision } from "../../pi/actions/approvalGrantScope.ts";
+import { parseCodexApprovalRequest } from "../../pi/actions/approvalRequestParser.ts";
 import { normalizedRunEvent } from "../runEvents.ts";
 import type { ApprovalDecision, ProviderEvent } from "../types.ts";
 import { objectValue } from "../../util/values.ts";

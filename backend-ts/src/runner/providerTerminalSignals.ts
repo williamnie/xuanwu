@@ -3,13 +3,13 @@ import { hydrateStoredIssueLogPayload } from "../db/repositories/issueEvents.ts"
 import { getIssue, listIssueRuns, type Issue, type IssueRun } from "../db/repositories/issues.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ProviderEvent } from "../providers/types.ts";
-import { guardianSignalsFromSupervisorCandidates, writeGuardianSignals } from "../pi/guardianSignals.ts";
-import type { HeartbeatSupervisorCandidateSignal } from "../pi/heartbeatTypes.ts";
+import { guardianSignalsFromSupervisorCandidates, writeGuardianSignals } from "../pi/guardian/guardianSignals.ts";
+import type { HeartbeatSupervisorCandidateSignal } from "../pi/heartbeat/heartbeatTypes.ts";
 import {
   parseIssueEventProviderError,
   parseProviderEventError,
   type ProviderErrorSignal
-} from "../pi/providerErrorParser.ts";
+} from "../pi/supervisor/providerErrorParser.ts";
 import { cleanString, positiveInteger } from "../util/values.ts";
 
 type ProviderTerminalSignalInput = {

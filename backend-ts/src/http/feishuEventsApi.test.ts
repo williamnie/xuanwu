@@ -11,7 +11,7 @@ import { listActionProposals } from "../db/repositories/pi.ts";
 import { EventBus } from "../events/bus.ts";
 import { createRequestHandler, createDefaultRouter } from "./server.ts";
 import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
-import type { LlmIntakeModel, LlmIntakeRequest } from "../pi/llmIntake.ts";
+import type { LlmIntakeModel, LlmIntakeRequest } from "../pi/intake/llmIntake.ts";
 import { useDatabaseCleanup } from "../testing/harness.ts";
 
 const trackDatabase = useDatabaseCleanup();

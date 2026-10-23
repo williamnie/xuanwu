@@ -19,7 +19,7 @@
 
 以下表明确 **不在本 migration 删除范围**：
 
-- `pi_delegations`：`pi/reports.ts` 与 Skill authorization 仍有 live consumer；必须另行完成 target mapping 和
+- `pi_delegations`：`pi/reports/reports.ts` 与 Skill authorization 仍有 live consumer；必须另行完成 target mapping 和
   consumer-zero，不能把空行数当成退役证据。
 - `pi_heartbeat_controls`, `pi_heartbeat_runs`, `pi_heartbeat_events`：仍是 pause/control 与 R3 execution
   audit authority。

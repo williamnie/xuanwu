@@ -34,7 +34,7 @@ import { ExecutionPolicyError, type ExecutionPolicyRequest, type ProviderPolicyC
 import type { ProviderTransport } from "../providers/core/manifest.ts";
 import { translateLegacyExecutionPolicy } from "../providers/core/legacyExecutionPolicy.ts";
 import { resolveExecutionPolicy } from "../providers/core/policyResolution.ts";
-import { appendRunMemoryPrompt, recordExecutorMemoryCitations } from "../pi/runMemoryContext.ts";
+import { appendRunMemoryPrompt, recordExecutorMemoryCitations } from "../pi/memory/runMemoryContext.ts";
 import { cleanString } from "../util/values.ts";
 
 const LIVE_PROVIDER_PAYLOAD_MAX_BYTES = 64 * 1024;

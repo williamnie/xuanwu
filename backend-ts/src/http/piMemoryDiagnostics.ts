@@ -1,8 +1,8 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getProject } from "../db/repositories/projects.ts";
-import { memoryReflectionEnabled, REFLECTION_LIMITS } from "../pi/memoryReflectionQueue.ts";
-import { reflectionReasonCode } from "../pi/memoryReflectionTelemetry.ts";
-import { containsSensitiveMemoryContent } from "../pi/memoryPolicy.ts";
+import { memoryReflectionEnabled, REFLECTION_LIMITS } from "../pi/memory/memoryReflectionQueue.ts";
+import { reflectionReasonCode } from "../pi/memory/memoryReflectionTelemetry.ts";
+import { containsSensitiveMemoryContent } from "../pi/memory/memoryPolicy.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { HttpError } from "./errors.ts";
 import { arrayValue } from "../util/values.ts";

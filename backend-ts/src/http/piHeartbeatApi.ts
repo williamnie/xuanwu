@@ -4,7 +4,7 @@ import {
   resumePiHeartbeat
 } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
-import { runPiHeartbeatOnce } from "../pi/heartbeatOrchestrator.ts";
+import { runPiHeartbeatOnce } from "../pi/heartbeat/heartbeatOrchestrator.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";

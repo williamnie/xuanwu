@@ -1,0 +1,216 @@
+import { Type, type Static } from "@sinclair/typebox";
+import { Value } from "@sinclair/typebox/value";
+import type { RunnerDatabase } from "../../db/database.ts";
+import type { PiAgent } from "../../db/repositories/pi.ts";
+import type { Project } from "../../db/repositories/projects.ts";
+import type { CompletionCard } from "../../domain/acceptance/completionCard.ts";
+import { ISSUE_EXECUTION_AUTHORITY_RULES } from "../../domain/work/issueExecutionAuthority.ts";
+import { appLanguage } from "../../i18n/language.ts";
+import { redactSensitiveText } from "../../util/redact.ts";
+import { piInternalReadAuthorization } from "../actions/internalReadAuthorization.ts";
+import { withOptionalJevTool } from "../../skills/jev/policy.ts";
+import { recordExecutorMemoryCitations, RUN_MEMORY_RULES } from "../memory/runMemoryContext.ts";
+import {
+  parseStructuredAssistantOutput,
+  structuredAssistantProviderError,
+  type StructuredOutputSession
+} from "../runtime/structuredAssistantOutput.ts";
+
+const PI_ACCEPTANCE_DECISIONS = [
+  "accept",
+  "continue_same_session",
+  "retry",
+  "needs_user",
+  "failed"
+] as const;
+
+const PI_ACCEPTANCE_DECISION_SCHEMA = Type.Object({
+  decision: Type.Union(PI_ACCEPTANCE_DECISIONS.map((value) => Type.Literal(value))),
+  confidence: Type.Union([Type.Literal("low"), Type.Literal("medium"), Type.Literal("high")]),
+  rationale: Type.String({ minLength: 1, maxLength: 8_000 }),
+  evidence_refs: Type.Array(Type.String({ minLength: 1, maxLength: 512 }), { maxItems: 32 }),
+  unmet_requirements: Type.Array(Type.String({ minLength: 1, maxLength: 2_000 }), { maxItems: 32 }),
+  progress: Type.Object({
+    made_progress: Type.Boolean(),
+    evidence_refs: Type.Array(Type.String({ minLength: 1, maxLength: 512 }), { maxItems: 32 }),
+    summary: Type.String({ minLength: 1, maxLength: 2_000 })
+  }, { additionalProperties: false }),
+  human_review_kind: Type.Optional(Type.Union([
+    Type.Literal("decision"),
+    Type.Literal("acceptance"),
+    Type.Literal("risk_acceptance")
+  ])),
+  follow_up_prompt: Type.Optional(Type.String({ minLength: 1, maxLength: 8_000 }))
+}, { additionalProperties: false });
+
+export type PiAcceptanceDecision = Static<typeof PI_ACCEPTANCE_DECISION_SCHEMA>;
+
+export type PiAcceptanceRuntimeResult =
+  | {
+    decision: PiAcceptanceDecision;
+    raw_text: string;
+    valid: true;
+  }
+  | {
+    error: string;
+    raw_text: string;
+    valid: false;
+  };
+
+const ACCEPTANCE_TOOL_NAMES = [
+  "issue_read",
+  "session_read_summary",
+  "repo_search",
+  "repo_read_excerpt",
+  "repo_tree",
+  "grep",
+  "find",
+  "ls"
+];
+const ACCEPTANCE_TIMEOUT_MS = 75_000;
+
+export async function runPiIssueAcceptance(input: {
+  agent: PiAgent;
+  card: CompletionCard;
+  database: RunnerDatabase;
+  project: Project;
+}): Promise<PiAcceptanceRuntimeResult> {
+  recordExecutorMemoryCitations(input.database, input.card.issue.id, input.card.run.id, input.card.final_message);
+  const { createPiRuntimeSession } = await import("../../http/piRuntime.ts");
+  const toolNames = withOptionalJevTool(input.database, { projectID: input.project.id, issueID: input.card.issue.id, source: "pi_issue_acceptance" }, ACCEPTANCE_TOOL_NAMES);
+  const runtime = await createPiRuntimeSession(input.database, {
+    agent: input.agent,
+    authorization: piInternalReadAuthorization({
+      issueID: input.card.issue.id,
+      projectID: input.project.id,
+      toolNames
+    }),
+    conversationID: `pi-acceptance-${input.card.issue.id}-${input.card.fingerprint.slice(0, 12)}`,
+    issueID: input.card.issue.id,
+    issueRunID: input.card.run.id,
+    heartbeatID: `pi-acceptance:${input.project.id}:${input.card.issue.id}:${input.card.fingerprint.slice(0, 12)}`,
+    promptProfile: "acceptance",
+    project: input.project,
+    retry: { baseDelayMs: 1_000, enabled: true, maxRetries: 2, provider: { maxRetries: 0 } },
+    source: "pi_issue_acceptance"
+  });
+  runtime.session.setActiveToolsByName(toolNames);
+  try {
+    await promptWithTimeout(runtime.session, acceptancePrompt(input.card, appLanguage(input.database)));
+    return interpretAcceptanceSession(runtime.session);
+  } finally {
+    runtime.dispose();
+  }
+}
+
+export function interpretAcceptanceSession(session: StructuredOutputSession): PiAcceptanceRuntimeResult {
+  const output = parseStructuredAssistantOutput(session, parseAcceptanceDecision);
+  const providerError = structuredAssistantProviderError(session);
+  if (providerError !== "") return interpretAcceptanceResponse(output.raw, providerError);
+  if (output.value) return { decision: output.value, raw_text: output.raw, valid: true };
+  return interpretAcceptanceResponse(output.raw);
+}
+
+export function interpretAcceptanceResponse(
+  raw: string,
+  providerError = ""
+): PiAcceptanceRuntimeResult {
+  const error = providerError.trim();
+  if (error) {
+    return {
+      error: `PI acceptance provider failed: ${redactSensitiveText(error)}`,
+      raw_text: raw,
+      valid: false
+    };
+  }
+  const decision = parseAcceptanceDecision(raw);
+  if (decision) return { decision, raw_text: raw, valid: true };
+  return {
+    error: "PI acceptance returned invalid JSON or schema",
+    raw_text: raw,
+    valid: false
+  };
+}
+
+export function parseAcceptanceDecision(raw: string): PiAcceptanceDecision | null {
+  const text = extractJson(raw);
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    return Value.Check(PI_ACCEPTANCE_DECISION_SCHEMA, parsed)
+      ? parsed as PiAcceptanceDecision
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function acceptancePrompt(card: CompletionCard, language: string): string {
+  return [
+    "You are the Xuanwu PI accepting one completed Work on the user's behalf.",
+    "This is a semantic acceptance decision, not a shell-command classifier and not a project manager meeting.",
+    ISSUE_EXECUTION_AUTHORITY_RULES,
+    RUN_MEMORY_RULES,
+    "Use durable_context.run_memory to trace this exact Run's snapshot. Historical memory verification is not current Run evidence; injection and citations alone never justify acceptance or progress.",
+    "Return exactly one JSON object. No markdown, code fences, or prose outside JSON.",
+    language === "zh-CN"
+      ? "rationale、unmet_requirements、progress.summary、follow_up_prompt 使用简体中文；schema key 和 decision 枚举保持英文。"
+      : "Use English for natural-language fields; keep schema keys and decision enums unchanged.",
+    "Required fields: decision, confidence, rationale, evidence_refs, unmet_requirements, progress. follow_up_prompt is optional.",
+    `decision MUST be exactly one string literal from: ${PI_ACCEPTANCE_DECISIONS.join(", ")}.`,
+    "confidence MUST be exactly one string literal: low, medium, or high. Never output a number, probability, percentage, or any other confidence form.",
+    "The exact JSON shape is: {\"decision\":\"accept|continue_same_session|retry|needs_user|failed\",\"confidence\":\"low|medium|high\",\"rationale\":\"...\",\"evidence_refs\":[\"...\"],\"unmet_requirements\":[\"...\"],\"progress\":{\"made_progress\":true|false,\"evidence_refs\":[\"...\"],\"summary\":\"...\"},\"human_review_kind\":\"decision|acceptance|risk_acceptance when needs_user\",\"follow_up_prompt\":\"optional...\"}.",
+    "Judge whether the chronological facts satisfy the authoritative Issue goal and acceptance criteria.",
+    "Before choosing accept, explain how the current delivered behavior or answer satisfies issue.goal and its acceptance criteria, incorporating applicable human_review decisions. Completing your previous follow_up_prompt is not sufficient. If an earlier PI instruction mistakenly removed the requested implementation, acknowledge the mistake and choose a bounded continuation to restore the authorized result, or needs_user when substantive authorization is genuinely unresolved; never redefine implementation success as rollback success.",
+    "Judge progress for this Run separately from completion. Set progress.made_progress=true only when this Run produced a concrete new implementation, decision, verified fact, or validation result that materially reduced the remaining work. Repeated planning, repeated inspection, an empty assistant turn, or read-only commands that do not establish a new relevant fact are not progress. Cite only current Run/card facts in progress.evidence_refs.",
+    "Commands are observations, not pre-classified proof. Read their command, exit_code, order, output excerpt, changed files, commits, final message, and warnings together.",
+    "prior_evidence contains original observations from earlier Runs of this same Work, never current-Run tests or long-term memory. Reuse only status=reusable, cite source_event_ref and source_run_id, and independently judge whether the recorded repository_and_host scope covers the command's inputs and environment. It does not prove remote services, external files, ignored dependencies, or a provider's private shell/toolchain stayed unchanged. If any relevant condition is outside that scope or cannot be confirmed, require fresh verification. Never infer current progress from historical tests. For report-only corrections do not repeat covered, unchanged verification; for revalidation_required follow reasons and revalidation_commands. Historical success never overrides a later failure.",
+    "The session field is a live bounded read of the Provider Session. If latest_turn_matches_run is false, treat latest_turn_items and session.current_git as later facts that supersede a stale canonical Run card when they clearly belong to this Issue.",
+    "When human_review is present, human_review.request is the exact request snapshot and its explicit response is authoritative for that stated product, scope, risk, cost, or external-verification choice. Judge the current workspace together with origin_completion and intervening_runs. If action=accept and request.kind=acceptance, do not choose needs_user for the same criterion or any paraphrase of it; choose accept unless the facts require a concrete technical continuation or failure. An intentionally interrupted mistaken retry is not by itself an implementation failure and must not cause another retry or Provider Session.",
+    "An earlier failed command may be superseded by a later successful command only when the later command actually covers the relevant scope. Explain that relationship rather than treating the latest row mechanically.",
+    "The executor final message is a claim that may help correlate facts, but it is not sufficient by itself.",
+    "Do not require test/lint/build for every task. Require evidence appropriate to this Issue's actual requested outcome and risk.",
+    "Choose accept when the bounded facts are sufficient. Every normal completed Work must receive this PI judgment; do not defer merely because deterministic code did not label a command.",
+    "Choose continue_same_session when the same executor should fix a concrete defect or produce missing proof; include an actionable follow_up_prompt.",
+    "Use the available read-only repository and Session tools before deciding; code review and independent checks are PI work, not separate lifecycle states.",
+    "Choose retry only when the existing Provider Session cannot responsibly continue and a fresh Session is required; include an actionable follow_up_prompt.",
+    "Choose needs_user only for a concrete product, scope, authorization, destructive-risk, visual, release, cost, or external-state decision that the system cannot responsibly make.",
+    "When decision=needs_user, set human_review_kind. Use decision for missing information or a bounded product/scope choice, risk_acceptance for authorization, cost, credentials, release, destructive risk, or external effects, and acceptance only when the human is explicitly being asked whether to accept the current delivery as-is and stop the missing work. Never label a request for information or permission to continue as acceptance.",
+    "Choose failed only when the Issue is conclusively unrecoverable within its authorized scope. A Provider error, disconnect, missing command, or exhausted automatic-recovery counter is not by itself grounds for failed.",
+    "Never create another Issue, never ask for a generic verifier, and never retry the same unchanged diagnosis.",
+    "evidence_refs must reference concrete card facts such as command:<id>, git:<revision>, run:<id>, session:<turn-id>, or final_message.",
+    "Completion card JSON:",
+    JSON.stringify(card, null, 2)
+  ].join("\n");
+}
+
+async function promptWithTimeout(
+  session: {
+    abort(): Promise<void>;
+    prompt(prompt: string, options: { expandPromptTemplates: boolean; source: "rpc" }): Promise<void>;
+  },
+  prompt: string
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`Xuanwu PI acceptance timed out after ${ACCEPTANCE_TIMEOUT_MS}ms`));
+      void session.abort().catch(() => undefined);
+    }, ACCEPTANCE_TIMEOUT_MS);
+  });
+  try {
+    await Promise.race([
+      session.prompt(prompt, { expandPromptTemplates: false, source: "rpc" }),
+      timeout
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+function extractJson(raw: string): string {
+  const text = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  if (text.startsWith("{") && text.endsWith("}")) return text;
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  return start >= 0 && end > start ? text.slice(start, end + 1) : text;
+}

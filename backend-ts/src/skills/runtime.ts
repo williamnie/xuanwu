@@ -2,14 +2,14 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import type { AttentionInboxItemRecord } from "../db/repositories/intakeRuns.ts";
 import { createPiActionEvent } from "../db/repositories/pi.ts";
-import { invokeReadOnlyAssistantTool } from "../pi/readOnlyToolInvocation.ts";
-import { createPiMcpActions } from "../pi/mcpActionTools.ts";
-import { executeSafePiAction } from "../pi/actionEngine.ts";
+import { invokeReadOnlyAssistantTool } from "../pi/tools/readOnlyToolInvocation.ts";
+import { createPiMcpActions } from "../pi/mcp/mcpActionTools.ts";
+import { executeSafePiAction } from "../pi/actions/actionEngine.ts";
 import { createPiProjectTools } from "../http/piProjectTools.ts";
 import type { EventBus } from "../events/bus.ts";
-import { recordToolCallAuditEvent, type ToolCallAuditContext } from "../pi/toolCallAudit.ts";
-import { loadAssistantToolRegistrySnapshot, type AssistantToolRegistrySnapshot } from "../pi/toolRegistrySnapshot.ts";
-import type { AssistantTool, ToolPermission } from "../pi/toolProviderEnvelope.ts";
+import { recordToolCallAuditEvent, type ToolCallAuditContext } from "../pi/actions/toolCallAudit.ts";
+import { loadAssistantToolRegistrySnapshot, type AssistantToolRegistrySnapshot } from "../pi/tools/toolRegistrySnapshot.ts";
+import type { AssistantTool, ToolPermission } from "../pi/tools/toolProviderEnvelope.ts";
 import type { WorkflowStage } from "../workflows/manifest.ts";
 import {
   BUILTIN_DOMAIN_PROPOSAL_HANDLER,

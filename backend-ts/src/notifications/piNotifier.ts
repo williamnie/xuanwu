@@ -1,7 +1,7 @@
 import type { AppEvent, EventBus } from "../events/bus.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { createNotification } from "../db/repositories/notifications.ts";
-import type { ProjectFinding } from "../pi/projectFindings.ts";
+import type { ProjectFinding } from "../pi/reports/projectFindings.ts";
 import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
 import { redactedUserVisibleText } from "../util/redact.ts";
 

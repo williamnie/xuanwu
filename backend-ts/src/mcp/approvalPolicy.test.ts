@@ -8,8 +8,8 @@ import { upsertPiMcpCapability } from "../db/repositories/piMcpCapabilities.ts";
 import { patchPiMcpServer, upsertPiMcpServer, type PiMcpApprovalMode } from "../db/repositories/piMcpServers.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { resolvePiActionDecision } from "../http/piActionDecision.ts";
-import { createPiRunnerActions } from "../pi/runnerActions.ts";
-import { expirePendingMcpApprovals } from "../pi/mcpApprovalExpiry.ts";
+import { createPiRunnerActions } from "../pi/runnerTools/runnerActions.ts";
+import { expirePendingMcpApprovals } from "../pi/mcp/mcpApprovalExpiry.ts";
 import { useDatabaseCleanup } from "../testing/harness.ts";
 
 const trackDatabase = useDatabaseCleanup();

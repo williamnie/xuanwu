@@ -4,7 +4,7 @@
 - 日期：2026-07-23
 - 取代：ADR-XW-0046、ADR-XW-0052
 - 运行入口：`backend-ts/src/http/piConversationApi.ts`、`backend-ts/src/http/piRuntime.ts`
-- 工具与门禁：`backend-ts/src/pi/builtinToolRegistry.ts`、`backend-ts/src/pi/actionGate.ts`
+- 工具与门禁：`backend-ts/src/pi/tools/builtinToolRegistry.ts`、`backend-ts/src/pi/actions/actionGate.ts`
 
 ## 1. 决策
 

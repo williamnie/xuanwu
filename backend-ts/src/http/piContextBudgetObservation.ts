@@ -6,7 +6,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent } from "../db/repositories/pi.ts";
-import type { PiRuntimeContextEnvelope } from "../pi/runtimeContextEnvelope.ts";
+import type { PiRuntimeContextEnvelope } from "../pi/runtime/runtimeContextEnvelope.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { RuntimeSessionInput } from "./piRuntime.ts";
 import type { PiRuntimeResourceSnapshot } from "./piRuntimeResources.ts";

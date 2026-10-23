@@ -6,7 +6,7 @@
 
 ## 字段
 
-最小结构由 `backend-ts/src/pi/repoContextPack.ts` 导出：
+最小结构由 `backend-ts/src/pi/tools/repoContextPack.ts` 导出：
 
 - `intent`：用户原始意图或 Supervisor 归纳后的目标。
 - `project`：`id/name/cwd`，用于说明 pack 归属项目。

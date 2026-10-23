@@ -7,7 +7,7 @@ import {
   type PiGuardianAlertFilter
 } from "../db/repositories/pi.ts";
 import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
-import { guardianAlertPresentation } from "../pi/guardianAlertPresentation.ts";
+import { guardianAlertPresentation } from "../pi/guardian/guardianAlertPresentation.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
 import { cleanString } from "../util/values.ts";

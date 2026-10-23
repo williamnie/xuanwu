@@ -12,7 +12,7 @@ import {
   type AttentionInboxItemStatus,
   type IntakeRunRecord
 } from "../db/repositories/intakeRuns.ts";
-import { runDomainSkillAndMarkProposal } from "../pi/domainSkillRun.ts";
+import { runDomainSkillAndMarkProposal } from "../pi/tools/domainSkillRun.ts";
 import { publicIntakeRun } from "./piSkillRunViews.ts";
 import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";

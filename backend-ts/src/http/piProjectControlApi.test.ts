@@ -8,7 +8,7 @@ import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { listPiActionEvents, listPiActions, listPiConversations, listPiMemoryItems } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { EventBus } from "../events/bus.ts";
-import { gatePiActionEnvelope } from "../pi/actionGate.ts";
+import { gatePiActionEnvelope } from "../pi/actions/actionGate.ts";
 import { createDefaultRouter } from "./server.ts";
 import { managerCycleAuthorization } from "./piProjectControlAuthorization.ts";
 import { useTestDatabase } from "../testing/harness.ts";

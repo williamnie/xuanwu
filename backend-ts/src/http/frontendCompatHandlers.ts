@@ -16,7 +16,7 @@ import { listSkillRegistry } from "../skills/registry.ts";
 import { libraryRegistryOptions } from "../skills/libraryContext.ts";
 import { isProjectLoopActive, startProjectLoop as startManagedProjectLoop } from "../runner/projectLoopManager.ts";
 import type { EventBus } from "../events/bus.ts";
-import { constrainApprovalGrantScope } from "../pi/approvalGrantScope.ts";
+import { constrainApprovalGrantScope } from "../pi/actions/approvalGrantScope.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { HttpError } from "./errors.ts";
 import { searchProjectReferences } from "./projectReferences.ts";

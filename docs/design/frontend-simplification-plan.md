@@ -646,7 +646,7 @@ E 阶段沿用 D 阶段的约束：不改认证、端口、权限默认值和已
 
 #### F1 玄武助手复用 Codex 登录
 
-**实施前已核实**：玄武助手凭据存于 `<数据目录>/pi-runtime/agent/auth.json`；原有 `ModelRuntime.create` 创建点为 `http/piRuntime.ts`、`http/piOAuthApi.ts`、`pi/sessionTitleGenerator.ts`，另有只读记忆回放和隔离 smoke 工具。原 `codexLoginStatus` 会解析 `$CODEX_HOME/auth.json`，检查 access token 或 API key 是否存在，API key 也会得到 configured；并非仅检查文件存在。pi 0.87.1 支持自定义 `CredentialStore`，请求鉴权在到期前 5 分钟通过 `modify` 回调刷新，目录发现也有刷新路径；不能仅禁止最终写入。
+**实施前已核实**：玄武助手凭据存于 `<数据目录>/pi-runtime/agent/auth.json`；原有 `ModelRuntime.create` 创建点为 `http/piRuntime.ts`、`http/piOAuthApi.ts`、`pi/runtime/sessionTitleGenerator.ts`，另有只读记忆回放和隔离 smoke 工具。原 `codexLoginStatus` 会解析 `$CODEX_HOME/auth.json`，检查 access token 或 API key 是否存在，API key 也会得到 configured；并非仅检查文件存在。pi 0.87.1 支持自定义 `CredentialStore`，请求鉴权在到期前 5 分钟通过 `modify` 回调刷新，目录发现也有刷新路径；不能仅禁止最终写入。
 
 **核心边界**：Codex 是唯一刷新方。玄武不复制 refresh token、不执行 pi 的刷新回调、不写 Codex 或独立 OAuth 的凭据文件。2026-10-15 根据实施前核实确认：
 

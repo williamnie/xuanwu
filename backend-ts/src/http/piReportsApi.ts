@@ -1,7 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getPiReportRecord, listPiReportRecords } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
-import { buildPiReport } from "../pi/reports.ts";
+import { buildPiReport } from "../pi/reports/reports.ts";
 import type { RunnerConfig } from "../config/env.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";

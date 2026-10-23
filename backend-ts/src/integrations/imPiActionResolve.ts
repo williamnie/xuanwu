@@ -4,7 +4,7 @@ import type { EventBus } from "../events/bus.ts";
 import { resolvePiActionDecision } from "../http/piActionDecision.ts";
 import type { ProjectLoopStarter } from "../http/piActionDispatch.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
-import { recordPiActionAuditEvent } from "../pi/actionEngine.ts";
+import { recordPiActionAuditEvent } from "../pi/actions/actionEngine.ts";
 
 type ImPiActionResolveContext = {
   bus?: EventBus;

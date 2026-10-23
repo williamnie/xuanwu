@@ -1,0 +1,148 @@
+import { redactSensitiveText } from "../../util/redact.ts";
+import { positiveInteger } from "../../util/values.ts";
+
+type RepoContextPackConfidence = "low" | "medium" | "high";
+type RepoContextEvidenceSourceKind = "code" | "doc" | "issue" | "memory" | "message" | "project" | "session" | "tool" | "unknown";
+type RepoContextPackSourceKind = "api" | "im" | "issue" | "manual" | "runner" | "session";
+
+type RepoContextPackProject = { cwd: string; id: string; name: string };
+type RepoContextPackSource = {
+  channel: string;
+  kind: RepoContextPackSourceKind;
+  message_id: string;
+  session_key: string;
+};
+export type RepoContextEvidenceItem = {
+  confidence: RepoContextPackConfidence;
+  excerpt: string;
+  issue_id: number;
+  message_id: string;
+  path: string;
+  reason: string;
+  session_key: string;
+  source_kind: RepoContextEvidenceSourceKind;
+  summary: string;
+};
+export type RepoContextRelevantFile = { path: string; reason: string; symbols: string[] };
+export type RepoContextPack = {
+  acceptance_criteria: string[];
+  confidence: RepoContextPackConfidence;
+  evidence: RepoContextEvidenceItem[];
+  generated_at: string;
+  intent: string;
+  kind: "repo_context_pack";
+  open_questions: string[];
+  project: RepoContextPackProject;
+  proposed_changes: string[];
+  relevant_files: RepoContextRelevantFile[];
+  source: RepoContextPackSource;
+  validation: string[];
+  version: 1;
+};
+export type RepoContextPackInput = Omit<Partial<RepoContextPack>,
+  "evidence" | "generated_at" | "intent" | "kind" | "project" | "relevant_files" | "source" | "version"
+> & {
+  evidence?: Partial<RepoContextEvidenceItem>[];
+  intent: string;
+  project: { cwd?: string; id: string; name?: string };
+  relevant_files?: Partial<RepoContextRelevantFile>[];
+  source?: Partial<RepoContextPackSource>;
+};
+
+const REPO_CONTEXT_PACK_VERSION = 1;
+
+export function createRepoContextPack(input: RepoContextPackInput, options: { now?: Date | string } = {}): RepoContextPack {
+  return {
+    kind: "repo_context_pack",
+    version: REPO_CONTEXT_PACK_VERSION,
+    intent: cleanText(input.intent),
+    project: normalizeProject(input.project),
+    evidence: cleanEvidenceList(input.evidence),
+    relevant_files: cleanRelevantFiles(input.relevant_files),
+    proposed_changes: cleanTextList(input.proposed_changes),
+    acceptance_criteria: cleanTextList(input.acceptance_criteria),
+    validation: cleanTextList(input.validation),
+    open_questions: cleanTextList(input.open_questions),
+    confidence: normalizeConfidence(input.confidence),
+    generated_at: generatedAt(options.now),
+    source: normalizeSource(input.source)
+  };
+}
+
+function normalizeProject(project: RepoContextPackInput["project"]): RepoContextPackProject {
+  return { cwd: cleanText(project.cwd), id: cleanText(project.id), name: cleanText(project.name) };
+}
+
+function normalizeSource(source: RepoContextPackInput["source"] = {}): RepoContextPackSource {
+  return {
+    channel: cleanText(source.channel),
+    kind: normalizeSourceKind(source.kind),
+    message_id: cleanText(source.message_id),
+    session_key: cleanText(source.session_key)
+  };
+}
+
+function cleanEvidenceList(items: RepoContextPackInput["evidence"] = []): RepoContextEvidenceItem[] {
+  return items.map(cleanEvidenceItem).filter(hasEvidenceValue);
+}
+
+function cleanEvidenceItem(item: Partial<RepoContextEvidenceItem>): RepoContextEvidenceItem {
+  return {
+    source_kind: normalizeEvidenceKind(item.source_kind),
+    path: cleanText(item.path),
+    issue_id: positiveInteger(item.issue_id),
+    session_key: cleanText(item.session_key),
+    message_id: cleanText(item.message_id),
+    reason: cleanText(item.reason),
+    excerpt: cleanText(item.excerpt),
+    summary: cleanText(item.summary),
+    confidence: normalizeConfidence(item.confidence)
+  };
+}
+
+function hasEvidenceValue(item: RepoContextEvidenceItem): boolean {
+  return [item.path, item.session_key, item.message_id, item.reason, item.excerpt, item.summary].some(Boolean)
+    || item.issue_id > 0;
+}
+
+function cleanRelevantFiles(items: RepoContextPackInput["relevant_files"] = []): RepoContextRelevantFile[] {
+  return items.map((item) => ({
+    path: cleanText(item.path),
+    reason: cleanText(item.reason),
+    symbols: cleanTextList(item.symbols)
+  })).filter((item) => item.path !== "");
+}
+
+function normalizeConfidence(value: unknown): RepoContextPackConfidence {
+  return value === "low" || value === "high" || value === "medium" ? value : "medium";
+}
+
+function normalizeEvidenceKind(value: unknown): RepoContextEvidenceSourceKind {
+  const allowed = ["code", "doc", "issue", "memory", "message", "project", "session", "tool", "unknown"];
+  return typeof value === "string" && allowed.includes(value) ? value as RepoContextEvidenceSourceKind : "unknown";
+}
+
+function normalizeSourceKind(value: unknown): RepoContextPackSourceKind {
+  const allowed = ["api", "im", "issue", "manual", "runner", "session"];
+  return typeof value === "string" && allowed.includes(value) ? value as RepoContextPackSourceKind : "manual";
+}
+
+function cleanTextList(items: unknown): string[] {
+  return Array.isArray(items) ? items.map(cleanText).filter(Boolean) : [];
+}
+
+function cleanText(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return redactSecretAssignmentLines(redactSensitiveText(value)).trim();
+}
+
+function redactSecretAssignmentLines(value: string): string {
+  return value.split(/\r?\n/).map((line) => {
+    return /(?:TOKEN|SECRET|PASSWORD|API[_-]?KEY|ACCESS[_-]?KEY)\s*[:=]/i.test(line) ? "[redacted sensitive line]" : line;
+  }).join("\n");
+}
+
+function generatedAt(now: Date | string | undefined): string {
+  if (now instanceof Date) return now.toISOString();
+  return cleanText(now) || new Date().toISOString();
+}

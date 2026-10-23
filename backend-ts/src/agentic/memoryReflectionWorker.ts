@@ -1,10 +1,10 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { recordReflectionAttempt, unknownReflectionUsage } from "../pi/memoryReflectionTelemetry.ts";
+import { recordReflectionAttempt, unknownReflectionUsage } from "../pi/memory/memoryReflectionTelemetry.ts";
 import {
   claimMemoryReflection, failMemoryReflectionAttempt, finishMemoryReflection, getMemoryReflection,
   reconcileMemoryReflectionEvents, requireReflectionLease, REFLECTION_LIMITS,
   type MemoryReflection, type ReflectionLease
-} from "../pi/memoryReflectionQueue.ts";
+} from "../pi/memory/memoryReflectionQueue.ts";
 
 type Reflect = (request: MemoryReflection, lease: ReflectionLease, signal: AbortSignal) => Promise<string>;
 
@@ -33,7 +33,7 @@ export async function runMemoryReflectionOnce(db: RunnerDatabase, options: {
       controller.signal.addEventListener("abort", onAbort, { once: true });
     });
     const reflect = options.reflect ?? (async (row, token, signal) => {
-      const { runMemoryReflectionRuntime } = await import("../pi/memoryReflectionRuntime.ts");
+      const { runMemoryReflectionRuntime } = await import("../pi/memory/memoryReflectionRuntime.ts");
       return runMemoryReflectionRuntime(db, row, token, signal, usage);
     });
     const raw = await Promise.race([reflect(request, lease, controller.signal), cancelled]);

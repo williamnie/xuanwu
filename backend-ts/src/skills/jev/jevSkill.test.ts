@@ -10,8 +10,8 @@ import { localSettingsPath, readLocalSettingsSync, updateLocalSettingsFile } fro
 import { createSecretService } from "../../security/secrets/service.ts";
 import { createDefaultRouter } from "../../http/server.ts";
 import { publicJevSkillSettings, saveJevSkillSettings } from "../../http/jevSkillSettingsApi.ts";
-import { createPiRuntimeToolKit } from "../../pi/piRuntimeTools.ts";
-import { callMcpTool } from "../../pi/mcpToolCall.ts";
+import { createPiRuntimeToolKit } from "../../pi/tools/piRuntimeTools.ts";
+import { callMcpTool } from "../../pi/mcp/mcpToolCall.ts";
 import { buildSkillPromptContext } from "../promptContext.ts";
 import { readMcpRegistry } from "../../mcp/registry.ts";
 import { loadSmokeRuntime, resolveDefaultRepoRoot } from "../../spikes/piSmokeSupport.ts";
@@ -21,8 +21,8 @@ import { invokeJevSkill, jevCooldownUntil } from "./invoke.ts";
 import { jevAllowed, jevScope, managerJevAuthorization } from "./policy.ts";
 import { runStdioProcess } from "../../mcp/stdioProcess.ts";
 import { managerCycleAuthorization } from "../../http/piProjectControlAuthorization.ts";
-import type { PiGatePolicy } from "../../pi/actionGate.ts";
-import type { McpTransportInvokeRequest, McpTransportInvokeResult } from "../../pi/mcpTransport.ts";
+import type { PiGatePolicy } from "../../pi/actions/actionGate.ts";
+import type { McpTransportInvokeRequest, McpTransportInvokeResult } from "../../pi/mcp/mcpTransport.ts";
 
 const databases: RunnerDatabase[] = [];
 const roots: string[] = [];

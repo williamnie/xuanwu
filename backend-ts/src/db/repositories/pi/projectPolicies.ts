@@ -3,7 +3,7 @@ import { normalizeMcpCapabilityList } from "../../../mcp/policy.ts";
 import {
   PI_SUPERVISOR_RATE_LIMIT_WAIT_POLICIES,
   type PiSupervisorRateLimitWaitPolicy
-} from "../../../pi/issueSupervisorRecovery.ts";
+} from "../../../pi/supervisor/issueSupervisorRecovery.ts";
 import { normalizeSkillIntentList } from "../../../skills/intents.ts";
 import { cleanString, getByID, now, requiredString } from "./common.ts";
 

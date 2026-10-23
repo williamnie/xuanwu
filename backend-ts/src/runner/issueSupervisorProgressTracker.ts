@@ -10,8 +10,8 @@ import {
   type PiRecoveryAttempt
 } from "../db/repositories/pi/recoveryAttempts.ts";
 import type { RunnerDatabase } from "../db/database.ts";
-import type { IssueSupervisorRecoveryContext } from "../pi/issueSupervisorContext.ts";
-import { detectMeaningfulProgress, type ProgressSnapshot } from "../pi/meaningfulProgress.ts";
+import type { IssueSupervisorRecoveryContext } from "../pi/supervisor/issueSupervisorContext.ts";
+import { detectMeaningfulProgress, type ProgressSnapshot } from "../pi/supervisor/meaningfulProgress.ts";
 import { cleanString, objectValue } from "../util/values.ts";
 
 const DEFAULT_STALE_SECONDS = 5 * 60;

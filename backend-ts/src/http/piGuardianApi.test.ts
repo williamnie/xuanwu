@@ -11,7 +11,7 @@ import {
   createPiRunGroup,
   updatePiNotificationIntent
 } from "../db/repositories/pi.ts";
-import { resolvePiNotificationPreference } from "../pi/notificationPreferenceResolver.ts";
+import { resolvePiNotificationPreference } from "../pi/notifications/notificationPreferenceResolver.ts";
 import { createDefaultRouter } from "./server.ts";
 import { useTestDatabase } from "../testing/harness.ts";
 

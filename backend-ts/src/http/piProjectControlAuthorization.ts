@@ -1,6 +1,6 @@
 import type { Project } from "../db/repositories/projects.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
-import type { PiGatePolicy } from "../pi/actionGate.ts";
+import type { PiGatePolicy } from "../pi/actions/actionGate.ts";
 import { parseSkillPolicy } from "../skills/intents.ts";
 
 export function managerCycleAuthorization(project: Project): PiGatePolicy {

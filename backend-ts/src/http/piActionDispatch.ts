@@ -6,19 +6,19 @@ import { deleteIssues, enqueueIssue } from "../db/repositories/issueActions.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { createIssueComment } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssues, listIssueRuns } from "../db/repositories/issues.ts";
-import { appendRunMemoryPrompt } from "../pi/runMemoryContext.ts";
+import { appendRunMemoryPrompt } from "../pi/memory/runMemoryContext.ts";
 import { approveImReplyDraft, createImReplyDraft } from "../db/repositories/imReplyOutbox.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
-import { applyIssueStateRepair } from "../pi/issueStateManager.ts";
-import { createAgentWorkflowProposal, type AgentWorkflowInput } from "../pi/agentOrchestration.ts";
-import { createIssueEnqueueCron } from "../pi/runnerIssueScheduleActions.ts";
+import { applyIssueStateRepair } from "../pi/issues/issueStateManager.ts";
+import { createAgentWorkflowProposal, type AgentWorkflowInput } from "../pi/runtime/agentOrchestration.ts";
+import { createIssueEnqueueCron } from "../pi/runnerTools/runnerIssueScheduleActions.ts";
 import {
   askUserActionResult,
   createMemoryFromAction,
   createReminderFromAction,
   createWatchThreadFromAction,
   noActionResult
-} from "../pi/nonIssueProposalActions.ts";
+} from "../pi/actions/nonIssueProposalActions.ts";
 import type { PiAction } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import {
@@ -29,30 +29,30 @@ import {
 import type { EventBus } from "../events/bus.ts";
 import { isExecutorProviderId, type ExecutorProvider, type ExecutorProviderId } from "../providers/types.ts";
 import { dispatchSupervisorPiAction } from "./piSupervisorActionDispatch.ts";
-import { isRunnerChatSource } from "../pi/runnerChatAuthorization.ts";
+import { isRunnerChatSource } from "../pi/runnerTools/runnerChatAuthorization.ts";
 import { dispatchNeedsUserEscalation } from "../notifications/piNeedsUserAction.ts";
 import {
   cancelIssueCompletionWatchAction,
   createIssueCompletionWatchAction,
   type IssueCompletionWatchCancelInput,
   type IssueCompletionWatchCreateInput
-} from "../pi/issueCompletionWatchActions.ts";
+} from "../pi/runnerTools/issueCompletionWatchActions.ts";
 import { requestIssuePiAcceptance } from "../runner/piAcceptanceRequest.ts";
-import { callMcpTool } from "../pi/mcpToolCall.ts";
-import { invokeReadOnlyAssistantTool } from "../pi/readOnlyToolInvocation.ts";
-import type { ToolPermission } from "../pi/toolProviderEnvelope.ts";
-import { materializeIssueBatch } from "../pi/issueBatchProposal.ts";
+import { callMcpTool } from "../pi/mcp/mcpToolCall.ts";
+import { invokeReadOnlyAssistantTool } from "../pi/tools/readOnlyToolInvocation.ts";
+import type { ToolPermission } from "../pi/tools/toolProviderEnvelope.ts";
+import { materializeIssueBatch } from "../pi/runnerTools/issueBatchProposal.ts";
 import {
   executeIssueStatusUpdate,
   type IssueStatusUpdateInput
-} from "../pi/runnerIssueStatusActions.ts";
+} from "../pi/runnerTools/runnerIssueStatusActions.ts";
 import { updateRunnerSettings } from "./runnerSettingsApi.ts";
 import {
   scheduleSystemRestart,
   type SystemRestartAuditEvent
 } from "./systemRestartApi.ts";
 import { reviewHumanIssue } from "../domain/review/humanReview.ts";
-import { writePiNotificationPreference } from "../pi/notificationPreferenceService.ts";
+import { writePiNotificationPreference } from "../pi/notifications/notificationPreferenceService.ts";
 import { registerRunRoutes } from "./runApi.ts";
 import { registerWorkRoutes } from "./workApi.ts";
 import { createRouter } from "./router.ts";

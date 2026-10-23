@@ -14,7 +14,7 @@ import { getProject } from "../db/repositories/projects.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { EventBus } from "../events/bus.ts";
 import { flushAgentCommunicationTestMessages } from "../notifications/agentCommunicationGateway.testSupport.ts";
-import { createPiRunnerActions } from "../pi/runnerActions.ts";
+import { createPiRunnerActions } from "../pi/runnerTools/runnerActions.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { runProjectLoopOnce } from "../runner/projectLoop.ts";
 import {

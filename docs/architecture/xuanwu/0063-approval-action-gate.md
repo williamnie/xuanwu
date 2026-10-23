@@ -78,7 +78,7 @@ target `resume token` 只可保存为 opaque hash，绑定 approval request id�
 
 ```bash
 cd backend-ts
-bun test src/xuanwu/approvalSemantics.test.ts src/pi/actionGate.test.ts src/pi/approvalFastPolicy.test.ts src/providers/codex/approvalBroker.test.ts
+bun test src/xuanwu/approvalSemantics.test.ts src/pi/actions/actionGate.test.ts src/pi/actions/approvalFastPolicy.test.ts src/providers/codex/approvalBroker.test.ts
 ```
 
 覆盖：越权/过期 gate deny；LLM policy 不能把 high-risk 变 execute；session grant 降级/TTL=0；idempotency recovery replay 不重复 dispatch；canonical source-of-truth/rollback/delete gate。provider resolver 的 terminal/retry 行为继续由 `approvalRequests`、`piApprovalRequestsApi` 和 `providerApprovalRequests` focused tests 覆盖。

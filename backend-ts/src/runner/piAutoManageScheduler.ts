@@ -3,25 +3,25 @@ import type { RunnerConfig } from "../config/env.ts";
 import { isPiHeartbeatPaused } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
-import { runDigestFlushSchedulerOnce } from "../pi/digestFlushScheduler.ts";
-import { queueReadyImDigestNotifications } from "../pi/digestNotifications.ts";
-import { queuePendingImActionNotifications } from "../pi/pendingActionNotifications.ts";
+import { runDigestFlushSchedulerOnce } from "../pi/notifications/digestFlushScheduler.ts";
+import { queueReadyImDigestNotifications } from "../pi/notifications/digestNotifications.ts";
+import { queuePendingImActionNotifications } from "../pi/actions/pendingActionNotifications.ts";
 import { queueDailyNotificationDigests, type DailyDigestResult } from "../notifications/dailyDigest.ts";
 import {
   runAgentCommunicationGatewayOnce,
   type AgentCommunicationDecider,
   type AgentCommunicationGatewayResult
 } from "../notifications/agentCommunicationGateway.ts";
-import { sendMissedDigestPendingFallback } from "../pi/guardianMissedDigestFallback.ts";
-import type { GuardianAlertDelivery } from "../pi/guardianAlertDelivery.ts";
+import { sendMissedDigestPendingFallback } from "../pi/guardian/guardianMissedDigestFallback.ts";
+import type { GuardianAlertDelivery } from "../pi/guardian/guardianAlertDelivery.ts";
 import {
   runGuardianMissedIntentSweepOnce,
   type GuardianMissedIntentSweepResult
-} from "../pi/guardianMissedIntentSweep.ts";
+} from "../pi/guardian/guardianMissedIntentSweep.ts";
 import {
   drainGuardianDecisionOrchestrator,
   type GuardianDecisionOrchestratorSummary
-} from "../pi/guardianDecisionOrchestrator.ts";
+} from "../pi/guardian/guardianDecisionOrchestrator.ts";
 import {
   dispatchApprovedGuardianActions,
   type PiGuardianActionDispatchResult
@@ -29,12 +29,12 @@ import {
 import {
   runPiGuardianWatchdogOnce,
   type PiGuardianWatchdogSummary
-} from "../pi/guardianWatchdog.ts";
-import { resolveRecoveredAlerts } from "../pi/guardianWatchdogMaintenance.ts";
+} from "../pi/guardian/guardianWatchdog.ts";
+import { resolveRecoveredAlerts } from "../pi/guardian/guardianWatchdogMaintenance.ts";
 import {
   queueGuardianOperationsDailyReports,
   type GuardianOperationsDailyReportResult
-} from "../pi/guardianOperationsDailyReport.ts";
+} from "../pi/guardian/guardianOperationsDailyReport.ts";
 import {
   runPiIssueSupervisorSchedulerOnce,
   type PiIssueSupervisorSchedulerInput
@@ -52,7 +52,7 @@ import {
 import { createNativeAutomationExecutor } from "./automationRuntime.ts";
 import { runWatchAutomationsOnce } from "./watchAutomationRuntime.ts";
 import type { ImChannelRegistry } from "../integrations/imChannelContracts.ts";
-import { dispatchImOutbox } from "../pi/imReplyOutboxDispatcher.ts";
+import { dispatchImOutbox } from "../pi/notifications/imReplyOutboxDispatcher.ts";
 import {
   signalOpenRunTerminalProviderErrors,
   type ProviderTerminalBackfillSummary

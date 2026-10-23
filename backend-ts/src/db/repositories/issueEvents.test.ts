@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { type RunnerDatabase } from "../database.ts";
 import { listAttentionInboxItems } from "./intakeRuns.ts";
-import { parseIssueEventProviderError } from "../../pi/providerErrorParser.ts";
+import { parseIssueEventProviderError } from "../../pi/supervisor/providerErrorParser.ts";
 import {
   ISSUE_LOG_ARTIFACT_THRESHOLD_BYTES,
   ISSUE_LOG_INLINE_PAYLOAD_LIMIT_BYTES,

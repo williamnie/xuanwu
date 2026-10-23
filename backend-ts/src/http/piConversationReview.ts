@@ -1,4 +1,4 @@
-import type { PiGatePolicy } from "../pi/actionGate.ts";
+import type { PiGatePolicy } from "../pi/actions/actionGate.ts";
 import type { PiConversation } from "../db/repositories/pi.ts";
 
 export function isReviewConversationIntent(value: string): boolean {

@@ -1104,7 +1104,7 @@ Qoder：
 
 ### P2：Run/Session 接线（本地已完成）
 
-- `pi/agentOrchestration.ts` 只解析 policy inheritance，不做 Provider mapping；
+- `pi/runtime/agentOrchestration.ts` 只解析 policy inheritance，不做 Provider mapping；
 - `runner/providerRuntime.ts` 在 spawn 前 resolve；
 - `runner/projectLoop.ts`、recovery、interrupt 使用 resolved policy/ref；
 - `http/sessionApi.ts`、session runtime settings 统一接线；

@@ -8,10 +8,10 @@ import {
   type IntakeRunStatus
 } from "../db/repositories/intakeRuns.ts";
 import { getPiAction, listPiActionEvents, type PiActionEvent } from "../db/repositories/pi.ts";
-import { runDomainSkillAndMarkProposal } from "../pi/domainSkillRun.ts";
-import { buildIntakeSkillInput } from "../pi/intakeSkillInput.ts";
-import { loadAssistantToolRegistrySnapshot } from "../pi/toolRegistrySnapshot.ts";
-import type { AssistantTool } from "../pi/toolProviderEnvelope.ts";
+import { runDomainSkillAndMarkProposal } from "../pi/tools/domainSkillRun.ts";
+import { buildIntakeSkillInput } from "../pi/intake/intakeSkillInput.ts";
+import { loadAssistantToolRegistrySnapshot } from "../pi/tools/toolRegistrySnapshot.ts";
+import type { AssistantTool } from "../pi/tools/toolProviderEnvelope.ts";
 import { readSkillRegistry, type SkillMetadata, type SkillRegistryDiagnostic } from "../skills/registry.ts";
 import { DEFAULT_DOMAIN_SKILL_ID } from "../skills/builtinDomainProposal.ts";
 import { SKILL_RUNTIME_COMPLETED_EVENT } from "../skills/runtime.ts";

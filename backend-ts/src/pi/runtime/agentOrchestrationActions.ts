@@ -1,0 +1,197 @@
+import type { RunnerDatabase } from "../../db/database.ts";
+import { createIssue } from "../../db/repositories/issueCreate.ts";
+import { createIssueComment } from "../../db/repositories/issueEvents.ts";
+import { listIssues, type Issue } from "../../db/repositories/issues.ts";
+import { updateIssue } from "../../db/repositories/issueUpdate.ts";
+import { listAgentProfiles } from "../../db/repositories/agentProfiles.ts";
+import type { Project } from "../../db/repositories/projects.ts";
+import type { ProviderCatalogEntry } from "../../providers/core/catalog.ts";
+import { createPendingPiAction, executeSafePiAction, type PiActionContext } from "../actions/actionEngine.ts";
+import { scopedRunnerChatActionContext } from "../runnerTools/runnerChatAuthorization.ts";
+import {
+  createAgentWorkflowProposal,
+  createExecutorAssignmentProposal,
+  createNeedsUserEscalationProposal,
+  recommendExecutorProfile,
+  type AgentRecommendationInput,
+  type AgentWorkflowInput,
+  type ExecutorAssignmentInput,
+  type NeedsUserEscalationInput
+} from "./agentOrchestration.ts";
+import { objectValue } from "../../util/values.ts";
+
+export type PiAgentOrchestrationActionLayer = {
+  assignExecutorProfileProposal(input: ExecutorAssignmentInput): unknown;
+  createExecutorIssueProposal(input: AgentWorkflowInput): unknown;
+  createReportWorkflow(input: AgentWorkflowInput): unknown;
+  createReviewWorkflow(input: AgentWorkflowInput): unknown;
+  escalateNeedsUser(input: NeedsUserEscalationInput): unknown;
+  recommendExecutorProfile(input: AgentRecommendationInput): unknown;
+  listAgentCatalog(input: object): unknown;
+};
+
+type OrchestrationContext = PiActionContext & {
+  codeAgentCatalog?: readonly ProviderCatalogEntry[];
+  onIssueEnqueued?: (projectID: string) => void;
+  project?: Project;
+};
+
+export function createPiAgentOrchestrationActions(
+  db: RunnerDatabase,
+  context: OrchestrationContext
+): PiAgentOrchestrationActionLayer {
+  return {
+    assignExecutorProfileProposal: (input) => assignExecutorProfileProposal(db, context, input),
+    createExecutorIssueProposal: (input) => createAgentWorkflowAction(db, context, { ...input, role: "executor" }),
+    createReportWorkflow: (input) => createAgentWorkflowAction(db, context, { ...input, role: "reporter" }),
+    createReviewWorkflow: (input) => createAgentWorkflowAction(db, context, { ...input, role: "reviewer" }),
+    escalateNeedsUser: (input) => escalateNeedsUser(db, context, input),
+    listAgentCatalog: () => safeListAgentCatalog(db, context),
+    recommendExecutorProfile: (input) => safeRecommendExecutorProfile(db, context, input)
+  };
+}
+
+function safeListAgentCatalog(db: RunnerDatabase, context: OrchestrationContext) {
+  return executeSafePiAction(db, context, {
+    actionType: "agent.catalog_list",
+    payload: {},
+    execute: () => agentCatalogSnapshot(db, context)
+  });
+}
+
+function agentCatalogSnapshot(db: RunnerDatabase, context: OrchestrationContext) {
+  const codeAgents = (context.codeAgentCatalog ?? []).map((agent) => ({
+    capabilities: agent.capabilities,
+    enabled: agent.enabled,
+    id: agent.id,
+    label: agent.label,
+    readiness_reason: agent.readiness_reason ?? "",
+    session_actions: agent.session_actions,
+    state: agent.state,
+    submittable: agent.submittable,
+    support_level: agent.supportLevel
+  }));
+  const available = new Set(codeAgents.filter((agent) => agent.enabled && agent.submittable).map((agent) => agent.id));
+  const catalogKnown = codeAgents.length > 0;
+  return {
+    agent_profiles: listAgentProfiles(db).map((profile) => ({
+      id: profile.id,
+      model: profile.model,
+      name: profile.name,
+      provider: profile.provider,
+      ...(catalogKnown ? { provider_available: available.has(profile.provider) } : {}),
+      reasoning_effort: profile.reasoning_effort,
+      service_tier: profile.service_tier,
+      skill_intents: parseStringList(profile.skill_intents)
+    })),
+    available_code_agent_ids: [...available],
+    code_agents: codeAgents,
+    source: "agent_catalog_list",
+    status: "completed"
+  };
+}
+
+function parseStringList(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function assignExecutorProfileProposal(
+  db: RunnerDatabase,
+  context: OrchestrationContext,
+  input: ExecutorAssignmentInput
+) {
+  const proposal = createExecutorAssignmentProposal(db, context.project, input);
+  const actionContext = scopedRunnerChatActionContext(context, "agent.executor_assign", {
+    issueID: proposal.issueID,
+    projectID: proposal.projectID
+  });
+  return createPendingPiAction(
+    db,
+    actionContext,
+    { ...proposal, actionType: "agent.executor_assign" },
+    () => updateIssue(db, input.issue_id, objectValue(proposal.payload.patch))
+  );
+}
+
+function createAgentWorkflowAction(db: RunnerDatabase, context: OrchestrationContext, input: AgentWorkflowInput) {
+  const proposal = createAgentWorkflowProposal(db, context.project, input);
+  const actionType = "agent.workflow_request";
+  const payload = input.role === "reviewer"
+    ? { ...proposal.payload, status: "todo" }
+    : proposal.payload;
+  const actionContext = scopedRunnerChatActionContext(context, actionType, {
+    issueID: proposal.issueID,
+    projectID: proposal.projectID ?? ""
+  });
+  return createPendingPiAction(
+    db,
+    actionContext,
+    { ...proposal, actionType, goalID: proposal.goalID, payload },
+    () => {
+      const existing = activeRoleWorkflow(db, proposal.projectID ?? "", proposal.issueID ?? 0, input.role);
+      if (existing) return existing;
+      const issue = createIssue(db, payload);
+      if (issue.status === "todo") context.onIssueEnqueued?.(issue.project_id);
+      return issue;
+    }
+  );
+}
+
+function activeRoleWorkflow(
+  db: RunnerDatabase,
+  projectID: string,
+  parentIssueID: number,
+  role: AgentWorkflowInput["role"]
+): Issue | null {
+  if (!projectID || !parentIssueID || !role) return null;
+  return listIssues(db, { projectId: projectID }).find((issue) => {
+    if (issue.status !== "triage" && issue.status !== "todo" && issue.status !== "in_progress" &&
+      issue.status !== "needs_user") return false;
+    const snapshot = objectValue(parseJSON(issue.workflow_snapshot_json));
+    return snapshot.agent_role === role && snapshot.parent_issue_id === parentIssueID;
+  }) ?? null;
+}
+
+function escalateNeedsUser(db: RunnerDatabase, context: OrchestrationContext, input: NeedsUserEscalationInput) {
+  const proposal = createNeedsUserEscalationProposal(db, input);
+  return createPendingPiAction(
+    db,
+    context,
+    { ...proposal, actionType: "needs_user.escalate" },
+    () => createIssueComment(db, input.issue_id, { author: "agent", body: String(proposal.payload.body ?? "") })
+  );
+}
+
+function safeRecommendExecutorProfile(
+  db: RunnerDatabase,
+  context: OrchestrationContext,
+  input: AgentRecommendationInput
+) {
+  const result = recommendExecutorProfile(db, context.project, input);
+  return executeSafePiAction(db, context, {
+    actionType: "agent.profile_recommend",
+    issueID: result.issue_id || undefined,
+    payload: cleanObjectPayload({ issue_id: result.issue_id, project_id: result.project_id, role: result.agent_role }),
+    projectID: result.project_id,
+    execute: () => result
+  });
+}
+
+function parseJSON(value: string): unknown {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return {};
+  }
+}
+
+function cleanObjectPayload(input: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(input).filter(([, value]) => (
+    Array.isArray(value) ? value.length > 0 : value !== undefined && value !== ""
+  )));
+}

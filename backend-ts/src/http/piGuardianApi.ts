@@ -9,7 +9,7 @@ import {
   type PiRunGroup,
   type PiRunGroupItem
 } from "../db/repositories/pi.ts";
-import { flushRunGroupDigest, runDigestFlushSchedulerOnce } from "../pi/digestFlushScheduler.ts";
+import { flushRunGroupDigest, runDigestFlushSchedulerOnce } from "../pi/notifications/digestFlushScheduler.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { registerPiGuardianPreferenceRoutes } from "./piGuardianPreferencesApi.ts";
 import type { Router } from "./router.ts";

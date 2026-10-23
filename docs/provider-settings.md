@@ -179,7 +179,7 @@ bun test --timeout 60000 \
   src/runner/interrupt.test.ts \
   src/runner/projectLoop.test.ts \
   src/runner/providerRuntime.test.ts \
-  src/pi/roleProfileSelector.test.ts
+  src/pi/runtime/roleProfileSelector.test.ts
 bun run build:binary
 
 cd ../frontend

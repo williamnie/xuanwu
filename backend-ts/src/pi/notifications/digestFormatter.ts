@@ -1,0 +1,133 @@
+import type { PiNotificationIntent } from "../../db/repositories/pi.ts";
+import { redactSensitiveText } from "../../util/redact.ts";
+import { SUPERVISOR_NOTIFICATION_PREFIX } from "../../xuanwu/userFacingTerminology.ts";
+import { cleanString, objectValue } from "../../util/values.ts";
+
+type DigestIssue = { bucket: string; issueID: number; reason: string; status: string; title: string };
+type DigestView = {
+  active: number; completed: number; failed: number; needsUser: number;
+  issues: DigestIssue[]; runGroupID: string; skipped: number; total: number; verification: number;
+};
+
+const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g;
+const STACK_LINE_PATTERN = /^\s*at\s+\S+/;
+const SUMMARY_LIMIT = 140;
+
+export function formatRunGroupDigest(intent: PiNotificationIntent): string {
+  const view = digestView(intent);
+  return [
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：这批任务有新结果了。`,
+    `批次 ${safeSummary(view.runGroupID || intent.run_group_id || "digest", 80)}，汇总原因 ${safeSummary(intent.flush_reason || "digest", 40)}。`,
+    [
+      `共 ${view.total}`,
+      `完成 ${view.completed}`,
+      `待验证 ${view.verification}`,
+      `失败 ${view.failed}`,
+      `需要你处理 ${view.needsUser}`,
+      `仍在跑 ${view.active}`,
+      `跳过 ${view.skipped}`
+    ].join("，"),
+    ...issueSections(view.issues),
+    nextStep(view)
+  ].filter(Boolean).join("\n");
+}
+
+function digestView(intent: PiNotificationIntent): DigestView {
+  const payload = parsePayload(intent.payload_json);
+  return {
+    active: count(payload, "active_count", "active"),
+    completed: count(payload, "completed_count", "completed"),
+    failed: count(payload, "failed_count", "failed"),
+    issues: issueList(payload.issues),
+    needsUser: count(payload, "needs_user_count", "needsUser"),
+    runGroupID: cleanString(payload.run_group_id) || intent.run_group_id,
+    skipped: count(payload, "skipped_count", "skipped"),
+    total: count(payload, "total_count", "total"),
+    verification: count(payload, "verification_count", "verification")
+  };
+}
+
+function issueSections(issues: DigestIssue[]): string[] {
+  const important = issues.filter((issue) => ["failed", "needs_user"].includes(issue.bucket));
+  const enqueue = issues.filter((issue) => isEnqueueStatus(issue.status));
+  return [
+    section("失败/需要用户", important),
+    section("入队/跳过", enqueue)
+  ].filter(Boolean);
+}
+
+function section(title: string, issues: DigestIssue[]): string {
+  const lines = uniqueIssues(issues).slice(0, 8).map(issueLine);
+  return lines.length === 0 ? "" : [`${title}：`, ...lines].join("\n");
+}
+
+function issueLine(issue: DigestIssue): string {
+  const status = safeSummary(issue.status || issue.bucket || "unknown", 40);
+  const reason = safeSummary(issue.reason || "未提供原因", SUMMARY_LIMIT);
+  return `- issue #${issue.issueID} ${status}：${reason}`;
+}
+
+function nextStep(view: DigestView): string {
+  if (view.needsUser > 0) return "有任务需要你处理，请查看对应任务后继续。";
+  if (view.failed > 0) return "有任务失败或阻塞，请查看执行记录后再重试。";
+  if (view.active > 0) return "还有任务在跑，我会在有新结果时再更新。";
+  return "这批任务已经结束，暂时不用处理。";
+}
+
+function uniqueIssues(issues: DigestIssue[]): DigestIssue[] {
+  const seen = new Set<string>();
+  return issues.filter((issue) => {
+    const key = `${issue.issueID}:${issue.status}:${issue.bucket}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function issueList(value: unknown): DigestIssue[] {
+  if (!Array.isArray(value)) return [];
+  return value.map(issueView).filter((issue) => issue.issueID > 0);
+}
+
+function issueView(value: unknown): DigestIssue {
+  const row = objectValue(value);
+  return {
+    bucket: cleanString(row.bucket),
+    issueID: positiveNumber(row.issue_id),
+    reason: cleanString(row.reason),
+    status: cleanString(row.status),
+    title: cleanString(row.title)
+  };
+}
+
+function isEnqueueStatus(status: string): boolean {
+  return ["enqueue_failed", "enqueue_pending_approval", "skipped"].includes(status);
+}
+
+function count(payload: Record<string, unknown>, primary: string, legacy: string): number {
+  return positiveNumber(payload[primary]) || positiveNumber(payload[legacy]);
+}
+
+function parsePayload(value: string): Record<string, unknown> {
+  try {
+    return objectValue(JSON.parse(value || "{}"));
+  } catch {
+    return {};
+  }
+}
+
+function positiveNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+function safeSummary(value: unknown, maxRunes: number): string {
+  const safe = redactSensitiveText(cleanString(value))
+    .split(/\r?\n/)
+    .filter((line) => !STACK_LINE_PATTERN.test(line))
+    .join(" ")
+    .replace(ABSOLUTE_PATH_PATTERN, "[redacted-path]")
+    .replace(/\s+/g, " ")
+    .trim();
+  const runes = [...safe];
+  return runes.length <= maxRunes ? safe : `${runes.slice(0, maxRunes - 1).join("")}…`;
+}
