@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import type { SQLQueryBindings } from "bun:sqlite";
+import { type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
@@ -10,1164 +10,673 @@ import { listNotifications } from "../db/repositories/notifications.ts";
 import { listPiGuardianAlerts } from "../db/repositories/pi.ts";
 import { runProjectLoopOnce } from "./projectLoop.ts";
 import { isProjectLoopActive, setProjectLoopMaxParallelProjects, startProjectLoop } from "./projectLoopManager.ts";
-import type { ExecutorProvider, ExecutorProviderId, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
+import type { ExecutorProvider, ExecutorProviderId, ProviderEvent, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
+import { FIXTURE_TIME, insertIssue, insertProject, insertRow, useTestDatabase, waitFor } from "../testing/harness.ts";
 
-const tempRoots: string[] = [];
+type ScriptedEvent = Omit<ProviderEvent, "provider" | "session">;
+const STARTED: ScriptedEvent = { type: "provider.message", text: "fake started" };
+const TURN_STARTED: ScriptedEvent = { status: "running", type: "turn_started" };
+const DONE: ScriptedEvent = { raw: { method: "turn/completed" }, status: "completed", type: "done" };
+const FAKE = "fake-execution-only" as ExecutorProviderId;
 
-class FakeExecutionProvider implements ExecutorProvider {
-  readonly id = "fake-execution-only" as const;
+/** An executor that records each run, then either throws `fail` or emits `events` on a deterministic session. */
+class ScriptedProvider implements ExecutorProvider {
   readonly capabilities = ["issue_execution"] as const;
   readonly inputs: ProviderRunInput[] = [];
+  private readonly emitters = new Map<number, (event: ScriptedEvent) => void>();
+
+  constructor(
+    readonly id: ExecutorProviderId = FAKE,
+    private readonly script: { events?: readonly ScriptedEvent[]; fail?: string } = {}
+  ) {}
 
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
     this.inputs.push(input);
-    input.onEvent?.({
-      provider: this.id,
-      type: "provider.message",
-      text: "fake started",
-      session: { provider: this.id, sessionId: `fake-session-${input.issueId}`, turnId: `fake-turn-${input.issueId}` }
-    });
-    return {
-      runId: `fake-run-${input.issueId}`,
-      session: { provider: this.id, sessionId: `fake-session-${input.issueId}`, turnId: `fake-turn-${input.issueId}` }
-    };
+    if (this.script.fail) throw new Error(this.script.fail);
+    const prefix = this.id === FAKE ? "fake" : this.id;
+    const session = { provider: this.id, sessionId: `${prefix}-session-${input.issueId}`, turnId: `${prefix}-turn-${input.issueId}` };
+    const emit = (event: ScriptedEvent) => input.onEvent?.({ ...event, provider: this.id, session });
+    this.emitters.set(input.issueId, emit);
+    for (const event of this.script.events ?? [STARTED]) emit(event);
+    return { runId: `${prefix}-run-${input.issueId}`, session };
+  }
+
+  /** Emits a later provider event on the run of `issueID`. */
+  emit(issueID: number, event: ScriptedEvent): void {
+    const emit = this.emitters.get(issueID);
+    if (!emit) throw new Error(`no run for issue ${issueID}`);
+    emit(event);
   }
 }
 
-class FailingExecutionProvider extends FakeExecutionProvider {
-  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
-    this.inputs.push(input);
-    throw new Error("provider failed CODEX_API_KEY=fixture-secret");
-  }
-}
+const openFixtureDatabase = useTestDatabase("xuanwu-bun-project-loop-");
 
-class NeedsUserExecutionProvider extends FakeExecutionProvider {
-  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
-    this.inputs.push(input);
-    input.onEvent?.({
-      provider: this.id,
-      type: "provider.message",
-      text: "已完成环境检查。\nRUNNER_OUTCOME: needs_user | 缺少部署凭证",
-      session: { provider: this.id, sessionId: `fake-session-${input.issueId}`, turnId: `fake-turn-${input.issueId}` }
-    });
-    return {
-      runId: `fake-run-${input.issueId}`,
-      session: { provider: this.id, sessionId: `fake-session-${input.issueId}`, turnId: `fake-turn-${input.issueId}` }
-    };
-  }
-}
-
-class CompletedExecutionProvider extends FakeExecutionProvider {
-  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
-    const result = await super.run(input);
-    input.onEvent?.({
-      provider: this.id,
-      raw: { method: "turn/completed" },
-      status: "completed",
-      type: "done",
-      session: result.session
-    });
-    return result;
-  }
-}
-
-class DeferredCompletionProvider extends FakeExecutionProvider {
-  private readonly completions = new Map<number, () => void>();
-
-  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
-    this.inputs.push(input);
-    const session = {
-      provider: this.id,
-      sessionId: `fake-session-${input.issueId}`,
-      turnId: `fake-turn-${input.issueId}`
-    };
-    input.onEvent?.({
-      provider: this.id,
-      status: "running",
-      type: "turn_started",
-      session
-    });
-    this.completions.set(input.issueId, () => input.onEvent?.({
-      provider: this.id,
-      raw: { method: "turn/completed" },
-      status: "completed",
-      type: "done",
-      session
-    }));
-    return { runId: `fake-run-${input.issueId}`, session };
-  }
-
-  complete(issueID: number): void {
-    const completion = this.completions.get(issueID);
-    if (!completion) throw new Error(`missing deferred completion for issue ${issueID}`);
-    this.completions.delete(issueID);
-    completion();
-  }
-}
-
-class MessageFailingExecutionProvider extends FakeExecutionProvider {
-  constructor(private readonly message: string) {
-    super();
-  }
-
-  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
-    this.inputs.push(input);
-    throw new Error(this.message);
-  }
-}
-
-class TransientInfraExecutionProvider implements ExecutorProvider {
-  readonly id = "claude" as const;
-  readonly capabilities = ["issue_execution"] as const;
-  readonly inputs: ProviderRunInput[] = [];
-
-  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
-    this.inputs.push(input);
-    throw new Error("codex app-server request timed out after 10000ms: initialize");
-  }
-}
-
-class NamedExecutionProvider implements ExecutorProvider {
-  readonly capabilities = ["issue_execution"] as const;
-  readonly inputs: ProviderRunInput[] = [];
-
-  constructor(readonly id: "codex" | "claude" | "qoder") {}
-
-  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
-    this.inputs.push(input);
-    const sessionId = `${this.id}-session-${input.issueId}`;
-    const turnId = `${this.id}-turn-${input.issueId}`;
-    input.onEvent?.({
-      provider: this.id,
-      session: { provider: this.id, sessionId, turnId },
-      status: "running",
-      type: "turn_started"
-    });
-    return { runId: `${this.id}-run-${input.issueId}`, session: { provider: this.id, sessionId, turnId } };
-  }
-}
-
-class TerminalExecutionProvider extends FakeExecutionProvider {
-  constructor(private readonly status: "failed") {
-    super();
-  }
-
-  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
-    const result = await super.run(input);
-    input.onEvent?.({
-      error: "executor reported a scoped failure",
-      provider: this.id,
-      status: this.status,
-      type: "error",
-      session: result.session
-    });
-    return result;
-  }
-}
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-project-loop-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
-}
-
-afterEach(async () => {
+afterEach(() => {
   setProjectLoopMaxParallelProjects(1);
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
 });
 
 describe("Bun project loop claim execution", () => {
   test("claims a single todo issue by runner order and starts provider run", async () => {
     const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "demo", provider: provider.id });
-      const laterHigh = insertIssue(db, { projectId: "demo", title: "later high", priority: 5, createdAt: "2026-01-03T00:00:00Z" });
-      const firstHigh = insertIssue(db, { projectId: "demo", title: "first high", priority: 5, createdAt: "2026-01-02T00:00:00Z" });
-      const low = insertIssue(db, { projectId: "demo", title: "low", priority: 1, createdAt: "2026-01-01T00:00:00Z" });
+    const provider = new ScriptedProvider();
+    addProject(db, "demo", provider.id);
+    const laterHigh = addIssue(db, "demo", "later high", { priority: 5, created_at: "2026-01-03T00:00:00Z" });
+    const firstHigh = addIssue(db, "demo", "first high", { priority: 5, created_at: "2026-01-02T00:00:00Z" });
+    const low = addIssue(db, "demo", "low", { priority: 1 });
 
-      const result = await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+    const result = await runOnce(db, provider);
 
-      expect(result.claimed).toBe(true);
-      if (!result.claimed) throw new Error("expected claim");
-      expect(result.issue.id).toBe(firstHigh);
-      expect(provider.inputs).toHaveLength(1);
-      expect(provider.inputs[0]).toMatchObject({ issueId: firstHigh, projectId: "demo" });
-      expect(provider.inputs[0]?.prompt).toContain("first high");
-      expect(getIssue(db, firstHigh)).toMatchObject({ status: "in_progress", attempt_count: 1 });
-      expect(getIssue(db, laterHigh)).toMatchObject({ status: "todo" });
-      expect(getIssue(db, low)).toMatchObject({ status: "todo" });
-      expect(listIssueRuns(db, firstHigh)).toMatchObject([{
-        attempt: 1,
-        status: "in_progress",
-        provider: "fake-execution-only",
-        provider_session_id: `fake-session-${firstHigh}`,
-        provider_turn_id: `fake-turn-${firstHigh}`,
-        runtime_metadata_json: `{"run_id":"fake-run-${firstHigh}","resolved_settings":{"approval_policy":"never","model":"","reasoning_effort":"","sandbox":"workspace-write","service_tier":"","service_tier_source":"standard"}}`,
-        ended_at: ""
-      }]);
-      expect(getAgentSession(db, `fake-execution-only:fake-session-${firstHigh}`)).toMatchObject({
-        provider: "fake-execution-only",
-        provider_session_id: `fake-session-${firstHigh}`,
-        issue_id: firstHigh,
-        status: "running"
-      });
-    } finally {
-      db.close();
-    }
+    expect(result.claimed).toBe(true);
+    if (!result.claimed) throw new Error("expected claim");
+    expect(result.issue.id).toBe(firstHigh);
+    expect(provider.inputs).toHaveLength(1);
+    expect(provider.inputs[0]).toMatchObject({ issueId: firstHigh, projectId: "demo" });
+    expect(provider.inputs[0]?.prompt).toContain("first high");
+    expect(getIssue(db, firstHigh)).toMatchObject({ status: "in_progress", attempt_count: 1 });
+    expect(getIssue(db, laterHigh)).toMatchObject({ status: "todo" });
+    expect(getIssue(db, low)).toMatchObject({ status: "todo" });
+    expect(listIssueRuns(db, firstHigh)).toMatchObject([{
+      attempt: 1,
+      status: "in_progress",
+      provider: "fake-execution-only",
+      provider_session_id: `fake-session-${firstHigh}`,
+      provider_turn_id: `fake-turn-${firstHigh}`,
+      runtime_metadata_json: `{"run_id":"fake-run-${firstHigh}","resolved_settings":{"approval_policy":"never","model":"","reasoning_effort":"","sandbox":"workspace-write","service_tier":"","service_tier_source":"standard"}}`,
+      ended_at: ""
+    }]);
+    expect(getAgentSession(db, `fake-execution-only:fake-session-${firstHigh}`)).toMatchObject({
+      provider: "fake-execution-only",
+      provider_session_id: `fake-session-${firstHigh}`,
+      issue_id: firstHigh,
+      status: "running"
+    });
   });
 
   test("sends the canonical issue prompt with the authoritative execution contract", async () => {
-    const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "demo", provider: provider.id });
-      insertIssue(db, {
-        description: "Add the focused runner prompt guidance.",
-        projectId: "demo",
-        title: "prompt contract"
-      });
+    const prompt = await promptFor({ description: "Add the focused runner prompt guidance.", title: "prompt contract" });
 
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
-
-      const prompt = provider.inputs[0]?.prompt ?? "";
-      expect(prompt).toContain("# prompt contract\n\nAdd the focused runner prompt guidance.");
-      expect(prompt).toContain("## Xuanwu execution context (authoritative)");
-      expect(prompt).toContain("already claimed Issue #1");
-      expect(prompt).toContain("Do not create, deduplicate, enqueue, retry, cancel, delete, or change the status of this Issue");
-      expect(prompt).toContain("Report `completed` when you have satisfied the Issue goal");
-      expect(prompt).toContain("Do not use it merely because the Issue is conversational or requires no repository changes");
-      expect(prompt).toContain("RUNNER_OUTCOME: needs_user | <reason>");
-    } finally {
-      db.close();
-    }
+    for (const fragment of [
+      "# prompt contract\n\nAdd the focused runner prompt guidance.",
+      "## Xuanwu execution context (authoritative)",
+      "already claimed Issue #1",
+      "Do not create, deduplicate, enqueue, retry, cancel, delete, or change the status of this Issue",
+      "Report `completed` when you have satisfied the Issue goal",
+      "Do not use it merely because the Issue is conversational or requires no repository changes",
+      "RUNNER_OUTCOME: needs_user | <reason>"
+    ]) expect(prompt).toContain(fragment);
   });
 
   test("injects the latest governed Supervisor retry resolution into the new attempt prompt", async () => {
-    const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "demo", provider: provider.id });
-      const issueID = insertIssue(db, {
-        description: "Implement the batch upload handler without unrelated changes.",
-        projectId: "demo",
-        title: "batch upload"
-      });
-      recordIssueEvent(db, issueID, "issue.supervisor_retry", {
-        decision_id: "decision-batch-contract",
-        reason: "The user explicitly authorized a backward-compatible public API contract extension for batch upload."
-      });
+    const prompt = await promptFor({
+      description: "Implement the batch upload handler without unrelated changes.",
+      title: "batch upload"
+    }, (db, issueID) => recordIssueEvent(db, issueID, "issue.supervisor_retry", {
+      decision_id: "decision-batch-contract",
+      reason: "The user explicitly authorized a backward-compatible public API contract extension for batch upload."
+    }));
 
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
-
-      const prompt = provider.inputs[0]?.prompt ?? "";
-      expect(prompt).toContain("## Governed retry context");
-      expect(prompt).toContain("Decision: decision-batch-contract");
-      expect(prompt).toContain("explicitly authorized a backward-compatible public API contract extension");
-      expect(prompt.indexOf("## Governed retry context")).toBeGreaterThan(prompt.indexOf("Implement the batch upload handler"));
-    } finally {
-      db.close();
-    }
+    expect(prompt).toContain("## Governed retry context");
+    expect(prompt).toContain("Decision: decision-batch-contract");
+    expect(prompt).toContain("explicitly authorized a backward-compatible public API contract extension");
+    expect(prompt.indexOf("## Governed retry context")).toBeGreaterThan(prompt.indexOf("Implement the batch upload handler"));
   });
 
   test("preserves issue-authored contract headings without adding runner contracts", async () => {
-    const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "demo", provider: provider.id });
-      insertIssue(db, {
-        description: [
-          "## Target outcome",
-          "Keep the existing target text.",
-          "## Required evidence",
-          "Use the issue-specific verification.",
-          "## Constraints / non-goals",
-          "Stay inside this issue.",
-          "## Stop policy / escalation",
-          "Report blockers."
-        ].join("\n"),
-        projectId: "demo",
-        title: "custom contract"
-      });
+    const prompt = await promptFor({
+      description: [
+        "## Target outcome",
+        "Keep the existing target text.",
+        "## Required evidence",
+        "Use the issue-specific verification.",
+        "## Constraints / non-goals",
+        "Stay inside this issue.",
+        "## Stop policy / escalation",
+        "Report blockers."
+      ].join("\n"),
+      title: "custom contract"
+    });
 
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
-
-      const prompt = provider.inputs[0]?.prompt ?? "";
-      expect(prompt).toContain("## Target outcome");
-      expect(prompt).not.toContain("## Goal Contract");
-      expect(prompt).not.toContain("Deliver the requested end state");
-      expect(prompt).not.toContain("## Runner lifecycle contract");
-      expect(prompt).toContain("## Xuanwu execution context (authoritative)");
-      expect(prompt).toContain("## Stop policy / escalation\nReport blockers.");
-    } finally {
-      db.close();
-    }
+    expect(prompt).toContain("## Target outcome");
+    expect(prompt).not.toContain("## Goal Contract");
+    expect(prompt).not.toContain("Deliver the requested end state");
+    expect(prompt).not.toContain("## Runner lifecycle contract");
+    expect(prompt).toContain("## Xuanwu execution context (authoritative)");
+    expect(prompt).toContain("## Stop policy / escalation\nReport blockers.");
   });
 
   test("treats pre-dispatch triage wording as non-conflicting while preserving substantive gates", async () => {
-    const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "demo", provider: provider.id });
-      const issueID = insertIssue(db, {
-        description: [
-          "## 前置门禁",
-          "- 本 Issue 保持 triage，不要自动入队。",
-          "- 必须等待用户提供真实账号认证方式。"
-        ].join("\n"),
-        projectId: "demo",
-        title: "Qoder final acceptance"
-      });
+    const prompt = await promptFor({
+      description: ["## 前置门禁", "- 本 Issue 保持 triage，不要自动入队。", "- 必须等待用户提供真实账号认证方式。"].join("\n"),
+      title: "Qoder final acceptance"
+    });
 
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
-
-      const prompt = provider.inputs[0]?.prompt ?? "";
-      expect(prompt).toContain("本 Issue 保持 triage，不要自动入队");
-      expect(prompt).toContain(`already claimed Issue #${issueID}`);
-      expect(prompt).toContain("is not a reason to undo this active Run");
-      expect(prompt).toContain("credentials, budget, external authorization, or user-supplied choices");
-      expect(prompt).toContain("RUNNER_OUTCOME: needs_user | <reason>");
-    } finally {
-      db.close();
-    }
+    expect(prompt).toContain("本 Issue 保持 triage，不要自动入队");
+    expect(prompt).toContain("already claimed Issue #1");
+    expect(prompt).toContain("is not a reason to undo this active Run");
+    expect(prompt).toContain("credentials, budget, external authorization, or user-supplied choices");
+    expect(prompt).toContain("RUNNER_OUTCOME: needs_user | <reason>");
   });
 
   test("idles safely when there are no todo issues", async () => {
     const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "demo", provider: provider.id });
-      insertIssue(db, { projectId: "demo", title: "triage", status: "triage" });
+    const provider = new ScriptedProvider();
+    addProject(db, "demo", provider.id);
+    addIssue(db, "demo", "triage", { status: "triage" });
 
-      const result = await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
-
-      expect(result).toEqual({ claimed: false });
-      expect(provider.inputs).toEqual([]);
-    } finally {
-      db.close();
-    }
+    expect(await runOnce(db, provider)).toEqual({ claimed: false });
+    expect(provider.inputs).toEqual([]);
   });
 
   test("does not claim another todo for the same project while an executor run is still open", async () => {
     const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "demo", provider: provider.id });
-      const running = insertIssue(db, { projectId: "demo", title: "running", status: "in_progress" });
-      const waiting = insertIssue(db, { projectId: "demo", title: "waiting" });
-      insertOpenRun(db, running);
+    const provider = new ScriptedProvider();
+    addProject(db, "demo", provider.id);
+    const running = addIssue(db, "demo", "running", { status: "in_progress" });
+    const waiting = addIssue(db, "demo", "waiting");
+    insertOpenRun(db, running);
 
-      const result = await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
-
-      expect(result).toEqual({ claimed: false });
-      expect(provider.inputs).toEqual([]);
-      expect(getIssue(db, waiting)).toMatchObject({ status: "todo", attempt_count: 0 });
-      expect(listIssueRuns(db, waiting)).toEqual([]);
-    } finally {
-      db.close();
-    }
+    expect(await runOnce(db, provider)).toEqual({ claimed: false });
+    expect(provider.inputs).toEqual([]);
+    expect(getIssue(db, waiting)).toMatchObject({ status: "todo", attempt_count: 0 });
+    expect(listIssueRuns(db, waiting)).toEqual([]);
   });
 
   test("claims a different project while an unrelated project run is open", async () => {
     const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "demo", provider: provider.id });
-      insertProject(db, { id: "other", provider: provider.id });
-      const running = insertIssue(db, { projectId: "demo", title: "running", status: "in_progress" });
-      const waiting = insertIssue(db, { projectId: "other", title: "waiting" });
-      insertOpenRun(db, running);
+    const provider = new ScriptedProvider();
+    addProject(db, "demo", provider.id);
+    addProject(db, "other", provider.id);
+    const running = addIssue(db, "demo", "running", { status: "in_progress" });
+    const waiting = addIssue(db, "other", "waiting");
+    insertOpenRun(db, running);
 
-      const result = await runProjectLoopOnce({ database: db, projectId: "other", providers: { [provider.id]: provider } });
-
-      expect(result).toMatchObject({ claimed: true });
-      expect(provider.inputs.map((input) => input.issueId)).toEqual([waiting]);
-      expect(getIssue(db, waiting)).toMatchObject({ status: "in_progress", attempt_count: 1 });
-    } finally {
-      db.close();
-    }
+    expect(await runOnce(db, provider, "other")).toMatchObject({ claimed: true });
+    expect(provider.inputs.map((input) => input.issueId)).toEqual([waiting]);
+    expect(getIssue(db, waiting)).toMatchObject({ status: "in_progress", attempt_count: 1 });
   });
 
   test("auto-run loop starts one session and leaves remaining todos queued", async () => {
     const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "serial-demo", provider: provider.id, autoRun: 1 });
-      const first = insertIssue(db, { projectId: "serial-demo", title: "first" });
-      const second = insertIssue(db, { projectId: "serial-demo", title: "second" });
+    const provider = new ScriptedProvider();
+    addProject(db, "serial-demo", provider.id, { auto_run: 1 });
+    const first = addIssue(db, "serial-demo", "first");
+    const second = addIssue(db, "serial-demo", "second");
 
-      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "serial-demo");
-      await waitFor(() => provider.inputs.length === 1);
-      await waitFor(() => !isProjectLoopActive("serial-demo"));
+    startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "serial-demo");
+    await settle(() => provider.inputs.length === 1);
+    await settle(() => !isProjectLoopActive("serial-demo"));
 
-      expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
-      expect(getIssue(db, first)).toMatchObject({ status: "in_progress", attempt_count: 1 });
-      expect(getIssue(db, second)).toMatchObject({ status: "todo", attempt_count: 0 });
-      expect(listIssueRuns(db, second)).toEqual([]);
-    } finally {
-      db.close();
-    }
+    expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
+    expect(getIssue(db, first)).toMatchObject({ status: "in_progress", attempt_count: 1 });
+    expect(getIssue(db, second)).toMatchObject({ status: "todo", attempt_count: 0 });
+    expect(listIssueRuns(db, second)).toEqual([]);
   });
 
   test("an asynchronous terminal event keeps the project locked until PI decides", async () => {
     const db = await openFixtureDatabase();
-    const provider = new DeferredCompletionProvider();
-    try {
-      insertProject(db, { id: "deferred-demo", provider: provider.id, autoRun: 1 });
-      const first = insertIssue(db, { projectId: "deferred-demo", title: "first" });
-      const second = insertIssue(db, { projectId: "deferred-demo", title: "second" });
+    const provider = new ScriptedProvider(FAKE, { events: [TURN_STARTED] });
+    addProject(db, "deferred-demo", provider.id, { auto_run: 1 });
+    const first = addIssue(db, "deferred-demo", "first");
+    const second = addIssue(db, "deferred-demo", "second");
 
-      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "deferred-demo");
-      await waitFor(() => provider.inputs.length === 1);
-      await waitFor(() => !isProjectLoopActive("deferred-demo"));
+    startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "deferred-demo");
+    await settle(() => provider.inputs.length === 1);
+    await settle(() => !isProjectLoopActive("deferred-demo"));
 
-      provider.complete(first);
-      await waitFor(() => listIssueRuns(db, first).at(-1)?.ended_at !== "");
-      await Bun.sleep(20);
+    provider.emit(first, DONE);
+    await settle(() => listIssueRuns(db, first).at(-1)?.ended_at !== "");
+    await Bun.sleep(20);
 
-      expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
-      expect(getIssue(db, first)).toMatchObject({ status: "in_progress" });
-      expect(getIssue(db, second)).toMatchObject({ status: "todo" });
-      expect(listIssueEvents(db, first, { types: ["issue.pi_acceptance_requested.v1"] })).toHaveLength(1);
-    } finally {
-      db.close();
-    }
+    expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
+    expect(getIssue(db, first)).toMatchObject({ status: "in_progress" });
+    expect(getIssue(db, second)).toMatchObject({ status: "todo" });
+    expect(listIssueEvents(db, first, { types: ["issue.pi_acceptance_requested.v1"] })).toHaveLength(1);
   });
 
   test("auto-run can start different projects up to the global concurrency limit", async () => {
     const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      setProjectLoopMaxParallelProjects(2);
-      insertProject(db, { id: "project-a", provider: provider.id, autoRun: 1 });
-      insertProject(db, { id: "project-b", provider: provider.id, autoRun: 1 });
-      const first = insertIssue(db, { projectId: "project-a", title: "first" });
-      const second = insertIssue(db, { projectId: "project-b", title: "second" });
+    const provider = new ScriptedProvider();
+    setProjectLoopMaxParallelProjects(2);
+    addProject(db, "project-a", provider.id, { auto_run: 1 });
+    addProject(db, "project-b", provider.id, { auto_run: 1 });
+    const first = addIssue(db, "project-a", "first");
+    const second = addIssue(db, "project-b", "second");
 
-      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "project-a");
-      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "project-b");
-      await waitFor(() => provider.inputs.length === 2);
-      await waitFor(() => !isProjectLoopActive("project-a") && !isProjectLoopActive("project-b"));
+    startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "project-a");
+    startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "project-b");
+    await settle(() => provider.inputs.length === 2);
+    await settle(() => !isProjectLoopActive("project-a") && !isProjectLoopActive("project-b"));
 
-      expect(provider.inputs.map((input) => input.issueId).sort((a, b) => a - b)).toEqual([first, second]);
-      expect(getIssue(db, first)).toMatchObject({ status: "in_progress", attempt_count: 1 });
-      expect(getIssue(db, second)).toMatchObject({ status: "in_progress", attempt_count: 1 });
-    } finally {
-      db.close();
-    }
+    expect(provider.inputs.map((input) => input.issueId).sort((a, b) => a - b)).toEqual([first, second]);
+    expect(getIssue(db, first)).toMatchObject({ status: "in_progress", attempt_count: 1 });
+    expect(getIssue(db, second)).toMatchObject({ status: "in_progress", attempt_count: 1 });
   });
 
   test("isolates loop queues for separate databases that reuse a project id", async () => {
-    const firstDB = await openFixtureDatabase();
-    const secondDB = await openFixtureDatabase();
-    const firstProvider = new FakeExecutionProvider();
-    const secondProvider = new FakeExecutionProvider();
-    try {
-      insertProject(firstDB, { id: "demo", provider: firstProvider.id, autoRun: 1 });
-      insertProject(secondDB, { id: "demo", provider: secondProvider.id, autoRun: 1 });
-      insertIssue(firstDB, { projectId: "demo", title: "first database" });
-      insertIssue(secondDB, { projectId: "demo", title: "second database" });
+    const [firstDB, secondDB] = [await openFixtureDatabase(), await openFixtureDatabase()];
+    const [firstProvider, secondProvider] = [new ScriptedProvider(), new ScriptedProvider()];
+    addProject(firstDB, "demo", firstProvider.id, { auto_run: 1 });
+    addProject(secondDB, "demo", secondProvider.id, { auto_run: 1 });
+    addIssue(firstDB, "demo", "first database");
+    addIssue(secondDB, "demo", "second database");
 
-      startProjectLoop({ database: firstDB, providers: { [firstProvider.id]: firstProvider } }, "demo");
-      startProjectLoop({ database: secondDB, providers: { [secondProvider.id]: secondProvider } }, "demo");
-      await waitFor(() => firstProvider.inputs.length === 1 && secondProvider.inputs.length === 1);
-      await waitFor(() => !isProjectLoopActive("demo", firstDB) && !isProjectLoopActive("demo", secondDB));
+    startProjectLoop({ database: firstDB, providers: { [firstProvider.id]: firstProvider } }, "demo");
+    startProjectLoop({ database: secondDB, providers: { [secondProvider.id]: secondProvider } }, "demo");
+    await settle(() => firstProvider.inputs.length === 1 && secondProvider.inputs.length === 1);
+    await settle(() => !isProjectLoopActive("demo", firstDB) && !isProjectLoopActive("demo", secondDB));
 
-      expect(firstProvider.inputs[0]).toMatchObject({ projectId: "demo", prompt: expect.stringContaining("first database") });
-      expect(secondProvider.inputs[0]).toMatchObject({ projectId: "demo", prompt: expect.stringContaining("second database") });
-    } finally {
-      firstDB.close();
-      secondDB.close();
-    }
+    expect(firstProvider.inputs[0]).toMatchObject({ projectId: "demo", prompt: expect.stringContaining("first database") });
+    expect(secondProvider.inputs[0]).toMatchObject({ projectId: "demo", prompt: expect.stringContaining("second database") });
   });
 
   test("explicit project hold blocks auto-run and forced execution without creating a Run", async () => {
     const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "held", provider: provider.id, autoRun: 1 });
-      const issueID = insertIssue(db, { projectId: "held", title: "held issue" });
-      db.sqlite.run(`insert into project_holds
-        (project_id, reason, message, hold_since, updated_at) values (?, ?, ?, ?, ?)`, [
-        "held", "user_pause", "explicit fixture hold", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"
-      ]);
+    const provider = new ScriptedProvider();
+    addProject(db, "held", provider.id, { auto_run: 1 });
+    const issueID = addIssue(db, "held", "held issue");
+    insertRow(db, "project_holds", {
+      project_id: "held", reason: "user_pause", message: "explicit fixture hold", hold_since: FIXTURE_TIME, updated_at: FIXTURE_TIME
+    });
 
-      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "held", { forceOnce: true });
-      await waitFor(() => !isProjectLoopActive("held"));
+    startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "held", { forceOnce: true });
+    await settle(() => !isProjectLoopActive("held"));
 
-      expect(provider.inputs).toEqual([]);
-      expect(getIssue(db, issueID)).toMatchObject({ status: "todo", attempt_count: 0 });
-      expect(listIssueRuns(db, issueID)).toEqual([]);
-      expect(latestEventPayload(db, issueID, "issue.runner_scope_decision")).toMatchObject({
-        authority: "project_holds",
-        decision: "stop",
-        reason: "project_hold",
-        scope: "project:held"
-      });
-    } finally {
-      db.close();
-    }
+    expect(provider.inputs).toEqual([]);
+    expect(getIssue(db, issueID)).toMatchObject({ status: "todo", attempt_count: 0 });
+    expect(listIssueRuns(db, issueID)).toEqual([]);
+    expect(latestEventPayload(db, issueID, "issue.runner_scope_decision")).toMatchObject({
+      authority: "project_holds", decision: "stop", reason: "project_hold", scope: "project:held"
+    });
   });
 
   test("provider runtime blocker stays provider-scoped while another provider keeps running", async () => {
     const db = await openFixtureDatabase();
-    const healthy = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "missing-codex", provider: "codex", autoRun: 1 });
-      insertProject(db, { id: "healthy", provider: healthy.id, autoRun: 1 });
-      const blocked = insertIssue(db, { projectId: "missing-codex", title: "provider blocked" });
-      const runnable = insertIssue(db, { projectId: "healthy", title: "provider ready" });
-      const runtime = { database: db, providers: { [healthy.id]: healthy } };
+    const healthy = new ScriptedProvider();
+    addProject(db, "missing-codex", "codex", { auto_run: 1 });
+    addProject(db, "healthy", healthy.id, { auto_run: 1 });
+    const blocked = addIssue(db, "missing-codex", "provider blocked");
+    const runnable = addIssue(db, "healthy", "provider ready");
+    const runtime = { database: db, providers: { [healthy.id]: healthy } };
 
-      startProjectLoop(runtime, "missing-codex");
-      startProjectLoop(runtime, "healthy");
-      await waitFor(() => healthy.inputs.length === 1);
-      await waitFor(() => !isProjectLoopActive("missing-codex") && !isProjectLoopActive("healthy"));
+    startProjectLoop(runtime, "missing-codex");
+    startProjectLoop(runtime, "healthy");
+    await settle(() => healthy.inputs.length === 1);
+    await settle(() => !isProjectLoopActive("missing-codex") && !isProjectLoopActive("healthy"));
 
-      expect(healthy.inputs.map((input) => input.issueId)).toEqual([runnable]);
-      expect(getIssue(db, blocked)).toMatchObject({ status: "todo", attempt_count: 0 });
-      expect(listIssueRuns(db, blocked)).toEqual([]);
-      expect(latestEventPayload(db, blocked, "issue.runner_scope_decision")).toMatchObject({
-        authority: "runner.providers",
-        decision: "stop",
-        provider: "codex",
-        reason: "provider_runtime",
-        scope: "provider:codex"
-      });
-    } finally {
-      db.close();
-    }
+    expect(healthy.inputs.map((input) => input.issueId)).toEqual([runnable]);
+    expect(getIssue(db, blocked)).toMatchObject({ status: "todo", attempt_count: 0 });
+    expect(listIssueRuns(db, blocked)).toEqual([]);
+    expect(latestEventPayload(db, blocked, "issue.runner_scope_decision")).toMatchObject({
+      authority: "runner.providers", decision: "stop", provider: "codex", reason: "provider_runtime", scope: "provider:codex"
+    });
   });
 
   test("a provider terminal failure holds only its project while another project can run", async () => {
     const db = await openFixtureDatabase();
-    const outage = new TransientInfraExecutionProvider();
-    const healthy = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "outage", provider: outage.id, autoRun: 1 });
-      insertProject(db, { id: "other-provider", provider: healthy.id, autoRun: 1 });
-      const deferred = insertIssue(db, { projectId: "outage", title: "deferred" });
-      const runnable = insertIssue(db, { projectId: "other-provider", title: "other provider" });
-      const runtime = { database: db, providers: { [outage.id]: outage, [healthy.id]: healthy } };
+    const outage = new ScriptedProvider("claude", { fail: INITIALIZE_TIMEOUT });
+    const healthy = new ScriptedProvider();
+    addProject(db, "outage", outage.id, { auto_run: 1 });
+    addProject(db, "other-provider", healthy.id, { auto_run: 1 });
+    const deferred = addIssue(db, "outage", "deferred");
+    const runnable = addIssue(db, "other-provider", "other provider");
+    const runtime = { database: db, providers: { [outage.id]: outage, [healthy.id]: healthy } };
 
-      startProjectLoop(runtime, "outage");
-      await waitFor(() => listEventTypes(db, deferred).includes("issue.pi_acceptance_requested.v1"));
-      startProjectLoop(runtime, "other-provider");
-      await waitFor(() => healthy.inputs.length === 1);
+    startProjectLoop(runtime, "outage");
+    await settle(() => listEventTypes(db, deferred).includes("issue.pi_acceptance_requested.v1"));
+    startProjectLoop(runtime, "other-provider");
+    await settle(() => healthy.inputs.length === 1);
 
-      expect(healthy.inputs.map((input) => input.issueId)).toEqual([runnable]);
-      expect(getIssue(db, deferred)).toMatchObject({ status: "in_progress" });
-    } finally {
-      db.close();
-    }
+    expect(healthy.inputs.map((input) => input.issueId)).toEqual([runnable]);
+    expect(getIssue(db, deferred)).toMatchObject({ status: "in_progress" });
   });
 
-  test("provider startup failure stays in the same Issue for PI and blocks its sibling", async () => {
-    const db = await openFixtureDatabase();
-    const provider = new FailingExecutionProvider();
-    try {
-      insertProject(db, { id: "failure-demo", provider: provider.id, autoRun: 1 });
-      const first = insertIssue(db, { projectId: "failure-demo", title: "first" });
-      const second = insertIssue(db, { projectId: "failure-demo", title: "second" });
+  for (const [name, script] of [
+    ["provider startup failure stays in the same Issue for PI and blocks its sibling", { fail: PROVIDER_FAILURE }],
+    ["executor failed waits for PI before the project can run a sibling", {
+      events: [STARTED, { error: "executor reported a scoped failure", status: "failed", type: "error" }]
+    }]
+  ] as const) {
+    test(name, async () => {
+      const db = await openFixtureDatabase();
+      const provider = new ScriptedProvider(FAKE, script);
+      addProject(db, "demo", provider.id, { auto_run: 1 });
+      const first = addIssue(db, "demo", "first");
+      const second = addIssue(db, "demo", "second");
 
-      await runProjectLoopOnce({ database: db, projectId: "failure-demo", providers: { [provider.id]: provider } });
+      await runOnce(db, provider);
 
       expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
       expect(getIssue(db, first)).toMatchObject({ status: "in_progress", attempt_count: 1 });
       expect(getIssue(db, second)).toMatchObject({ status: "todo", attempt_count: 0 });
       expect(listIssueRuns(db, second)).toHaveLength(0);
-    } finally {
-      db.close();
-    }
-  });
-
-  for (const status of ["failed"] as const) {
-    test(`executor ${status} waits for PI before the project can run a sibling`, async () => {
-      const db = await openFixtureDatabase();
-      const provider = new TerminalExecutionProvider(status);
-      try {
-        insertProject(db, { id: `terminal-${status}`, provider: provider.id, autoRun: 1 });
-        const first = insertIssue(db, { projectId: `terminal-${status}`, title: "first" });
-        const second = insertIssue(db, { projectId: `terminal-${status}`, title: "second" });
-
-        await runProjectLoopOnce({
-          database: db,
-          projectId: `terminal-${status}`,
-          providers: { [provider.id]: provider }
-        });
-
-        expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
-        expect(getIssue(db, first)).toMatchObject({ status: "in_progress", attempt_count: 1 });
-        expect(getIssue(db, second)).toMatchObject({ status: "todo", attempt_count: 0 });
-        expect(listIssueRuns(db, second)).toHaveLength(0);
-      } finally {
-        db.close();
-      }
     });
   }
 
   test("auto-run records provider startup failure as terminal Run facts for PI", async () => {
     const db = await openFixtureDatabase();
-    const provider = new TransientInfraExecutionProvider();
-    try {
-      insertProject(db, { id: "infra-demo", provider: provider.id, autoRun: 1 });
-      const first = insertIssue(db, { projectId: "infra-demo", title: "first" });
-      const second = insertIssue(db, { projectId: "infra-demo", title: "second" });
+    const provider = new ScriptedProvider("claude", { fail: INITIALIZE_TIMEOUT });
+    addProject(db, "infra-demo", provider.id, { auto_run: 1 });
+    const first = addIssue(db, "infra-demo", "first");
+    const second = addIssue(db, "infra-demo", "second");
 
-      await runProjectLoopOnce({ database: db, projectId: "infra-demo", providers: { [provider.id]: provider } });
+    await runOnce(db, provider, "infra-demo");
 
-      expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
-      expect(getIssue(db, first)).toMatchObject({
-        status: "in_progress",
-        auto_retry_reason: "",
-        auto_retry_next_at: "",
-        error: ""
-      });
-      expect(listIssueRuns(db, first).at(-1)).toMatchObject({
-        provider: "claude",
-        status: "failed",
-        ended_at: expect.stringMatching(/Z$/),
-        exit_reason: "provider_reported_failed",
-        error: "codex app-server request timed out after 10000ms: initialize"
-      });
-      expect(getIssue(db, second)).toMatchObject({ status: "todo", attempt_count: 0 });
-      expect(listIssueRuns(db, second)).toEqual([]);
-      expect(listEventTypes(db, first)).not.toContain("issue.provider_deferred");
-    } finally {
-      db.close();
-    }
+    expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
+    expect(getIssue(db, first)).toMatchObject({ status: "in_progress", auto_retry_reason: "", auto_retry_next_at: "", error: "" });
+    expect(listIssueRuns(db, first).at(-1)).toMatchObject({
+      provider: "claude",
+      status: "failed",
+      ended_at: expect.stringMatching(/Z$/),
+      exit_reason: "provider_reported_failed",
+      error: INITIALIZE_TIMEOUT
+    });
+    expect(getIssue(db, second)).toMatchObject({ status: "todo", attempt_count: 0 });
+    expect(listIssueRuns(db, second)).toEqual([]);
+    expect(listEventTypes(db, first)).not.toContain("issue.provider_deferred");
   });
 
   test("keeps auth and quota failures terminal even when wrapped in transport wording", async () => {
-    for (const [index, message] of [
-      "transport error: 401 unauthorized",
-      "network error: insufficient quota"
-    ].entries()) {
+    for (const fail of ["transport error: 401 unauthorized", "network error: insufficient quota"]) {
       const db = await openFixtureDatabase();
-      const provider = new MessageFailingExecutionProvider(message);
-      try {
-        insertProject(db, { id: `terminal-demo-${index}`, provider: provider.id });
-        const issueId = insertIssue(db, { projectId: `terminal-demo-${index}`, title: "terminal provider failure" });
+      const provider = new ScriptedProvider(FAKE, { fail });
+      addProject(db, "demo", provider.id);
+      const issueId = addIssue(db, "demo", "terminal provider failure");
 
-        await runProjectLoopOnce({ database: db, projectId: `terminal-demo-${index}`, providers: { [provider.id]: provider } });
+      await runOnce(db, provider);
 
-        expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress", error: "" });
-        expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({ status: "failed", exit_reason: "provider_reported_failed" });
-        expect(listEventTypes(db, issueId)).not.toContain("issue.provider_deferred");
-      } finally {
-        db.close();
-      }
+      expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress", error: "" });
+      expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({ status: "failed", exit_reason: "provider_reported_failed" });
+      expect(listEventTypes(db, issueId)).not.toContain("issue.provider_deferred");
     }
   });
 
   test("forced loop starts one executor session even when project auto-run is off", async () => {
     const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "manual-demo", provider: provider.id });
-      const issueId = insertIssue(db, { projectId: "manual-demo", title: "from IM" });
+    const provider = new ScriptedProvider();
+    addProject(db, "manual-demo", provider.id);
+    const issueId = addIssue(db, "manual-demo", "from IM");
 
-      await runProjectLoopOnce({ database: db, projectId: "manual-demo", providers: { [provider.id]: provider } });
+    await runOnce(db, provider, "manual-demo");
 
-      expect(provider.inputs.map((input) => input.issueId)).toEqual([issueId]);
-      expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress", attempt_count: 1 });
-    } finally {
-      db.close();
-    }
+    expect(provider.inputs.map((input) => input.issueId)).toEqual([issueId]);
+    expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress", attempt_count: 1 });
   });
 
   test("reconciles a completed provider session and closes the Run", async () => {
     const db = await openFixtureDatabase();
-    const provider = new CompletedExecutionProvider();
-    try {
-      insertProject(db, { id: "demo", provider: provider.id });
-      const issueId = insertIssue(db, { projectId: "demo", title: "needs explicit status" });
+    const provider = new ScriptedProvider(FAKE, { events: [STARTED, DONE] });
+    addProject(db, "demo", provider.id);
+    const issueId = addIssue(db, "demo", "needs explicit status");
 
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+    await runOnce(db, provider);
 
-      expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress" });
-      expect(listIssueRuns(db, issueId)).toMatchObject([{
-        status: "succeeded",
-        ended_at: expect.stringMatching(/Z$/)
-      }]);
-      expect(listIssueEvents(db, issueId, { types: ["issue.pi_acceptance_requested.v1"] })).toHaveLength(1);
-    } finally {
-      db.close();
-    }
+    expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress" });
+    expect(listIssueRuns(db, issueId)).toMatchObject([{ status: "succeeded", ended_at: expect.stringMatching(/Z$/) }]);
+    expect(listIssueEvents(db, issueId, { types: ["issue.pi_acceptance_requested.v1"] })).toHaveLength(1);
   });
 
   test("routes an executor needs_user claim through PI semantic acceptance instead of failing immediately", async () => {
     const db = await openFixtureDatabase();
-    const provider = new NeedsUserExecutionProvider();
-    try {
-      insertProject(db, { id: "demo", provider: provider.id });
-      const issueId = insertIssue(db, { projectId: "demo", title: "needs credentials" });
+    const provider = new ScriptedProvider(FAKE, {
+      events: [{ type: "provider.message", text: "已完成环境检查。\nRUNNER_OUTCOME: needs_user | 缺少部署凭证" }]
+    });
+    addProject(db, "demo", provider.id);
+    const issueId = addIssue(db, "demo", "needs credentials");
 
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+    await runOnce(db, provider);
 
-      expect(getIssue(db, issueId)).toMatchObject({
-        status: "in_progress",
-        error: ""
-      });
-      expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
-        status: "failed",
-        ended_at: expect.stringMatching(/Z$/)
-      });
-      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" }).filter((alert) => alert.issue_id === issueId)).toHaveLength(0);
-      expect(listNotifications(db, { projectID: "demo" }).filter((notification) => notification.issue_id === issueId)).toHaveLength(0);
-      expect(listIssueEvents(db, issueId, { types: ["issue.pi_acceptance_requested.v1"] })).toHaveLength(1);
-    } finally {
-      db.close();
-    }
+    expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress", error: "" });
+    expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({ status: "failed", ended_at: expect.stringMatching(/Z$/) });
+    expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" }).filter((alert) => alert.issue_id === issueId)).toHaveLength(0);
+    expect(listNotifications(db, { projectID: "demo" }).filter((notification) => notification.issue_id === issueId)).toHaveLength(0);
+    expect(listIssueEvents(db, issueId, { types: ["issue.pi_acceptance_requested.v1"] })).toHaveLength(1);
   });
 
   test("uses assigned executor profile for provider options and session linkage", async () => {
     const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "demo", provider: provider.id });
-      insertAgentProfile(db, {
-        id: "executor-fake",
-        model: "profile-model",
-        provider: provider.id
-      });
-      const issueId = insertIssue(db, {
-        agentProfileId: "executor-fake",
-        projectId: "demo",
-        title: "profile selected"
-      });
+    const provider = new ScriptedProvider();
+    addProject(db, "demo", provider.id);
+    insertAgentProfile(db, "executor-fake", provider.id, { model: "profile-model" });
+    const issueId = addIssue(db, "demo", "profile selected", { agent_profile_id: "executor-fake" });
 
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+    await runOnce(db, provider);
 
-      expect(provider.inputs[0]).toMatchObject({
-        approvalPolicy: "on-request",
-        model: "profile-model",
-        reasoningEffort: "high",
-        sandbox: "danger-full-access"
-      });
-      expect(latestRun(db, issueId)).toMatchObject({
-        agent_profile_id: "executor-fake",
-        capability_summary: "issue_execution",
-        selection_reason: "issue assigned agent_profile_id"
-      });
-      expect(getAgentSession(db, `fake-execution-only:fake-session-${issueId}`)).toMatchObject({
-        agent_role: "executor",
-        issue_id: issueId
-      });
-    } finally {
-      db.close();
-    }
+    expect(provider.inputs[0]).toMatchObject({
+      approvalPolicy: "on-request", model: "profile-model", reasoningEffort: "high", sandbox: "danger-full-access"
+    });
+    expect(latestRun(db, issueId)).toMatchObject({
+      agent_profile_id: "executor-fake",
+      capability_summary: "issue_execution",
+      selection_reason: "issue assigned agent_profile_id"
+    });
+    expect(getAgentSession(db, `fake-execution-only:fake-session-${issueId}`)).toMatchObject({
+      agent_role: "executor",
+      issue_id: issueId
+    });
   });
 
   test("passes an assigned provider profile's empty model through to execution", async () => {
     const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "demo", model: "codex-default", provider: provider.id });
-      insertAgentProfile(db, { id: "provider-default", model: "", provider: provider.id });
-      const issueId = insertIssue(db, {
-        agentProfileId: "provider-default",
-        projectId: "demo",
-        title: "use provider default model"
-      });
+    const provider = new ScriptedProvider();
+    addProject(db, "demo", provider.id);
+    insertAgentProfile(db, "provider-default", provider.id, { model: "" });
+    const issueId = addIssue(db, "demo", "use provider default model", { agent_profile_id: "provider-default" });
 
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+    await runOnce(db, provider);
 
-      expect(provider.inputs[0]).toMatchObject({ issueId, model: "" });
-    } finally {
-      db.close();
-    }
+    expect(provider.inputs[0]).toMatchObject({ issueId, model: "" });
   });
 
   test("freezes different Codex and Claude Work providers into Run and Attempt history", async () => {
     const db = await openFixtureDatabase();
-    const codex = new NamedExecutionProvider("codex");
-    const claude = new NamedExecutionProvider("claude");
-    try {
-      insertProject(db, { id: "demo", provider: "codex" });
-      insertAgentProfile(db, { id: "codex-work", model: "gpt-5.6", provider: "codex" });
-      insertAgentProfile(db, { id: "claude-work", model: "claude-sonnet", provider: "claude" });
-      const codexIssue = insertIssue(db, {
-        agentProfileId: "codex-work",
-        priority: 10,
-        projectId: "demo",
-        title: "Codex Work"
-      });
-      const claudeIssue = insertIssue(db, {
-        agentProfileId: "claude-work",
-        priority: 5,
-        projectId: "demo",
-        title: "Claude Work"
-      });
-      const providers = { codex, claude } satisfies Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+    const providers = { codex: new ScriptedProvider("codex", { events: [TURN_STARTED] }), claude: new ScriptedProvider("claude", { events: [TURN_STARTED] }) };
+    addProject(db, "demo", "codex");
+    insertAgentProfile(db, "codex-work", "codex", { model: "gpt-5.6" });
+    insertAgentProfile(db, "claude-work", "claude", { model: "claude-sonnet" });
+    const codexIssue = addIssue(db, "demo", "Codex Work", { agent_profile_id: "codex-work", priority: 10 });
+    const claudeIssue = addIssue(db, "demo", "Claude Work", { agent_profile_id: "claude-work", priority: 5 });
 
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers });
-      closeClaimedIssue(db, codexIssue);
-      db.sqlite.run("update projects set provider='claude', default_agent_profile_id='claude-work' where id='demo'");
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers });
+    await runProjectLoopOnce({ database: db, projectId: "demo", providers });
+    closeClaimedIssue(db, codexIssue);
+    db.sqlite.run("update projects set provider='claude', default_agent_profile_id='claude-work' where id='demo'");
+    await runProjectLoopOnce({ database: db, projectId: "demo", providers });
 
-      expect(codex.inputs.map((input) => input.issueId)).toEqual([codexIssue]);
-      expect(claude.inputs.map((input) => input.issueId)).toEqual([claudeIssue]);
-      expect(listIssueRuns(db, codexIssue).at(-1)).toMatchObject({
-        agent_profile_id: "codex-work",
-        provider: "codex",
-        provider_session_id: `codex-session-${codexIssue}`
+    for (const [name, issueID] of [["codex", codexIssue], ["claude", claudeIssue]] as const) {
+      expect(providers[name].inputs.map((input) => input.issueId)).toEqual([issueID]);
+      expect(listIssueRuns(db, issueID).at(-1)).toMatchObject({
+        agent_profile_id: `${name}-work`,
+        provider: name,
+        provider_session_id: `${name}-session-${issueID}`
       });
-      expect(listIssueRuns(db, claudeIssue).at(-1)).toMatchObject({
-        agent_profile_id: "claude-work",
-        provider: "claude",
-        provider_session_id: `claude-session-${claudeIssue}`
-      });
-      expect(latestAttempt(db, codexIssue)).toMatchObject({
-        provider: "codex",
-        provider_session_id: `codex-session-${codexIssue}`
-      });
-      expect(latestAttempt(db, claudeIssue)).toMatchObject({
-        provider: "claude",
-        provider_session_id: `claude-session-${claudeIssue}`
-      });
-    } finally {
-      db.close();
+      expect(latestAttempt(db, issueID)).toMatchObject({ provider: name, provider_session_id: `${name}-session-${issueID}` });
     }
   });
 
   test("routes Qoder project defaults and Issue overrides in both directions with resolved settings", async () => {
     const db = await openFixtureDatabase();
-    const codex = new NamedExecutionProvider("codex");
-    const qoder = new NamedExecutionProvider("qoder");
-    try {
-      insertAgentProfile(db, { id: "codex-work", model: "gpt-5.6", provider: "codex" });
-      insertAgentProfile(db, { id: "qoder-work", model: "performance", provider: "qoder" });
-      insertProject(db, {
-        id: "demo",
-        provider: "codex",
-        defaultAgentProfileId: "qoder-work"
-      });
-      const codexOverride = insertIssue(db, {
-        agentProfileId: "codex-work",
-        priority: 10,
-        projectId: "demo",
-        title: "Codex overrides Qoder project default"
-      });
-      const qoderInherited = insertIssue(db, {
-        priority: 5,
-        projectId: "demo",
-        title: "Qoder project default"
-      });
-      const providers = { codex, qoder } satisfies Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+    const providers = { codex: new ScriptedProvider("codex", { events: [TURN_STARTED] }), qoder: new ScriptedProvider("qoder", { events: [TURN_STARTED] }) };
+    insertAgentProfile(db, "codex-work", "codex", { model: "gpt-5.6" });
+    insertAgentProfile(db, "qoder-work", "qoder", { model: "performance" });
+    addProject(db, "demo", "codex", { default_agent_profile_id: "qoder-work" });
+    const codexOverride = addIssue(db, "demo", "Codex overrides Qoder project default", { agent_profile_id: "codex-work", priority: 10 });
+    const qoderInherited = addIssue(db, "demo", "Qoder project default", { priority: 5 });
 
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers });
-      closeClaimedIssue(db, codexOverride);
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers });
-      closeClaimedIssue(db, qoderInherited);
+    await runProjectLoopOnce({ database: db, projectId: "demo", providers });
+    closeClaimedIssue(db, codexOverride);
+    await runProjectLoopOnce({ database: db, projectId: "demo", providers });
+    closeClaimedIssue(db, qoderInherited);
 
-      db.sqlite.run("update projects set default_agent_profile_id='codex-work' where id='demo'");
-      const qoderOverride = insertIssue(db, {
-        agentProfileId: "qoder-work",
-        projectId: "demo",
-        title: "Qoder overrides Codex project default"
-      });
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers });
+    db.sqlite.run("update projects set default_agent_profile_id='codex-work' where id='demo'");
+    const qoderOverride = addIssue(db, "demo", "Qoder overrides Codex project default", { agent_profile_id: "qoder-work" });
+    await runProjectLoopOnce({ database: db, projectId: "demo", providers });
 
-      expect(codex.inputs.map((input) => input.issueId)).toEqual([codexOverride]);
-      expect(qoder.inputs.map((input) => input.issueId)).toEqual([qoderInherited, qoderOverride]);
-      expect(listIssueRuns(db, codexOverride).at(-1)).toMatchObject({
-        agent_profile_id: "codex-work",
-        provider: "codex",
-        selection_reason: "issue assigned agent_profile_id"
+    expect(providers.codex.inputs.map((input) => input.issueId)).toEqual([codexOverride]);
+    expect(providers.qoder.inputs.map((input) => input.issueId)).toEqual([qoderInherited, qoderOverride]);
+    for (const [issueID, provider, reason] of [
+      [codexOverride, "codex", "issue assigned agent_profile_id"],
+      [qoderInherited, "qoder", "project default_agent_profile_id"],
+      [qoderOverride, "qoder", "issue assigned agent_profile_id"]
+    ] as const) {
+      expect(listIssueRuns(db, issueID).at(-1)).toMatchObject({
+        agent_profile_id: `${provider}-work`, provider, selection_reason: reason
       });
-      expect(listIssueRuns(db, qoderInherited).at(-1)).toMatchObject({
-        agent_profile_id: "qoder-work",
-        provider: "qoder",
-        selection_reason: "project default_agent_profile_id"
-      });
-      expect(listIssueRuns(db, qoderOverride).at(-1)).toMatchObject({
-        agent_profile_id: "qoder-work",
-        provider: "qoder",
-        selection_reason: "issue assigned agent_profile_id"
-      });
-      expect(latestRunMetadata(db, qoderOverride)).toMatchObject({
-        resolved_settings: {
-          approval_policy: "on-request",
-          model: "performance",
-          reasoning_effort: "high",
-          sandbox: "danger-full-access",
-          service_tier: "",
-          service_tier_source: "standard"
-        }
-      });
-    } finally {
-      db.close();
     }
+    expect(latestRunMetadata(db, qoderOverride)).toMatchObject({
+      resolved_settings: resolvedSettings({ approval_policy: "on-request", model: "performance", reasoning_effort: "high", sandbox: "danger-full-access" })
+    });
   });
 
   test("keeps a historical Qoder profile fail-closed when Qoder runtime is unavailable", async () => {
     const db = await openFixtureDatabase();
-    const codex = new NamedExecutionProvider("codex");
-    try {
-      insertAgentProfile(db, { id: "qoder-work", model: "performance", provider: "qoder" });
-      insertProject(db, {
-        id: "demo",
-        provider: "codex",
-        defaultAgentProfileId: "qoder-work"
-      });
-      const issueID = insertIssue(db, { projectId: "demo", title: "Historical Qoder selection" });
+    const codex = new ScriptedProvider("codex", { events: [TURN_STARTED] });
+    insertAgentProfile(db, "qoder-work", "qoder", { model: "performance" });
+    addProject(db, "demo", "codex", { default_agent_profile_id: "qoder-work" });
+    const issueID = addIssue(db, "demo", "Historical Qoder selection");
 
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { codex } });
+    await runOnce(db, codex);
 
-      expect(codex.inputs).toEqual([]);
-      expect(getIssue(db, issueID)).toMatchObject({ status: "todo", attempt_count: 0 });
-      expect(listIssueRuns(db, issueID)).toEqual([]);
-      expect(latestEventPayload(db, issueID, "issue.runner_scope_decision")).toMatchObject({
-        authority: "runner.providers",
-        decision: "stop",
-        provider: "qoder",
-        reason: "provider_runtime",
-        scope: "provider:qoder"
-      });
-    } finally {
-      db.close();
-    }
+    expect(codex.inputs).toEqual([]);
+    expect(getIssue(db, issueID)).toMatchObject({ status: "todo", attempt_count: 0 });
+    expect(listIssueRuns(db, issueID)).toEqual([]);
+    expect(latestEventPayload(db, issueID, "issue.runner_scope_decision")).toMatchObject({
+      authority: "runner.providers", decision: "stop", provider: "qoder", reason: "provider_runtime", scope: "provider:qoder"
+    });
   });
 
   test("resolves issue, profile, and project service tier before provider execution", async () => {
     const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "demo", provider: provider.id, serviceTier: "project-fast" });
-      const projectIssue = insertIssue(db, {
-        projectId: "demo",
-        priority: 6,
-        title: "project speed"
-      });
+    const provider = new ScriptedProvider();
+    addProject(db, "demo", provider.id, { default_service_tier: "project-fast" });
+    const projectIssue = addIssue(db, "demo", "project speed", { priority: 6 });
 
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
-      closeClaimedIssue(db, projectIssue);
+    await runOnce(db, provider);
+    closeClaimedIssue(db, projectIssue);
 
-      insertAgentProfile(db, {
-        id: "executor-fake",
-        model: "profile-model",
-        provider: provider.id,
-        serviceTier: "profile-fast"
-      });
-      const profileIssue = insertIssue(db, {
-        agentProfileId: "executor-fake",
-        projectId: "demo",
-        priority: 4,
-        title: "profile speed"
-      });
-      const issueOverride = insertIssue(db, {
-        projectId: "demo",
-        priority: 5,
-        serviceTier: "priority",
-        title: "issue speed"
-      });
+    insertAgentProfile(db, "executor-fake", provider.id, { model: "profile-model", service_tier: "profile-fast" });
+    const profileIssue = addIssue(db, "demo", "profile speed", { agent_profile_id: "executor-fake", priority: 4 });
+    const issueOverride = addIssue(db, "demo", "issue speed", { priority: 5, service_tier: "priority" });
 
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
-      closeClaimedIssue(db, issueOverride);
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+    await runOnce(db, provider);
+    closeClaimedIssue(db, issueOverride);
+    await runOnce(db, provider);
 
-      expect(provider.inputs.map((input) => ({
-        issueId: input.issueId,
-        serviceTier: input.serviceTier,
-        serviceTierSource: input.serviceTierSource
-      }))).toEqual([
-        { issueId: projectIssue, serviceTier: "project-fast", serviceTierSource: "project" },
-        { issueId: issueOverride, serviceTier: "priority", serviceTierSource: "issue" },
-        { issueId: profileIssue, serviceTier: "profile-fast", serviceTierSource: "agent_profile" }
-      ]);
-      expect(latestRunMetadata(db, profileIssue)).toEqual({
-        run_id: `fake-run-${profileIssue}`,
-        resolved_settings: {
-          approval_policy: "on-request",
-          model: "profile-model",
-          reasoning_effort: "high",
-          sandbox: "danger-full-access",
-          service_tier: "profile-fast",
-          service_tier_source: "agent_profile"
-        },
-        service_tier: "profile-fast",
-        service_tier_source: "agent_profile"
+    expect(provider.inputs.map(({ issueId, serviceTier, serviceTierSource }) => ({ issueId, serviceTier, serviceTierSource }))).toEqual([
+      { issueId: projectIssue, serviceTier: "project-fast", serviceTierSource: "project" },
+      { issueId: issueOverride, serviceTier: "priority", serviceTierSource: "issue" },
+      { issueId: profileIssue, serviceTier: "profile-fast", serviceTierSource: "agent_profile" }
+    ]);
+    for (const [issueID, service_tier, service_tier_source, profile] of [
+      [profileIssue, "profile-fast", "agent_profile", { approval_policy: "on-request", model: "profile-model", reasoning_effort: "high", sandbox: "danger-full-access" }],
+      [issueOverride, "priority", "issue", {}],
+      [projectIssue, "project-fast", "project", {}]
+    ] as const) {
+      expect(latestRunMetadata(db, issueID)).toEqual({
+        run_id: `fake-run-${issueID}`,
+        resolved_settings: resolvedSettings({ ...profile, service_tier, service_tier_source }),
+        service_tier,
+        service_tier_source
       });
-      expect(latestRunMetadata(db, issueOverride)).toEqual({
-        run_id: `fake-run-${issueOverride}`,
-        resolved_settings: {
-          approval_policy: "never",
-          model: "",
-          reasoning_effort: "",
-          sandbox: "workspace-write",
-          service_tier: "priority",
-          service_tier_source: "issue"
-        },
-        service_tier: "priority",
-        service_tier_source: "issue"
-      });
-      expect(latestRunMetadata(db, projectIssue)).toEqual({
-        run_id: `fake-run-${projectIssue}`,
-        resolved_settings: {
-          approval_policy: "never",
-          model: "",
-          reasoning_effort: "",
-          sandbox: "workspace-write",
-          service_tier: "project-fast",
-          service_tier_source: "project"
-        },
-        service_tier: "project-fast",
-        service_tier_source: "project"
-      });
-    } finally {
-      db.close();
     }
   });
 
   test("passes uploaded attachment images to executor provider as local images", async () => {
     const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "demo", provider: provider.id });
-      const imagePath = await insertUpload(db, "upload_issue_image");
-      insertIssue(db, {
-        description: `请按截图修复\n\n![shot](attachment://upload_issue_image)\n\n![dup](attachment://upload_issue_image)`,
-        projectId: "demo",
-        title: "image issue"
-      });
+    const provider = new ScriptedProvider();
+    addProject(db, "demo", provider.id);
+    const imagePath = join(db.path, "..", "upload_issue_image.png");
+    await writeFile(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    insertRow(db, "uploads", {
+      id: "upload_issue_image", original_name: "shot.png", mime_type: "image/png", size_bytes: 4,
+      sha256: "fixture-sha", storage_path: imagePath, created_at: FIXTURE_TIME
+    });
+    addIssue(db, "demo", "image issue", {
+      description: `请按截图修复\n\n![shot](attachment://upload_issue_image)\n\n![dup](attachment://upload_issue_image)`
+    });
 
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+    await runOnce(db, provider);
 
-      expect(provider.inputs[0]?.images).toEqual([{
-        detail: "high",
-        path: imagePath,
-        type: "localImage"
-      }]);
-      expect(provider.inputs[0]?.prompt).toContain("attachment://upload_issue_image");
-    } finally {
-      db.close();
-    }
+    expect(provider.inputs[0]?.images).toEqual([{ detail: "high", path: imagePath, type: "localImage" }]);
+    expect(provider.inputs[0]?.prompt).toContain("attachment://upload_issue_image");
   });
 
   test("keeps skill intent context small and avoids dumping the global skill registry", async () => {
-    const db = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(db, { id: "demo", provider: provider.id });
-      insertIssue(db, {
-        projectId: "demo",
-        recommendedSkillIntents: ["frontend-ui", "css-layout", "react-component-maintenance"],
-        title: "frontend issue"
-      });
+    const prompt = await promptFor({
+      recommended_skill_intents_json: JSON.stringify(["frontend-ui", "css-layout", "react-component-maintenance"]),
+      title: "frontend issue"
+    });
 
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
-
-      const prompt = provider.inputs[0]?.prompt ?? "";
-      expect(prompt).toContain("## Skill Intent Context");
-      expect(prompt).toContain(`Recommended skill intents: ["frontend-ui","css-layout","react-component-maintenance"]`);
-      expect(prompt).not.toContain("Available skills metadata");
-      expect(prompt).not.toContain("babysit-repo");
-    } finally {
-      db.close();
-    }
+    expect(prompt).toContain("## Skill Intent Context");
+    expect(prompt).toContain(`Recommended skill intents: ["frontend-ui","css-layout","react-component-maintenance"]`);
+    expect(prompt).not.toContain("Available skills metadata");
+    expect(prompt).not.toContain("babysit-repo");
   });
 
   test("keeps provider failures as Run facts until PI decides the Issue", async () => {
     const db = await openFixtureDatabase();
-    const provider = new FailingExecutionProvider();
-    try {
-      insertProject(db, { id: "demo", provider: provider.id });
-      const issueId = insertIssue(db, { projectId: "demo", title: "provider fails" });
+    const provider = new ScriptedProvider(FAKE, { fail: PROVIDER_FAILURE });
+    addProject(db, "demo", provider.id);
+    const issueId = addIssue(db, "demo", "provider fails");
 
-      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+    await runOnce(db, provider);
 
-      const issue = getIssue(db, issueId);
-      const run = listIssueRuns(db, issueId).at(-1);
-      expect(issue).toMatchObject({
-        status: "in_progress",
-        error: ""
-      });
-      expect(run).toMatchObject({
-        status: "failed",
-        exit_reason: "provider_reported_failed",
-        error: "provider failed CODEX_API_KEY=[redacted]"
-      });
-      expect(run?.error).not.toContain("fixture-secret");
-      expect(run?.ended_at).not.toBe("");
-      expect(listIssueEvents(db, issueId, { types: ["issue.pi_acceptance_requested.v1"] })).toHaveLength(1);
-    } finally {
-      db.close();
-    }
+    const run = listIssueRuns(db, issueId).at(-1);
+    expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress", error: "" });
+    expect(run).toMatchObject({
+      status: "failed",
+      exit_reason: "provider_reported_failed",
+      error: "provider failed CODEX_API_KEY=[redacted]"
+    });
+    expect(run?.error).not.toContain("fixture-secret");
+    expect(run?.ended_at).not.toBe("");
+    expect(listIssueEvents(db, issueId, { types: ["issue.pi_acceptance_requested.v1"] })).toHaveLength(1);
   });
 });
 
-type ProjectFixture = { autoRun?: number; cwd?: string; defaultAgentProfileId?: string; id: string; model?: string; provider: string; serviceTier?: string };
+const PROVIDER_FAILURE = "provider failed CODEX_API_KEY=fixture-secret";
+const INITIALIZE_TIMEOUT = "codex app-server request timed out after 10000ms: initialize";
 
-type IssueFixture = {
-  agentProfileId?: string;
-  createdAt?: string;
-  description?: string;
-  priority?: number;
-  projectId: string;
-  recommendedSkillIntents?: string[];
-  requiredSkillIntents?: string[];
-  status?: string;
-  serviceTier?: string;
-  title: string;
-};
-
-function insertProject(db: RunnerDatabase, project: ProjectFixture): void {
-  db.sqlite.run(
-    `insert into projects (id, name, cwd, provider, model, auto_run, default_agent_profile_id, default_service_tier, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [project.id, project.id, project.cwd ?? `/tmp/${project.id}`, project.provider, project.model ?? "codex-default",
-      project.autoRun ?? 0, project.defaultAgentProfileId ?? "", project.serviceTier ?? "",
-      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
-  );
+function addProject(db: RunnerDatabase, id: string, provider: string, values: Record<string, SQLQueryBindings> = {}): void {
+  insertProject(db, id, { provider, model: "codex-default", ...values });
 }
 
-function insertIssue(db: RunnerDatabase, issue: IssueFixture): number {
-  const status = issue.status ?? "todo";
-  const priority = issue.priority ?? 0;
-  const createdAt = issue.createdAt ?? "2026-01-01T00:00:00Z";
-  db.sqlite.run(
-    `insert into issues (project_id, title, description, status, priority, agent_profile_id, service_tier,
-      required_skill_intents_json, recommended_skill_intents_json, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      issue.projectId, issue.title, issue.description ?? "", status, priority,
-      issue.agentProfileId ?? "", issue.serviceTier ?? "", JSON.stringify(issue.requiredSkillIntents ?? []),
-      JSON.stringify(issue.recommendedSkillIntents ?? []), createdAt, createdAt
-    ]
-  );
-  const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
-  if (!row) throw new Error("missing inserted issue id");
-  return row.id;
+function addIssue(db: RunnerDatabase, projectId: string, title: string, values: Record<string, SQLQueryBindings> = {}): number {
+  const createdAt = values.created_at ?? FIXTURE_TIME;
+  return insertIssue(db, { project_id: projectId, title, status: "todo", updated_at: createdAt, ...values });
 }
 
-async function insertUpload(db: RunnerDatabase, id: string): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-upload-"));
-  tempRoots.push(root);
-  const path = join(root, `${id}.png`);
-  await mkdir(root, { recursive: true });
-  await writeFile(path, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
-  db.sqlite.run(
-    `insert into uploads (id, original_name, mime_type, size_bytes, sha256, storage_path, created_at)
-     values (?, ?, ?, ?, ?, ?, ?)`,
-    [id, "shot.png", "image/png", 4, "fixture-sha", path, "2026-01-01T00:00:00Z"]
-  );
-  return path;
+function insertAgentProfile(db: RunnerDatabase, id: string, provider: string, values: Record<string, SQLQueryBindings>): void {
+  insertRow(db, "agent_profiles", {
+    id, name: id, provider, reasoning_effort: "high", approval_policy: "on-request", sandbox: "danger-full-access",
+    skill_intents_json: "[]", created_at: FIXTURE_TIME, updated_at: FIXTURE_TIME, ...values
+  });
 }
 
-function insertAgentProfile(db: RunnerDatabase, input: { id: string; model: string; provider: string; serviceTier?: string }): void {
-  db.sqlite.run(
-    `insert into agent_profiles (id, name, provider, model, reasoning_effort, service_tier,
-      approval_policy, sandbox, skill_intents_json, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      input.id, input.id, input.provider, input.model, "high", input.serviceTier ?? "", "on-request",
-      "danger-full-access", "[]", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"
-    ]
-  );
+function runOnce(db: RunnerDatabase, provider: ScriptedProvider, projectId = "demo") {
+  return runProjectLoopOnce({ database: db, projectId, providers: { [provider.id]: provider } });
+}
+
+/** Runs one loop pass for a fresh "demo" issue and returns the prompt the executor received. */
+async function promptFor(
+  issue: Record<string, SQLQueryBindings> & { title: string },
+  seed: (db: RunnerDatabase, issueID: number) => void = () => {}
+): Promise<string> {
+  const db = await openFixtureDatabase();
+  const provider = new ScriptedProvider();
+  addProject(db, "demo", provider.id);
+  seed(db, addIssue(db, "demo", issue.title, issue));
+  await runOnce(db, provider);
+  return provider.inputs[0]?.prompt ?? "";
+}
+
+function resolvedSettings(overrides: Record<string, string>) {
+  return {
+    approval_policy: "never", model: "", reasoning_effort: "", sandbox: "workspace-write",
+    service_tier: "", service_tier_source: "standard", ...overrides
+  };
+}
+
+function settle(predicate: () => boolean): Promise<unknown> {
+  return waitFor(predicate, "condition timed out", 100, 5);
 }
 
 function latestRunMetadata(db: RunnerDatabase, issueId: number): Record<string, unknown> {
@@ -1193,19 +702,12 @@ function latestAttempt(db: RunnerDatabase, issueId: number): Record<string, unkn
 }
 
 function insertOpenRun(db: RunnerDatabase, issueID: number): void {
-  db.sqlite.run(
-    `insert into issue_runs (id, issue_id, attempt, status, started_at)
-     values (?, ?, ?, ?, ?)`,
-    [`issue-${issueID}-attempt-1`, issueID, 1, "in_progress", "2026-01-01T00:00:00Z"]
-  );
+  insertRow(db, "issue_runs", { id: `issue-${issueID}-attempt-1`, issue_id: issueID, attempt: 1, status: "in_progress", started_at: FIXTURE_TIME });
 }
 
 function closeClaimedIssue(db: RunnerDatabase, issueID: number): void {
   db.sqlite.run("update issues set status='done' where id=?", [issueID]);
-  db.sqlite.run("update issue_runs set status='done', ended_at=? where issue_id=? and ended_at=''", [
-    "2026-01-01T00:01:00Z",
-    issueID
-  ]);
+  db.sqlite.run("update issue_runs set status='done', ended_at=? where issue_id=? and ended_at=''", ["2026-01-01T00:01:00Z", issueID]);
 }
 
 function listEventTypes(db: RunnerDatabase, issueID: number): string[] {
@@ -1214,22 +716,9 @@ function listEventTypes(db: RunnerDatabase, issueID: number): string[] {
   ).all(issueID).map((event) => event.type);
 }
 
-function latestEventPayload(
-  db: RunnerDatabase,
-  issueID: number,
-  type: string
-): Record<string, unknown> {
-  const payload = db.sqlite.query<{ payload: string }, [number, string]>(`
-    select payload from issue_events where issue_id=? and type=? order by id desc limit 1
-  `).get(issueID, type)?.payload ?? "{}";
+function latestEventPayload(db: RunnerDatabase, issueID: number, type: string): Record<string, unknown> {
+  const payload = db.sqlite.query<{ payload: string }, [number, string]>(
+    "select payload from issue_events where issue_id=? and type=? order by id desc limit 1"
+  ).get(issueID, type)?.payload ?? "{}";
   return JSON.parse(payload) as Record<string, unknown>;
-}
-
-async function waitFor(predicate: () => boolean, timeoutMs = 500): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (predicate()) return;
-    await Bun.sleep(5);
-  }
-  throw new Error("condition timed out");
 }
