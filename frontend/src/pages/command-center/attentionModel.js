@@ -1,12 +1,4 @@
-export const ATTENTION_PRIORITIES = ['p0', 'p1', 'p2', 'p3'];
 
-export function groupAttentionByPriority(items = []) {
-  const groups = Object.fromEntries(ATTENTION_PRIORITIES.map(priority => [priority, []]));
-  for (const item of items) {
-    if (groups[item?.priority]) groups[item.priority].push(item);
-  }
-  return groups;
-}
 
 export function attentionActionPayload(item, action, { nonce = eventNonce(), occurredAt = new Date().toISOString() } = {}) {
   const payload = {

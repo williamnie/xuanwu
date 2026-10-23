@@ -3,17 +3,10 @@ import test from 'node:test';
 import {
   buildRunControlPayload,
   mergeRunPages,
-  resolveRunsPage,
   runAvailableActions,
   runIssueId,
   runProviderSessionRef,
 } from './runPageModel.js';
-
-test('Sessions remains a compatibility route into the canonical Runs page', () => {
-  assert.equal(resolveRunsPage('sessions'), 'runs');
-  assert.equal(resolveRunsPage('runs'), 'runs');
-  assert.equal(resolveRunsPage('issues'), 'issues');
-});
 
 test('Run drill-down resolves the latest provider observation without exposing it as Run identity', () => {
   const run = fixtureRun({

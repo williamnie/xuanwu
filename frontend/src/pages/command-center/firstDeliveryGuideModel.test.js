@@ -4,7 +4,6 @@ import {
   FIRST_DELIVERY_TITLE,
   firstDeliveryRecovery,
   firstDeliveryState,
-  onboardingProjectID,
   preselectedCodeAgentID,
   RUNTIME_REPAIR_COMMAND,
   sampleWorkPayload,
@@ -94,7 +93,6 @@ test('sample mutation is uniquely audited and strictly read-only', () => {
   assert.ok(first.goal.indexOf("printf 'Hello Xuanwu\\n'") < first.goal.indexOf('README'));
   assert.match(first.goal, /第一条通过的验证结果/);
   assert.match(first.goal, /后续验证结果/);
-  assert.equal(onboardingProjectID('/tmp/My Demo/'), 'my-demo');
 });
 
 test('recovery keeps a failed or partially delivered Work on its existing authority', () => {

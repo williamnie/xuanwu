@@ -31,22 +31,6 @@ const REVIEW_LABELS = {
   pending: '等待评审',
 };
 
-export function mergeRecentDeliveryDetail(summary, detail) {
-  const handoff = detail?.handoff;
-  if (!handoff || handoff.id !== summary?.id) return summary;
-  return {
-    ...summary,
-    delivery: handoff.delivery || summary.delivery,
-    delivery_status: detail.delivery_status || summary.delivery_status,
-    evidence_count: Array.isArray(handoff.evidence_ids) ? handoff.evidence_ids.length : summary.evidence_count,
-    review: handoff.review || summary.review,
-    risk_count: Array.isArray(handoff.risks) ? handoff.risks.length : summary.risk_count,
-    status: handoff.status || summary.status,
-    summary: handoff.summary || summary.summary,
-    updated_at: handoff.updated_at || summary.updated_at,
-  };
-}
-
 export function recentDeliveryView(item) {
   const delivery = item?.delivery || {};
   const mode = delivery.mode || 'unknown';

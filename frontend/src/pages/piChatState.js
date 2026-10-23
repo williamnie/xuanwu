@@ -563,8 +563,3 @@ function normalizeReference(reference) {
 function transcriptMessage(role, text, meta = null) {
   return { created_at: new Date().toISOString(), id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, meta, role, text };
 }
-
-export function shortId(value) {
-  const text = String(value || '');
-  return text.length > 12 ? `${text.slice(0, 6)}…${text.slice(-4)}` : text;
-}

@@ -116,17 +116,6 @@ describe("P0 baseline: 自动检测前后端 provider/capability drift", () => {
     expect(enabledValues).not.toContain("opencode");
     expect(enabledValues).not.toContain("kimicode");
   });
-
-  test("前端 CAPABILITY_LABELS 与后端 ExecutorCapability 对齐（P6 后 transcript_export 由 nativeActions 提供）", async () => {
-    const source = await readFile(frontendSessionOptionsPath, "utf8");
-    const labelsBlock = source.match(/CAPABILITY_LABELS\s*=\s*{([^}]+)}/)?.[1] ?? "";
-    const frontendCapabilities = [...labelsBlock.matchAll(/([a-z_]+):/g)].map((m) => m[1]).sort();
-    expect(frontendCapabilities.length).toBeGreaterThan(0);
-    // P6：transcript_export 不再是通用 capability label（后端 ExecutorCapability 亦无此项）
-    expect(frontendCapabilities).not.toContain("transcript_export");
-    const knownFrontendOnly = frontendCapabilities.filter((c) => !["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"].includes(c));
-    expect(knownFrontendOnly).toEqual([]);
-  });
 });
 
 function insertProject(db: RunnerDatabase, id: string): void {

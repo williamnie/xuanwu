@@ -181,8 +181,6 @@ export const selectBackendOnline = (state) => state.backendOnline;
 export const selectBackendConnectionState = (state) => state.backendConnectionState;
 export const selectLoading = (state) => state.loading;
 export const selectRefreshData = (state) => state.refreshData;
-export const selectRefreshAllData = (state) => state.refreshAllData;
-export const selectSetBackendOnline = (state) => state.setBackendOnline;
 export const selectSetBackendConnectionState = (state) => state.setBackendConnectionState;
 export const selectSetGuardianAlerts = (state) => state.setGuardianAlerts;
 export const selectSetProjects = (state) => state.setProjects;

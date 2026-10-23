@@ -8,10 +8,6 @@ export const RUN_REFRESH_EVENT_TYPES = new Set([
   'run.lifecycle.run_materialized.v1',
 ]);
 
-export function resolveRunsPage(page) {
-  return page === 'sessions' ? 'runs' : page;
-}
-
 export function mergeRunPages(current, incoming) {
   const byId = new Map(current.map(run => [run.id, run]));
   incoming.forEach(run => byId.set(run.id, run));

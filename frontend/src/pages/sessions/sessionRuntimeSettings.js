@@ -27,10 +27,6 @@ export function sessionRuntimeSettings(session = null) {
   });
 }
 
-export function messageSettingsForSession(session, project) {
-  return messageSettingsForRuntimeKey(sessionRuntimeSettingsKey(session), project);
-}
-
 export function messageSettingsForRuntimeKey(runtimeKey, project) {
   const runtimeSettings = settingsFromRuntimeKey(runtimeKey);
   const merged = {

@@ -2,14 +2,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { attentionActionPayload, attentionView, groupAttentionByPriority } from './attentionModel.js';
+import { attentionActionPayload, attentionView } from './attentionModel.js';
 
 const ITEM = { id: 'xw:attention:pi_guardian_alerts:alert-1', priority: 'p0', revision: 3, status: 'open', type: 'connection_issue' };
 
-test('Attention groups priority and labels every action-required type deterministically', () => {
-  const groups = groupAttentionByPriority([ITEM, { ...ITEM, id: 'approval', priority: 'p2', type: 'approval_required' }]);
-  assert.deepEqual(groups.p0.map(item => item.id), [ITEM.id]);
-  assert.deepEqual(groups.p2.map(item => item.id), ['approval']);
+test('Attention labels every action-required type deterministically', () => {
   assert.equal(attentionView({ ...ITEM, type: 'approval_required' }).typeLabel, '等待审批');
   assert.equal(attentionView({ ...ITEM, type: 'blocker' }).typeLabel, '阻塞');
   assert.equal(attentionView({ ...ITEM, type: 'failure' }).typeLabel, '失败');

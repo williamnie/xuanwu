@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildSessionComposerSuggestions,
-  issueCommandPrompt,
   issueReferenceText,
 } from './sessionComposerAssist.js';
 
@@ -100,7 +99,5 @@ test('slash suggestions expose structured command payloads', () => {
 });
 
 test('reference text normalizes whitespace without creating @project text', () => {
-  assert.equal(issueCommandPrompt({ id: 'demo', name: 'Demo\nProject' }).startsWith('项目：Demo Project (demo)'), true);
-  assert.doesNotMatch(issueCommandPrompt({ id: 'demo', name: 'Demo Project' }), /@project/);
   assert.equal(issueReferenceText({ id: 7, title: 'Fix\tbug' }), '#7 Fix bug');
 });

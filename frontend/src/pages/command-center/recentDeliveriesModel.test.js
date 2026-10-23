@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
-  mergeRecentDeliveryDetail,
   recentDeliveryDetailRoute,
   recentDeliveryView,
 } from './recentDeliveriesModel.js';
@@ -47,28 +46,6 @@ test('Evidence, review, delivery and risk conclusions stay deterministic', () =>
   assert.equal(view.statusTone, 'amber');
   assert.equal(view.riskLabel, '1 项风险');
   assert.equal(view.externalHref, 'https://git.example.test/pulls/697');
-});
-
-test('detail refresh replaces aggregate status without replacing API-owned links', () => {
-  const snapshot = item({ status: 'draft' });
-  const refreshed = mergeRecentDeliveryDetail(snapshot, {
-    delivery_status: { overall: 'delivered', refreshed_at: '2026-07-17T08:02:00.000Z' },
-    handoff: {
-      delivery: { mode: 'deploy', deployment_ref: 'deploy:697', environment: 'staging', revision_ref: 'abc123' },
-      evidence_ids: ['xw:evidence:git:697'],
-      id: HANDOFF_ID,
-      review: { state: 'not_applicable' },
-      risks: [],
-      status: 'delivered',
-      summary: 'Deployed verified revision',
-      updated_at: '2026-07-17T08:02:00.000Z',
-    },
-  });
-  assert.equal(refreshed.delivery_status.overall, 'delivered');
-  assert.equal(refreshed.status, 'delivered');
-  assert.equal(refreshed.evidence_count, 1);
-  assert.equal(refreshed.links, snapshot.links);
-  assert.equal(recentDeliveryView(refreshed).operationLabel, 'Deploy');
 });
 
 test('open actions accept only the returned matching Handoff link and HTTP(S) URL', () => {

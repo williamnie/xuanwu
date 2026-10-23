@@ -8,8 +8,6 @@ export const WORK_BOARD_STATUSES = [
   'cancelled',
 ];
 
-export const WORK_BOARD_TYPES = ['objective', 'engineering_task'];
-
 export function laneScrollDecision({ armed, clientHeight, scrollHeight, scrollTop }, threshold = 160) {
   const remaining = scrollHeight - scrollTop - clientHeight;
   const nearEnd = scrollHeight > clientHeight && remaining <= threshold;

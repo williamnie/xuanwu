@@ -15,23 +15,6 @@ export function buildSessionComposerSuggestions({ issues = [], currentProject = 
   ];
 }
 
-export function issueCommandPrompt(project = null) {
-  const projectLine = project ? `项目：${projectLabel(project)}\n\n` : '';
-  return `${projectLine}请把下面内容整理为一个 xuanwu issue：\n\n## 背景/问题\n\n## 目标\n\n## 范围\n\n## 验收\n\n## 验证方式\n`;
-}
-
-export function statusCommandPrompt(linkedIssues = []) {
-  const refs = linkedIssues.map(issueReferenceText).filter(Boolean).join('、');
-  const targetLine = refs ? `关联 issue：${refs}\n\n` : '';
-  return `${targetLine}请查询当前 linked issue / runner 状态，并总结：\n- 当前状态\n- 最近日志或错误\n- 下一步建议\n`;
-}
-
-function projectLabel(project) {
-  const id = cleanInline(project?.id);
-  const name = cleanInline(project?.name) || id || '未命名项目';
-  return id && id !== name ? `${name} (${id})` : name;
-}
-
 export function issueReferenceText(issue) {
   const id = cleanInline(issue?.id);
   if (!id) return '';

@@ -10,19 +10,6 @@ export const REASONING_EFFORT_OPTIONS = [
 ];
 
 export const SERVICE_TIER_STANDARD = '';
-export const SERVICE_TIER_FAST = 'priority';
-
-export const APPROVAL_OPTIONS = [
-  { value: 'never', label: '不询问授权', shortLabel: '不询问' },
-  { value: 'danger-only', label: '敏感操作确认', shortLabel: '敏感确认' },
-  { value: 'always', label: '每次执行必审', shortLabel: '必审' },
-];
-
-export const SANDBOX_OPTIONS = [
-  { value: 'workspace-write', label: 'Workspace write' },
-  { value: 'read-only', label: 'Read only' },
-  { value: 'danger-full-access', label: 'Danger full access' },
-];
 
 export const PROVIDER_OPTIONS = [
   { value: 'codex', label: 'Codex', enabled: true },
@@ -45,16 +32,6 @@ export function providerOptionsFromCatalog(catalog) {
     }));
 }
 
-export const CAPABILITY_LABELS = {
-  issue_execution: 'Issue 执行',
-  sessions: 'Sessions',
-  resume_session: '恢复会话',
-  interrupt: '中断',
-  approvals: '审批',
-  model_list: '模型列表',
-  // transcript_export 非通用 capability：由 Provider manifest nativeActions 提供（P6）
-};
-
 export function providerValue(project) {
   return project?.provider || '';
 }
@@ -75,12 +52,6 @@ export function providerCapabilities(project) {
 
 export function providerSupports(project, capability) {
   return providerCapabilities(project).includes(capability);
-}
-
-export function capabilitySummary(project) {
-  const capabilities = providerCapabilities(project);
-  if (!capabilities.length) return '暂无 capability 声明';
-  return capabilities.map((item) => CAPABILITY_LABELS[item] || item).join(' / ');
 }
 
 export function modelValueFromProject(project) {

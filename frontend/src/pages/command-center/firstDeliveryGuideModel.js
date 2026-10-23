@@ -73,12 +73,6 @@ export function firstDeliveryRecovery(state) {
   return '任务已有验证结果，还缺交付结果。点击“完成交付检查”即可在本页整理；如果检查未通过，点击“让玄武协助”继续处理。';
 }
 
-export function onboardingProjectID(cwd) {
-  const normalized = String(cwd || '').trim().replace(/[\\/]+$/, '');
-  const base = normalized.split(/[\\/]/).pop()?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'project';
-  return base.replace(/^-+|-+$/g, '') || 'project';
-}
-
 export function sampleWorkPayload(projectID, now = new Date().toISOString(), nonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}`) {
   return {
     audit: {
