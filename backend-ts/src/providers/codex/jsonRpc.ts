@@ -446,21 +446,6 @@ export function codexAppServerRpcTimeoutMs(configuredTimeoutMs: number): number 
   return Math.min(Math.max(1, configuredTimeoutMs), CODEX_APP_SERVER_RPC_TIMEOUT_MS);
 }
 
-export async function runCodexTransportInitializeSmoke(
-  config: ProviderRuntimeConfig,
-  options: CodexTransportOptions = {}
-): Promise<unknown> {
-  const transport = new CodexStdioJsonRpcTransport(config, options);
-  try {
-    return await transport.request("initialize", {
-      clientInfo: { name: "xuanwu", version: "0.1.0" },
-      capabilities: { experimentalApi: true }
-    });
-  } finally {
-    await transport.stop();
-  }
-}
-
 function isRequestId(value: unknown): value is string | number {
   return typeof value === "number" || typeof value === "string";
 }

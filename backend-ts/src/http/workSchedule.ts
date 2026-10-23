@@ -12,14 +12,6 @@ import { readProjectLoopSnapshot } from "../runner/projectLoopManager.ts";
 import { evaluateQueueCandidate, providerAvailability, projectCapacityAvailable, type WorkSchedule } from "../runner/queueEligibility.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 
-export const WORK_SCHEDULE_CONTRACT = {
-  version: "xw.work-schedule.v1", statuses: ["todo"], authority: "shared-queue-candidate-gates",
-  dependency_reads: "once-per-project-per-request; existing per-node readiness reads retained",
-  capacity_source: "core_runtime", writes: false,
-  priority: ["project_hold", "auto_run_off", "dependency_waiting", "dependency_failed", "dependency_missing",
-    "dependency_cycle", "readiness_waiting", "workspace_waiting", "provider_unavailable", "project_busy", "capacity_full"]
-} as const;
-
 export type ScheduledWork = WorkLedgerEntry & { schedule?: WorkSchedule };
 
 /** Request-local projection. Dependency/readiness stays on the scheduler's existing read path.

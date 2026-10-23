@@ -54,10 +54,6 @@ export function isoWeekKey(date: Date): string {
   return `${probe.getFullYear()}-W${pad(week)}`;
 }
 
-export function parseJSON(value: string): unknown {
-  try { return JSON.parse(value); } catch { return null; }
-}
-
 export function numeric(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }

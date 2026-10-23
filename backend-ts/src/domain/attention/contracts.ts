@@ -49,13 +49,6 @@ export const ATTENTION_PRIORITY_TABLE = {
   connection_issue: { critical: "p0", high: "p1", medium: "p1", low: "p2" }
 } as const satisfies Record<AttentionType, Record<AttentionSeverity, AttentionPriority>>;
 
-const ATTENTION_ESCALATION_AFTER_MS = {
-  p0: null,
-  p1: 60 * 60 * 1000,
-  p2: 4 * 60 * 60 * 1000,
-  p3: 24 * 60 * 60 * 1000
-} as const satisfies Record<AttentionPriority, number | null>;
-
 export type AttentionSourceRef = {
   authority: AttentionSourceAuthority;
   correlation_refs: string[];
@@ -233,56 +226,6 @@ export function applyAttentionCommand(
   next.revision += 1;
   next.updated_at = command.audit.occurred_at;
   return transitionResult(current, next, command.action, command.audit);
-}
-
-export function escalateAttentionIfDue(
-  current: AttentionRecord,
-  audit: AttentionTransitionAudit
-): AttentionTransitionResult | null {
-  if (!isAttentionEscalationDue(current, audit.occurred_at)) return null;
-  return applyAttentionCommand(current, {
-    action: "escalate",
-    audit,
-    expected_revision: current.revision
-  });
-}
-
-function isAttentionEscalationDue(current: AttentionRecord, now: string): boolean {
-  assertAttentionRecord(current);
-  const nowMs = timestampMs(now, "now");
-  if (TERMINAL_ATTENTION_STATUSES.has(current.status) || current.priority === "p0") return false;
-  if (current.snoozed_until && nowMs < timestampMs(current.snoozed_until, "snoozed_until")) return false;
-  const delay = ATTENTION_ESCALATION_AFTER_MS[current.priority];
-  if (delay === null) return false;
-  const baseline = current.escalation.last_escalated_at ?? current.created_at;
-  return nowMs - timestampMs(baseline, "escalation baseline") >= delay;
-}
-
-export function reconcileAttentionSources(
-  current: AttentionRecord,
-  sourceRefs: readonly AttentionSourceRef[],
-  audit: AttentionTransitionAudit
-): AttentionTransitionResult {
-  assertAttentionRecord(current);
-  assertAudit(audit);
-  if (audit.gate.authority !== "deterministic_policy" || audit.gate.decision !== "allow") {
-    throw new Error("Attention source reconciliation requires an allowed deterministic policy gate");
-  }
-  const updates = new Map(sourceRefs.map((ref) => [sourceIdentity(ref), normalizedSourceRef(ref)]));
-  const next = structuredClone(current);
-  next.source_refs = current.source_refs.map((ref) => updates.get(sourceIdentity(ref)) ?? ref);
-  const unknown = [...updates.keys()].filter((key) => !current.source_refs.some((ref) => sourceIdentity(ref) === key));
-  if (unknown.length > 0) throw new Error(`Attention source reconciliation contains unknown refs: ${unknown.join(", ")}`);
-
-  const before = current.status;
-  if (next.source_refs.every((ref) => TERMINAL_SOURCE_RESOLUTIONS.has(ref.resolution))) {
-    const target = next.source_refs.every((ref) => ref.resolution === "dismissed") ? "dismissed" : "resolved";
-    if (!TERMINAL_ATTENTION_STATUSES.has(next.status)) next.status = transitionStatus(next.status, target);
-    delete next.snoozed_until;
-  }
-  next.revision += 1;
-  next.updated_at = audit.occurred_at;
-  return transitionResult({ ...current, status: before }, next, "source_reconciled", audit);
 }
 
 export function validateAttentionRecord(record: AttentionRecord): string[] {

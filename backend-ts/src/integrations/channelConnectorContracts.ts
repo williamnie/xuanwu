@@ -152,17 +152,6 @@ export function validateOutboundEnvelope(value: unknown, manifest?: ConnectorMan
   return result(errors);
 }
 
-export function validateConnectorHealth(value: unknown): ConnectorConformanceResult {
-  const errors: string[] = [];
-  const health = record(value, "connector health", errors);
-  if (!health) return result(errors);
-  text(health.checked_at, "health.checked_at", errors, 64);
-  optionalSafeText(health.last_error, "health.last_error", errors, 4096);
-  if (!CONNECTOR_HEALTH_STATES.includes(health.state as ConnectorHealthState)) errors.push("health.state is unsupported");
-  if (!nonNegativeInteger(health.reconnect_attempts)) errors.push("health.reconnect_attempts must be a non-negative integer");
-  return result(errors);
-}
-
 /** Fail closed before invoking an adapter. */
 export function assertOutboundEnvelope(value: unknown, manifest?: ConnectorManifest): asserts value is OutboundEnvelope {
   const validation = validateOutboundEnvelope(value, manifest);
@@ -178,16 +167,6 @@ export function assertConnectorConformance(connector: ChannelConnector): void {
   if (connector.manifest.capabilities.some((item) => item.kind === "outbound") && typeof connector.deliver !== "function") {
     throw new Error("connector declares outbound capability without deliver");
   }
-}
-
-/** Safe for status/audit surfaces; auth references remain opaque and payload secrets are never emitted. */
-export function redactConnectorValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(redactConnectorValue);
-  if (!value || typeof value !== "object") return typeof value === "string" ? redactSensitiveText(value) : value;
-  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => {
-    if (secretKey.test(key)) return [key, "[redacted]"];
-    return [key, redactConnectorValue(item)];
-  }));
 }
 
 function capabilities(value: unknown, errors: string[]): void {
@@ -279,20 +258,6 @@ function text(value: unknown, label: string, errors: string[], maximum: number, 
   return output;
 }
 
-function optionalSafeText(value: unknown, label: string, errors: string[], maximum: number): void {
-  if (typeof value !== "string") {
-    errors.push(`${label} must be a string`);
-    return;
-  }
-  const output = value.trim();
-  if (output.length > maximum) errors.push(`${label} exceeds ${maximum} characters`);
-  if (output !== redactSensitiveText(output)) errors.push(`${label} contains a secret`);
-}
-
-function nonNegativeInteger(value: unknown): boolean {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-}
-
 function containsSecretValue(value: unknown): boolean {
   return typeof value === "string" && /(?:bearer\s+|api[_-]?key=|token=|secret=)/i.test(value);
 }
@@ -302,4 +267,3 @@ function result(errors: string[]): ConnectorConformanceResult {
 }
 
 const idPattern = /^[a-z0-9][a-z0-9_.:-]*$/;
-const secretKey = /(?:token|secret|password|api[_-]?key|authorization)/i;

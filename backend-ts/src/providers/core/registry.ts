@@ -306,7 +306,3 @@ function messageOf(err: unknown): string {
   if (err instanceof Error) return err.message;
   return "unknown error";
 }
-
-export function registryEntryId(id: string): ProviderId {
-  return asProviderId(id);
-}

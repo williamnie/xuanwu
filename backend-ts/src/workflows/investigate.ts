@@ -1,10 +1,5 @@
-import { Type, type Static } from "@sinclair/typebox";
+import { Type } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
-import {
-  canSatisfyEvidenceGate,
-  validateEvidence,
-  type EvidenceRecord
-} from "../domain/evidence/contracts.ts";
 import type { WorkflowVerificationPolicy } from "../domain/evidence/policy.ts";
 import {
   workflowManifestRef,
@@ -157,9 +152,6 @@ const INVESTIGATE_HANDOFF_REPORT_SCHEMA = Type.Object({
   }, { additionalProperties: false })
 }, { additionalProperties: false });
 
-export type InvestigateHandoffReport = Static<typeof INVESTIGATE_HANDOFF_REPORT_SCHEMA>;
-type InvestigateHandoffValidation = { errors: string[]; ok: boolean };
-
 export function investigateWorkflowRegistryContributions(): {
   manifests: WorkflowManifestRegistration[];
   verification_policies: WorkflowVerificationPolicy[];
@@ -171,39 +163,6 @@ export function investigateWorkflowRegistryContributions(): {
     }],
     verification_policies: [structuredClone(INVESTIGATE_VERIFICATION_POLICY)]
   };
-}
-
-export function validateInvestigateHandoffReport(
-  input: unknown,
-  evidence?: readonly EvidenceRecord[]
-): InvestigateHandoffValidation {
-  if (!Value.Check(INVESTIGATE_HANDOFF_REPORT_SCHEMA, input)) {
-    return {
-      errors: [...Value.Errors(INVESTIGATE_HANDOFF_REPORT_SCHEMA, input)].map((error) =>
-        `schema ${error.path || "/"}: ${error.message}`
-      ),
-      ok: false
-    };
-  }
-  const report = input as InvestigateHandoffReport;
-  const errors: string[] = [];
-  const stageIDs = report.stages.map((stage) => stage.id);
-  if (stageIDs.some((id, index) => id !== INVESTIGATE_STAGE_IDS[index])) {
-    errors.push(`stages must be ordered exactly as ${INVESTIGATE_STAGE_IDS.join(", ")}`);
-  }
-  if (new Set(report.evidence_ids).size !== report.evidence_ids.length) {
-    errors.push("evidence_ids must be unique");
-  }
-  if (new Set(report.read_only_audit.tool_audit_refs).size !== report.read_only_audit.tool_audit_refs.length) {
-    errors.push("tool_audit_refs must be unique");
-  }
-  const reportEvidence = new Set(report.evidence_ids);
-  const stageEvidence = new Set(report.stages.flatMap((stage) => stage.evidence_ids));
-  for (const id of stageEvidence) if (!reportEvidence.has(id)) errors.push(`stage references undeclared Evidence ${id}`);
-  for (const id of reportEvidence) if (!stageEvidence.has(id)) errors.push(`Evidence ${id} is not linked to a stage`);
-  validateOutcome(report, errors);
-  if (evidence) validateLinkedEvidence(report, evidence, errors);
-  return { errors, ok: errors.length === 0 };
 }
 
 function stage(
@@ -229,61 +188,4 @@ function stage(
       project_override_modes: ["local_changes"]
     }
   };
-}
-
-function validateOutcome(report: InvestigateHandoffReport, errors: string[]): void {
-  const byID = new Map(report.stages.map((stage) => [stage.id, stage]));
-  if (byID.get("scope")?.status !== "completed") errors.push("scope stage must be completed");
-  if (byID.get("report")?.status !== "completed") errors.push("report stage must be completed");
-  if (report.outcome === "confirmed") {
-    if (report.reproduction.status !== "reproduced") errors.push("confirmed outcome requires reproduced status");
-    if (report.root_cause.status !== "confirmed") errors.push("confirmed outcome requires confirmed root cause");
-    if (byID.get("reproduce")?.status !== "completed" || byID.get("root-cause")?.status !== "completed") {
-      errors.push("confirmed outcome requires completed reproduce and root-cause stages");
-    }
-  }
-  if (report.outcome === "not_reproduced") {
-    if (report.reproduction.status !== "not_reproduced") {
-      errors.push("not_reproduced outcome requires not_reproduced reproduction status");
-    }
-    if (report.root_cause.status === "confirmed") errors.push("not_reproduced outcome cannot claim a confirmed root cause");
-    if (byID.get("reproduce")?.status !== "completed") {
-      errors.push("not_reproduced outcome requires a completed reproduction attempt");
-    }
-  }
-  if (report.outcome === "insufficient_information") {
-    if (report.reproduction.status !== "insufficient_information") {
-      errors.push("insufficient_information outcome requires matching reproduction status");
-    }
-    if (report.root_cause.status !== "unknown") {
-      errors.push("insufficient_information outcome requires unknown root cause");
-    }
-    if (byID.get("reproduce")?.status !== "blocked" || byID.get("root-cause")?.status !== "blocked") {
-      errors.push("insufficient_information outcome requires blocked reproduce and root-cause stages");
-    }
-  }
-}
-
-function validateLinkedEvidence(
-  report: InvestigateHandoffReport,
-  evidence: readonly EvidenceRecord[],
-  errors: string[]
-): void {
-  const byID = new Map(evidence.map((item) => [item.id, item]));
-  for (const id of report.evidence_ids) {
-    const item = byID.get(id as EvidenceRecord["id"]);
-    if (!item) {
-      errors.push(`linked Evidence is missing: ${id}`);
-      continue;
-    }
-    const validation = validateEvidence(item);
-    if (!validation.ok) errors.push(`linked Evidence ${id} is invalid: ${validation.errors.join("; ")}`);
-    if (item.work_id !== report.work_id) errors.push(`linked Evidence ${id} belongs to another Work`);
-  }
-  if (!report.evidence_ids.some((id) => {
-    const item = byID.get(id as EvidenceRecord["id"]);
-    return item ? canSatisfyEvidenceGate(item) : false;
-  })) {
-    errors.push("report requires at least one passed trusted Evidence observation");
-  }
 }

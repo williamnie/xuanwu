@@ -16,8 +16,7 @@ import { buildImConversationPromptProjection } from "../integrations/imConversat
 import { HTTP_READONLY_PROVIDER_ID, URL_FETCH_TOOL_NAME } from "../pi/httpToolProvider.ts";
 import {
   createPiRuntimeSession,
-  PI_RUNNER_CHAT_ACTIONS,
-  PI_RUNNER_CHAT_MUTATION_ACTIONS
+  PI_RUNNER_CHAT_ACTIONS
 } from "./piRuntime.ts";
 import { PI_CONTEXT_BUDGET_OBSERVATION_EVENT } from "./piContextBudgetObservation.ts";
 import { finalPiConversationSseData } from "./piConversationSse.testSupport.ts";
@@ -94,14 +93,6 @@ describe("Bun PI runtime v1 smoke", () => {
 
   test("Runner Chat authorization exposes canonical Issue status management", () => {
     expect(PI_RUNNER_CHAT_ACTIONS).toEqual(expect.arrayContaining([
-      "human_review.respond",
-      "issue.cancel",
-      "issue.delete",
-      "runner.settings_update",
-      "system.restart",
-      "issue.status_update"
-    ]));
-    expect(PI_RUNNER_CHAT_MUTATION_ACTIONS).toEqual(expect.arrayContaining([
       "human_review.respond",
       "issue.cancel",
       "issue.delete",

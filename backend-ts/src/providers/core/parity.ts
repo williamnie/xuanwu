@@ -1,4 +1,4 @@
-import type { ExecutorProvider, ProviderExecutionRef } from "../types.ts";
+import type { ExecutorProvider } from "../types.ts";
 import { legacySessionFields } from "./legacyProjection.ts";
 import { legacyCapabilitiesFromDetail } from "./manifest.ts";
 import type { RegistryEntry } from "./registry.ts";
@@ -26,22 +26,6 @@ type ParityReport = {
   diffs: ParityDiff[];
 };
 
-/** P9：refs parity——canonical ProviderExecutionRef 经 legacyProjection 与 legacy 存储值对比。 */
-export function compareRefsParity(
-  provider: string,
-  canonical: Partial<ProviderExecutionRef> | undefined,
-  legacy: { thread_id: string; turn_id: string }
-): ParityReport {
-  const projected = legacySessionFields(canonical);
-  const diffs: ParityDiff[] = [];
-  for (const field of ["thread_id", "turn_id"] as const) {
-    if (projected[field] !== legacy[field]) {
-      diffs.push({ scope: "refs", field, canonical: projected[field], legacy: legacy[field] });
-    }
-  }
-  return { provider, ok: diffs.length === 0, diffs };
-}
-
 /** P9：capabilities parity——manifest detail 投影 vs 实例 legacy 数组（drift 检测）。 */
 export function compareCapabilitiesParity(entry: RegistryEntry): ParityReport {
   const manifestLegacy = [...legacyCapabilitiesFromDetail(entry.manifest.capabilities)].sort();
@@ -64,14 +48,6 @@ export function compareCapabilitiesParity(entry: RegistryEntry): ParityReport {
 /** P9：W2 观察窗 flag（rollback 用；关闭即回退旧 projection，无 DB 回填）。 */
 export function legacyProjectionCompareEnabled(): boolean {
   return process.env.XUANWU_PROVIDER_LEGACY_PROJECTION_COMPARE === "1";
-}
-
-type LegacyConsumerInventory = Array<{ consumer: string; status: "migrated" | "legacy" | "pending" }>;
-
-export function summarizeConsumerInventory(inventory: LegacyConsumerInventory): { migrated: number; legacy: number; total: number } {
-  const migrated = inventory.filter((i) => i.status === "migrated").length;
-  const legacy = inventory.filter((i) => i.status !== "migrated").length;
-  return { migrated, legacy, total: inventory.length };
 }
 
 /** P9：run parity 报告聚合（供 runtime 在观察窗内记录）。 */

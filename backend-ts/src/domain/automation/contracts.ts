@@ -1,11 +1,7 @@
 import { parseWorkflowManifestRef } from "../../workflows/manifest.ts";
-
-const AUTOMATION_TRIGGER_TYPES = ["cron", "manual", "webhook", "continuous"] as const;
 const AUTOMATION_STATUSES = ["draft", "active", "paused", "archived"] as const;
 const AUTOMATION_MODES = ["observe", "propose", "execute_allowed"] as const;
 const AUTOMATION_RUN_STATUSES = ["queued", "running", "succeeded", "failed", "skipped"] as const;
-
-export type AutomationTriggerType = typeof AUTOMATION_TRIGGER_TYPES[number];
 export type AutomationStatus = typeof AUTOMATION_STATUSES[number];
 export type AutomationMode = typeof AUTOMATION_MODES[number];
 export type AutomationRunStatus = typeof AUTOMATION_RUN_STATUSES[number];

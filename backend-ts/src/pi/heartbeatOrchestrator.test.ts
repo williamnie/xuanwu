@@ -12,7 +12,7 @@ import {
   pausePiHeartbeat,
   resumePiHeartbeat
 } from "../db/repositories/pi.ts";
-import { runDelegationHeartbeatsOnce, runPiHeartbeatOnce } from "./heartbeatOrchestrator.ts";
+import { runPiHeartbeatOnce } from "./heartbeatOrchestrator.ts";
 
 const tempRoots: string[] = [];
 const NOW = new Date("2026-06-02T10:00:00Z");
@@ -83,44 +83,6 @@ describe("PI heartbeat orchestrator", () => {
       expect(result.signals.pi_conversations).toEqual({ active: 1, total: 1 });
       expect(result.signals.provider_health).toEqual({ provider: "codex", status: "configured" });
       expect(result.signals.usage_cost).toEqual({ status: "not_configured", total_tokens: 0 });
-    } finally {
-      db.close();
-    }
-  });
-
-  test("scans active delegations without inventing delegated action candidates", async () => {
-    const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "project-a");
-      insertIssue(db, "project-a", "failed", "connection reset by peer");
-      insertDelegation(db, "delegation-a", "project-a");
-
-      const result = await runDelegationHeartbeatsOnce({ database: db, now: NOW });
-
-      expect(result).toMatchObject({ scanned: 1, started: 1, skipped: 0 });
-      expect(result.runs[0]).toMatchObject({ delegation_id: "delegation-a", project_id: "project-a", status: "completed" });
-      expect(result.runs[0]?.action_candidates).toEqual([]);
-      expect(listPiGuardianEvents(db, { projectId: "project-a" })).toEqual([]);
-      expect(rowCount(db, "pi_actions")).toBe(0);
-    } finally {
-      db.close();
-    }
-  });
-
-
-  test("continues delegation batch when one delegation references a missing project", async () => {
-    const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "project-a");
-      insertDelegation(db, "delegation-bad", "missing-project");
-      insertDelegation(db, "delegation-good", "project-a");
-
-      const result = await runDelegationHeartbeatsOnce({ database: db, now: NOW });
-
-      expect(result).toMatchObject({ scanned: 2, skipped: 0, started: 2 });
-      expect(result.runs.map((run) => run.status)).toEqual(["failed", "completed"]);
-      expect(result.runs[0]).toMatchObject({ error: "project not found", project_id: "missing-project" });
-      expect(result.runs[1]).toMatchObject({ project_id: "project-a", status: "completed" });
     } finally {
       db.close();
     }
@@ -340,8 +302,4 @@ function statusOfIssue(db: RunnerDatabase, issueID: number): string {
 
 function openRunCount(db: RunnerDatabase): number {
   return db.sqlite.query<{ count: number }, []>("select count(*) as count from issue_runs where ended_at=''").get()?.count ?? 0;
-}
-
-function rowCount(db: RunnerDatabase, table: string): number {
-  return db.sqlite.query<{ count: number }, []>(`select count(*) as count from ${table}`).get()?.count ?? 0;
 }

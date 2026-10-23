@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
-import { listPiGuardianEvents, listPiHeartbeatEvents } from "../db/repositories/pi.ts";
-import { runDelegationHeartbeatsOnce, runPiHeartbeatOnce } from "./heartbeatOrchestrator.ts";
+import { listPiGuardianEvents } from "../db/repositories/pi.ts";
+import { runPiHeartbeatOnce } from "./heartbeatOrchestrator.ts";
 
 const tempRoots: string[] = [];
 const NOW = new Date("2026-06-02T10:00:00Z");
@@ -34,64 +34,6 @@ describe("PI heartbeat decision boundary", () => {
       db.close();
     }
   });
-
-  test("delegation authorization does not make heartbeat choose an action", async () => {
-    const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "project-a");
-      const issueID = insertIssue(db, "project-a", "todo");
-      insertDelegation(db, "delegation-a", "project-a", {
-        allowed_actions: ["issue.enqueue"],
-        allowed_mcp_capabilities: ["docs:resource:runbook"],
-        allowed_skill_intents: ["xuanwu"],
-        authorizedActions: [{ action_type: "issue.enqueue", issue_id: issueID, project_id: "project-a" }],
-        mode: "delegated",
-        scope: { project_id: "project-a" }
-      });
-
-      const result = await runDelegationHeartbeatsOnce({ database: db, now: NOW });
-      const run = result.runs[0];
-
-      expect(run?.executed_actions).toEqual([]);
-      expect(run).toMatchObject({ actions_proposed: 0, status: "completed" });
-      expect(run?.policy.authorization_summary).toMatchObject({
-        allowed_mcp_capabilities: ["docs:resource:runbook"],
-        allowed_skill_intents: ["xuanwu"]
-      });
-      expect(rowCount(db, "pi_actions")).toBe(0);
-      const audit = listPiHeartbeatEvents(db, { heartbeatId: run?.heartbeat_id }).find((event) => event.event_type === "audit");
-      expect(JSON.parse(audit?.payload_json ?? "{}")).toMatchObject({ actions_executed: 0, actions_proposed: 0 });
-      expect(listIssueEvents(db, issueID).map((event) => event.type)).toEqual([]);
-      expect(statusOfIssue(db, issueID)).toBe("todo");
-    } finally {
-      db.close();
-    }
-  });
-
-  test("delegated heartbeat does not execute provider-specific enqueue side effects", async () => {
-    const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "project-a", "noop");
-      const issueID = insertIssue(db, "project-a", "todo");
-      insertDelegation(db, "delegation-a", "project-a", {
-        allowed_actions: ["issue.enqueue"],
-        authorizedActions: [{ action_type: "issue.enqueue", issue_id: issueID, project_id: "project-a" }],
-        mode: "delegated",
-        scope: { project_id: "project-a" }
-      });
-
-      const result = await runDelegationHeartbeatsOnce({ database: db, now: NOW });
-      const run = result.runs[0];
-
-      expect(run).toMatchObject({ status: "completed", error: "" });
-      expect(rowCount(db, "pi_actions")).toBe(0);
-      expect(listPiHeartbeatEvents(db, { heartbeatId: run?.heartbeat_id }).map((event) => event.event_type)).toEqual([
-        "collect_signals", "evaluate_policies", "delegate_decision", "authorization_gate", "audit", "schedule_next_tick"
-      ]);
-    } finally {
-      db.close();
-    }
-  });
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
@@ -116,15 +58,6 @@ function insertIssue(db: RunnerDatabase, projectID: string, status: string, skil
     [projectID, `${status} issue`, status, JSON.stringify(skills), "2026-06-02T09:00:00Z", "2026-06-02T09:00:00Z"]
   );
   return db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get()?.id ?? 0;
-}
-
-function insertDelegation(db: RunnerDatabase, id: string, projectID: string, authorization: unknown): void {
-  db.sqlite.run(
-    `insert into pi_delegations
-     (id, project_id, title, status, intent_json, authorization_json, next_heartbeat_at, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, projectID, "Watch blockers", "active", "{}", JSON.stringify(authorization), "2026-06-02T09:59:00Z", "2026-06-02T09:00:00Z", "2026-06-02T09:00:00Z"]
-  );
 }
 
 function statusOfIssue(db: RunnerDatabase, issueID: number): string {

@@ -3,11 +3,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { WorkflowVerificationPolicy } from "../domain/evidence/policy.ts";
 import {
-  WORKFLOW_MANIFEST_SCHEMA_VERSION,
-  parseWorkflowManifestJSON,
   validateWorkflowManifest,
   validateWorkflowProjectOverride,
-  workflowManifestRef,
   type WorkflowManifest,
   type WorkflowProjectOverride
 } from "./manifest.ts";
@@ -17,30 +14,6 @@ const FIXTURES = join(import.meta.dir, "../../../docs/fixtures/workflows");
 const ADR = join(import.meta.dir, "../../../docs/architecture/xuanwu/0049-workflow-manifest-registry.md");
 
 describe("Workflow Manifest V1", () => {
-  test("accepts the legal fixture and publishes an exact revision reference", () => {
-    const result = parseWorkflowManifestJSON(fixtureText("workflow-manifest-v1.valid.json"));
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error(JSON.stringify(result.issues));
-    expect(result.manifest).toMatchObject({
-      id: "workflow:fixture-implement",
-      revision: 1,
-      schema_version: WORKFLOW_MANIFEST_SCHEMA_VERSION
-    });
-    expect(workflowManifestRef(result.manifest)).toBe("workflow:fixture-implement@1");
-  });
-
-  test("rejects the illegal fixture with a located unknown-field diagnostic", () => {
-    const result = parseWorkflowManifestJSON(fixtureText("workflow-manifest-v1.invalid.json"));
-
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected invalid manifest");
-    expect(result.issues).toContainEqual({
-      code: "unknown_field",
-      message: "Unexpected property",
-      path: "stages[0].llm_can_bypass_gate"
-    });
-  });
 
   test("fails closed on unsupported versions and semantic permission contracts", () => {
     const future = { ...manifest(), schema_version: "xuanwu.workflow-manifest.v2" };
@@ -212,9 +185,10 @@ function options(
 }
 
 function manifest(): WorkflowManifest {
-  const result = parseWorkflowManifestJSON(fixtureText("workflow-manifest-v1.valid.json"));
+  const value = JSON.parse(fixtureText("workflow-manifest-v1.valid.json")) as WorkflowManifest;
+  const result = validateWorkflowManifest(value);
   if (!result.ok) throw new Error(JSON.stringify(result.issues));
-  return structuredClone(result.manifest);
+  return value;
 }
 
 function projectOverride(): WorkflowProjectOverride {

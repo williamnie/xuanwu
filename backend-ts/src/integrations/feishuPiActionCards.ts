@@ -43,11 +43,6 @@ export function piActionApprovalActionID(actionID: string): string {
   return `pi_action:${actionID}`;
 }
 
-export function piActionIDFromApprovalActionID(value: string): string {
-  const text = cleanString(value);
-  return text.startsWith("pi_action:") ? cleanString(text.slice("pi_action:".length)) : "";
-}
-
 function normalizeDecision(value: string): FeishuPiActionDecision | null {
   if (["approve", "approved", "execute"].includes(value)) return "approve";
   if (["approve_always", "always_allow", "allow_always"].includes(value)) return "approve_always";

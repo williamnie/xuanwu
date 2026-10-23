@@ -4,11 +4,7 @@ import { resolve } from "node:path";
 import { listBrowserAssistantTools } from "../pi/browserToolProvider.ts";
 import { listBuiltinAssistantTools } from "../pi/builtinToolRegistry.ts";
 import { listHttpAssistantTools } from "../pi/httpToolProvider.ts";
-import {
-  evaluateWorkflowVerificationPolicy,
-  validateWorkflowVerificationPolicy
-} from "../domain/evidence/policy.ts";
-import type { EvidenceRecord } from "../domain/evidence/contracts.ts";
+import { validateWorkflowVerificationPolicy } from "../domain/evidence/policy.ts";
 import { validateWorkflowManifest } from "./manifest.ts";
 import { createWorkflowRegistry } from "./registry.ts";
 import {
@@ -16,19 +12,10 @@ import {
   INVESTIGATE_VERIFICATION_POLICY,
   INVESTIGATE_WORKFLOW_MANIFEST,
   INVESTIGATE_WORKFLOW_REF,
-  investigateWorkflowRegistryContributions,
-  validateInvestigateHandoffReport,
-  type InvestigateHandoffReport
+  investigateWorkflowRegistryContributions
 } from "./investigate.ts";
 
 const FIXTURES = resolve(import.meta.dir, "../../../docs/fixtures/workflows");
-const ADR = resolve(import.meta.dir, "../../../docs/architecture/xuanwu/0054-investigate-workflow.md");
-
-type InvestigateFixture = {
-  evidence: EvidenceRecord[];
-  name: "confirmed" | "not_reproduced" | "insufficient_information";
-  report: InvestigateHandoffReport;
-};
 
 describe("Investigate Workflow", () => {
   test("registers and resolves the exact canonical read-only revision", () => {
@@ -73,62 +60,6 @@ describe("Investigate Workflow", () => {
     }));
     expect(registry.resolve(INVESTIGATE_WORKFLOW_REF)).toMatchObject({ ok: false });
   });
-
-  for (const fixture of investigateFixtures()) {
-    test(`validates ${fixture.name} report, linked Evidence, and no-write audit`, () => {
-      const validation = validateInvestigateHandoffReport(fixture.report, fixture.evidence);
-      expect(validation).toEqual({ errors: [], ok: true });
-      expect(fixture.report.read_only_audit).toMatchObject({
-        allowed_actions: [],
-        changed_files: [],
-        confirmation: "no_write_operations_observed",
-        destructive_operations: [],
-        external_writes: [],
-        state_mutations: []
-      });
-
-      const evaluation = evaluateWorkflowVerificationPolicy({
-        context: {
-          now: "2026-07-17T01:00:00.000Z",
-          project_id: "fixture-project",
-          risk: "safe",
-          work_id: fixture.report.work_id as EvidenceRecord["work_id"]
-        },
-        evidence: fixture.evidence,
-        policy: INVESTIGATE_VERIFICATION_POLICY
-      });
-      expect(evaluation).toMatchObject({ decision: "passed", satisfied: true });
-    });
-  }
-
-  test("rejects report mutations and missing Evidence instead of trusting model narrative", () => {
-    const fixture = investigateFixtures()[0]!;
-    const mutated = structuredClone(fixture.report) as InvestigateHandoffReport;
-    mutated.read_only_audit.changed_files.push("src/unauthorized.ts");
-
-    expect(validateInvestigateHandoffReport(mutated, fixture.evidence)).toMatchObject({ ok: false });
-    expect(validateInvestigateHandoffReport(fixture.report, [])).toMatchObject({
-      errors: expect.arrayContaining([
-        "linked Evidence is missing: xw:evidence:issue_events:investigate-confirmed",
-        "report requires at least one passed trusted Evidence observation"
-      ]),
-      ok: false
-    });
-  });
-
-  test("locks authority, compatibility, rollback, and deletion gates in the canonical ADR", () => {
-    const adr = readFileSync(ADR, "utf8");
-    for (const phrase of [
-      "workflow:investigate@1",
-      "P04 Evidence",
-      "P05 Handoff",
-      "双写：0",
-      "双读：0",
-      "回滚",
-      "最终删除门禁",
-      "changed_files=[]"
-    ]) expect(adr).toContain(phrase);
-  });
 });
 
 function investigateRegistry() {
@@ -149,15 +80,4 @@ function investigateTools() {
     ...listHttpAssistantTools(),
     ...listBrowserAssistantTools()
   ];
-}
-
-function investigateFixtures(): InvestigateFixture[] {
-  const parsed = JSON.parse(readFileSync(
-    resolve(FIXTURES, "investigate-handoff-fixtures-v1.json"),
-    "utf8"
-  )) as { fixtures: InvestigateFixture[]; schema_version: string };
-  if (parsed.schema_version !== "xw.investigate-handoff-fixtures.v1") {
-    throw new Error("unsupported Investigate fixture version");
-  }
-  return parsed.fixtures;
 }

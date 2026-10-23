@@ -1,4 +1,3 @@
-import { WORK_SCHEDULE_CONTRACT } from "./workSchedule.ts";
 import { describe, expect, test } from "bun:test";
 import type { RunnerDatabase } from "../db/database.ts";
 import { AUTOMATION_API_AUTHORITY, registerAutomationRoutes } from "./automationApi.ts";
@@ -8,7 +7,6 @@ import {
   registerCommandCenterRoutes
 } from "./commandCenterApi.ts";
 import { EVIDENCE_HTTP_COMPATIBILITY_POLICY, registerEvidenceRoutes } from "./evidenceApi.ts";
-import { FRONTEND_COMPATIBILITY_POLICY, registerFrontendCompatRoutes } from "./frontendCompatApi.ts";
 import { registerHandoffRoutes } from "./handoffApi.ts";
 import { READ_API_ROUTE_REGISTRY } from "./readApi.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
@@ -23,33 +21,6 @@ import { MEMORY_DIAGNOSTICS_CONTRACT } from "./piMemoryDiagnostics.ts";
 import { COMMAND_CENTER_INBOX_CONTRACT } from "./commandCenterInbox.ts";
 
 describe("read API route contracts", () => {
-  test("locks the read-only queue schedule contract without changing route identities", () => {
-    expect(WORK_SCHEDULE_CONTRACT).toMatchInlineSnapshot(`
-      {
-        "authority": "shared-queue-candidate-gates",
-        "capacity_source": "core_runtime",
-        "dependency_reads": "once-per-project-per-request; existing per-node readiness reads retained",
-        "priority": [
-          "project_hold",
-          "auto_run_off",
-          "dependency_waiting",
-          "dependency_failed",
-          "dependency_missing",
-          "dependency_cycle",
-          "readiness_waiting",
-          "workspace_waiting",
-          "provider_unavailable",
-          "project_busy",
-          "capacity_full",
-        ],
-        "statuses": [
-          "todo",
-        ],
-        "version": "xw.work-schedule.v1",
-        "writes": false,
-      }
-    `);
-  });
   test("rejects unsupported Work source filters before reading the database", async () => {
     const router = createRouter();
     registerWorkRoutes(router, { database: {} as RunnerDatabase });
@@ -268,41 +239,6 @@ describe("read API route contracts", () => {
         "PUT /api/works/:id/readiness-requirements",
       ]
     `);
-  });
-
-  test("locks legacy frontend compatibility routes and authority policy", () => {
-    expect(captureRoutes(registerFrontendCompatRoutes)).toMatchInlineSnapshot(`
-      [
-        "DELETE /api/agent-profiles/:id",
-        "DELETE /api/projects/:id",
-        "GET /api/capabilities",
-        "GET /api/codex/models",
-        "GET /api/notifications",
-        "GET /api/projects/:id/loop/status",
-        "GET /api/projects/:id/references/search",
-        "GET /api/projects/sync/codex/preview",
-        "GET /api/session-images",
-        "GET /api/uploads/:id/content",
-        "PATCH /api/agent-profiles/:id",
-        "PATCH /api/projects",
-        "POST /api/agent-profiles",
-        "POST /api/codex/approvals/:id/resolve",
-        "POST /api/commands",
-        "POST /api/notifications/:id/read",
-        "POST /api/projects/:id/hold/resume",
-        "POST /api/projects/:id/loop/start",
-        "POST /api/projects/:id/loop/stop",
-        "POST /api/projects/sync/codex",
-        "POST /api/system/restart",
-        "POST /api/uploads/images",
-      ]
-    `);
-    expect(FRONTEND_COMPATIBILITY_POLICY).toEqual({
-      authority: "existing-domain-repositories",
-      dualReadWrite: "none",
-      removalGate: "G7-and-item-specific-P11-zero-consumer",
-      rollback: "restore-prior-route-registry-without-data-migration"
-    });
   });
 });
 

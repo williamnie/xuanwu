@@ -9,13 +9,6 @@ import {
 import type { Router } from "./router.ts";
 import { cleanString } from "../util/values.ts";
 
-export const FRONTEND_COMPATIBILITY_POLICY = {
-  authority: "existing-domain-repositories",
-  dualReadWrite: "none",
-  removalGate: "G7-and-item-specific-P11-zero-consumer",
-  rollback: "restore-prior-route-registry-without-data-migration"
-} as const;
-
 export function registerFrontendCompatRoutes(router: Router, context: FrontendCompatContext): void {
   const handlers = createFrontendCompatHandlers(context);
   registerAgentProfileRoutes(router, handlers);

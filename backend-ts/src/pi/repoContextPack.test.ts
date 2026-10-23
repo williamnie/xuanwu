@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-  REPO_CONTEXT_PACK_NOTICE,
-  createRepoContextPack,
-  renderRepoContextPack
+  createRepoContextPack
 } from "./repoContextPack.ts";
 import { renderRepoContextPackIssueMarkdown } from "./issueProposalContext.ts";
 
@@ -80,42 +78,6 @@ describe("PI repo context pack contract", () => {
     expect(pack.validation).toEqual(["bun test src/pi/repoContextPack.test.ts"]);
     expect(pack.open_questions).toEqual([]);
     expect(pack.confidence).toBe("medium");
-  });
-
-  test("renders an IM feature request as non-binding issue context", () => {
-    const pack = createRepoContextPack({
-      intent: "帮我实现这个折叠面板功能",
-      project: { id: "movo-web", name: "MOVO Web" },
-      evidence: [{
-        source_kind: "message",
-        message_id: "feishu-msg-42",
-        reason: "user asked for an accordion-like interaction",
-        summary: "用户希望新增可展开/收起的面板。",
-        confidence: "high"
-      }, {
-        source_kind: "code",
-        path: "src/components/Accordion.tsx",
-        reason: "existing component likely owns the interaction",
-        excerpt: "export function Accordion() { ... }",
-        confidence: "medium"
-      }],
-      relevant_files: [{ path: "src/components/Accordion.tsx", reason: "primary UI component", symbols: ["Accordion"] }],
-      proposed_changes: ["Add collapsed state and accessible toggle affordance."],
-      acceptance_criteria: ["Panel expands and collapses from the IM-described entry point."],
-      validation: ["bun test src/components/Accordion.test.tsx"],
-      open_questions: ["确认折叠默认态是否展开。"],
-      confidence: "medium",
-      source: { kind: "im", channel: "feishu", message_id: "feishu-msg-42" }
-    }, { now: new Date("2026-06-12T00:00:00.000Z") });
-
-    const markdown = renderRepoContextPack(pack);
-
-    expect(markdown).toContain("## Supervisor repo_context_pack");
-    expect(markdown).toContain(REPO_CONTEXT_PACK_NOTICE);
-    expect(markdown).toContain("帮我实现这个折叠面板功能");
-    expect(markdown).toContain("src/components/Accordion.tsx");
-    expect(markdown).toContain("bun test src/components/Accordion.test.tsx");
-    expect(markdown).toContain("executor 需要复核运行态和代码");
   });
 
   test("renders repo context pack into issue proposal sections", () => {

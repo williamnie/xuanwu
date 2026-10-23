@@ -7,16 +7,13 @@ import { makeRunAttemptID } from "../run/contracts.ts";
 import {
   EVIDENCE_KINDS,
   EVIDENCE_SCHEMA,
-  EVIDENCE_STATE_TRANSITIONS,
   canSatisfyEvidenceGate,
-  evaluateEvidenceTransition,
   isKnownEvidenceKind,
   redactEvidenceRecord,
   validateEvidence,
   type EvidenceKind,
   type EvidenceRecord,
-  type EvidenceSourceKind,
-  type EvidenceTransitionCommand
+  type EvidenceSourceKind
 } from "./contracts.ts";
 
 const NOW = "2026-07-16T09:30:00.000Z";
@@ -36,14 +33,8 @@ const SOURCE_BY_KIND: Record<typeof EVIDENCE_KINDS[number], EvidenceSourceKind> 
 };
 
 describe("Evidence domain contract", () => {
-  test("publishes a runnable schema for every required Evidence kind and reuses the P00.04 state machine", () => {
+  test("publishes a runnable schema for every required Evidence kind", () => {
     expect(EVIDENCE_KINDS).toEqual(["shell", "test", "lint", "build", "git", "http", "browser", "human"]);
-    expect(EVIDENCE_STATE_TRANSITIONS).toEqual({
-      pending: ["passed", "failed", "blocked"],
-      passed: [],
-      failed: [],
-      blocked: []
-    });
 
     for (const kind of EVIDENCE_KINDS) {
       const evidence = record(kind, "passed", SOURCE_BY_KIND[kind], kind === "human" ? "human_attestation" : "tool_result");
@@ -85,22 +76,6 @@ describe("Evidence domain contract", () => {
     expect(validateEvidence(linked).errors).toContain("attempt_id must belong to run_id");
 
     expect(Value.Check(EVIDENCE_SCHEMA, { ...record("test"), raw_secret: "not allowed" })).toBe(false);
-  });
-
-  test("requires auditable deterministic status transitions and keeps terminal Evidence immutable", () => {
-    const pending = record("test", "pending", "test_runner", "tool_result");
-    const command = transition(pending, "passed");
-    expect(evaluateEvidenceTransition(pending, command)).toEqual({ allowed: true, violations: [] });
-
-    command.audit.gate.decision = "ask";
-    expect(evaluateEvidenceTransition(pending, command).violations).toContain("transition gate requires approval");
-    command.audit.gate.decision = "allow";
-    command.audit.gate.authority = "llm" as EvidenceTransitionCommand["audit"]["gate"]["authority"];
-    expect(evaluateEvidenceTransition(pending, command).violations).toContain("transition gate authority is not trusted");
-
-    const passed = record("test", "passed", "test_runner", "tool_result");
-    expect(evaluateEvidenceTransition(passed, transition(passed, "failed")).violations)
-      .toContain("illegal Evidence transition passed -> failed");
   });
 
   test("redacts nested secret values, forbids sensitive fact keys, and never promotes an Agent claim", () => {
@@ -194,25 +169,5 @@ function record(
       policy_ref: "evidence-redaction:v1",
       redacted_paths: []
     }
-  };
-}
-
-function transition(
-  evidence: EvidenceRecord,
-  to: Exclude<EvidenceRecord["status"], "pending">
-): EvidenceTransitionCommand {
-  return {
-    audit: {
-      actor: { id: "runner", kind: "runner" },
-      correlation_id: "issue-663-evidence",
-      event_id: "issue_events:663:evidence-transition",
-      gate: { authority: "deterministic_policy", decision: "allow", policy_ref: "evidence-status:v1" },
-      occurred_at: LATER,
-      reason: "collector completed"
-    },
-    completed_at: LATER,
-    evidence_id: evidence.id,
-    expected_revision: evidence.revision,
-    to
   };
 }

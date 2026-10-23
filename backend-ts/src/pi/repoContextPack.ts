@@ -50,8 +50,6 @@ export type RepoContextPackInput = Omit<Partial<RepoContextPack>,
 };
 
 const REPO_CONTEXT_PACK_VERSION = 1;
-export const REPO_CONTEXT_PACK_NOTICE =
-  "Supervisor repo_context_pack 是只读代码/上下文后的初步上下文，不是 executor 的强制指令；executor 需要复核运行态和代码后再实现、测试、提交。";
 
 export function createRepoContextPack(input: RepoContextPackInput, options: { now?: Date | string } = {}): RepoContextPack {
   return {
@@ -69,26 +67,6 @@ export function createRepoContextPack(input: RepoContextPackInput, options: { no
     generated_at: generatedAt(options.now),
     source: normalizeSource(input.source)
   };
-}
-
-export function renderRepoContextPack(pack: RepoContextPack): string {
-  return [
-    "## Supervisor repo_context_pack",
-    `> ${REPO_CONTEXT_PACK_NOTICE}`,
-    "",
-    `- Intent: ${pack.intent || "(not specified)"}`,
-    `- Project: ${projectLabel(pack.project)}`,
-    `- Confidence: ${pack.confidence}`,
-    `- Generated at: ${pack.generated_at}`,
-    `- Source: ${sourceLabel(pack.source)}`,
-    "",
-    renderEvidence(pack.evidence),
-    renderFiles(pack.relevant_files),
-    renderList("Proposed changes", pack.proposed_changes),
-    renderList("Acceptance criteria", pack.acceptance_criteria),
-    renderList("Suggested validation", pack.validation),
-    renderList("Open questions", pack.open_questions)
-  ].filter(Boolean).join("\n");
 }
 
 function normalizeProject(project: RepoContextPackInput["project"]): RepoContextPackProject {
@@ -133,46 +111,6 @@ function cleanRelevantFiles(items: RepoContextPackInput["relevant_files"] = []):
     reason: cleanText(item.reason),
     symbols: cleanTextList(item.symbols)
   })).filter((item) => item.path !== "");
-}
-
-function renderEvidence(items: RepoContextEvidenceItem[]): string {
-  if (items.length === 0) return renderEmptySection("Evidence");
-  const lines = items.map((item, index) => `${index + 1}. ${evidenceLabel(item)}`);
-  return ["### Evidence", ...lines, ""].join("\n");
-}
-
-function renderFiles(items: RepoContextRelevantFile[]): string {
-  if (items.length === 0) return renderEmptySection("Relevant files");
-  const lines = items.map((item, index) => `${index + 1}. \`${item.path}\` - ${item.reason || "related"}${symbolSuffix(item)}`);
-  return ["### Relevant files", ...lines, ""].join("\n");
-}
-
-function renderList(title: string, items: string[]): string {
-  if (items.length === 0) return renderEmptySection(title);
-  return [`### ${title}`, ...items.map((item, index) => `${index + 1}. ${item}`), ""].join("\n");
-}
-
-function evidenceLabel(item: RepoContextEvidenceItem): string {
-  const locators = [item.path && `path=\`${item.path}\``, item.issue_id > 0 && `issue=#${item.issue_id}`,
-    item.session_key && `session=${item.session_key}`, item.message_id && `message=${item.message_id}`].filter(Boolean);
-  const details = [item.reason, item.summary, item.excerpt].filter(Boolean).join(" — ");
-  return `[${item.source_kind}/${item.confidence}] ${locators.join(" ")}${locators.length ? " - " : ""}${details || "related context"}`;
-}
-
-function symbolSuffix(item: RepoContextRelevantFile): string {
-  return item.symbols.length === 0 ? "" : ` (symbols: ${item.symbols.join(", ")})`;
-}
-
-function projectLabel(project: RepoContextPackProject): string {
-  return [project.id, project.name, project.cwd].filter(Boolean).join(" / ") || "(not specified)";
-}
-
-function sourceLabel(source: RepoContextPackSource): string {
-  return [source.kind, source.channel, source.message_id, source.session_key].filter(Boolean).join(" / ");
-}
-
-function renderEmptySection(title: string): string {
-  return [`### ${title}`, "- (none)", ""].join("\n");
 }
 
 function normalizeConfidence(value: unknown): RepoContextPackConfidence {

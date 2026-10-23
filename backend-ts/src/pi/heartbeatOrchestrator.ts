@@ -2,7 +2,6 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { hasActiveExecutorWork } from "../db/repositories/issueQueue.ts";
 import {
   createPiHeartbeatRun,
-  listActivePiDelegations,
   updatePiHeartbeatRun,
   type PiDelegation
 } from "../db/repositories/pi.ts";
@@ -14,8 +13,6 @@ import {
 } from "./guardianSignals.ts";
 import { heartbeatContext, isPaused, iso, recordHeartbeatEvent, safeError, updateDelegationTick } from "./heartbeatOrchestratorSupport.ts";
 import type {
-  DelegationHeartbeatInput,
-  DelegationHeartbeatResult,
   HeartbeatActionCandidate,
   HeartbeatActionSummary,
   HeartbeatInput,
@@ -38,64 +35,6 @@ export async function runPiHeartbeatOnce(input: HeartbeatInput): Promise<Heartbe
   } finally {
     lockKeys.forEach((key) => activeHeartbeats.delete(key));
   }
-}
-
-export async function runDelegationHeartbeatsOnce(input: DelegationHeartbeatInput): Promise<DelegationHeartbeatResult> {
-  const now = input.now ?? new Date();
-  const delegations = listActivePiDelegations(input.database, iso(now));
-  const result: DelegationHeartbeatResult = { runs: [], scanned: delegations.length, skipped: 0, started: 0 };
-  for (const delegation of delegations) {
-    const run = await runDelegationHeartbeat(input, delegation, now);
-    result.runs.push(run);
-    if (run.status === "skipped") result.skipped += 1;
-    else result.started += 1;
-  }
-  return result;
-}
-
-async function runDelegationHeartbeat(input: DelegationHeartbeatInput, delegation: PiDelegation, now: Date): Promise<HeartbeatResult> {
-  try {
-    return await runPiHeartbeatOnce({
-      database: input.database,
-      delegation,
-      kind: "delegation",
-      now,
-      projectID: delegation.project_id,
-      trigger: "delegation"
-    });
-  } catch (error) {
-    return persistFailedDelegationHeartbeat(input, delegation, now, safeError(error));
-  }
-}
-
-function persistFailedDelegationHeartbeat(
-  input: DelegationHeartbeatInput,
-  delegation: PiDelegation,
-  now: Date,
-  error: string
-): HeartbeatResult {
-  const nowText = iso(now);
-  const ctx = {
-    delegationID: delegation.id,
-    heartbeatID: `delegation:${delegation.project_id}:${delegation.id}:${crypto.randomUUID()}`,
-    kind: "delegation" as const,
-    now,
-    nowText,
-    projectID: delegation.project_id
-  };
-  const result = failedResult(ctx, error);
-  createPiHeartbeatRun(input.database, {
-    id: ctx.heartbeatID,
-    kind: ctx.kind,
-    project_id: ctx.projectID,
-    delegation_id: ctx.delegationID,
-    trigger: "delegation",
-    started_at: nowText,
-    ...storedRunResult(result, nowText)
-  });
-  recordHeartbeatEvent(input.database, ctx, "error", {}, result.error);
-  updateDelegationTick(input.database, delegation, nowText, result.next_tick_at);
-  return result;
 }
 
 async function runHeartbeatLocked(input: HeartbeatInput, ctx: ReturnType<typeof heartbeatContext>): Promise<HeartbeatResult> {
@@ -148,7 +87,6 @@ async function runHeartbeatLocked(input: HeartbeatInput, ctx: ReturnType<typeof 
     return result;
   }
 }
-
 
 function recordSupervisorSignals(
   db: RunnerDatabase,
@@ -238,7 +176,6 @@ function completedResult(
     status: "completed"
   };
 }
-
 
 function failedResult(ctx: ReturnType<typeof heartbeatContext>, error: string): HeartbeatResult {
   return {

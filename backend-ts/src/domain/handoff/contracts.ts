@@ -2,7 +2,6 @@ import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import {
   HANDOFF_STATUSES,
-  STATE_TRANSITIONS,
   canTransition,
   parseDomainID,
   type DomainActor,
@@ -17,9 +16,6 @@ import {
 export { HANDOFF_STATUSES, type EvidenceID, type RunID, type WorkID };
 
 const HANDOFF_SCHEMA_VERSION = 1 as const;
-
-// P00.04 remains the single source for the shared Handoff status vocabulary and edge table.
-export const HANDOFF_STATE_TRANSITIONS = STATE_TRANSITIONS.handoff;
 
 export const DELIVERY_MODES = [
   "local_changes",
@@ -196,7 +192,6 @@ export type HandoffRecord = Omit<
   supersedes_id?: HandoffID;
   work_id: WorkID;
 };
-export type HandoffDelivery = HandoffRecord["delivery"];
 export type HandoffDeliveryAction = HandoffRecord["delivery_actions"][number];
 
 export type HandoffLinkContext = {

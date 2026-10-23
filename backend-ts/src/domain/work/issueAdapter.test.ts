@@ -16,8 +16,7 @@ import {
   issueStatusToWorkStatus,
   listIssueBackedWorks,
   updateIssueBackedWork,
-  workIDToIssueID,
-  workStatusToIssueStatus
+  workIDToIssueID
 } from "./issueAdapter.ts";
 
 const tempRoots: string[] = [];
@@ -92,7 +91,7 @@ describe("Issue-backed Work compatibility adapter", () => {
         expect(workIDToIssueID(work.id)).toBeGreaterThan(0);
       }
       for (const status of WORK_STATUSES) {
-        expect(workStatusToIssueStatus(issueStatusToWorkStatus(status))).toBe(status);
+        expect(issueStatusToWorkStatus(status)).toBe(status);
       }
     } finally {
       db.close();

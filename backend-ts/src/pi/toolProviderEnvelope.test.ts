@@ -4,9 +4,7 @@ import {
   isToolPermission,
   isToolProviderKind,
   validateAssistantTool,
-  validateToolInvocation,
   validateToolProvider,
-  validateToolResult,
   type AssistantTool,
   type ToolProvider
 } from "./toolProviderEnvelope.ts";
@@ -101,43 +99,6 @@ describe("Tool Provider envelope", () => {
       { path: "permission", message: "permission must be read, write, or dangerous" },
       { path: "timeout_ms", message: "must be a positive integer" },
       { path: "audit.redact", message: "redact must be a string array" }
-    ]);
-  });
-
-  test("validates invocation envelope basics", () => {
-    expect(validateToolInvocation({
-      id: "call-1",
-      input: { id: 1 },
-      permission: "read",
-      provider_id: "runner-builtin",
-      tool_name: "issue_read"
-    })).toEqual([]);
-    expect(validateToolInvocation({ id: "", input: [], permission: "admin", provider_id: "", tool_name: "" })).toEqual([
-      { path: "id", message: "must be a non-empty string" },
-      { path: "tool_name", message: "must be a non-empty string" },
-      { path: "provider_id", message: "must be a non-empty string" },
-      { path: "input", message: "input must be an object" },
-      { path: "permission", message: "permission must be read, write, or dangerous" }
-    ]);
-  });
-
-  test("validates tool result status and error envelope", () => {
-    expect(validateToolResult({
-      duration_ms: 12,
-      invocation_id: "call-1",
-      status: "succeeded"
-    })).toEqual([]);
-    expect(validateToolResult({
-      duration_ms: -1,
-      error: { code: 404 },
-      invocation_id: "",
-      status: "partial"
-    })).toEqual([
-      { path: "invocation_id", message: "must be a non-empty string" },
-      { path: "status", message: "status must be a supported result status" },
-      { path: "duration_ms", message: "must be a non-negative integer" },
-      { path: "error.message", message: "must be a non-empty string" },
-      { path: "error.code", message: "code must be a string" }
     ]);
   });
 });

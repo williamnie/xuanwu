@@ -6,12 +6,10 @@ import { makeDomainID } from "../../xuanwu/coreDomainContracts.ts";
 import {
   DELIVERY_MODES,
   HANDOFF_SCHEMA,
-  HANDOFF_STATE_TRANSITIONS,
   REVIEW_STATES,
   evaluateHandoffTransition,
   validateHandoff,
   type DeliveryMode,
-  type HandoffDelivery,
   type HandoffDeliveryAction,
   type HandoffLinkContext,
   type HandoffRecord,
@@ -27,7 +25,7 @@ const REPO_ROOT = resolve(import.meta.dir, "../../../..");
 const ADR_PATH = "docs/architecture/xuanwu/0036-handoff-delivery-contract.md";
 
 describe("Handoff / Delivery domain contract", () => {
-  test("publishes every delivery mode and reuses the P00.04 status machine", () => {
+  test("publishes every delivery mode and review state", () => {
     expect(DELIVERY_MODES).toEqual([
       "local_changes",
       "branch_commit",
@@ -44,12 +42,6 @@ describe("Handoff / Delivery domain contract", () => {
       "changes_requested",
       "not_applicable"
     ]);
-    expect(HANDOFF_STATE_TRANSITIONS).toEqual({
-      draft: ["ready", "superseded"],
-      ready: ["delivered", "superseded"],
-      delivered: ["superseded"],
-      superseded: []
-    });
   });
 
   test("accepts a runnable schema for every delivery mode", () => {
@@ -250,7 +242,7 @@ function record(mode: DeliveryMode, status: HandoffRecord["status"] = "ready"): 
   };
 }
 
-function deliveryFor(mode: DeliveryMode): HandoffDelivery {
+function deliveryFor(mode: DeliveryMode): HandoffRecord["delivery"] {
   switch (mode) {
     case "local_changes": return { mode, working_tree_ref: "git:tree-672" };
     case "branch_commit": return { mode, branch_ref: "refs/heads/xw-672", commit_ref: "git:commit-672" };
@@ -291,7 +283,7 @@ function deliveryFor(mode: DeliveryMode): HandoffDelivery {
   }
 }
 
-function finalRevision(delivery: HandoffDelivery): string {
+function finalRevision(delivery: HandoffRecord["delivery"]): string {
   switch (delivery.mode) {
     case "local_changes": return delivery.working_tree_ref;
     case "branch_commit":

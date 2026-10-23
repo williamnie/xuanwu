@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { runDelegationHeartbeatsOnce, runPiHeartbeatOnce } from "./heartbeatOrchestrator.ts";
+import { runPiHeartbeatOnce } from "./heartbeatOrchestrator.ts";
 import { createPiMemoryItem } from "../db/repositories/pi.ts";
 import { seedMemoryExperience } from "./memoryExperienceTestFixtures.ts";
 
@@ -23,21 +23,6 @@ afterEach(async () => {
 });
 
 describe("PI heartbeat memory signals", () => {
-  test("only recalls technical experience for the bound task with a matching version", async () => {
-    const db = await openFixtureDatabase();
-    try {
-      const { experience, issueID } = seedMemoryExperience(db);
-      createPiMemoryItem(db, { id: "timeout-experience", scope: "project", scope_id: "demo", kind: "resolution",
-        authority: "evidence_backed", content: JSON.stringify(experience) });
-      const projectOnly = await runPiHeartbeatOnce({ database: db, projectID: "demo", now: new Date("2026-06-02T10:00:00Z") });
-      expect(projectOnly.signals.memory_items).toEqual([]);
-      db.sqlite.run("update issues set description=? where id=?", ["async callback timed out v0.2.13", issueID]);
-      insertDelegation(db, "task-memory", "demo", [issueID]);
-      const scoped = await runDelegationHeartbeatsOnce({ database: db, now: new Date("2026-06-02T10:01:00Z") });
-      expect(scoped.runs[0]?.signals.memory_items).toMatchObject([{ id: "timeout-experience", revision: 1,
-        content_fingerprint: expect.stringMatching(/^[a-f0-9]{64}$/), selection_stage: "text_candidate" }]);
-    } finally { db.close(); }
-  });
 
   test("retrieves confirmed project memory and omits disabled candidates", async () => {
     const db = await openFixtureDatabase();
@@ -71,28 +56,6 @@ describe("PI heartbeat memory signals", () => {
       db.close();
     }
   });
-
-  test("injects delegation issue-scope memory before project memory", async () => {
-    const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      insertIssue(db, 259, "demo");
-      insertDelegation(db, "delegation-a", "demo", [259]);
-      insertScopedMemory(db, "project-policy", "project", "demo", "Project scoped policy");
-      insertScopedMemory(db, "issue-memory", "issue", "259", "Issue scoped acceptance");
-
-      const result = await runDelegationHeartbeatsOnce({
-        database: db,
-        now: new Date("2026-06-02T10:00:00Z")
-      });
-
-      const items = result.runs[0]?.signals.memory_items ?? [];
-      expect(items.map((item) => item.id)).toEqual(["issue-memory", "project-policy"]);
-      expect(items[0]).toMatchObject({ reference: "pi_memory_items/issue-memory", scope: "issue", scope_id: "259" });
-    } finally {
-      db.close();
-    }
-  });
 });
 
 function insertProject(db: RunnerDatabase, id: string): void {
@@ -110,34 +73,5 @@ function insertMemory(db: RunnerDatabase, id: string, disabled: number, content:
      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, "project", "demo", "project_policy", content, "issue", "259", "high", disabled,
       "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
-  );
-}
-
-function insertDelegation(db: RunnerDatabase, id: string, projectID: string, issueIDs: number[]): void {
-  db.sqlite.run(
-    `insert into pi_delegations
-      (id, project_id, title, status, intent_json, authorization_json, scope_json, next_heartbeat_at, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, projectID, "Watch scoped issue", "active", "{}", "{}",
-      JSON.stringify({ issue_ids: issueIDs, project_id: projectID }), "2026-06-02T09:59:00Z",
-      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
-  );
-}
-
-function insertScopedMemory(db: RunnerDatabase, id: string, scope: string, scopeID: string, content: string): void {
-  db.sqlite.run(
-    `insert into pi_memory_items
-      (id, scope, scope_id, kind, content, source_type, source_id, confidence, disabled, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, scope, scopeID, "project_policy", content, "issue", "259", "high", 0,
-      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
-  );
-}
-
-function insertIssue(db: RunnerDatabase, id: number, projectID: string): void {
-  db.sqlite.run(
-    `insert into issues (id, project_id, title, status, priority, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?)`,
-    [id, projectID, `Issue ${id}`, "todo", 3, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }

@@ -35,15 +35,6 @@ export function parseMcpPolicy(value: unknown): McpPolicy {
   });
 }
 
-export function mcpCapabilitiesFromPayload(payload: Record<string, unknown>): string[] {
-  return cleanList([
-    ...parseMcpCapabilityList(payload.capability_id),
-    ...parseMcpCapabilityList(payload.capability_ids),
-    ...parseMcpCapabilityList(payload.required_mcp_capabilities),
-    ...parseMcpCapabilityList(payload.recommended_mcp_capabilities)
-  ]);
-}
-
 function cleanPolicy(policy: McpPolicy): McpPolicy {
   return Object.fromEntries(Object.entries(policy).filter(([, value]) => Array.isArray(value) && value.length > 0)) as McpPolicy;
 }

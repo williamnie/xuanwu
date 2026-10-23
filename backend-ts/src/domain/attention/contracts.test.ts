@@ -7,17 +7,11 @@ import type { PiAction } from "../../db/repositories/pi/actions.ts";
 import type { PiGuardianAlert } from "../../db/repositories/pi/guardianAlerts.ts";
 import {
   ATTENTION_PRIORITY_TABLE,
-  applyAttentionCommand,
   attentionDedupeKey,
   attentionPriority,
   consolidateAttentionCandidates,
-  escalateAttentionIfDue,
-  reconcileAttentionSources,
-  validateAttentionRecord,
   type AttentionCandidate,
-  type AttentionRecord,
-  type AttentionSourceRef,
-  type AttentionTransitionAudit
+  type AttentionSourceRef
 } from "./contracts.ts";
 import {
   attentionFromApprovalRequest,
@@ -103,82 +97,6 @@ describe("unified Attention contracts", () => {
     });
   });
 
-  test("requires an audited allow gate for acknowledge, snooze, resolve, and escalation", () => {
-    const record = projected();
-    const acknowledged = applyAttentionCommand(record, {
-      action: "acknowledge",
-      audit: audit("2026-07-17T00:01:00.000Z"),
-      expected_revision: 0
-    });
-    expect(acknowledged.attention).toMatchObject({ revision: 1, status: "acknowledged" });
-    expect(acknowledged.audit_event).toMatchObject({
-      after_status: "acknowledged",
-      before_status: "open",
-      operation: "acknowledge"
-    });
-
-    const snoozed = applyAttentionCommand(acknowledged.attention, {
-      action: "snooze",
-      audit: audit("2026-07-17T00:02:00.000Z"),
-      expected_revision: 1,
-      snoozed_until: "2026-07-17T02:00:00.000Z"
-    });
-    expect(snoozed.attention).toMatchObject({ status: "waiting", snoozed_until: "2026-07-17T02:00:00.000Z" });
-    expect(escalateAttentionIfDue(snoozed.attention, audit("2026-07-17T01:00:00.000Z"))).toBeNull();
-
-    expect(() => applyAttentionCommand(record, {
-      action: "resolve",
-      audit: { ...audit("2026-07-17T00:03:00.000Z"), gate: { ...audit().gate, decision: "ask" } },
-      expected_revision: 0
-    })).toThrow("requires an allow gate");
-    expect(() => applyAttentionCommand(record, {
-      action: "resolve",
-      audit: audit("2026-07-17T00:03:00.000Z"),
-      expected_revision: 3
-    })).toThrow("revision conflict");
-    expect(() => applyAttentionCommand(record, {
-      action: "escalate",
-      audit: { ...audit("2026-07-17T00:03:00.000Z"), gate: { ...audit().gate, authority: "human_approval" } },
-      expected_revision: 0
-    })).toThrow("requires a deterministic policy gate");
-  });
-
-  test("escalates due items one level and records the deterministic audit", () => {
-    const result = escalateAttentionIfDue(projected(), audit("2026-07-17T01:00:00.000Z"));
-    expect(result?.attention).toMatchObject({
-      escalation: { count: 1, last_escalated_at: "2026-07-17T01:00:00.000Z" },
-      priority: "p0",
-      revision: 1
-    });
-    expect(result?.audit_event.operation).toBe("escalate");
-  });
-
-  test("auto-resolves only after every deduped source object is terminal", () => {
-    const record = consolidateAttentionCandidates([
-      candidate({ source_ref: source("attention_inbox_items", "71", "issue:713") }),
-      candidate({ source_ref: source("pi_guardian_alerts", "guardian-713", "issue:713") })
-    ])[0];
-    const first = reconcileAttentionSources(record, [{
-      ...record.source_refs[0],
-      resolution: "resolved",
-      source_state: "actioned"
-    }], audit("2026-07-17T00:10:00.000Z"));
-    expect(first.attention.status).toBe("open");
-
-    const second = reconcileAttentionSources(first.attention, [{
-      ...first.attention.source_refs[1],
-      resolution: "resolved",
-      source_state: "resolved"
-    }], audit("2026-07-17T00:11:00.000Z"));
-    expect(second.attention).toMatchObject({ revision: 2, status: "resolved" });
-    expect(second.audit_event).toMatchObject({
-      after_status: "resolved",
-      before_status: "open",
-      operation: "source_reconciled"
-    });
-    expect(validateAttentionRecord(second.attention)).toEqual([]);
-  });
-
   test("keeps source of truth, coexistence, rollback, and deletion gates explicit", () => {
     const adr = readFileSync(resolve(import.meta.dir, "../../../../docs/architecture/xuanwu/0061-unified-attention-model.md"), "utf8");
     for (const term of ["source of truth", "双写为 0", "W1 shadow", "W2 cut read", "回滚", "最终删除门禁"]) {
@@ -215,21 +133,6 @@ function source(
     local_id: localID,
     resolution: "active",
     source_state: "open"
-  };
-}
-
-function projected(): AttentionRecord {
-  return consolidateAttentionCandidates([candidate()])[0];
-}
-
-function audit(occurredAt = "2026-07-17T00:01:00.000Z"): AttentionTransitionAudit {
-  return {
-    actor: { id: "supervisor", kind: "supervisor" },
-    correlation_id: "corr-713",
-    event_id: `attention-event:${occurredAt}`,
-    gate: { authority: "deterministic_policy", decision: "allow", policy_ref: "attention-policy:v1" },
-    occurred_at: occurredAt,
-    reason: "source facts changed"
   };
 }
 

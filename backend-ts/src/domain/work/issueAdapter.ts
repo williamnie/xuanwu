@@ -162,11 +162,6 @@ export function issueStatusToWorkStatus(status: string): WorkStatus {
   return status as WorkStatus;
 }
 
-export function workStatusToIssueStatus(status: WorkStatus): string {
-  if (!WORK_STATUSES.includes(status)) throw new Error(`unsupported Work status ${status}`);
-  return status;
-}
-
 export function createIssueBackedWork(
   db: RunnerDatabase,
   command: IssueWorkCreateCommand

@@ -2,8 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
   assertConnectorConformance,
   assertOutboundEnvelope,
-  redactConnectorValue,
-  validateConnectorHealth,
   validateInboundEnvelope,
   validateOutboundEnvelope,
   type ChannelConnector,
@@ -80,22 +78,5 @@ describe("P09.01 Channel / Connector contract", () => {
     const untrusted = { ...outbound(), authorization: { action_gate_ref: "llm:1", authority: "llm", decision: "allow" } };
     expect(validateOutboundEnvelope(untrusted, manifest).errors).toContain("outbound.authorization.authority is not trusted");
     expect(() => assertOutboundEnvelope(untrusted, manifest)).toThrow("invalid outbound connector envelope");
-  });
-
-  test("disconnect and recovery health are observable without changing connector state", () => {
-    expect(validateConnectorHealth({
-      checked_at: "2026-07-18T00:00:00.000Z", last_error: "network unavailable", reconnect_attempts: 2, state: "disconnected"
-    })).toEqual({ errors: [], ok: true });
-    expect(validateConnectorHealth({
-      checked_at: "2026-07-18T00:01:00.000Z", last_error: "", reconnect_attempts: 2, state: "healthy"
-    })).toEqual({ errors: [], ok: true });
-  });
-
-  test("redacts secrets from connector status and audit values", () => {
-    expect(redactConnectorValue({ access_token: "Bearer super-secret", nested: { password: "p", text: "token=abc" } }))
-      .toEqual({ access_token: "[redacted]", nested: { password: "[redacted]", text: "token=[redacted]" } });
-    expect(validateConnectorHealth({
-      checked_at: "2026-07-18T00:00:00.000Z", last_error: "Bearer super-secret", reconnect_attempts: 1, state: "failed"
-    }).ok).toBe(false);
   });
 });

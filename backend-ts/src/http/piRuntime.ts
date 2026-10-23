@@ -106,32 +106,6 @@ export const PI_RUNNER_CHAT_ACTIONS = [
   ...SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES
 ] as const;
 
-export const PI_RUNNER_CHAT_MUTATION_ACTIONS = [
-  "skill.install", "skill.enable", "skill.disable", "skill.update", "skill.rollback", "skill.uninstall",
-  "agent.executor_assign",
-  "agent.workflow_request",
-  "human_review.request",
-  "issue.comment",
-  "human_review.respond",
-  "issue.create",
-  "issue.cancel",
-  "issue.delete",
-  "issue.acceptance_request",
-  "issue.enqueue",
-  "issue.schedule_enqueue",
-  "issue.status_update",
-  "issue.state_repair",
-  "issue_completion_watch.create",
-  "issue_completion_watch.cancel",
-  "notification.preference.update",
-  "project.create",
-  "runner.settings_update",
-  "system.restart",
-  "workspace.make_directory",
-  "workspace.write_file",
-  ...SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES
-] as const;
-
 const PI_RUNTIME_ROOT = "pi-runtime";
 const RUNNER_RUNTIME_ROOT = ".runner";
 const RUNNER_SESSIONS_DIR = "sessions";

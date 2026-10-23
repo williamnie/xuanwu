@@ -71,17 +71,6 @@ export function remoteGitConnectorStatus(config: RemoteGitConnectorConfig): Remo
   };
 }
 
-export function retryAfterSeconds(headers: Headers, now = Date.now()): number | undefined {
-  const value = headers.get("retry-after")?.trim() ?? "";
-  if (/^\d+(?:\.\d+)?$/.test(value)) return Math.max(1, Math.ceil(Number(value)));
-  const at = Date.parse(value);
-  return Number.isNaN(at) ? undefined : Math.max(1, Math.ceil((at - now) / 1000));
-}
-
-export function arrayValue(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
 function cleanBaseUrl(value: unknown, fallback: string, label: string, allowFile = false): string {
   const text = cleanString(value) || fallback;
   let parsed: URL;

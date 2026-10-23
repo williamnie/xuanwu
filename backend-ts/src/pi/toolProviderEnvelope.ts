@@ -103,10 +103,6 @@ export function isToolPermission(value: unknown): value is ToolPermission {
   return typeof value === "string" && (TOOL_PERMISSIONS as readonly string[]).includes(value);
 }
 
-function isToolResultStatus(value: unknown): value is ToolResultStatus {
-  return typeof value === "string" && (TOOL_RESULT_STATUSES as readonly string[]).includes(value);
-}
-
 export function assistantToolKey(tool: Pick<AssistantTool, "provider_id" | "name">): string {
   return `${tool.provider_id}:${tool.name}`;
 }
@@ -141,29 +137,6 @@ export function validateAssistantTool(tool: unknown): ToolEnvelopeValidationIssu
   return issues;
 }
 
-export function validateToolInvocation(invocation: unknown): ToolEnvelopeValidationIssue[] {
-  if (!isRecord(invocation)) return [{ path: "invocation", message: "invocation must be an object" }];
-  const issues: ToolEnvelopeValidationIssue[] = [];
-  requireNonEmptyString(issues, invocation.id, "id");
-  requireNonEmptyString(issues, invocation.tool_name, "tool_name");
-  requireNonEmptyString(issues, invocation.provider_id, "provider_id");
-  if (!isRecord(invocation.input)) issues.push({ path: "input", message: "input must be an object" });
-  if (!isToolPermission(invocation.permission)) issues.push({ path: "permission", message: "permission must be read, write, or dangerous" });
-  if (invocation.timeout_ms !== undefined) requirePositiveInteger(issues, invocation.timeout_ms, "timeout_ms");
-  if (invocation.audit !== undefined) issues.push(...validateAuditMetadata(invocation.audit, "audit"));
-  return issues;
-}
-
-export function validateToolResult(result: unknown): ToolEnvelopeValidationIssue[] {
-  if (!isRecord(result)) return [{ path: "result", message: "result must be an object" }];
-  const issues: ToolEnvelopeValidationIssue[] = [];
-  requireNonEmptyString(issues, result.invocation_id, "invocation_id");
-  if (!isToolResultStatus(result.status)) issues.push({ path: "status", message: "status must be a supported result status" });
-  if (result.duration_ms !== undefined) requireNonNegativeInteger(issues, result.duration_ms, "duration_ms");
-  if (result.error !== undefined) issues.push(...validateResultError(result.error, "error"));
-  return issues;
-}
-
 function validateAuditMetadata(value: unknown, path: string): ToolEnvelopeValidationIssue[] {
   if (!isRecord(value)) return [{ path, message: "audit metadata must be an object" }];
   if (!Array.isArray(value.redact) || value.redact.some((item) => typeof item !== "string")) {
@@ -191,24 +164,12 @@ function validateRuntimeToolPolicy(value: unknown): ToolEnvelopeValidationIssue[
   return issues;
 }
 
-function validateResultError(value: unknown, path: string): ToolEnvelopeValidationIssue[] {
-  if (!isRecord(value)) return [{ path, message: "error must be an object" }];
-  const issues: ToolEnvelopeValidationIssue[] = [];
-  requireNonEmptyString(issues, value.message, `${path}.message`);
-  if (value.code !== undefined && typeof value.code !== "string") issues.push({ path: `${path}.code`, message: "code must be a string" });
-  return issues;
-}
-
 function requireNonEmptyString(issues: ToolEnvelopeValidationIssue[], value: unknown, path: string): void {
   if (typeof value !== "string" || value.trim() === "") issues.push({ path, message: "must be a non-empty string" });
 }
 
 function requirePositiveInteger(issues: ToolEnvelopeValidationIssue[], value: unknown, path: string): void {
   if (!Number.isInteger(value) || Number(value) <= 0) issues.push({ path, message: "must be a positive integer" });
-}
-
-function requireNonNegativeInteger(issues: ToolEnvelopeValidationIssue[], value: unknown, path: string): void {
-  if (!Number.isInteger(value) || Number(value) < 0) issues.push({ path, message: "must be a non-negative integer" });
 }
 
 function stringList(value: unknown): string[] {

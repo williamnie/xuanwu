@@ -109,22 +109,6 @@ export type WorkflowValidationIssue = {
   path: string;
 };
 type WorkflowValidationResult = { issues: WorkflowValidationIssue[]; ok: boolean };
-type WorkflowManifestParseResult =
-  | { manifest: WorkflowManifest; ok: true }
-  | { issues: WorkflowValidationIssue[]; ok: false };
-
-export function parseWorkflowManifestJSON(text: string): WorkflowManifestParseResult {
-  let value: unknown;
-  try {
-    value = JSON.parse(text) as unknown;
-  } catch (error) {
-    return { issues: [{ code: "invalid_value", message: jsonError(error), path: "$" }], ok: false };
-  }
-  const result = validateWorkflowManifest(value);
-  return result.ok
-    ? { manifest: value as WorkflowManifest, ok: true }
-    : { issues: result.issues, ok: false };
-}
 
 export function validateWorkflowManifest(input: unknown): WorkflowValidationResult {
   const issues = schemaIssues(WORKFLOW_MANIFEST_SCHEMA, input, WORKFLOW_MANIFEST_SCHEMA_VERSION);
@@ -343,8 +327,4 @@ function approvalRank(mode: WorkflowApprovalMode): number {
 
 function add(issues: WorkflowValidationIssue[], path: string, message: string): void {
   issues.push({ code: "invalid_value", message, path });
-}
-
-function jsonError(error: unknown): string {
-  return error instanceof Error ? error.message : "invalid JSON";
 }

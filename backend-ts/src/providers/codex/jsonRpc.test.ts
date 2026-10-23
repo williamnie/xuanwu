@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { codexAppServerRpcTimeoutMs, CodexStdioJsonRpcTransport, runCodexTransportInitializeSmoke } from "./jsonRpc.ts";
+import { codexAppServerRpcTimeoutMs, CodexStdioJsonRpcTransport } from "./jsonRpc.ts";
 import type { ProviderEvent } from "../types.ts";
-import type { CodexJsonRpcProcess, CodexJsonRpcProcessFactory } from "./jsonRpc.ts";
+import type { CodexJsonRpcProcess } from "./jsonRpc.ts";
 import { CodexProcessGroupLifecycle, type ProcessTreeEntry } from "./processLifecycle.ts";
 
 class FakeCodexProcess implements CodexJsonRpcProcess {
@@ -84,25 +84,6 @@ describe("Codex stdio JSON-RPC transport", () => {
     expect(codexAppServerRpcTimeoutMs(90_000)).toBe(90_000);
     expect(codexAppServerRpcTimeoutMs(60_000)).toBe(60_000);
     expect(codexAppServerRpcTimeoutMs(1)).toBe(1);
-  });
-
-  test("runs an initialize smoke request over fake stdio", async () => {
-    let spawnedCommand: string[] = [];
-    let spawnedEnvironment: Record<string, string | undefined> = {};
-    const factory: CodexJsonRpcProcessFactory = ({ command, env }) => {
-      spawnedCommand = command;
-      spawnedEnvironment = env;
-      return new FakeCodexProcess((request, fake) => {
-        expect(request).toMatchObject({ id: 1, method: "initialize" });
-        fake.sendStdout({ id: request.id, result: { protocolVersion: "fixture" } });
-      });
-    };
-
-    const result = await runCodexTransportInitializeSmoke(config, { processFactory: factory });
-
-    expect(spawnedCommand).toEqual(["codex", "app-server", "--listen", "stdio://"]);
-    expect(spawnedEnvironment.XUANWU_MANAGED_EXECUTION).toBe("1");
-    expect(result).toEqual({ protocolVersion: "fixture" });
   });
 
 

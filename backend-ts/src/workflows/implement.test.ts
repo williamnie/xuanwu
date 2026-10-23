@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { EvidenceRecord } from "../domain/evidence/contracts.ts";
-import type { HandoffRecord } from "../domain/handoff/contracts.ts";
 import { listBuiltinAssistantTools } from "../pi/builtinToolRegistry.ts";
 import {
   validateWorkflowVerificationPolicy
@@ -16,22 +14,10 @@ import {
   IMPLEMENT_VERIFICATION_POLICY,
   IMPLEMENT_WORKFLOW_MANIFEST,
   IMPLEMENT_WORKFLOW_REF,
-  evaluateImplementStageTransition,
-  implementWorkflowRegistryContributions,
-  validateImplementWorkflowRun,
-  type ImplementWorkflowRun,
-  type ImplementWorkflowValidationContext
+  implementWorkflowRegistryContributions
 } from "./implement.ts";
 
 const FIXTURES = resolve(import.meta.dir, "../../../docs/fixtures/workflows");
-const ADR = resolve(import.meta.dir, "../../../docs/architecture/xuanwu/0055-implement-workflow.md");
-
-type ImplementFixture = ImplementWorkflowValidationContext & {
-  evidence: EvidenceRecord[];
-  handoff: HandoffRecord;
-  name: "local_changes" | "branch_commit";
-  receipt: ImplementWorkflowRun;
-};
 
 describe("Implement Workflow", () => {
   test("registers and resolves the exact canonical Implement revision", () => {
@@ -135,95 +121,6 @@ describe("Implement Workflow", () => {
       message: "is not allowed by the base workflow"
     }));
   });
-
-  test("allows only audited forward or verification-rework stage transitions", () => {
-    const fixture = implementFixtures()[0]!;
-    for (const transition of fixture.receipt.transitions) {
-      expect(evaluateImplementStageTransition(transition)).toEqual({ allowed: true, violations: [] });
-    }
-
-    const focused = fixture.receipt.transitions.find((item) => item.from === "focused-verify")!;
-    expect(evaluateImplementStageTransition({
-      ...focused,
-      to: "modify",
-      signal: "failed",
-      verification_decision: "failed"
-    })).toEqual({ allowed: true, violations: [] });
-
-    expect(evaluateImplementStageTransition({
-      ...fixture.receipt.transitions[0]!,
-      to: "focused-verify"
-    })).toMatchObject({ allowed: false });
-    expect(evaluateImplementStageTransition({
-      ...focused,
-      signal: "blocked"
-    })).toMatchObject({ allowed: false });
-    expect(evaluateImplementStageTransition({
-      ...fixture.receipt.transitions.at(-1)!,
-      verification_decision: "overridden"
-    })).toMatchObject({
-      allowed: false,
-      violations: expect.arrayContaining(["final report requires the Provider's verification commands to have passed"])
-    });
-  });
-
-  for (const fixture of implementFixtures()) {
-    test(`validates the canonical ${fixture.name} receipt, Evidence, and Handoff`, () => {
-      expect(validateImplementWorkflowRun(fixture.receipt, fixture)).toEqual({ errors: [], ok: true });
-      expect(fixture.receipt.verification.focused_evidence_ids).not.toEqual(
-        fixture.receipt.verification.regression_evidence_ids
-      );
-      expect(fixture.handoff.delivery.mode).toBe(fixture.name);
-    });
-  }
-
-  test("rejects failed regression, reused Evidence, and external writes before Handoff", () => {
-    const fixture = structuredClone(implementFixtures()[0]!);
-    const regressionID = fixture.receipt.verification.regression_evidence_ids[0]!;
-    const regression = fixture.evidence.find((item) => item.id === regressionID)!;
-    regression.status = "failed";
-    regression.decisive_output.facts.outcome = "exit_nonzero";
-    expect(validateImplementWorkflowRun(fixture.receipt, fixture)).toMatchObject({
-      errors: expect.arrayContaining(["regression verification policy did not pass: failed"]),
-      ok: false
-    });
-
-    const reused = structuredClone(implementFixtures()[0]!);
-    const focusedID = reused.receipt.verification.focused_evidence_ids[0]!;
-    reused.receipt.verification.regression_evidence_ids = [focusedID];
-    reused.receipt.stages.find((stage) => stage.id === "regression")!.evidence_ids = [focusedID];
-    expect(validateImplementWorkflowRun(reused.receipt, reused)).toMatchObject({
-      errors: expect.arrayContaining([
-        `focused and regression verification must use distinct Evidence: ${focusedID}`
-      ]),
-      ok: false
-    });
-
-    const external = structuredClone(implementFixtures()[0]!);
-    external.receipt.mutation_audit[0]!.classification = "external_write";
-    expect(validateImplementWorkflowRun(external.receipt, external)).toMatchObject({
-      errors: expect.arrayContaining([
-        "Implement local Handoff forbids external_write operation workspace.modify"
-      ]),
-      ok: false
-    });
-  });
-
-  test("locks authority, migration, rollback, and final deletion gates in the canonical ADR", () => {
-    const adr = readFileSync(ADR, "utf8");
-    for (const phrase of [
-      "workflow:implement@1",
-      "Issue-backed Work",
-      "P04 Evidence",
-      "P05 Handoff",
-      "双写：0",
-      "双读：0",
-      "回滚",
-      "最终删除门禁",
-      "local_changes",
-      "branch_commit"
-    ]) expect(adr).toContain(phrase);
-  });
 });
 
 function implementRegistry() {
@@ -236,15 +133,4 @@ function implementRegistry() {
     tools: listBuiltinAssistantTools(),
     verification_policies: contributions.verification_policies
   });
-}
-
-function implementFixtures(): ImplementFixture[] {
-  const parsed = JSON.parse(readFileSync(
-    resolve(FIXTURES, "implement-run-fixtures-v1.json"),
-    "utf8"
-  )) as { fixtures: ImplementFixture[]; schema_version: string };
-  if (parsed.schema_version !== "xw.implement-workflow-fixtures.v1") {
-    throw new Error("unsupported Implement fixture version");
-  }
-  return parsed.fixtures;
 }

@@ -3,12 +3,8 @@ import { Value } from "@sinclair/typebox/value";
 import { redactSensitiveText } from "../../util/redact.ts";
 import {
   EVIDENCE_STATUSES,
-  STATE_TRANSITIONS,
-  canTransition,
   parseDomainID,
-  type DomainActor,
   type EvidenceID,
-  type EvidenceStatus,
   type RunID,
   type WorkID
 } from "../../xuanwu/coreDomainContracts.ts";
@@ -18,9 +14,6 @@ import { isRecord } from "../../util/values.ts";
 export { EVIDENCE_STATUSES, type EvidenceID, type RunID, type RunAttemptID, type WorkID };
 
 export const EVIDENCE_SCHEMA_VERSION = 1 as const;
-
-// P00.04 remains the single source for the shared Evidence status vocabulary and edge table.
-export const EVIDENCE_STATE_TRANSITIONS = STATE_TRANSITIONS.evidence;
 
 export const EVIDENCE_KINDS = ["shell", "test", "lint", "build", "git", "http", "browser", "human"] as const;
 type KnownEvidenceKind = typeof EVIDENCE_KINDS[number];
@@ -150,31 +143,6 @@ export type EvidenceRecord = Omit<EvidenceSchemaValue, "attempt_id" | "id" | "ki
 export type EvidenceArtifactRef = EvidenceRecord["artifact_refs"][number];
 type EvidenceValidationResult = { errors: string[]; known_kind: boolean; ok: boolean };
 
-type EvidenceTransitionGate = {
-  authority: "deterministic_policy" | "human_approval";
-  decision: "allow" | "deny" | "ask";
-  policy_ref: string;
-};
-
-type EvidenceTransitionAudit = {
-  actor: DomainActor;
-  correlation_id: string;
-  event_id: string;
-  gate: EvidenceTransitionGate;
-  occurred_at: string;
-  reason: string;
-};
-
-export type EvidenceTransitionCommand = {
-  audit: EvidenceTransitionAudit;
-  completed_at: string;
-  evidence_id: EvidenceID;
-  expected_revision: number;
-  to: Exclude<EvidenceStatus, "pending">;
-};
-
-type EvidenceTransitionDecision = { allowed: boolean; violations: string[] };
-
 const TRUSTED_ASSERTION_ORIGINS = new Set<EvidenceAssertionOrigin>([
   "tool_result",
   "system_observation",
@@ -282,30 +250,6 @@ export function canSatisfyEvidenceGate(evidence: EvidenceRecord): boolean {
     && validation.known_kind
     && evidence.status === "passed"
     && TRUSTED_ASSERTION_ORIGINS.has(evidence.provenance.assertion_origin);
-}
-
-export function evaluateEvidenceTransition(
-  current: EvidenceRecord,
-  command: EvidenceTransitionCommand
-): EvidenceTransitionDecision {
-  const violations: string[] = [];
-  if (command.evidence_id !== current.id) violations.push("transition references another Evidence");
-  if (command.expected_revision !== current.revision) violations.push("stale Evidence revision");
-  if (!canTransition("evidence", current.status, command.to)) {
-    violations.push(`illegal Evidence transition ${current.status} -> ${command.to}`);
-  }
-  if (!isIsoTimestamp(command.completed_at)) violations.push("transition completed_at must be an ISO timestamp");
-  if (!isIsoTimestamp(command.audit.occurred_at)) violations.push("transition audit occurred_at must be an ISO timestamp");
-  if (!command.audit.actor.id.trim()) violations.push("transition actor is required");
-  if (!command.audit.correlation_id.trim()) violations.push("transition correlation_id is required");
-  if (!command.audit.event_id.trim()) violations.push("transition event_id is required");
-  if (!command.audit.reason.trim()) violations.push("transition reason is required");
-  if (!command.audit.gate.policy_ref.trim()) violations.push("transition policy_ref is required");
-  if (command.audit.gate.decision !== "allow") violations.push("transition gate requires approval");
-  if (!["deterministic_policy", "human_approval"].includes(command.audit.gate.authority)) {
-    violations.push("transition gate authority is not trusted");
-  }
-  return { allowed: violations.length === 0, violations };
 }
 
 export function redactEvidenceRecord(input: EvidenceRecord, policyRef: string): EvidenceRecord {
