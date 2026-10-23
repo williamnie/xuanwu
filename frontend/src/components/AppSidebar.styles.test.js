@@ -68,3 +68,13 @@ test('sidebar footer never shrinks under a long session list', () => {
   assert.match(ruleFor('.sidebar-footer', sidebarCss), /flex-shrink:\s*0/);
   assert.doesNotMatch(sidebarCss, /nav-item-analytics/);
 });
+
+test('session list bleed stays inside the sidebar padding so no horizontal scrollbar covers the footer', () => {
+  // 侧栏内边距 10px = 插槽外伸 4px + 滚动区外伸 6px；超出即出现横向滚动条压住底部设置
+  const sessionsCss = readFileSync(new URL('../pages/sessions/SessionsClient.css', import.meta.url), 'utf8');
+  const piChatCss = readFileSync(new URL('../pages/PiChatSidebar.css', import.meta.url), 'utf8');
+  assert.match(ruleFor('.sidebar', workbenchCss), /padding:\s*var\(--space-4\)\s+var\(--space-2-5\)/);
+  assert.match(ruleFor('.sessions-app-sidebar-slot', sessionsCss), /margin:\s*var\(--space-5\)\s+calc\(var\(--space-1\)\s*\*\s*-1\)\s+0/);
+  assert.match(ruleFor('.sessions-app-sidebar-panel .sidebar-scroll-area', sessionsCss), /margin-right:\s*calc\(var\(--space-1-5\)\s*\*\s*-1\)/);
+  assert.match(ruleFor('.pi-chat-app-sidebar-panel .sidebar-scroll-area', piChatCss), /margin-right:\s*calc\(var\(--space-1-5\)\s*\*\s*-1\)/);
+});

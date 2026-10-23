@@ -36,7 +36,7 @@
 }
 
 .sessions-app-sidebar-panel .sidebar-scroll-area {
-  margin-right: calc(var(--space-2) * -1);
+  margin-right: calc(var(--space-1-5) * -1);
   padding-right: var(--space-1);
 }
 
