@@ -1,13 +1,6 @@
-import {
-  archiveEventMaintenance,
-  checkpointEventDatabase,
-  deleteArchivedEvents,
-  prepareEventDeleteEvidence,
-  previewEventMaintenance,
-  restoreArchivedEvents,
-  verifyEventArchive,
-  vacuumEventDatabase
-} from "../events/maintenanceService.ts";
+import { archiveEventMaintenance, previewEventMaintenance, verifyEventArchive } from "../events/maintenance/archive.ts";
+import { checkpointEventDatabase, vacuumEventDatabase } from "../events/maintenance/database.ts";
+import { deleteArchivedEvents, prepareEventDeleteEvidence, restoreArchivedEvents } from "../events/maintenance/deletion.ts";
 import { rebuildEventSummaryProjection } from "../events/eventSummaryProjectionService.ts";
 import {
   cutoverCompactEventSummaryProjection,

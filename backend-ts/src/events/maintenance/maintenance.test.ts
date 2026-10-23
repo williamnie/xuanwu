@@ -1,19 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { createHash } from "node:crypto";
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  archiveEventMaintenance,
-  checkpointEventDatabase,
-  deleteArchivedEvents,
-  prepareEventDeleteEvidence,
-  restoreArchivedEvents,
-  verifyEventArchive,
-  vacuumEventDatabase
-} from "./maintenanceService.ts";
-import { sha256 } from "../util/values.ts";
+import { archiveEventMaintenance, verifyEventArchive } from "./archive.ts";
+import { checkpointEventDatabase, vacuumEventDatabase } from "./database.ts";
+import { deleteArchivedEvents, prepareEventDeleteEvidence, restoreArchivedEvents } from "./deletion.ts";
+import { sha256 } from "../../util/values.ts";
 
 const roots: string[] = [];
 const NOW = "2026-07-16T00:00:00Z";

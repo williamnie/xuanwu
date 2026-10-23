@@ -7,7 +7,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { rebuildEventSummaryProjection } from "./eventSummaryProjectionService.ts";
 import { projectPendingEventSummaries } from "./eventSummaryProjector.ts";
-import { vacuumEventDatabase } from "./maintenanceService.ts";
+import { vacuumEventDatabase } from "./maintenance/database.ts";
 import {
   compactHistoricalIssueLogPayloads,
   restoreHistoricalIssueLogPayloads
