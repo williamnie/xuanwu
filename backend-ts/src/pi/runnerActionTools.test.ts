@@ -15,6 +15,9 @@ import { getProject, type Project } from "../db/repositories/projects.ts";
 import { createHumanReviewRequest, readIssueDecisionProjection } from "../domain/review/humanReview.ts";
 import { createPiRunnerActions, type PiRunnerActionLayer } from "./runnerActions.ts";
 import { createPiRunnerActionTools, PI_RUNNER_ACTION_TOOL_NAMES } from "./runnerActionTools.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 describe("PI runner action tools", () => {
   test("defines schemas and delegates tool calls to the action layer", async () => {
@@ -1536,7 +1539,7 @@ function insertAgentProfile(
 }
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase; project: Project }> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-action-tools-"));
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   db.sqlite.run(
     `insert into projects (id, name, cwd, sort_order, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?)`,

@@ -10,6 +10,9 @@ import { observeGitHubIssue, updateGitHubIssueCase } from "./issueCaseStore.ts";
 import { nativeQuestion, relayNativeGitHubQuestion } from "./nativeQuestionBridge.ts";
 import { githubWorkExecutionContext } from "./issueWorkflow.ts";
 import { recordIssueEvent } from "../../db/repositories/issueEvents.ts";
+import { useDatabaseCleanup } from "../../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 test("recognizes native asynchronous questions without treating ordinary prose as a lifecycle signal", () => {
   expect(nativeQuestion({ items: [{ type: "agentMessage", id: "a", text: "请问是否接受？", phase: "final_answer" }] })).toBeNull();
@@ -21,7 +24,7 @@ test("recognizes native asynchronous questions without treating ordinary prose a
 
 test("native question relay steers the exact live Turn once without inventing an answer or ending its Run", async () => {
   const root = await mkdtemp(join(tmpdir(), "xw-native-question-"));
-  const db = await openDatabase({ stateDir: root });
+  const db = await openDatabase({ stateDir: root }).then(trackDatabase);
   try {
     const now = new Date().toISOString();
     db.sqlite.run("insert into projects (id,name,cwd,created_at,updated_at) values ('demo','Demo',?,?,?)", [root, now, now]);

@@ -13,6 +13,9 @@ import { createDefaultRouter } from "../http/server.ts";
 import { routeInboxItemToDomainSkill, routeRawEventToIntake } from "./eventRouter.ts";
 import { syncCliRawEvents } from "./cliRawEventSync.ts";
 import type { LlmIntakeModel, LlmIntakeRequest } from "./llmIntake.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 const BASE_URL = "http://127.0.0.1:3008";
 const SOURCE = "fixture-cli";
 const PROVIDER = "fixture-cli-e2e";
@@ -27,65 +30,61 @@ afterEach(async () => {
 describe("fixture CLI to issue/reply proposal E2E", () => {
   test("syncs fake CLI events through intake, proposals, approval, activity, and dedupes reruns", async () => {
     const fixture = await openFixture();
-    try {
-      seedProject(fixture.db, PROJECT_ID);
-      const router = createDefaultRouter({
-        config: buildConfig({ cliConnectorDirs: [fixture.cliDir] }),
-        database: fixture.db
-      });
-      const first = await runFixtureFlow(fixture.db, router);
-      const counts = rowCounts(fixture.db);
-      const bug = itemByIntent(first.items, "bug_report");
-      const status = itemByIntent(first.items, "status_question");
-      const issue = listIssues(fixture.db, { projectId: PROJECT_ID })[0];
-      const draft = listImReplyDrafts(fixture.db, { source: SOURCE })[0];
-      const bugProposal = proposalForItem(fixture.db, bug.id);
-      const statusProposal = proposalForItem(fixture.db, status.id);
-      const activity = await jsonRequest(router, `/api/pi/activity?source=${SOURCE}&limit=200`);
-      const stages = activity.items.map((item: { stage: string }) => item.stage);
-      expect(first.route).toMatchObject({ status: "routed" });
-      expect(first.sync.processed_watermark).toBe("fixture-watermark-2");
-      expect(bug.evidence_refs.some((ref) => ref.includes("#attachment:0"))).toBe(true);
-      expect(issue).toMatchObject({
-        source_turn_id: `attention_inbox_item:${bug.id}`,
-        status: "triage",
-        title: "登录页 500"
-      });
-      expect(`${issue.description}\n${issue.source_excerpt}`).toContain("#attachment:0");
-      expect(issue.source_excerpt).toContain(`proposal:${bugProposal.id}`);
-      expect(bugProposal).toMatchObject({
-        evidence_refs: bug.evidence_refs,
-        source_item_ids: [`attention_inbox_item:${bug.id}`],
-        status: "approved"
-      });
-      expect(draft).toMatchObject({
-        external_event_id: eventByExternalID(first.events, "status-1").id,
-        source: SOURCE,
-        status: "pending",
-        target_chat_id: "cli-chat",
-        target_message_id: "status-1"
-      });
-      expect(statusProposal).toMatchObject({
+    seedProject(fixture.db, PROJECT_ID);
+    const router = createDefaultRouter({
+      config: buildConfig({ cliConnectorDirs: [fixture.cliDir] }),
+      database: fixture.db
+    });
+    const first = await runFixtureFlow(fixture.db, router);
+    const counts = rowCounts(fixture.db);
+    const bug = itemByIntent(first.items, "bug_report");
+    const status = itemByIntent(first.items, "status_question");
+    const issue = listIssues(fixture.db, { projectId: PROJECT_ID })[0];
+    const draft = listImReplyDrafts(fixture.db, { source: SOURCE })[0];
+    const bugProposal = proposalForItem(fixture.db, bug.id);
+    const statusProposal = proposalForItem(fixture.db, status.id);
+    const activity = await jsonRequest(router, `/api/pi/activity?source=${SOURCE}&limit=200`);
+    const stages = activity.items.map((item: { stage: string }) => item.stage);
+    expect(first.route).toMatchObject({ status: "routed" });
+    expect(first.sync.processed_watermark).toBe("fixture-watermark-2");
+    expect(bug.evidence_refs.some((ref) => ref.includes("#attachment:0"))).toBe(true);
+    expect(issue).toMatchObject({
+      source_turn_id: `attention_inbox_item:${bug.id}`,
+      status: "triage",
+      title: "登录页 500"
+    });
+    expect(`${issue.description}\n${issue.source_excerpt}`).toContain("#attachment:0");
+    expect(issue.source_excerpt).toContain(`proposal:${bugProposal.id}`);
+    expect(bugProposal).toMatchObject({
+      evidence_refs: bug.evidence_refs,
+      source_item_ids: [`attention_inbox_item:${bug.id}`],
+      status: "approved"
+    });
+    expect(draft).toMatchObject({
+      external_event_id: eventByExternalID(first.events, "status-1").id,
+      source: SOURCE,
+      status: "pending",
+      target_chat_id: "cli-chat",
+      target_message_id: "status-1"
+    });
+    expect(statusProposal).toMatchObject({
+      evidence_refs: status.evidence_refs,
+      source_item_ids: [`attention_inbox_item:${status.id}`],
+      status: "approved"
+    });
+    expect(statusProposal.actions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
         evidence_refs: status.evidence_refs,
-        source_item_ids: [`attention_inbox_item:${status.id}`],
-        status: "approved"
-      });
-      expect(statusProposal.actions).toEqual(expect.arrayContaining([
-        expect.objectContaining({
-          evidence_refs: status.evidence_refs,
-          pi_action_id: draft.approval_action_id,
-          type: "message.reply_draft"
-        })
-      ]));
-      expect(stages).toEqual(expect.arrayContaining([
-        "Raw", "Context", "Intake", "Inbox", "Domain Skill", "Proposal", "Policy", "Action", "Issue", "Reply"
-      ]));
-      const second = await runFixtureFlow(fixture.db, router);
-      expect(second.route).toMatchObject({ reason: "duplicate_raw_event", status: "skipped" });
-      expect(rowCounts(fixture.db)).toEqual(counts);
-    } finally {
-      fixture.db.close();
-    }
+        pi_action_id: draft.approval_action_id,
+        type: "message.reply_draft"
+      })
+    ]));
+    expect(stages).toEqual(expect.arrayContaining([
+      "Raw", "Context", "Intake", "Inbox", "Domain Skill", "Proposal", "Policy", "Action", "Issue", "Reply"
+    ]));
+    const second = await runFixtureFlow(fixture.db, router);
+    expect(second.route).toMatchObject({ reason: "duplicate_raw_event", status: "skipped" });
+    expect(rowCounts(fixture.db)).toEqual(counts);
   });
 });
 async function runFixtureFlow(
@@ -199,7 +198,7 @@ async function openFixture(): Promise<{ cliDir: string; db: RunnerDatabase; root
   tempRoots.push(root);
   const cliDir = join(root, "connectors");
   await writeFixtureCli(cliDir);
-  return { cliDir, db: await openDatabase({ stateDir: join(root, "state") }), root };
+  return { cliDir, db: await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase), root };
 }
 async function writeFixtureCli(dir: string): Promise<void> {
   await mkdir(dir, { recursive: true });

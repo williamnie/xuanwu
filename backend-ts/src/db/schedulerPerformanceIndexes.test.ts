@@ -5,10 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase } from "./database.ts";
 import { createPiAction, listRecentAttentionPiActions } from "./repositories/pi.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 test("scheduler sweeps use bounded PI action and notification indexes", async () => {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-scheduler-indexes-"));
-  const db = await openDatabase({ stateDir: root });
+  const db = await openDatabase({ stateDir: root }).then(trackDatabase);
   try {
     expect(plan(db.sqlite, `
       select id from pi_actions indexed by idx_pi_actions_pending_mcp_expiry
@@ -49,7 +52,7 @@ test("scheduler sweeps use bounded PI action and notification indexes", async ()
 
 test("Attention reads only the newest seven-day active Action window", async () => {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-attention-actions-"));
-  const db = await openDatabase({ stateDir: root });
+  const db = await openDatabase({ stateDir: root }).then(trackDatabase);
   try {
     for (let index = 1; index <= 28; index += 1) {
       const id = `attention-${String(index).padStart(2, "0")}`;
@@ -89,7 +92,7 @@ test("Attention reads only the newest seven-day active Action window", async () 
 
 test("runtime statistics and watchdogs avoid history table scans and route sorting", async () => {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-runtime-indexes-"));
-  const db = await openDatabase({ stateDir: root });
+  const db = await openDatabase({ stateDir: root }).then(trackDatabase);
   try {
     const cases = [
       ["select count(*) from issue_runs where ended_at=''", "idx_issue_runs_active_provider"],
@@ -111,10 +114,8 @@ test("runtime statistics and watchdogs avoid history table scans and route sorti
           or conversation_id<>'' or run_group_id<>'' or sent_outbox_id>0 or error<>'')`, []))
       .toContain("idx_pi_notification_intents_stale_routable");
     db.close();
-    const reopened = await openDatabase({ stateDir: root });
-    try {
-      expect(reopened.sqlite.query("select count(*) as n from schema_migrations where id='085_runtime_read_indexes'").get()).toEqual({ n: 1 });
-    } finally { reopened.close(); }
+    const reopened = await openDatabase({ stateDir: root }).then(trackDatabase);
+    expect(reopened.sqlite.query("select count(*) as n from schema_migrations where id='085_runtime_read_indexes'").get()).toEqual({ n: 1 });
   } finally {
     db.close();
     await rm(root, { recursive: true, force: true });

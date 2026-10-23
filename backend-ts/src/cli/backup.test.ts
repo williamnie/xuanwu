@@ -5,6 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase } from "../db/database.ts";
 import { runCli } from "./command.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 
@@ -39,13 +42,9 @@ describe("backup CLI", () => {
     ])).toMatchObject({ action: "backup.import", restored_state_dir: restored, verified: true });
 
     // Isolated Golden Journey read smoke: the restored authoritative issue/project state remains readable.
-    const database = await openDatabase({ readonlyImportPath: join(restored, "runner.db") });
-    try {
-      expect(database.sqlite.query<{ id: string }, []>("select id from projects where id='golden'").get()?.id).toBe("golden");
-      expect(database.sqlite.query<{ title: string }, []>("select title from issues where project_id='golden'").get()?.title).toBe("Golden Journey restored read");
-    } finally {
-      database.close();
-    }
+    const database = await openDatabase({ readonlyImportPath: join(restored, "runner.db") }).then(trackDatabase);
+    expect(database.sqlite.query<{ id: string }, []>("select id from projects where id='golden'").get()?.id).toBe("golden");
+    expect(database.sqlite.query<{ title: string }, []>("select title from issues where project_id='golden'").get()?.title).toBe("Golden Journey restored read");
     expect(readFileSync(join(restored, "artifacts", "evidence.txt"), "utf8")).toBe("authoritative artifact\n");
     expect(readFileSync(join(restored, "config", "secret-ref.json"), "utf8")).toContain("secret-store://runner");
     expect(existsSync(join(restored, "auth_token"))).toBe(false);
@@ -82,7 +81,7 @@ function fixtureRoot(): string {
 }
 
 async function seedState(stateDir: string): Promise<void> {
-  const database = await openDatabase({ stateDir });
+  const database = await openDatabase({ stateDir }).then(trackDatabase);
   database.sqlite.run(`
     insert into projects (id, name, cwd, created_at, updated_at)
       values ('golden', 'Golden', '/tmp/golden', '2026-07-18T00:00:00Z', '2026-07-18T00:00:00Z');

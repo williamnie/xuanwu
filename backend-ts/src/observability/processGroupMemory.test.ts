@@ -18,6 +18,9 @@ import type { ProcessTreeEntry } from "../providers/codex/processLifecycle.ts";
 import { openDatabase } from "../db/database.ts";
 import { listPiGuardianAlerts } from "../db/repositories/pi.ts";
 import { ackPiGuardianAlert, upsertPiGuardianAlert } from "../db/repositories/pi/guardianAlerts.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const MIB = 1024 * 1024;
 
@@ -531,7 +534,7 @@ describe("runner process-group memory observer", () => {
 
   test("deduplicates a redacted budget alert into the existing Guardian Attention surface", async () => {
     const root = await mkdtemp(join(tmpdir(), "runner-memory-alert-"));
-    const database = await openDatabase({ dbPath: join(root, "runner.db"), stateDir: root });
+    const database = await openDatabase({ dbPath: join(root, "runner.db"), stateDir: root }).then(trackDatabase);
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     const alert: ProcessMemoryBudgetAlert = {
       budget: { hard_bytes: 320 * MIB, status: "hard_exceeded" },
@@ -561,7 +564,7 @@ describe("runner process-group memory observer", () => {
 
   test("consolidates soft and hard transitions into one incident and reopens only on escalation", async () => {
     const root = await mkdtemp(join(tmpdir(), "runner-memory-levels-"));
-    const database = await openDatabase({ dbPath: join(root, "runner.db"), stateDir: root });
+    const database = await openDatabase({ dbPath: join(root, "runner.db"), stateDir: root }).then(trackDatabase);
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
       writeProcessGroupMemoryAlert(database, {
@@ -595,7 +598,7 @@ describe("runner process-group memory observer", () => {
 
   test("consolidates legacy per-level incidents without losing an acknowledgement of the peak", async () => {
     const root = await mkdtemp(join(tmpdir(), "runner-memory-legacy-"));
-    const database = await openDatabase({ dbPath: join(root, "runner.db"), stateDir: root });
+    const database = await openDatabase({ dbPath: join(root, "runner.db"), stateDir: root }).then(trackDatabase);
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
       upsertPiGuardianAlert(database, {
@@ -625,7 +628,7 @@ describe("runner process-group memory observer", () => {
 
   test("resolves open and acknowledged memory incidents after a healthy sample", async () => {
     const root = await mkdtemp(join(tmpdir(), "runner-memory-recovery-"));
-    const database = await openDatabase({ dbPath: join(root, "runner.db"), stateDir: root });
+    const database = await openDatabase({ dbPath: join(root, "runner.db"), stateDir: root }).then(trackDatabase);
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
       upsertPiGuardianAlert(database, {
@@ -653,7 +656,7 @@ describe("runner process-group memory observer", () => {
 
   test("reopens the canonical memory incident instead of creating alert history on every recovery flap", async () => {
     const root = await mkdtemp(join(tmpdir(), "runner-memory-reopen-"));
-    const database = await openDatabase({ dbPath: join(root, "runner.db"), stateDir: root });
+    const database = await openDatabase({ dbPath: join(root, "runner.db"), stateDir: root }).then(trackDatabase);
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
       writeProcessGroupMemoryAlert(database, {

@@ -9,6 +9,9 @@ import {
   WAL_MAINTENANCE_SCHEMA,
   runWalMaintenance
 } from "./walMaintenance.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 
@@ -114,7 +117,7 @@ async function databaseFixture() {
   const root = await mkdtemp(join(tmpdir(), "sqlite-wal-maintenance-"));
   roots.push(root);
   const stateDir = join(root, "state");
-  const runner = await openDatabase({ stateDir });
+  const runner = await openDatabase({ stateDir }).then(trackDatabase);
   runner.sqlite.run("create table wal_fixture (value text not null)");
   runner.close();
   return { dbPath: join(stateDir, "runner.db"), root };

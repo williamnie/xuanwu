@@ -8,6 +8,9 @@ import { getConnectorCursor } from "../db/repositories/connectorRuntime.ts";
 import { buildTelegramConnectorConfig } from "./telegramConfig.ts";
 import { TelegramClientError, type TelegramBotClient } from "./telegramClient.ts";
 import { createTelegramReceiverManager } from "./telegramReceiver.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
@@ -16,7 +19,7 @@ describe("Telegram long-poll receiver", () => {
   test("records a permanent malformed update and continues the durable batch prefix", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-telegram-poison-update-"));
     roots.push(root);
-    const database = await openDatabase({ stateDir: join(root, "state") });
+    const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     let emitted = false;
     let deliveries = 0;
     const client: TelegramBotClient = {
@@ -58,7 +61,7 @@ describe("Telegram long-poll receiver", () => {
   test("stops a batch at a non-durable update and resumes from the contiguous cursor", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-telegram-batch-prefix-"));
     roots.push(root);
-    const database = await openDatabase({ stateDir: join(root, "state") });
+    const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     const offsets: Array<number | undefined> = [];
     let deliveries = 0;
     database.sqlite.run(`create trigger reject_telegram_102 before insert on connector_update_audits
@@ -97,7 +100,7 @@ describe("Telegram long-poll receiver", () => {
   test("commits the accepted update and cursor together and skips it after restart", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-telegram-receiver-"));
     roots.push(root);
-    const database = await openDatabase({ stateDir: join(root, "state") });
+    const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     const offsets: Array<number | undefined> = [];
     let deliveries = 0;
     const manager = createTelegramReceiverManager({
@@ -131,7 +134,7 @@ describe("Telegram long-poll receiver", () => {
   test("does not execute the same accepted message twice when its downstream handler fails", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-telegram-handler-failure-"));
     roots.push(root);
-    const database = await openDatabase({ stateDir: join(root, "state") });
+    const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     const offsets: Array<number | undefined> = [];
     let deliveries = 0;
     const manager = createTelegramReceiverManager({
@@ -157,7 +160,7 @@ describe("Telegram long-poll receiver", () => {
   test("records edited_message in the inbox and audit without invoking PI", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-telegram-edited-message-"));
     roots.push(root);
-    const database = await openDatabase({ stateDir: join(root, "state") });
+    const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     let emitted = false;
     let deliveries = 0;
     const manager = createTelegramReceiverManager({
@@ -200,7 +203,7 @@ describe("Telegram long-poll receiver", () => {
   test("fails closed without polling when a webhook owns the bot", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-telegram-webhook-"));
     roots.push(root);
-    const database = await openDatabase({ stateDir: join(root, "state") });
+    const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     let polls = 0;
     const base = fakeClient([]);
     const manager = createTelegramReceiverManager({
@@ -224,7 +227,7 @@ describe("Telegram long-poll receiver", () => {
   test("invalidates the getMe cache when the Bot Token changes", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-telegram-token-cache-"));
     roots.push(root);
-    const database = await openDatabase({ stateDir: join(root, "state") });
+    const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     let getMeCalls = 0;
     const base = fakeClient([]);
     const manager = createTelegramReceiverManager({
@@ -252,7 +255,7 @@ describe("Telegram long-poll receiver", () => {
   test("classifies a competing long-poll consumer as permanent and does not reconnect", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-telegram-conflict-"));
     roots.push(root);
-    const database = await openDatabase({ stateDir: join(root, "state") });
+    const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     let polls = 0;
     const base = fakeClient([]);
     const manager = createTelegramReceiverManager({

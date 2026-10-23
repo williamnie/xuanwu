@@ -4,11 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase } from "../../database.ts";
 import { getPiPersona, listPiActionEvents, updatePiPersona } from "../../repositories/pi.ts";
+import { useDatabaseCleanup } from "../../../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 describe("Supervisor Chat Persona repository", () => {
   test("seeds a disabled system-language persona and audits an optimistic update without plaintext", async () => {
     const root = await mkdtemp(join(tmpdir(), "xw-persona-repository-"));
-    const db = await openDatabase({ stateDir: join(root, "state") });
+    const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     try {
       expect(getPiPersona(db)).toMatchObject({
         supervisor_id: "runner-default",
@@ -56,7 +59,7 @@ describe("Supervisor Chat Persona repository", () => {
 
   test("rejects stale revisions, invalid enums, and text over the fixed budgets", async () => {
     const root = await mkdtemp(join(tmpdir(), "xw-persona-validation-"));
-    const db = await openDatabase({ stateDir: join(root, "state") });
+    const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     const audit = { actor: "test", reason: "validation", requestedAt: new Date().toISOString() };
     try {
       expect(() => updatePiPersona(db, { expected_revision: 1, enabled: 1 }, audit))

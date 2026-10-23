@@ -5,6 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCli } from "./command.ts";
 import { openDatabase } from "../db/database.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 
@@ -63,7 +66,7 @@ describe("maintenance CLI", () => {
     const root = mkdtempSync(join(tmpdir(), "maintenance-projection-cli-"));
     roots.push(root);
     const dbPath = join(root, "runner-copy.db");
-    const database = await openDatabase({ dbPath, stateDir: root });
+    const database = await openDatabase({ dbPath, stateDir: root }).then(trackDatabase);
     database.sqlite.run(`
       insert into projects (id, name, cwd, created_at, updated_at)
         values ('demo', 'Demo', '/tmp/demo', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
@@ -96,7 +99,7 @@ describe("maintenance CLI", () => {
     const root = mkdtempSync(join(tmpdir(), "maintenance-compact-projection-cli-"));
     roots.push(root);
     const dbPath = join(root, "runner-copy.db");
-    const database = await openDatabase({ dbPath, stateDir: root });
+    const database = await openDatabase({ dbPath, stateDir: root }).then(trackDatabase);
     database.sqlite.run(`
       insert into projects (id, name, cwd, created_at, updated_at)
         values ('demo', 'Demo', '/tmp/demo', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
@@ -158,7 +161,7 @@ describe("maintenance CLI", () => {
     const root = mkdtempSync(join(tmpdir(), "maintenance-payload-compaction-cli-"));
     roots.push(root);
     const dbPath = join(root, "runner-copy.db");
-    const database = await openDatabase({ dbPath, stateDir: root });
+    const database = await openDatabase({ dbPath, stateDir: root }).then(trackDatabase);
     database.sqlite.run(`
       insert into projects (id, name, cwd, created_at, updated_at)
         values ('demo', 'Demo', '/tmp/demo', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
@@ -196,7 +199,7 @@ describe("maintenance CLI", () => {
     roots.push(root);
     const dbPath = join(root, "runner-copy.db");
     const reportPath = join(root, "attention-audit.json");
-    const database = await openDatabase({ dbPath, stateDir: root });
+    const database = await openDatabase({ dbPath, stateDir: root }).then(trackDatabase);
     database.close();
 
     const report = await maintenanceCli([

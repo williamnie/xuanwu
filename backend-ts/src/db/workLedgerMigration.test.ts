@@ -7,6 +7,9 @@ import { dirname, join, resolve } from "node:path";
 import { openDatabase, type RunnerDatabase } from "./database.ts";
 import { runMigrations } from "./migrations.ts";
 import { migrations } from "./schema/index.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const MIGRATION_ID = "041_work_ledger_schema";
 const NOW = "2026-07-16T00:00:00.000Z";
@@ -21,47 +24,39 @@ afterEach(async () => {
 
 describe("Work Ledger schema migration", () => {
   test("creates the additive schema on an empty database", async () => {
-    const connection = await openDatabase({ stateDir: await tempPath("work-ledger-empty-") });
-    try {
-      expect(tableNames(connection)).toEqual(expect.arrayContaining(["works", "work_relations", "work_events"]));
-      expect(columnNames(connection, "works")).toEqual(expect.arrayContaining([
-        "acceptance_json", "created_at", "project_id", "provenance_json", "revision", "updated_at"
-      ]));
-      expect(indexNames(connection, "works")).toEqual(expect.arrayContaining([
-        "idx_works_project_status_updated", "idx_works_project_updated"
-      ]));
-      expect(indexNames(connection, "work_relations")).toEqual(expect.arrayContaining([
-        "idx_work_relations_source", "idx_work_relations_target", "ux_work_relations_parent_child"
-      ]));
-      expect(indexNames(connection, "work_events")).toEqual(expect.arrayContaining([
-        "idx_work_events_correlation", "idx_work_events_project_occurred", "idx_work_events_work_occurred"
-      ]));
-      expect(migrationCount(connection)).toEqual({ count: 1 });
-    } finally {
-      connection.close();
-    }
+    const connection = await openDatabase({ stateDir: await tempPath("work-ledger-empty-") }).then(trackDatabase);
+    expect(tableNames(connection)).toEqual(expect.arrayContaining(["works", "work_relations", "work_events"]));
+    expect(columnNames(connection, "works")).toEqual(expect.arrayContaining([
+      "acceptance_json", "created_at", "project_id", "provenance_json", "revision", "updated_at"
+    ]));
+    expect(indexNames(connection, "works")).toEqual(expect.arrayContaining([
+      "idx_works_project_status_updated", "idx_works_project_updated"
+    ]));
+    expect(indexNames(connection, "work_relations")).toEqual(expect.arrayContaining([
+      "idx_work_relations_source", "idx_work_relations_target", "ux_work_relations_parent_child"
+    ]));
+    expect(indexNames(connection, "work_events")).toEqual(expect.arrayContaining([
+      "idx_work_events_correlation", "idx_work_events_project_occurred", "idx_work_events_work_occurred"
+    ]));
+    expect(migrationCount(connection)).toEqual({ count: 1 });
   });
 
   test("migrates an existing runtime database without changing legacy issues", async () => {
     const stateDir = await tempPath("work-ledger-upgrade-");
     await createPreWorkLedgerDatabase(join(stateDir, "runner.db"));
 
-    const migrated = await openDatabase({ stateDir });
-    try {
-      expect(migrated.sqlite.query(
-        "select project_id, title, status, created_at, updated_at from issues where id=1"
-      ).get()).toEqual({
-        created_at: NOW,
-        project_id: "demo",
-        status: "todo",
-        title: "Legacy issue",
-        updated_at: NOW
-      });
-      expect(migrated.sqlite.query("select count(*) as count from works").get()).toEqual({ count: 0 });
-      expect(migrationCount(migrated)).toEqual({ count: 1 });
-    } finally {
-      migrated.close();
-    }
+    const migrated = await openDatabase({ stateDir }).then(trackDatabase);
+    expect(migrated.sqlite.query(
+      "select project_id, title, status, created_at, updated_at from issues where id=1"
+    ).get()).toEqual({
+      created_at: NOW,
+      project_id: "demo",
+      status: "todo",
+      title: "Legacy issue",
+      updated_at: NOW
+    });
+    expect(migrated.sqlite.query("select count(*) as count from works").get()).toEqual({ count: 0 });
+    expect(migrationCount(migrated)).toEqual({ count: 1 });
   });
 
   test("is idempotent across repeated migration runs", async () => {
@@ -83,38 +78,34 @@ describe("Work Ledger schema migration", () => {
   });
 
   test("enforces Work vocabulary, project ownership, relation shape, and audit gates", async () => {
-    const connection = await openDatabase({ stateDir: await tempPath("work-ledger-constraints-") });
-    try {
-      insertProject(connection, "alpha");
-      insertProject(connection, "beta");
-      insertWork(connection, "xw:work:issues:1", "alpha");
-      insertWork(connection, "xw:work:issues:2", "alpha");
-      insertWork(connection, "xw:work:issues:3", "alpha");
-      insertWork(connection, "xw:work:issues:4", "beta");
+    const connection = await openDatabase({ stateDir: await tempPath("work-ledger-constraints-") }).then(trackDatabase);
+    insertProject(connection, "alpha");
+    insertProject(connection, "beta");
+    insertWork(connection, "xw:work:issues:1", "alpha");
+    insertWork(connection, "xw:work:issues:2", "alpha");
+    insertWork(connection, "xw:work:issues:3", "alpha");
+    insertWork(connection, "xw:work:issues:4", "beta");
 
-      expect(() => insertWork(connection, "xw:work:issues:5", "alpha", "unknown"))
-        .toThrow();
-      expect(() => insertRelation(connection, "self", "alpha", "xw:work:issues:1", "xw:work:issues:1"))
-        .toThrow();
-      expect(() => insertRelation(connection, "cross-project", "alpha", "xw:work:issues:1", "xw:work:issues:4"))
-        .toThrow();
+    expect(() => insertWork(connection, "xw:work:issues:5", "alpha", "unknown"))
+      .toThrow();
+    expect(() => insertRelation(connection, "self", "alpha", "xw:work:issues:1", "xw:work:issues:1"))
+      .toThrow();
+    expect(() => insertRelation(connection, "cross-project", "alpha", "xw:work:issues:1", "xw:work:issues:4"))
+      .toThrow();
 
-      insertRelation(connection, "parent-one", "alpha", "xw:work:issues:1", "xw:work:issues:3");
-      expect(() => insertRelation(connection, "parent-two", "alpha", "xw:work:issues:2", "xw:work:issues:3"))
-        .toThrow();
+    insertRelation(connection, "parent-one", "alpha", "xw:work:issues:1", "xw:work:issues:3");
+    expect(() => insertRelation(connection, "parent-two", "alpha", "xw:work:issues:2", "xw:work:issues:3"))
+      .toThrow();
 
-      expect(() => insertEvent(connection, "llm-event", "xw:work:issues:1", "alpha", "llm"))
-        .toThrow();
-      insertEvent(connection, "allowed-event", "xw:work:issues:1", "alpha", "deterministic_policy");
-      expect(connection.sqlite.query("select outcome from work_events where event_id='allowed-event'").get())
-        .toEqual({ outcome: "applied" });
-    } finally {
-      connection.close();
-    }
+    expect(() => insertEvent(connection, "llm-event", "xw:work:issues:1", "alpha", "llm"))
+      .toThrow();
+    insertEvent(connection, "allowed-event", "xw:work:issues:1", "alpha", "deterministic_policy");
+    expect(connection.sqlite.query("select outcome from work_events where event_id='allowed-event'").get())
+      .toEqual({ outcome: "applied" });
   });
 
   test("uses the declared indexes for ledger queries", async () => {
-    const connection = await openDatabase({ stateDir: await tempPath("work-ledger-query-plan-") });
+    const connection = await openDatabase({ stateDir: await tempPath("work-ledger-query-plan-") }).then(trackDatabase);
     try {
       expect(queryPlan(connection, `
         select * from works

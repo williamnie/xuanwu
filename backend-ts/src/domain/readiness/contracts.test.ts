@@ -17,6 +17,9 @@ import {
   type ReadinessEvidenceEvent,
   type ReadinessRequirementDeclaration
 } from "./contracts.ts";
+import { useDatabaseCleanup } from "../../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const NOW = "2026-07-20T00:00:00Z";
 const REVISION = "9f1e2d3";
@@ -33,77 +36,69 @@ afterEach(async () => {
 describe("delivery readiness Evidence projection", () => {
   test("keeps source-ready downstream unclaimed while the live revision Evidence is missing", async () => {
     const db = await fixtureDatabase();
-    try {
-      insertProject(db);
-      const source = insertIssue(db, "source", "done");
-      const downstream = insertIssue(db, "destructive downstream", "todo");
-      addDependency(db, downstream, source);
-      declareRequirements(db, downstream, source, { required_stage: "observed" });
+    insertProject(db);
+    const source = insertIssue(db, "source", "done");
+    const downstream = insertIssue(db, "destructive downstream", "todo");
+    addDependency(db, downstream, source);
+    declareRequirements(db, downstream, source, { required_stage: "observed" });
 
-      expect(readIssueReadiness(db, downstream)).toMatchObject({
+    expect(readIssueReadiness(db, downstream)).toMatchObject({
+      current_stage: "source_ready",
+      ready: false,
+      status: "waiting",
+      requirements: [{
         current_stage: "source_ready",
-        ready: false,
-        status: "waiting",
-        requirements: [{
-          current_stage: "source_ready",
-          missing_evidence: [
-            `deployed:production:${RUNTIME_REVISION}`,
-            "observed:production:W2"
-          ],
-          source_status: "done"
-        }]
-      });
-      expect(claimNextIssue(db, "demo")).toBeNull();
-      expect(getIssue(db, downstream)).toMatchObject({ attempt_count: 0, status: "todo" });
-      expect(listIssueRuns(db, downstream)).toEqual([]);
-    } finally {
-      db.close();
-    }
+        missing_evidence: [
+          `deployed:production:${RUNTIME_REVISION}`,
+          "observed:production:W2"
+        ],
+        source_status: "done"
+      }]
+    });
+    expect(claimNextIssue(db, "demo")).toBeNull();
+    expect(getIssue(db, downstream)).toMatchObject({ attempt_count: 0, status: "todo" });
+    expect(listIssueRuns(db, downstream)).toEqual([]);
   });
 
   test("advances only after exact environment, revision, release-window, and gate Evidence", async () => {
     const db = await fixtureDatabase();
-    try {
-      insertProject(db);
-      const source = insertIssue(db, "source", "done");
-      const downstream = insertIssue(db, "migration downstream", "todo");
-      addDependency(db, downstream, source);
-      declareRequirements(db, downstream, source, { migration_gate: "G4", required_stage: "gate_passed" });
+    insertProject(db);
+    const source = insertIssue(db, "source", "done");
+    const downstream = insertIssue(db, "migration downstream", "todo");
+    addDependency(db, downstream, source);
+    declareRequirements(db, downstream, source, { migration_gate: "G4", required_stage: "gate_passed" });
 
-      record(db, source, evidence(source, "deployment", "deploy-wrong-env", { environment: "staging" }));
-      record(db, source, evidence(source, "deployment", "deploy-old-release", { release_window: "W1" }));
-      record(db, source, evidence(source, "deployment", "deploy-old-revision", {
-        runtime_revision: "v0.1.0-759-g8e0d1c2",
-        source_revision: "8e0d1c2"
-      }));
-      record(db, source, evidence(source, "deployment", "deploy-current"));
-      expect(readIssueReadiness(db, downstream)).toMatchObject({ current_stage: "deployed", ready: false });
+    record(db, source, evidence(source, "deployment", "deploy-wrong-env", { environment: "staging" }));
+    record(db, source, evidence(source, "deployment", "deploy-old-release", { release_window: "W1" }));
+    record(db, source, evidence(source, "deployment", "deploy-old-revision", {
+      runtime_revision: "v0.1.0-759-g8e0d1c2",
+      source_revision: "8e0d1c2"
+    }));
+    record(db, source, evidence(source, "deployment", "deploy-current"));
+    expect(readIssueReadiness(db, downstream)).toMatchObject({ current_stage: "deployed", ready: false });
 
-      record(db, source, evidence(source, "gate_pass", "gate-too-early", { migration_gate: "G4" }));
-      record(db, source, evidence(source, "observation", "golden-journey"));
-      expect(readIssueReadiness(db, downstream)).toMatchObject({ current_stage: "observed", ready: false });
+    record(db, source, evidence(source, "gate_pass", "gate-too-early", { migration_gate: "G4" }));
+    record(db, source, evidence(source, "observation", "golden-journey"));
+    expect(readIssueReadiness(db, downstream)).toMatchObject({ current_stage: "observed", ready: false });
 
-      record(db, source, evidence(source, "gate_pass", "wrong-gate", { migration_gate: "G3" }));
-      expect(readIssueReadiness(db, downstream)).toMatchObject({ current_stage: "observed", ready: false });
-      record(db, source, evidence(source, "gate_pass", "gate-current", { migration_gate: "G4" }));
+    record(db, source, evidence(source, "gate_pass", "wrong-gate", { migration_gate: "G3" }));
+    expect(readIssueReadiness(db, downstream)).toMatchObject({ current_stage: "observed", ready: false });
+    record(db, source, evidence(source, "gate_pass", "gate-current", { migration_gate: "G4" }));
 
-      expect(readIssueReadiness(db, downstream)).toMatchObject({
-        current_stage: "gate_passed",
-        missing_evidence: [],
-        ready: true,
-        status: "ready"
-      });
-      expect(claimNextIssue(db, "demo")).toMatchObject({ id: downstream, status: "in_progress" });
-    } finally {
-      db.close();
-    }
+    expect(readIssueReadiness(db, downstream)).toMatchObject({
+      current_stage: "gate_passed",
+      missing_evidence: [],
+      ready: true,
+      status: "ready"
+    });
+    expect(claimNextIssue(db, "demo")).toMatchObject({ id: downstream, status: "in_progress" });
   });
 
   test("rebuilds after restart and rollback Evidence revokes only the matching projection", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-readiness-restart-"));
     tempRoots.push(root);
     const stateDir = join(root, "state");
-    let db = await openDatabase({ stateDir });
+    let db = await openDatabase({ stateDir }).then(trackDatabase);
     insertProject(db);
     const source = insertIssue(db, "source", "done");
     const downstream = insertIssue(db, "live downstream", "todo");
@@ -114,32 +109,28 @@ describe("delivery readiness Evidence projection", () => {
     expect(readIssueReadiness(db, downstream)?.ready).toBe(true);
     db.close();
 
-    db = await openDatabase({ stateDir });
-    try {
-      expect(readIssueReadiness(db, downstream)).toMatchObject({ current_stage: "observed", ready: true });
-      record(db, source, evidence(source, "rollback", "rollback-current"));
-      expect(readIssueReadiness(db, downstream)).toMatchObject({
-        current_stage: "source_ready",
-        ready: false,
-        requirements: [{ rollback_evidence_id: expect.stringContaining("rollback-current") }]
-      });
-      expect(db.sqlite.query<{ count: number }, []>(
-        "select count(*) as count from issue_events where type='evidence.recorded.v1'"
-      ).get()?.count).toBe(3);
+    db = await openDatabase({ stateDir }).then(trackDatabase);
+    expect(readIssueReadiness(db, downstream)).toMatchObject({ current_stage: "observed", ready: true });
+    record(db, source, evidence(source, "rollback", "rollback-current"));
+    expect(readIssueReadiness(db, downstream)).toMatchObject({
+      current_stage: "source_ready",
+      ready: false,
+      requirements: [{ rollback_evidence_id: expect.stringContaining("rollback-current") }]
+    });
+    expect(db.sqlite.query<{ count: number }, []>(
+      "select count(*) as count from issue_events where type='evidence.recorded.v1'"
+    ).get()?.count).toBe(3);
 
-      record(db, source, evidence(source, "deployment", "redeploy-current"));
-      record(db, source, evidence(source, "observation", "reobserve-current"));
-      expect(readIssueReadiness(db, downstream)).toMatchObject({ current_stage: "observed", ready: true });
-    } finally {
-      db.close();
-    }
+    record(db, source, evidence(source, "deployment", "redeploy-current"));
+    record(db, source, evidence(source, "observation", "reobserve-current"));
+    expect(readIssueReadiness(db, downstream)).toMatchObject({ current_stage: "observed", ready: true });
   });
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-readiness-"));
   tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
+  return openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
 }
 
 function insertProject(db: RunnerDatabase): void {

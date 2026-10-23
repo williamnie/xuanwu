@@ -7,11 +7,14 @@ import { openDatabase } from "./database.ts";
 import { runMigrations } from "./migrations.ts";
 import { listAgentProfiles } from "./repositories/agentProfiles.ts";
 import { migrations } from "./schema/index.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 test("seeds selectable code agent profiles idempotently", async () => {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-builtin-provider-profiles-"));
   try {
-    const first = await openDatabase({ stateDir: root });
+    const first = await openDatabase({ stateDir: root }).then(trackDatabase);
     expect(listAgentProfiles(first).map((profile) => ({ id: profile.id, provider: profile.provider }))).toEqual([
       { id: "xuanwu-provider-claude", provider: "claude" },
       { id: "xuanwu-provider-codex", provider: "codex" },
@@ -26,7 +29,7 @@ test("seeds selectable code agent profiles idempotently", async () => {
     ]);
     first.close();
 
-    const second = await openDatabase({ stateDir: root });
+    const second = await openDatabase({ stateDir: root }).then(trackDatabase);
     expect(listAgentProfiles(second)).toHaveLength(4);
     second.close();
   } finally {

@@ -15,6 +15,9 @@ import {
   upsertProjectPiPolicy
 } from "../db/repositories/pi.ts";
 import { queueFeishuIssueStatusNotification } from "./feishuLifecycleNotifications.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const tempRoots: string[] = [];
 
@@ -28,139 +31,119 @@ afterEach(async () => {
 describe("Feishu lifecycle notification preference routing", () => {
   test("quiet preference suppresses ordinary single issue lifecycle Feishu drafts", async () => {
     const db = await fixtureDatabase();
-    try {
-      createProjectPreference(db, "pref-project-quiet", "quiet");
-      const issueID = linkedFeishuIssue(db);
+    createProjectPreference(db, "pref-project-quiet", "quiet");
+    const issueID = linkedFeishuIssue(db);
 
-      updateIssue(db, issueID, { status: "todo", error: "" });
-      const start = queueFeishuIssueStatusNotification(db, issueID);
-      updateIssue(db, issueID, { status: "done", error: "" });
-      const done = queueFeishuIssueStatusNotification(db, issueID);
+    updateIssue(db, issueID, { status: "todo", error: "" });
+    const start = queueFeishuIssueStatusNotification(db, issueID);
+    updateIssue(db, issueID, { status: "done", error: "" });
+    const done = queueFeishuIssueStatusNotification(db, issueID);
 
-      expect(start).toMatchObject({ queued: false, reason: "run_group_lifecycle_suppressed" });
-      expect(done).toMatchObject({ queued: false, reason: "run_group_lifecycle_suppressed" });
-      expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
-      expect(listPiNotificationIntents(db, { issueId: issueID })).toEqual(expect.arrayContaining([
-        expect.objectContaining({ decision: "suppress", kind: "issue_start", preference_id: "pref-project-quiet" }),
-        expect.objectContaining({ decision: "suppress", kind: "issue_done", preference_id: "pref-project-quiet" })
-      ]));
-    } finally {
-      db.close();
-    }
+    expect(start).toMatchObject({ queued: false, reason: "run_group_lifecycle_suppressed" });
+    expect(done).toMatchObject({ queued: false, reason: "run_group_lifecycle_suppressed" });
+    expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
+    expect(listPiNotificationIntents(db, { issueId: issueID })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ decision: "suppress", kind: "issue_start", preference_id: "pref-project-quiet" }),
+      expect.objectContaining({ decision: "suppress", kind: "issue_done", preference_id: "pref-project-quiet" })
+    ]));
   });
 
   test("conversation quiet preference applies to legacy issues without run group", async () => {
     const db = await fixtureDatabase();
-    try {
-      createConversationPreference(db, "pref-conversation-quiet", "quiet", "oc_group");
-      const issueID = linkedFeishuIssue(db);
+    createConversationPreference(db, "pref-conversation-quiet", "quiet", "oc_group");
+    const issueID = linkedFeishuIssue(db);
 
-      updateIssue(db, issueID, { status: "done", error: "" });
-      const result = queueFeishuIssueStatusNotification(db, issueID);
+    updateIssue(db, issueID, { status: "done", error: "" });
+    const result = queueFeishuIssueStatusNotification(db, issueID);
 
-      expect(result).toMatchObject({ queued: false, reason: "run_group_lifecycle_suppressed" });
-      expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
-      expect(listPiNotificationIntents(db, { issueId: issueID })).toMatchObject([
-        {
-          conversation_id: "oc_group",
-          decision: "suppress",
-          kind: "issue_done",
-          preference_id: "pref-conversation-quiet",
-          run_group_id: "",
-          state: "suppressed"
-        }
-      ]);
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ queued: false, reason: "run_group_lifecycle_suppressed" });
+    expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
+    expect(listPiNotificationIntents(db, { issueId: issueID })).toMatchObject([
+      {
+        conversation_id: "oc_group",
+        decision: "suppress",
+        kind: "issue_done",
+        preference_id: "pref-conversation-quiet",
+        run_group_id: "",
+        state: "suppressed"
+      }
+    ]);
   });
 
   test("digest preference aggregates ordinary single issue lifecycle without direct Feishu drafts", async () => {
     const db = await fixtureDatabase();
-    try {
-      createProjectPreference(db, "pref-project-digest", "digest");
-      const issueID = linkedFeishuIssue(db);
+    createProjectPreference(db, "pref-project-digest", "digest");
+    const issueID = linkedFeishuIssue(db);
 
-      updateIssue(db, issueID, { status: "done", error: "" });
-      const result = queueFeishuIssueStatusNotification(db, issueID);
+    updateIssue(db, issueID, { status: "done", error: "" });
+    const result = queueFeishuIssueStatusNotification(db, issueID);
 
-      expect(result).toMatchObject({ queued: false, reason: "run_group_lifecycle_aggregated" });
-      expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
-      expect(listPiNotificationIntents(db, { issueId: issueID })).toMatchObject([
-        {
-          decision: "aggregate",
-          kind: "issue_done",
-          preference_id: "pref-project-digest",
-          run_group_id: "",
-          state: "aggregated"
-        }
-      ]);
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ queued: false, reason: "run_group_lifecycle_aggregated" });
+    expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
+    expect(listPiNotificationIntents(db, { issueId: issueID })).toMatchObject([
+      {
+        decision: "aggregate",
+        kind: "issue_done",
+        preference_id: "pref-project-digest",
+        run_group_id: "",
+        state: "aggregated"
+      }
+    ]);
   });
 
   test("normal preference preserves existing single issue Feishu routing", async () => {
     const db = await fixtureDatabase();
-    try {
-      createProjectPreference(db, "pref-project-normal", "normal");
-      const issueID = linkedFeishuIssue(db);
+    createProjectPreference(db, "pref-project-normal", "normal");
+    const issueID = linkedFeishuIssue(db);
 
-      updateIssue(db, issueID, { status: "done", error: "" });
-      const result = queueFeishuIssueStatusNotification(db, issueID);
-      await flushAgentCommunicationTestMessages(db);
+    updateIssue(db, issueID, { status: "done", error: "" });
+    const result = queueFeishuIssueStatusNotification(db, issueID);
+    await flushAgentCommunicationTestMessages(db);
 
-      expect(result).toMatchObject({ queued: true, reason: "queued" });
-      expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(1);
-      expect(listPiNotificationIntents(db, { issueId: issueID })).toMatchObject([
-        {
-          decision: "send_now",
-          kind: "issue_done",
-          preference_id: "pref-project-normal",
-          run_group_id: "",
-          state: "sent"
-        }
-      ]);
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ queued: true, reason: "queued" });
+    expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(1);
+    expect(listPiNotificationIntents(db, { issueId: issueID })).toMatchObject([
+      {
+        decision: "send_now",
+        kind: "issue_done",
+        preference_id: "pref-project-normal",
+        run_group_id: "",
+        state: "sent"
+      }
+    ]);
   });
 
   test("project quiet hours defer ordinary lifecycle notification for Daily Digest", async () => {
     const db = await fixtureDatabase();
-    try {
-      upsertProjectPiPolicy(db, {
-        project_id: "demo",
-        quiet_hours_json: { daily: [{ end: "08:00", start: "22:00" }] },
-        timezone: "UTC"
-      });
-      const issueID = linkedFeishuIssue(db);
-      updateIssue(db, issueID, { status: "done", error: "" });
+    upsertProjectPiPolicy(db, {
+      project_id: "demo",
+      quiet_hours_json: { daily: [{ end: "08:00", start: "22:00" }] },
+      timezone: "UTC"
+    });
+    const issueID = linkedFeishuIssue(db);
+    updateIssue(db, issueID, { status: "done", error: "" });
 
-      const result = queueFeishuIssueStatusNotification(db, issueID, {
-        now: new Date("2026-07-18T23:00:00.000Z")
-      });
+    const result = queueFeishuIssueStatusNotification(db, issueID, {
+      now: new Date("2026-07-18T23:00:00.000Z")
+    });
 
-      expect(result).toMatchObject({ queued: false, reason: "run_group_lifecycle_aggregated" });
-      expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
-      expect(listPiNotificationIntents(db, { issueId: issueID })).toMatchObject([
-        expect.objectContaining({
-          decision: "aggregate",
-          flush_after_at: "2026-07-19T08:00:00.000Z",
-          kind: "issue_done",
-          state: "aggregated"
-        })
-      ]);
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ queued: false, reason: "run_group_lifecycle_aggregated" });
+    expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
+    expect(listPiNotificationIntents(db, { issueId: issueID })).toMatchObject([
+      expect.objectContaining({
+        decision: "aggregate",
+        flush_after_at: "2026-07-19T08:00:00.000Z",
+        kind: "issue_done",
+        state: "aggregated"
+      })
+    ]);
   });
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-lifecycle-pref-"));
   tempRoots.push(root);
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   db.sqlite.run(
     `insert into projects (id, name, cwd, provider, provider_config_json, sort_order, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, ?)`,

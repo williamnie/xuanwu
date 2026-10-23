@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { createDefaultRouter } from "./server.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
@@ -18,7 +21,7 @@ async function openFixtureDatabase(): Promise<{ cwd: string; database: RunnerDat
     await Bun.$`mkdir -p ${cwd}`.quiet();
     await writeFile(join(cwd, "src.txt"), "reference text");
   });
-  return { cwd, database: await openDatabase({ stateDir: join(root, "state") }) };
+  return { cwd, database: await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase) };
 }
 
 afterEach(async () => {

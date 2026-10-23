@@ -27,6 +27,9 @@ import {
   isTransientRecoveryDiagnosis
 } from "./recoveryDiagnosis.ts";
 import { issueSupervisorRecoveryFixtures } from "./issueSupervisorRecoveryFixtures.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const tempRoots: string[] = [];
 
@@ -137,93 +140,85 @@ describe("PI issue supervisor recovery contract", () => {
 
   test("extends project policy with allowed actions, cooldown, budget, and 429 wait policy", async () => {
     const db = await openFixtureDatabase();
-    try {
-      expect(readProjectPiPolicy(db, "demo")).toMatchObject({
-        allowed_supervisor_actions_json: "[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"issue.state_repair\",\"needs_user.escalate\"]",
-        supervisor_cooldown_seconds: 300,
-        supervisor_max_recoveries_per_issue: 6,
-        supervisor_max_recoveries_per_project_per_hour: 0,
-        supervisor_rate_limit_wait_policy: "respect_retry_after"
-      });
+    expect(readProjectPiPolicy(db, "demo")).toMatchObject({
+      allowed_supervisor_actions_json: "[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"issue.state_repair\",\"needs_user.escalate\"]",
+      supervisor_cooldown_seconds: 300,
+      supervisor_max_recoveries_per_issue: 6,
+      supervisor_max_recoveries_per_project_per_hour: 0,
+      supervisor_rate_limit_wait_policy: "respect_retry_after"
+    });
 
-      const policy = upsertProjectPiPolicy(db, {
-        allowed_supervisor_actions_json: ["session.resume_followup", "issue.retry_after"],
-        project_id: "demo",
-        supervisor_cooldown_seconds: 900,
-        supervisor_max_recoveries_per_issue: 3,
-        supervisor_max_recoveries_per_project_per_hour: 12,
-        supervisor_rate_limit_wait_policy: "ask"
-      });
+    const policy = upsertProjectPiPolicy(db, {
+      allowed_supervisor_actions_json: ["session.resume_followup", "issue.retry_after"],
+      project_id: "demo",
+      supervisor_cooldown_seconds: 900,
+      supervisor_max_recoveries_per_issue: 3,
+      supervisor_max_recoveries_per_project_per_hour: 12,
+      supervisor_rate_limit_wait_policy: "ask"
+    });
 
-      expect(policy).toMatchObject({
-        supervisor_cooldown_seconds: 900,
-        supervisor_max_recoveries_per_issue: 3,
-        supervisor_max_recoveries_per_project_per_hour: 0,
-        supervisor_rate_limit_wait_policy: "ask"
-      });
-      expect(JSON.parse(policy.allowed_supervisor_actions_json)).toEqual([
-        "session.resume_followup",
-        "issue.retry_after"
-      ]);
-    } finally {
-      db.close();
-    }
+    expect(policy).toMatchObject({
+      supervisor_cooldown_seconds: 900,
+      supervisor_max_recoveries_per_issue: 3,
+      supervisor_max_recoveries_per_project_per_hour: 0,
+      supervisor_rate_limit_wait_policy: "ask"
+    });
+    expect(JSON.parse(policy.allowed_supervisor_actions_json)).toEqual([
+      "session.resume_followup",
+      "issue.retry_after"
+    ]);
   });
 
   test("persists a signal to decision to action to result supervisor event chain", async () => {
     const db = await openFixtureDatabase();
-    try {
-      createIssueSupervisorEvent(db, {
-        diagnosis_code: "executor_stream_disconnected",
-        event_type: "signal",
-        issue_id: 298,
-        payload_json: { summary: "Reconnecting... 1/5" },
-        project_id: "xuanwu",
-        provider: "codex",
-        provider_session_id: "thread-298",
-        run_id: "issue-298-attempt-1"
-      });
-      createIssueSupervisorEvent(db, {
-        confidence: "high",
-        decision: "resume_session",
-        diagnosis_code: "executor_stream_disconnected",
-        event_type: "decision",
-        issue_id: 298,
-        payload_json: { recovery_message: "continue after inspecting current state" },
-        project_id: "xuanwu"
-      });
-      createIssueSupervisorEvent(db, {
-        action_id: "pi-action-298-resume",
-        action_type: "session.resume_followup",
-        decision: "resume_session",
-        event_type: "action",
-        issue_id: 298,
-        payload_json: { prompt: "continue after inspecting current state" },
-        project_id: "xuanwu"
-      });
-      createIssueSupervisorEvent(db, {
-        action_id: "pi-action-298-resume",
-        decision: "resume_session",
-        event_type: "result",
-        issue_id: 298,
-        payload_json: { outcome: "progress" },
-        project_id: "xuanwu"
-      });
+    createIssueSupervisorEvent(db, {
+      diagnosis_code: "executor_stream_disconnected",
+      event_type: "signal",
+      issue_id: 298,
+      payload_json: { summary: "Reconnecting... 1/5" },
+      project_id: "xuanwu",
+      provider: "codex",
+      provider_session_id: "thread-298",
+      run_id: "issue-298-attempt-1"
+    });
+    createIssueSupervisorEvent(db, {
+      confidence: "high",
+      decision: "resume_session",
+      diagnosis_code: "executor_stream_disconnected",
+      event_type: "decision",
+      issue_id: 298,
+      payload_json: { recovery_message: "continue after inspecting current state" },
+      project_id: "xuanwu"
+    });
+    createIssueSupervisorEvent(db, {
+      action_id: "pi-action-298-resume",
+      action_type: "session.resume_followup",
+      decision: "resume_session",
+      event_type: "action",
+      issue_id: 298,
+      payload_json: { prompt: "continue after inspecting current state" },
+      project_id: "xuanwu"
+    });
+    createIssueSupervisorEvent(db, {
+      action_id: "pi-action-298-resume",
+      decision: "resume_session",
+      event_type: "result",
+      issue_id: 298,
+      payload_json: { outcome: "progress" },
+      project_id: "xuanwu"
+    });
 
-      const events = listIssueSupervisorEvents(db, { issueId: 298 });
-      expect(events.map((event) => event.event_type)).toEqual(["signal", "decision", "action", "result"]);
-      expect(events[0]).toMatchObject({
-        diagnosis_code: "executor_stream_disconnected",
-        issue_id: 298,
-        provider: "codex",
-        provider_session_id: "thread-298",
-        run_id: "issue-298-attempt-1"
-      });
-      expect(events[2]).toMatchObject({ action_id: "pi-action-298-resume", action_type: "session.resume_followup" });
-      expect(JSON.parse(events[3]?.payload_json ?? "{}")).toEqual({ outcome: "progress" });
-    } finally {
-      db.close();
-    }
+    const events = listIssueSupervisorEvents(db, { issueId: 298 });
+    expect(events.map((event) => event.event_type)).toEqual(["signal", "decision", "action", "result"]);
+    expect(events[0]).toMatchObject({
+      diagnosis_code: "executor_stream_disconnected",
+      issue_id: 298,
+      provider: "codex",
+      provider_session_id: "thread-298",
+      run_id: "issue-298-attempt-1"
+    });
+    expect(events[2]).toMatchObject({ action_id: "pi-action-298-resume", action_type: "session.resume_followup" });
+    expect(JSON.parse(events[3]?.payload_json ?? "{}")).toEqual({ outcome: "progress" });
   });
 
   test("migrates legacy databases with supervisor event table and policy columns", async () => {
@@ -232,7 +227,7 @@ describe("PI issue supervisor recovery contract", () => {
     await createLegacyDatabase(join(stateDir, "runner.db"));
     await insertLegacyPolicyRow(join(stateDir, "runner.db"));
 
-    const migrated = await openDatabase({ stateDir });
+    const migrated = await openDatabase({ stateDir }).then(trackDatabase);
     try {
       expect(tableNames(migrated)).toContain("issue_supervisor_events");
       expect(columnNames(migrated, "issue_supervisor_events")).toEqual(expect.arrayContaining([
@@ -316,34 +311,30 @@ describe("PI issue supervisor recovery contract", () => {
 
   test("redacts supervisor event payloads before persistence and reads", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const event = createIssueSupervisorEvent(db, {
-        event_type: "signal",
-        issue_id: 298,
-        payload_json: {
-          auth_token: "runner-secret",
-          cwd: "/Users/xiaobei/private/project",
-          nested: { api_key: "sk-live-secret", output_path: "/tmp/raw.log" },
-          text: "Authorization: Bearer live-secret"
-        },
-        project_id: "demo"
-      });
+    const event = createIssueSupervisorEvent(db, {
+      event_type: "signal",
+      issue_id: 298,
+      payload_json: {
+        auth_token: "runner-secret",
+        cwd: "/Users/xiaobei/private/project",
+        nested: { api_key: "sk-live-secret", output_path: "/tmp/raw.log" },
+        text: "Authorization: Bearer live-secret"
+      },
+      project_id: "demo"
+    });
 
-      const raw = db.sqlite.query<{ payload_json: string }, [number]>(
-        "select payload_json from issue_supervisor_events where id=?"
-      ).get(event.id)?.payload_json ?? "";
-      const listed = listIssueSupervisorEvents(db, { issueId: 298 })[0]?.payload_json ?? "";
-      for (const payload of [raw, listed]) {
-        expect(payload).not.toContain("runner-secret");
-        expect(payload).not.toContain("sk-live-secret");
-        expect(payload).not.toContain("live-secret");
-        expect(payload).not.toContain("/Users/xiaobei/private");
-        expect(payload).not.toContain("/tmp/raw.log");
-        expect(payload).toContain("[redacted]");
-        expect(payload).toContain("[redacted-path]");
-      }
-    } finally {
-      db.close();
+    const raw = db.sqlite.query<{ payload_json: string }, [number]>(
+      "select payload_json from issue_supervisor_events where id=?"
+    ).get(event.id)?.payload_json ?? "";
+    const listed = listIssueSupervisorEvents(db, { issueId: 298 })[0]?.payload_json ?? "";
+    for (const payload of [raw, listed]) {
+      expect(payload).not.toContain("runner-secret");
+      expect(payload).not.toContain("sk-live-secret");
+      expect(payload).not.toContain("live-secret");
+      expect(payload).not.toContain("/Users/xiaobei/private");
+      expect(payload).not.toContain("/tmp/raw.log");
+      expect(payload).toContain("[redacted]");
+      expect(payload).toContain("[redacted-path]");
     }
   });
 
@@ -356,7 +347,7 @@ describe("PI issue supervisor recovery contract", () => {
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
   const root = await tempPath("xuanwu-supervisor-");
-  return openDatabase({ stateDir: join(root, "state") });
+  return openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
 }
 
 async function tempPath(prefix: string): Promise<string> {
@@ -368,11 +359,7 @@ async function tempPath(prefix: string): Promise<string> {
 async function createLegacyDatabase(path: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   const db = new Database(path);
-  try {
-    runMigrations(db, migrations.slice(0, supervisorMigrationIndex()));
-  } finally {
-    db.close();
-  }
+  runMigrations(db, migrations.slice(0, supervisorMigrationIndex()));
 }
 
 async function insertLegacyPolicyRow(path: string): Promise<void> {

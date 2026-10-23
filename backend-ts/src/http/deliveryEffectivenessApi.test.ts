@@ -4,11 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDatabase } from '../db/database.ts';
 import { createDefaultRouter, createRequestHandler } from './server.ts';
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const range = 'from=2026-09-01T00%3A00%3A00.000Z&to=2026-09-29T00%3A00%3A00.000Z';
 test('statistics read API validates ranges, dimensions and pagination, preserves auth and has no writes', async () => {
   const root = await mkdtemp(join(tmpdir(), 'delivery-api-979-'));
-  const db = await openDatabase({ stateDir: root });
+  const db = await openDatabase({ stateDir: root }).then(trackDatabase);
   try {
     db.sqlite.run("insert into projects(id,name,cwd,created_at,updated_at) values ('demo','Demo','/tmp/delivery-api','2026-09-01','2026-09-01')");
     const router = createDefaultRouter({ database: db });

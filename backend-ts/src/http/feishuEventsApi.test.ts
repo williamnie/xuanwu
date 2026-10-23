@@ -12,6 +12,9 @@ import { EventBus } from "../events/bus.ts";
 import { createRequestHandler, createDefaultRouter } from "./server.ts";
 import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
 import type { LlmIntakeModel, LlmIntakeRequest } from "../pi/llmIntake.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const BASE_URL = "http://127.0.0.1:3008";
 const ENCRYPT_KEY = "fixture-encrypt-key";
@@ -102,18 +105,14 @@ describe("Feishu events endpoint", () => {
       agentBridge: bridge,
       projectMappings: "chat:oc_group=demo"
     });
-    try {
-      const response = await postFeishu(handle, messageEvent({ token: "verify-token" }));
+    const response = await postFeishu(handle, messageEvent({ token: "verify-token" }));
 
-      expect(response.status).toBe(202);
-      expect(bridgeCalls).toEqual([{
-        messageId: "om_message_1",
-        projectId: "",
-        text: "@PI implement it"
-      }]);
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(202);
+    expect(bridgeCalls).toEqual([{
+      messageId: "om_message_1",
+      projectId: "",
+      text: "@PI implement it"
+    }]);
   });
 
   test("routes accepted Feishu messages through generic intake and keeps legacy bridge fallback", async () => {
@@ -131,35 +130,31 @@ describe("Feishu events endpoint", () => {
       feishuIntakePolicy: { action_mode: "propose_actions", profile: "company_chat" }
     });
     seedProject(database, "demo");
-    try {
-      const response = await postFeishu(handle, messageEvent({
-        text: "@PI demo 登录页 500 了，请创建 issue",
-        token: "verify-token"
-      }));
-      const body = await response.json() as Record<string, unknown>;
-      const bundles = listContextBundles(database, "feishu");
-      const items = listAttentionInboxItems(database, { source: "feishu" });
-      const proposals = listActionProposals(database);
+    const response = await postFeishu(handle, messageEvent({
+      text: "@PI demo 登录页 500 了，请创建 issue",
+      token: "verify-token"
+    }));
+    const body = await response.json() as Record<string, unknown>;
+    const bundles = listContextBundles(database, "feishu");
+    const items = listAttentionInboxItems(database, { source: "feishu" });
+    const proposals = listActionProposals(database);
 
-      expect(response.status).toBe(202);
-      expect(body).toMatchObject({ ok: true });
-      expect(bundles).toHaveLength(1);
-      expect(bundles[0]).toMatchObject({ source: "feishu", trigger: "mention" });
-      expect(items).toHaveLength(1);
-      expect(items[0]).toMatchObject({
-        primary_intent: "bug_report",
-        source: "feishu",
-        status: "proposal_created",
-        title: "登录页 500"
-      });
-      expect(proposals).toHaveLength(1);
-      expect(proposals[0].actions).toEqual(expect.arrayContaining([
-        expect.objectContaining({ type: "issue.create" })
-      ]));
-      expect(bridgeCalls).toEqual(["om_message_1"]);
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(202);
+    expect(body).toMatchObject({ ok: true });
+    expect(bundles).toHaveLength(1);
+    expect(bundles[0]).toMatchObject({ source: "feishu", trigger: "mention" });
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      primary_intent: "bug_report",
+      source: "feishu",
+      status: "proposal_created",
+      title: "登录页 500"
+    });
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0].actions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "issue.create" })
+    ]));
+    expect(bridgeCalls).toEqual(["om_message_1"]);
   });
 
   test("does not create proposals when generic intake classifies Feishu chat as non-task", async () => {
@@ -167,16 +162,12 @@ describe("Feishu events endpoint", () => {
       feishuIntakeModel: feishuIgnoredIntakeModel(),
       feishuIntakePolicy: { action_mode: "propose_actions", profile: "company_chat" }
     });
-    try {
-      const response = await postFeishu(handle, messageEvent({ text: "@PI 你是谁？", token: "verify-token" }));
+    const response = await postFeishu(handle, messageEvent({ text: "@PI 你是谁？", token: "verify-token" }));
 
-      expect(response.status).toBe(202);
-      expect(listContextBundles(database, "feishu")).toHaveLength(1);
-      expect(listAttentionInboxItems(database, { source: "feishu" })).toHaveLength(0);
-      expect(listActionProposals(database)).toHaveLength(0);
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(202);
+    expect(listContextBundles(database, "feishu")).toHaveLength(1);
+    expect(listAttentionInboxItems(database, { source: "feishu" })).toHaveLength(0);
+    expect(listActionProposals(database)).toHaveLength(0);
   });
 
   test("responds to encrypted URL verification when encrypt key is configured", async () => {
@@ -273,21 +264,17 @@ describe("Feishu events endpoint", () => {
   test("returns a diagnostic error when connector config is incomplete", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-http-"));
     tempRoots.push(root);
-    const database = await openDatabase({ stateDir: join(root, "state") });
+    const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     const config = buildConfig({ feishuAppId: "cli_app_id" });
     const router = createDefaultRouter({ config, database });
-    try {
-      const response = await postFeishu(createRequestHandler(router, ""), {
-        challenge: "challenge-code",
-        token: "verify-token",
-        type: "url_verification"
-      });
+    const response = await postFeishu(createRequestHandler(router, ""), {
+      challenge: "challenge-code",
+      token: "verify-token",
+      type: "url_verification"
+    });
 
-      expect(response.status).toBe(503);
-      expect(await response.json()).toEqual({ message: "feishu connector is not configured" });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ message: "feishu connector is not configured" });
   });
 });
 
@@ -302,7 +289,7 @@ async function fixtureHandler(options: {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-http-"));
   tempRoots.push(root);
   const bus = new EventBus();
-  const database = await openDatabase({ stateDir: join(root, "state") });
+  const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   const config = buildConfig({
     authToken: options.runnerAuthToken ?? "",
     feishuAppId: "cli_app_id",

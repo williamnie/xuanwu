@@ -11,13 +11,16 @@ import {
 } from "../../domain/evidence/runGitWorkspaceBaseline.ts";
 import { prepareReservedIssueRun } from "../../domain/run/runPreparation.ts";
 import { createIssueRun, ensureOpenIssueRun, insertIssueRunRecord, updateIssueRuntime, updateOpenIssueRunRuntime } from "./issueRuns.ts";
+import { useDatabaseCleanup } from "../../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-issue-run-repo-"));
   tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
+  return openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
 }
 
 afterEach(async () => {
@@ -71,113 +74,101 @@ describe("issue run repository", () => {
 
   test("creates attempts and updates only the open run runtime", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueId = insertIssue(db, "demo");
+    insertProject(db, "demo");
+    const issueId = insertIssue(db, "demo");
 
-      const first = createIssueRun(db, issueId);
-      updateOpenIssueRunRuntime(db, issueId, {
-        provider: "codex",
+    const first = createIssueRun(db, issueId);
+    updateOpenIssueRunRuntime(db, issueId, {
+      provider: "codex",
+      provider_session_id: "thread-1",
+      provider_turn_id: "turn-1",
+      metadata: { model: "codex-default", cwd: "/tmp/demo" }
+    });
+    closeRun(db, first.id);
+    const second = createIssueRun(db, issueId);
+    updateOpenIssueRunRuntime(db, issueId, {
+      provider: "codex",
+      provider_session_id: "thread-2",
+      provider_turn_id: "turn-2"
+    });
+
+    expect(allRuns(db, issueId)).toEqual([
+      {
+        attempt: 1,
         provider_session_id: "thread-1",
         provider_turn_id: "turn-1",
-        metadata: { model: "codex-default", cwd: "/tmp/demo" }
-      });
-      closeRun(db, first.id);
-      const second = createIssueRun(db, issueId);
-      updateOpenIssueRunRuntime(db, issueId, {
-        provider: "codex",
+        runtime_metadata_json: "{\"model\":\"codex-default\",\"cwd\":\"/tmp/demo\"}"
+      },
+      {
+        attempt: 2,
         provider_session_id: "thread-2",
-        provider_turn_id: "turn-2"
-      });
-
-      expect(allRuns(db, issueId)).toEqual([
-        {
-          attempt: 1,
-          provider_session_id: "thread-1",
-          provider_turn_id: "turn-1",
-          runtime_metadata_json: "{\"model\":\"codex-default\",\"cwd\":\"/tmp/demo\"}"
-        },
-        {
-          attempt: 2,
-          provider_session_id: "thread-2",
-          provider_turn_id: "turn-2",
-          runtime_metadata_json: "{}"
-        }
-      ]);
-      expect(second.attempt).toBe(2);
-    } finally {
-      db.close();
-    }
+        provider_turn_id: "turn-2",
+        runtime_metadata_json: "{}"
+      }
+    ]);
+    expect(second.attempt).toBe(2);
   });
 
   test("ensures one open attempt and mirrors Codex runtime to compatibility fields", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueId = insertIssue(db, "demo");
+    insertProject(db, "demo");
+    const issueId = insertIssue(db, "demo");
 
-      const first = ensureOpenIssueRun(db, issueId);
-      const same = ensureOpenIssueRun(db, issueId);
-      updateIssueRuntime(db, issueId, {
-        provider: "codex",
-        provider_session_id: "thread-codex",
-        provider_turn_id: "turn-codex",
-        metadata: { source: "turn/start" }
-      });
+    const first = ensureOpenIssueRun(db, issueId);
+    const same = ensureOpenIssueRun(db, issueId);
+    updateIssueRuntime(db, issueId, {
+      provider: "codex",
+      provider_session_id: "thread-codex",
+      provider_turn_id: "turn-codex",
+      metadata: { source: "turn/start" }
+    });
 
-      expect(same.id).toBe(first.id);
-      expect(allRuns(db, issueId)).toEqual([{
-        attempt: 1,
-        provider_session_id: "thread-codex",
-        provider_turn_id: "turn-codex",
-        runtime_metadata_json: "{\"source\":\"turn/start\"}"
-      }]);
-      expect(db.sqlite.query<Record<string, unknown>, [number]>(
-        "select codex_thread_id, codex_turn_id from issues where id=?"
-      ).get(issueId)).toEqual({ codex_thread_id: "thread-codex", codex_turn_id: "turn-codex" });
-    } finally {
-      db.close();
-    }
+    expect(same.id).toBe(first.id);
+    expect(allRuns(db, issueId)).toEqual([{
+      attempt: 1,
+      provider_session_id: "thread-codex",
+      provider_turn_id: "turn-codex",
+      runtime_metadata_json: "{\"source\":\"turn/start\"}"
+    }]);
+    expect(db.sqlite.query<Record<string, unknown>, [number]>(
+      "select codex_thread_id, codex_turn_id from issues where id=?"
+    ).get(issueId)).toEqual({ codex_thread_id: "thread-codex", codex_turn_id: "turn-codex" });
   });
 
   test("does not let a late closed attempt overwrite the current issue session", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueId = insertIssue(db, "demo");
-      const first = createIssueRun(db, issueId);
-      updateIssueRuntime(db, issueId, {
-        issue_run_id: first.id,
-        provider: "codex",
-        provider_session_id: "thread-1",
-        provider_turn_id: "turn-1"
-      });
-      closeRun(db, first.id);
-      const second = createIssueRun(db, issueId);
-      updateIssueRuntime(db, issueId, {
-        issue_run_id: second.id,
-        provider: "codex",
-        provider_session_id: "thread-2",
-        provider_turn_id: "turn-2"
-      });
+    insertProject(db, "demo");
+    const issueId = insertIssue(db, "demo");
+    const first = createIssueRun(db, issueId);
+    updateIssueRuntime(db, issueId, {
+      issue_run_id: first.id,
+      provider: "codex",
+      provider_session_id: "thread-1",
+      provider_turn_id: "turn-1"
+    });
+    closeRun(db, first.id);
+    const second = createIssueRun(db, issueId);
+    updateIssueRuntime(db, issueId, {
+      issue_run_id: second.id,
+      provider: "codex",
+      provider_session_id: "thread-2",
+      provider_turn_id: "turn-2"
+    });
 
-      updateIssueRuntime(db, issueId, {
-        issue_run_id: first.id,
-        provider: "codex",
-        provider_session_id: "thread-1-late",
-        provider_turn_id: "turn-1-late"
-      });
+    updateIssueRuntime(db, issueId, {
+      issue_run_id: first.id,
+      provider: "codex",
+      provider_session_id: "thread-1-late",
+      provider_turn_id: "turn-1-late"
+    });
 
-      expect(allRuns(db, issueId)).toEqual([
-        expect.objectContaining({ attempt: 1, provider_session_id: "thread-1-late", provider_turn_id: "turn-1-late" }),
-        expect.objectContaining({ attempt: 2, provider_session_id: "thread-2", provider_turn_id: "turn-2" })
-      ]);
-      expect(db.sqlite.query<Record<string, unknown>, [number]>(
-        "select codex_thread_id, codex_turn_id from issues where id=?"
-      ).get(issueId)).toEqual({ codex_thread_id: "thread-2", codex_turn_id: "turn-2" });
-    } finally {
-      db.close();
-    }
+    expect(allRuns(db, issueId)).toEqual([
+      expect.objectContaining({ attempt: 1, provider_session_id: "thread-1-late", provider_turn_id: "turn-1-late" }),
+      expect.objectContaining({ attempt: 2, provider_session_id: "thread-2", provider_turn_id: "turn-2" })
+    ]);
+    expect(db.sqlite.query<Record<string, unknown>, [number]>(
+      "select codex_thread_id, codex_turn_id from issues where id=?"
+    ).get(issueId)).toEqual({ codex_thread_id: "thread-2", codex_turn_id: "turn-2" });
   });
 });
 

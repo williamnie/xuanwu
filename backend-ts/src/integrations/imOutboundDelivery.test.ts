@@ -7,6 +7,9 @@ import { listImReplyDrafts, listSyncOutbox } from "../db/repositories/imReplyOut
 import { createImOutboundEnvelope, type ImOutboundPayloadV1 } from "./imChannelContracts.ts";
 import { deliverImOutboundNow } from "./imOutboundDelivery.ts";
 import type { ChannelConnector } from "./channelConnectorContracts.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 
@@ -18,58 +21,54 @@ describe("durable IM outbound delivery", () => {
   test("persists one draft/outbox and delivers once across an immediate replay", async () => {
     const root = await mkdtemp(join(tmpdir(), "im-outbound-delivery-"));
     roots.push(root);
-    const database = await openDatabase({ dbPath: join(root, "runner.db"), stateDir: root });
-    try {
-      let sends = 0;
-      const connector = fakeConnector(async (envelope) => {
-        sends += 1;
-        return { provider_request_ref: "provider-message-1", replayed: false, target: envelope.target };
-      });
-      const payload: ImOutboundPayloadV1 = {
-        operation: "message.reply",
-        schema_version: "xuanwu.im-outbound.v1",
-        target: { connector_id: "sample", conversation_id: "opaque-conversation" },
-        text: "**Markdown** reply"
-      };
-      const envelope = createImOutboundEnvelope({
-        actionGateRef: "policy:reply",
-        actionID: "reply:1",
-        authority: "deterministic_policy",
-        correlationID: "event:1",
-        eventRef: "external_events:1",
-        idempotencyKey: "reply:event:1",
-        payload,
-        target: "sample://conversation/opaque-conversation"
-      });
-      const first = await deliverImOutboundNow({
-        connector,
-        content: payload.text!,
-        database,
-        envelope,
-        externalEventId: 1,
-        targetChatId: "opaque-conversation"
-      });
-      const replay = await deliverImOutboundNow({
-        connector,
-        content: payload.text!,
-        database,
-        envelope,
-        externalEventId: 1,
-        targetChatId: "opaque-conversation"
-      });
+    const database = await openDatabase({ dbPath: join(root, "runner.db"), stateDir: root }).then(trackDatabase);
+    let sends = 0;
+    const connector = fakeConnector(async (envelope) => {
+      sends += 1;
+      return { provider_request_ref: "provider-message-1", replayed: false, target: envelope.target };
+    });
+    const payload: ImOutboundPayloadV1 = {
+      operation: "message.reply",
+      schema_version: "xuanwu.im-outbound.v1",
+      target: { connector_id: "sample", conversation_id: "opaque-conversation" },
+      text: "**Markdown** reply"
+    };
+    const envelope = createImOutboundEnvelope({
+      actionGateRef: "policy:reply",
+      actionID: "reply:1",
+      authority: "deterministic_policy",
+      correlationID: "event:1",
+      eventRef: "external_events:1",
+      idempotencyKey: "reply:event:1",
+      payload,
+      target: "sample://conversation/opaque-conversation"
+    });
+    const first = await deliverImOutboundNow({
+      connector,
+      content: payload.text!,
+      database,
+      envelope,
+      externalEventId: 1,
+      targetChatId: "opaque-conversation"
+    });
+    const replay = await deliverImOutboundNow({
+      connector,
+      content: payload.text!,
+      database,
+      envelope,
+      externalEventId: 1,
+      targetChatId: "opaque-conversation"
+    });
 
-      expect(first.replayed).toBe(false);
-      expect(replay.replayed).toBe(true);
-      expect(sends).toBe(1);
-      expect(listImReplyDrafts(database)).toHaveLength(1);
-      expect(listSyncOutbox(database)).toHaveLength(1);
-      expect(JSON.parse(listSyncOutbox(database)[0]!.payload_json)).toMatchObject({
-        connector_id: "sample",
-        operation: "message.reply"
-      });
-    } finally {
-      database.close();
-    }
+    expect(first.replayed).toBe(false);
+    expect(replay.replayed).toBe(true);
+    expect(sends).toBe(1);
+    expect(listImReplyDrafts(database)).toHaveLength(1);
+    expect(listSyncOutbox(database)).toHaveLength(1);
+    expect(JSON.parse(listSyncOutbox(database)[0]!.payload_json)).toMatchObject({
+      connector_id: "sample",
+      operation: "message.reply"
+    });
   });
 });
 

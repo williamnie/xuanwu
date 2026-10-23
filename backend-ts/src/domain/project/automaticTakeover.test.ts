@@ -10,6 +10,9 @@ import {
   ensureProjectAutomaticTakeover,
   updateAutomaticallyManagedProject
 } from "./automaticTakeover.ts";
+import { useDatabaseCleanup } from "../../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const tempRoots: string[] = [];
 
@@ -54,5 +57,5 @@ describe("automatic project takeover", () => {
 async function fixture(): Promise<{ cwd: string; database: RunnerDatabase }> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-project-takeover-"));
   tempRoots.push(root);
-  return { cwd: root, database: await openDatabase({ stateDir: join(root, "state") }) };
+  return { cwd: root, database: await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase) };
 }

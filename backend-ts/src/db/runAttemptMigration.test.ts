@@ -7,6 +7,9 @@ import { dirname, join, resolve } from "node:path";
 import { openDatabase, type RunnerDatabase } from "./database.ts";
 import { runMigrations } from "./migrations.ts";
 import { migrations } from "./schema/index.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const MIGRATION_ID = "042_run_attempt_relations";
 const NOW = "2026-07-16T00:00:00.000Z";
@@ -21,32 +24,28 @@ afterEach(async () => {
 
 describe("Run/Attempt relation migration", () => {
   test("creates additive Run identity, Attempt storage, and indexes on an empty database", async () => {
-    const connection = await openDatabase({ stateDir: await tempPath("run-attempt-empty-") });
-    try {
-      expect(generatedColumnNames(connection, "issue_runs")).toEqual(expect.arrayContaining([
-        "run_id", "run_sequence", "work_id"
-      ]));
-      expect(tableNames(connection)).toContain("run_attempts");
-      expect(indexNames(connection, "issue_runs")).toEqual(expect.arrayContaining([
-        "ux_issue_runs_run_id", "ux_issue_runs_run_legacy", "ux_issue_runs_work_sequence"
-      ]));
-      expect(indexNames(connection, "run_attempts")).toEqual(expect.arrayContaining([
-        "idx_run_attempts_agent_session",
-        "idx_run_attempts_provider_session",
-        "ux_run_attempts_provider_invocation",
-        "ux_run_attempts_run_sequence"
-      ]));
-      expect(migrationCount(connection)).toEqual({ count: 1 });
-    } finally {
-      connection.close();
-    }
+    const connection = await openDatabase({ stateDir: await tempPath("run-attempt-empty-") }).then(trackDatabase);
+    expect(generatedColumnNames(connection, "issue_runs")).toEqual(expect.arrayContaining([
+      "run_id", "run_sequence", "work_id"
+    ]));
+    expect(tableNames(connection)).toContain("run_attempts");
+    expect(indexNames(connection, "issue_runs")).toEqual(expect.arrayContaining([
+      "ux_issue_runs_run_id", "ux_issue_runs_run_legacy", "ux_issue_runs_work_sequence"
+    ]));
+    expect(indexNames(connection, "run_attempts")).toEqual(expect.arrayContaining([
+      "idx_run_attempts_agent_session",
+      "idx_run_attempts_provider_session",
+      "ux_run_attempts_provider_invocation",
+      "ux_run_attempts_run_sequence"
+    ]));
+    expect(migrationCount(connection)).toEqual({ count: 1 });
   });
 
   test("backfills a historical database with stable IDs and quarantines unknown legacy status", async () => {
     const stateDir = await tempPath("run-attempt-upgrade-");
     await createPreRunAttemptDatabase(join(stateDir, "runner.db"));
 
-    const migrated = await openDatabase({ stateDir });
+    const migrated = await openDatabase({ stateDir }).then(trackDatabase);
     try {
       expect(migrated.sqlite.query(`
         select id, run_id, work_id, run_sequence
@@ -113,7 +112,7 @@ describe("Run/Attempt relation migration", () => {
   });
 
   test("keeps the legacy issue_runs and agent_sessions writers compatible", async () => {
-    const connection = await openDatabase({ stateDir: await tempPath("run-attempt-legacy-writer-") });
+    const connection = await openDatabase({ stateDir: await tempPath("run-attempt-legacy-writer-") }).then(trackDatabase);
     try {
       insertProject(connection, "demo");
       const issueID = insertIssue(connection, "demo");
@@ -158,7 +157,7 @@ describe("Run/Attempt relation migration", () => {
   });
 
   test("enforces unique mappings, rejects orphan Attempts, and cascades legacy deletion", async () => {
-    const connection = await openDatabase({ stateDir: await tempPath("run-attempt-constraints-") });
+    const connection = await openDatabase({ stateDir: await tempPath("run-attempt-constraints-") }).then(trackDatabase);
     try {
       insertProject(connection, "demo");
       const issueID = insertIssue(connection, "demo");
@@ -193,7 +192,7 @@ describe("Run/Attempt relation migration", () => {
   });
 
   test("uses the declared indexes and remains idempotent", async () => {
-    const connection = await openDatabase({ stateDir: await tempPath("run-attempt-query-plan-") });
+    const connection = await openDatabase({ stateDir: await tempPath("run-attempt-query-plan-") }).then(trackDatabase);
     try {
       runMigrations(connection.sqlite);
       expect(migrationCount(connection)).toEqual({ count: 1 });

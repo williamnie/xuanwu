@@ -6,6 +6,9 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getPiAction, listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
 import { createDefaultRouter } from "./server.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
@@ -79,7 +82,7 @@ describe("PI stale pending action maintenance API", () => {
 async function openFixture(): Promise<{ db: RunnerDatabase; root: string }> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-maintenance-"));
   tempRoots.push(root);
-  return { db: await openDatabase({ stateDir: join(root, "state") }), root };
+  return { db: await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase), root };
 }
 
 function seedHistoricalStaleSupervisorCase(db: RunnerDatabase): void {

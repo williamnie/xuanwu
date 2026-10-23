@@ -11,6 +11,9 @@ import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "..
 import { buildIssueSupervisorRecoveryContext } from "./issueSupervisorContext.ts";
 import { applyIssueSupervisorDecisionActions } from "./issueSupervisorActions.ts";
 import type { PiSupervisorDecisionJson } from "./issueSupervisorRecovery.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const NOW = new Date("2026-06-10T08:00:00Z");
 const tempRoots: string[] = [];
@@ -175,29 +178,25 @@ describe("PI issue supervisor actions", () => {
       }
       db.close();
 
-      const reopened = await openDatabase({ stateDir: join(root, "state") });
-      try {
-        const result = await applyIssueSupervisorDecisionActions({
-          context: buildIssueSupervisorRecoveryContext(reopened, 306, { now: NOW }),
-          database: reopened,
-          decision: resumeDecision(),
-          now: NOW,
-          providers: { codex: provider }
-        });
+      const reopened = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
+      const result = await applyIssueSupervisorDecisionActions({
+        context: buildIssueSupervisorRecoveryContext(reopened, 306, { now: NOW }),
+        database: reopened,
+        decision: resumeDecision(),
+        now: NOW,
+        providers: { codex: provider }
+      });
 
-        expect(provider.calls).toEqual([]);
-        expect(result.actions).toContainEqual(expect.objectContaining({
-          action_type: "session.resume_followup",
-          decision: "deny",
-          status: "denied"
-        }));
-        expect(listPiActions(reopened, { issueId: 306 })).toContainEqual(expect.objectContaining({
-          gate_decision: "deny",
-          gate_reason: expect.stringContaining("budget")
-        }));
-      } finally {
-        reopened.close();
-      }
+      expect(provider.calls).toEqual([]);
+      expect(result.actions).toContainEqual(expect.objectContaining({
+        action_type: "session.resume_followup",
+        decision: "deny",
+        status: "denied"
+      }));
+      expect(listPiActions(reopened, { issueId: 306 })).toContainEqual(expect.objectContaining({
+        gate_decision: "deny",
+        gate_reason: expect.stringContaining("budget")
+      }));
     } finally {
       try { db.close(); } catch {}
     }
@@ -211,7 +210,7 @@ async function fixtureDb(): Promise<RunnerDatabase> {
 async function fixtureDbWithRoot(): Promise<{ db: RunnerDatabase; root: string }> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-supervisor-actions-"));
   tempRoots.push(root);
-  return { db: await openDatabase({ stateDir: join(root, "state") }), root };
+  return { db: await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase), root };
 }
 
 function insertProject(db: RunnerDatabase, id: string): void {

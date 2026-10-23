@@ -10,6 +10,9 @@ import { loadAssistantToolRegistrySnapshot } from "../pi/toolRegistrySnapshot.ts
 import { readSkillCatalog } from "../skills/managedStore.ts";
 import { createDefaultRouter } from "./server.ts";
 import { finalPiConversationSseData } from "./piConversationSse.testSupport.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 afterEach(async () => { while (roots.length) await rm(roots.pop()!, { recursive: true, force: true }); });
@@ -18,7 +21,7 @@ for (const scope of ["instance", "project"] as const) test(`Runner Chat installs
   const root = await mkdtemp(join(tmpdir(), "xuanwu-skill-conversation-")); roots.push(root);
   const stateDir = join(root, "state"), cwd = join(root, "project");
   await mkdir(cwd);
-  const db = await openDatabase({ stateDir });
+  const db = await openDatabase({ stateDir }).then(trackDatabase);
   const provider = `skill-faux-${scope}`, api = `${provider}-api`;
   const faux = registerFauxProvider({ api, provider });
   try {

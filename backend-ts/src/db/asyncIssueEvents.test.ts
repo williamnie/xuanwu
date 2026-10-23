@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { listIssueEventsAsync } from "./asyncIssueEvents.ts";
 import { openDatabase, type RunnerDatabase } from "./database.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 
@@ -15,66 +18,58 @@ describe("async Issue event reads", () => {
   test("runs bounded reads on the supplied read connection without spawning child processes", async () => {
     const root = await mkdtemp(join(tmpdir(), "issue-events-worker-"));
     roots.push(root);
-    const db = await openDatabase({ stateDir: root });
-    try {
-      const issueID = fixtureIssue(db);
-      for (let index = 0; index < 20; index += 1) {
-        db.sqlite.run(
-          "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.log', ?, ?)",
-          [issueID, JSON.stringify({ text: `event-${index}` }), `2026-01-01T00:00:${String(index).padStart(2, "0")}Z`]
-        );
-      }
-
-      let eventLoopAdvanced = false;
-      setTimeout(() => {
-        eventLoopAdvanced = true;
-      }, 0);
-      const pending = listIssueEventsAsync(db, issueID, {
-        hydrateArtifacts: false,
-        limit: 5,
-        types: ["issue.log"]
-      });
-      await Bun.sleep(5);
-      expect(eventLoopAdvanced).toBe(true);
-
-      const events = await pending;
-      expect(events).toHaveLength(5);
-      expect(events.map((event) => JSON.parse(event.payload).text)).toEqual([
-        "event-15",
-        "event-16",
-        "event-17",
-        "event-18",
-        "event-19"
-      ]);
-    } finally {
-      db.close();
+    const db = await openDatabase({ stateDir: root }).then(trackDatabase);
+    const issueID = fixtureIssue(db);
+    for (let index = 0; index < 20; index += 1) {
+      db.sqlite.run(
+        "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.log', ?, ?)",
+        [issueID, JSON.stringify({ text: `event-${index}` }), `2026-01-01T00:00:${String(index).padStart(2, "0")}Z`]
+      );
     }
+
+    let eventLoopAdvanced = false;
+    setTimeout(() => {
+      eventLoopAdvanced = true;
+    }, 0);
+    const pending = listIssueEventsAsync(db, issueID, {
+      hydrateArtifacts: false,
+      limit: 5,
+      types: ["issue.log"]
+    });
+    await Bun.sleep(5);
+    expect(eventLoopAdvanced).toBe(true);
+
+    const events = await pending;
+    expect(events).toHaveLength(5);
+    expect(events.map((event) => JSON.parse(event.payload).text)).toEqual([
+      "event-15",
+      "event-16",
+      "event-17",
+      "event-18",
+      "event-19"
+    ]);
   });
 
   test("returns complete large payloads under concurrent detail reads", async () => {
     const root = await mkdtemp(join(tmpdir(), "issue-events-concurrent-"));
     roots.push(root);
-    const db = await openDatabase({ stateDir: root });
-    try {
-      const issueID = fixtureIssue(db);
-      const text = "x".repeat(32_000);
-      for (let index = 0; index < 100; index += 1) {
-        db.sqlite.run(
-          "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.log', ?, ?)",
-          [issueID, JSON.stringify({ index, text }), `2026-01-01T00:01:${String(index % 60).padStart(2, "0")}Z`]
-        );
-      }
-
-      const pages = await Promise.all(Array.from({ length: 20 }, () => (
-        listIssueEventsAsync(db, issueID, { hydrateArtifacts: false, limit: 100, types: ["issue.log"] })
-      )));
-
-      expect(pages).toHaveLength(20);
-      expect(pages.every((events) => events.length === 100)).toBe(true);
-      expect(pages.every((events) => JSON.parse(events.at(-1)?.payload ?? "{}").text === text)).toBe(true);
-    } finally {
-      db.close();
+    const db = await openDatabase({ stateDir: root }).then(trackDatabase);
+    const issueID = fixtureIssue(db);
+    const text = "x".repeat(32_000);
+    for (let index = 0; index < 100; index += 1) {
+      db.sqlite.run(
+        "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.log', ?, ?)",
+        [issueID, JSON.stringify({ index, text }), `2026-01-01T00:01:${String(index % 60).padStart(2, "0")}Z`]
+      );
     }
+
+    const pages = await Promise.all(Array.from({ length: 20 }, () => (
+      listIssueEventsAsync(db, issueID, { hydrateArtifacts: false, limit: 100, types: ["issue.log"] })
+    )));
+
+    expect(pages).toHaveLength(20);
+    expect(pages.every((events) => events.length === 100)).toBe(true);
+    expect(pages.every((events) => JSON.parse(events.at(-1)?.payload ?? "{}").text === text)).toBe(true);
   });
 });
 

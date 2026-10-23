@@ -10,6 +10,9 @@ import { getPiAction, getPiIssueCompletionWatch, listPiActionEvents, listPiActio
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import { createHumanReviewRequest } from "../domain/review/humanReview.ts";
 import { createPiRunnerActions } from "./runnerActions.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 describe("PI runner action gate", () => {
   test("delegated mode only auto-executes actions covered by an authorization envelope", async () => {
@@ -584,7 +587,7 @@ describe("PI runner action gate", () => {
 
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase; project: Project }> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-action-gate-"));
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   db.sqlite.run(
     `insert into projects (id, name, cwd, sort_order, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?)`,

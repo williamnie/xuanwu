@@ -6,6 +6,9 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { recordIssueLogEvent } from "../db/repositories/issueEvents.ts";
 import type { ProviderEvent } from "../providers/types.ts";
 import { createIssueLogPersistence } from "./issueLogPersistence.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const tempRoots: string[] = [];
 const session = { provider: "codex" as const, sessionId: "benchmark-thread", turnId: "benchmark-turn" };
@@ -18,32 +21,27 @@ describe("issue.log bounded storage benchmark", () => {
   test("reduces equivalent Run DB rows and payload bytes by at least 70 percent", async () => {
     const baseline = await fixture("baseline");
     const bounded = await fixture("bounded");
-    try {
-      const events = benchmarkEvents();
-      const baselineBefore = allocatedBytes(baseline.db);
-      for (const event of events) recordIssueLogEvent(baseline.db, baseline.issueID, event);
-      const baselineAfter = storage(baseline.db, baseline.issueID, baselineBefore);
+    const events = benchmarkEvents();
+    const baselineBefore = allocatedBytes(baseline.db);
+    for (const event of events) recordIssueLogEvent(baseline.db, baseline.issueID, event);
+    const baselineAfter = storage(baseline.db, baseline.issueID, baselineBefore);
 
-      const boundedBefore = allocatedBytes(bounded.db);
-      const persistence = createIssueLogPersistence((event) => {
-        recordIssueLogEvent(bounded.db, bounded.issueID, event);
-      });
-      events.forEach((event) => persistence.push(event));
-      persistence.flush();
-      const boundedAfter = storage(bounded.db, bounded.issueID, boundedBefore);
+    const boundedBefore = allocatedBytes(bounded.db);
+    const persistence = createIssueLogPersistence((event) => {
+      recordIssueLogEvent(bounded.db, bounded.issueID, event);
+    });
+    events.forEach((event) => persistence.push(event));
+    persistence.flush();
+    const boundedAfter = storage(bounded.db, bounded.issueID, boundedBefore);
 
-      expect(baselineAfter.rows).toBe(events.length);
-      expect(boundedAfter.rows).toBeLessThan(baselineAfter.rows * 0.3);
-      expect(boundedAfter.payloadBytes).toBeLessThan(baselineAfter.payloadBytes * 0.3);
-      expect(boundedAfter.allocatedGrowthBytes).toBeLessThan(baselineAfter.allocatedGrowthBytes * 0.3);
-      expect({ baseline: baselineAfter, bounded: boundedAfter }).toEqual({
-        baseline: { allocatedGrowthBytes: 1_298_432, payloadBytes: 724_103, rows: 5_122 },
-        bounded: { allocatedGrowthBytes: 102_400, payloadBytes: 77_333, rows: 131 }
-      });
-    } finally {
-      baseline.db.close();
-      bounded.db.close();
-    }
+    expect(baselineAfter.rows).toBe(events.length);
+    expect(boundedAfter.rows).toBeLessThan(baselineAfter.rows * 0.3);
+    expect(boundedAfter.payloadBytes).toBeLessThan(baselineAfter.payloadBytes * 0.3);
+    expect(boundedAfter.allocatedGrowthBytes).toBeLessThan(baselineAfter.allocatedGrowthBytes * 0.3);
+    expect({ baseline: baselineAfter, bounded: boundedAfter }).toEqual({
+      baseline: { allocatedGrowthBytes: 1_298_432, payloadBytes: 724_103, rows: 5_122 },
+      bounded: { allocatedGrowthBytes: 102_400, payloadBytes: 77_333, rows: 131 }
+    });
   });
 });
 
@@ -84,7 +82,7 @@ function benchmarkEvents(): ProviderEvent[] {
 async function fixture(name: string): Promise<{ db: RunnerDatabase; issueID: number }> {
   const root = await mkdtemp(join(tmpdir(), `issue-log-benchmark-${name}-`));
   tempRoots.push(root);
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   db.sqlite.run(
     "insert into projects (id, name, cwd, created_at, updated_at) values (?, ?, ?, ?, ?)",
     [name, name, `/tmp/${name}`, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]

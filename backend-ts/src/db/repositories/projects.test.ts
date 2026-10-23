@@ -4,13 +4,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../database.ts";
 import { createProject, getProject, listProjects } from "./projects.ts";
+import { useDatabaseCleanup } from "../../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-projects-"));
   tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
+  return openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
 }
 
 afterEach(async () => {
@@ -23,76 +26,64 @@ afterEach(async () => {
 describe("project read repository", () => {
   test("returns an empty project list", async () => {
     const db = await openFixtureDatabase();
-    try {
-      expect(listProjects(db)).toEqual([]);
-    } finally {
-      db.close();
-    }
+    expect(listProjects(db)).toEqual([]);
   });
 
   test("lists and gets projects using frontend-compatible field names", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, {
-        id: "later",
-        name: "Later",
-        cwd: "/tmp/later",
-        sort_order: 2,
-        created_at: "2026-01-02T00:00:00Z"
-      });
-      insertProject(db, {
-        id: "demo",
-        name: "Demo",
-        cwd: "/tmp/demo",
-        sort_order: 1,
-        created_at: "2026-01-01T00:00:00Z"
-      });
+    insertProject(db, {
+      id: "later",
+      name: "Later",
+      cwd: "/tmp/later",
+      sort_order: 2,
+      created_at: "2026-01-02T00:00:00Z"
+    });
+    insertProject(db, {
+      id: "demo",
+      name: "Demo",
+      cwd: "/tmp/demo",
+      sort_order: 1,
+      created_at: "2026-01-01T00:00:00Z"
+    });
 
-      expect(listProjects(db).map((project) => project.id)).toEqual(["demo", "later"]);
-      expect(getProject(db, "demo")).toEqual({
-        id: "demo",
-        name: "Demo",
-        cwd: "/tmp/demo",
-        provider: "codex",
-        provider_config_json: "{}",
-        auto_run: 0,
-        model: "codex-default",
-        approval_policy: "never",
-        execution_policy: {
-          contract: "xw.execution-policy.v1",
-          access: "provider-native-development",
-          approval: "unattended"
-        },
-        execution_policy_json: "{}",
-        execution_policy_source: "legacy",
-        execution_policy_warnings: [],
-        pi_managed: 0,
-        sandbox: "workspace-write",
-        default_agent_profile_id: "",
-        default_mcp_policy: "{}",
-        default_service_tier: "",
-        default_skill_policy: "{}",
-        loop_status: "stopped",
-        sort_order: 1,
-        provider_capabilities: ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"],
-        created_at: "2026-01-01T00:00:00Z",
-        updated_at: "2026-01-01T00:00:00Z"
-      });
-      expect(getProject(db, "missing")).toBeNull();
-    } finally {
-      db.close();
-    }
+    expect(listProjects(db).map((project) => project.id)).toEqual(["demo", "later"]);
+    expect(getProject(db, "demo")).toEqual({
+      id: "demo",
+      name: "Demo",
+      cwd: "/tmp/demo",
+      provider: "codex",
+      provider_config_json: "{}",
+      auto_run: 0,
+      model: "codex-default",
+      approval_policy: "never",
+      execution_policy: {
+        contract: "xw.execution-policy.v1",
+        access: "provider-native-development",
+        approval: "unattended"
+      },
+      execution_policy_json: "{}",
+      execution_policy_source: "legacy",
+      execution_policy_warnings: [],
+      pi_managed: 0,
+      sandbox: "workspace-write",
+      default_agent_profile_id: "",
+      default_mcp_policy: "{}",
+      default_service_tier: "",
+      default_skill_policy: "{}",
+      loop_status: "stopped",
+      sort_order: 1,
+      provider_capabilities: ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"],
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z"
+    });
+    expect(getProject(db, "missing")).toBeNull();
   });
 
   test("keeps codex-default scoped to Codex projects", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const cwd = tempRoots.at(-1)!;
-      const pi = createProject(db, { id: "pi-project", cwd, provider: "pi-coding-agent", model: "" });
-      expect(pi).toMatchObject({ provider: "pi-coding-agent", model: "" });
-    } finally {
-      db.close();
-    }
+    const cwd = tempRoots.at(-1)!;
+    const pi = createProject(db, { id: "pi-project", cwd, provider: "pi-coding-agent", model: "" });
+    expect(pi).toMatchObject({ provider: "pi-coding-agent", model: "" });
   });
 });
 

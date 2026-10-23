@@ -15,6 +15,9 @@ import { PI_RUNTIME_PROMPT_PROFILES } from "../pi/runtimePromptProfile.ts";
 import { ISSUE_PLANNING_POLICY } from "../pi/issuePlanningPolicy.ts";
 import { readFileSync } from "node:fs";
 import { buildPiRuntimeContextEnvelope, piRuntimeContextEnvelopePrompt } from "../pi/runtimeContextEnvelope.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const DECISION_FIXTURES = [
   {
@@ -47,7 +50,7 @@ const DECISION_FIXTURES = [
 describe("Xuanwu PI runtime prompt", () => {
   test("isolates all five explicit profiles and never infers profile from heartbeat", async () => {
     const root = await mkdtemp(join(tmpdir(), "xw-prompt-profiles-"));
-    const db = await openDatabase({ stateDir: join(root, "state") });
+    const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     try {
       updatePiPersona(db, { expected_revision: 0, enabled: 1 }, {
         actor: "test", reason: "prompt ordering", requestedAt: new Date().toISOString()
@@ -98,7 +101,7 @@ describe("Xuanwu PI runtime prompt", () => {
 
   test("JSON-encodes hostile Persona text inside a presentation-only final section", async () => {
     const root = await mkdtemp(join(tmpdir(), "xw-prompt-persona-escape-"));
-    const db = await openDatabase({ stateDir: join(root, "state") });
+    const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     try {
       updatePiPersona(db, {
         expected_revision: 0,
@@ -125,7 +128,7 @@ describe("Xuanwu PI runtime prompt", () => {
 
   test("projects an explicit project policy into every PI runtime profile", async () => {
     const root = await mkdtemp(join(tmpdir(), "xw-prompt-shared-policy-"));
-    const db = await openDatabase({ stateDir: join(root, "state") });
+    const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     try {
       createPiMemoryItem(db, {
         authority: "user_explicit",
@@ -261,7 +264,7 @@ describe("Xuanwu PI runtime prompt", () => {
 
   test("keeps confirmed project/global memory scoped away from an old conversation", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-supervisor-memory-"));
-    const db = await openDatabase({ stateDir: join(root, "state") });
+    const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     try {
       createPiMemoryItem(db, {
         content: "Project-level Supervisor preference",
@@ -303,7 +306,7 @@ describe("Xuanwu PI runtime prompt", () => {
 
   test("keeps retrieval diagnostics in the audit envelope without inflating the model prompt", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-context-diagnostics-"));
-    const db = await openDatabase({ stateDir: join(root, "state") });
+    const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     try {
       const envelope = buildPiRuntimeContextEnvelope(db, {
         agent: agentRecord(), conversationID: "diagnostics", promptProfile: "chat",
@@ -346,7 +349,7 @@ describe("Xuanwu PI runtime prompt", () => {
 
 async function withRuntimePrompt(name: string, assertion: (prompt: string) => void): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), `xuanwu-bun-supervisor-${name}-`));
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   try {
     assertion(buildPiRuntimeSystemPrompt({
       agent: agentRecord(),

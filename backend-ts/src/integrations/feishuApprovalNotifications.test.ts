@@ -20,6 +20,9 @@ import {
   queueFeishuApprovalNotification,
   resolvePiApprovalRequestFromFeishu
 } from "./feishuNotifications.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const tempRoots: string[] = [];
 
@@ -30,74 +33,66 @@ afterEach(async () => {
 describe("Feishu approval notification queue", () => {
   test("routes a Codex approval request to the linked Telegram conversation without Feishu config", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issueID = linkedTelegramIssue(db);
-      upsertAgentSession(db, {
-        issue_id: issueID,
-        project_id: "demo",
-        provider: "codex",
-        provider_session_id: "thread-telegram-approval"
-      });
+    const issueID = linkedTelegramIssue(db);
+    upsertAgentSession(db, {
+      issue_id: issueID,
+      project_id: "demo",
+      provider: "codex",
+      provider_session_id: "thread-telegram-approval"
+    });
 
-      const queued = queueFeishuApprovalNotification(
-        db,
-        approvalEvent("approval-telegram-1", "thread-telegram-approval", "git status"),
-        { requireConfigured: true }
-      );
-      await flushAgentCommunicationTestMessages(db);
-      const outbox = listSyncOutbox(db, { source: "telegram" });
+    const queued = queueFeishuApprovalNotification(
+      db,
+      approvalEvent("approval-telegram-1", "thread-telegram-approval", "git status"),
+      { requireConfigured: true }
+    );
+    await flushAgentCommunicationTestMessages(db);
+    const outbox = listSyncOutbox(db, { source: "telegram" });
 
-      expect(queued).toMatchObject({ queued: true, reason: "queued" });
-      expect(outbox).toHaveLength(1);
-      expect(outbox[0]).toMatchObject({
-        approval_action_id: "approval-telegram-1",
-        target_chat_id: "-100456",
-        target_message_id: "88",
-        target_thread_id: "12"
-      });
-      expect(getPiApprovalRequest(db, "approval-telegram-1")).toMatchObject({
-        delivery_channel: "telegram",
-        delivery_state: "delivered"
-      });
-    } finally {
-      db.close();
-    }
+    expect(queued).toMatchObject({ queued: true, reason: "queued" });
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0]).toMatchObject({
+      approval_action_id: "approval-telegram-1",
+      target_chat_id: "-100456",
+      target_message_id: "88",
+      target_thread_id: "12"
+    });
+    expect(getPiApprovalRequest(db, "approval-telegram-1")).toMatchObject({
+      delivery_channel: "telegram",
+      delivery_state: "delivered"
+    });
   });
 
   test("queues one Feishu notification when a linked issue session requests authorization", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issueID = linkedFeishuIssue(db);
-      upsertAgentSession(db, { issue_id: issueID, project_id: "demo", provider: "codex", provider_session_id: "thread-approval" });
+    const issueID = linkedFeishuIssue(db);
+    upsertAgentSession(db, { issue_id: issueID, project_id: "demo", provider: "codex", provider_session_id: "thread-approval" });
 
-      const first = queueFeishuApprovalNotification(db, approvalEvent("approval-1", "thread-approval", "git status"));
-      const second = queueFeishuApprovalNotification(db, approvalEvent("approval-1", "thread-approval", "git status"));
-      await flushAgentCommunicationTestMessages(db);
-      const outbox = listSyncOutbox(db, { source: "feishu" });
-      const content = outbox[0]?.content ?? "";
+    const first = queueFeishuApprovalNotification(db, approvalEvent("approval-1", "thread-approval", "git status"));
+    const second = queueFeishuApprovalNotification(db, approvalEvent("approval-1", "thread-approval", "git status"));
+    await flushAgentCommunicationTestMessages(db);
+    const outbox = listSyncOutbox(db, { source: "feishu" });
+    const content = outbox[0]?.content ?? "";
 
-      expect(first).toMatchObject({ queued: true, reason: "queued" });
-      expect(second).toMatchObject({ queued: false, reason: "duplicate" });
-      expect(outbox).toHaveLength(1);
-      expect(listPiNotificationIntents(db, { issueId: issueID })).toMatchObject([
-        expect.objectContaining({
-          kind: "approval_requested",
-          requires_user: 1,
-          sent_outbox_id: outbox[0]?.id,
-          state: "sent"
-        })
-      ]);
-      expect(content).toContain("git status");
-      expect(outbox[0]).toMatchObject({
-        approval_action_id: "approval-1",
-        content: expect.stringContaining("#1「Feishu task」需要你确认"),
-        issue_id: issueID,
-        status: "pending",
-        target_chat_id: "oc_group"
-      });
-    } finally {
-      db.close();
-    }
+    expect(first).toMatchObject({ queued: true, reason: "queued" });
+    expect(second).toMatchObject({ queued: false, reason: "duplicate" });
+    expect(outbox).toHaveLength(1);
+    expect(listPiNotificationIntents(db, { issueId: issueID })).toMatchObject([
+      expect.objectContaining({
+        kind: "approval_requested",
+        requires_user: 1,
+        sent_outbox_id: outbox[0]?.id,
+        state: "sent"
+      })
+    ]);
+    expect(content).toContain("git status");
+    expect(outbox[0]).toMatchObject({
+      approval_action_id: "approval-1",
+      content: expect.stringContaining("#1「Feishu task」需要你确认"),
+      issue_id: issueID,
+      status: "pending",
+      target_chat_id: "oc_group"
+    });
   });
 
   test("keeps approval pending without an outbox notification when Feishu is not configured", async () => {
@@ -124,122 +119,112 @@ describe("Feishu approval notification queue", () => {
 
   test("uses the project Feishu fallback for scoped destructive command approval", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issue = createIssue(db, { project_id: "demo", title: "Local video cleanup", status: "in_progress" });
-      upsertAgentSession(db, { issue_id: issue.id, project_id: "demo", provider: "codex", provider_session_id: "thread-rm" });
-      const config = buildFeishuConnectorConfig({
-        appId: "cli_fixture",
-        appSecret: "fixture-secret",
-        defaultChatId: "oc_default"
-      });
+    const issue = createIssue(db, { project_id: "demo", title: "Local video cleanup", status: "in_progress" });
+    upsertAgentSession(db, { issue_id: issue.id, project_id: "demo", provider: "codex", provider_session_id: "thread-rm" });
+    const config = buildFeishuConnectorConfig({
+      appId: "cli_fixture",
+      appSecret: "fixture-secret",
+      defaultChatId: "oc_default"
+    });
 
-      const queued = queueFeishuApprovalNotification(
-        db,
-        approvalEvent("approval-rm", "thread-rm", "rm -rf *.mp4"),
-        { config, requireConfigured: true }
-      );
-      await flushAgentCommunicationTestMessages(db);
+    const queued = queueFeishuApprovalNotification(
+      db,
+      approvalEvent("approval-rm", "thread-rm", "rm -rf *.mp4"),
+      { config, requireConfigured: true }
+    );
+    await flushAgentCommunicationTestMessages(db);
 
-      expect(queued).toMatchObject({ queued: true });
-      expect(listSyncOutbox(db, { source: "feishu" })).toEqual([
-        expect.objectContaining({
-          approval_action_id: "approval-rm",
-          content: expect.stringContaining("rm -rf *.mp4"),
-          target_chat_id: "oc_default"
-        })
-      ]);
-    } finally { db.close(); }
+    expect(queued).toMatchObject({ queued: true });
+    expect(listSyncOutbox(db, { source: "feishu" })).toEqual([
+      expect.objectContaining({
+        approval_action_id: "approval-rm",
+        content: expect.stringContaining("rm -rf *.mp4"),
+        target_chat_id: "oc_default"
+      })
+    ]);
   });
 
   test("records lifecycle, dispatches one IM notification, and resolves Codex from approval id", async () => {
     const db = await fixtureDatabase();
     const resolutions: Array<{ decision: string; id: string; scope: string }> = [];
-    try {
-      const issueID = linkedFeishuIssue(db);
-      upsertAgentSession(db, { issue_id: issueID, project_id: "demo", provider: "codex", provider_session_id: "thread-record" });
+    const issueID = linkedFeishuIssue(db);
+    upsertAgentSession(db, { issue_id: issueID, project_id: "demo", provider: "codex", provider_session_id: "thread-record" });
 
-      const first = queueFeishuApprovalNotification(
-        db,
-        approvalEvent("approval-record-1", "thread-record", "cat CODEX_API_KEY=fixture-secret /Users/example/private.txt", "turn-record")
-      );
-      const second = queueFeishuApprovalNotification(db, approvalEvent("approval-record-1", "thread-record", "git status"));
-      await flushAgentCommunicationTestMessages(db);
-      const resolved = await resolvePiApprovalRequestFromFeishu(db, {
-        decision: "approve_session",
-        provider: { resolveApproval: async (id, decision) => { resolutions.push({ id, decision: decision.decision, scope: decision.scope ?? "" }); } },
-        requestID: "approval-record-1",
-        scope: "session"
-      });
-      const duplicate = await resolvePiApprovalRequestFromFeishu(db, {
-        decision: "deny",
-        provider: { resolveApproval: async (id, decision) => { resolutions.push({ id, decision: decision.decision, scope: decision.scope ?? "" }); } },
-        requestID: "approval-record-1",
-        scope: "turn"
-      });
-      const outbox = listSyncOutbox(db, { source: "feishu" });
-      const requests = listPiApprovalRequests(db);
+    const first = queueFeishuApprovalNotification(
+      db,
+      approvalEvent("approval-record-1", "thread-record", "cat CODEX_API_KEY=fixture-secret /Users/example/private.txt", "turn-record")
+    );
+    const second = queueFeishuApprovalNotification(db, approvalEvent("approval-record-1", "thread-record", "git status"));
+    await flushAgentCommunicationTestMessages(db);
+    const resolved = await resolvePiApprovalRequestFromFeishu(db, {
+      decision: "approve_session",
+      provider: { resolveApproval: async (id, decision) => { resolutions.push({ id, decision: decision.decision, scope: decision.scope ?? "" }); } },
+      requestID: "approval-record-1",
+      scope: "session"
+    });
+    const duplicate = await resolvePiApprovalRequestFromFeishu(db, {
+      decision: "deny",
+      provider: { resolveApproval: async (id, decision) => { resolutions.push({ id, decision: decision.decision, scope: decision.scope ?? "" }); } },
+      requestID: "approval-record-1",
+      scope: "turn"
+    });
+    const outbox = listSyncOutbox(db, { source: "feishu" });
+    const requests = listPiApprovalRequests(db);
 
-      expect(first).toMatchObject({ queued: true, reason: "queued" });
-      expect(second).toMatchObject({ queued: false, reason: "duplicate" });
-      expect(outbox[0]?.content).toContain("[redacted-path]");
-      expect(outbox[0]?.content).not.toContain("fixture-secret");
-      expect(outbox[0]?.content).not.toContain("/Users/example");
-      expect(requests).toHaveLength(1);
-      expect(requests[0]).toMatchObject({
-        approval_id: "approval-record-1",
-        delivery_channel: "feishu",
-        issue_id: issueID,
-        provider: "codex",
-        request_type: "command",
-        status: "approved",
-        thread_id: "thread-record",
-        turn_id: "turn-record"
-      });
-      expect(getPiApprovalRequest(db, "approval-record-1")).toMatchObject({
-        resolved_decision: "approve",
-        resolved_scope: "turn"
-      });
-      expect(resolved).toMatchObject({ ok: true, status: "approved" });
-      expect(duplicate).toMatchObject({ ok: true, status: "approved" });
-      expect(resolutions).toEqual([{ decision: "approve", id: "approval-record-1", scope: "turn" }]);
-    } finally {
-      db.close();
-    }
+    expect(first).toMatchObject({ queued: true, reason: "queued" });
+    expect(second).toMatchObject({ queued: false, reason: "duplicate" });
+    expect(outbox[0]?.content).toContain("[redacted-path]");
+    expect(outbox[0]?.content).not.toContain("fixture-secret");
+    expect(outbox[0]?.content).not.toContain("/Users/example");
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({
+      approval_id: "approval-record-1",
+      delivery_channel: "feishu",
+      issue_id: issueID,
+      provider: "codex",
+      request_type: "command",
+      status: "approved",
+      thread_id: "thread-record",
+      turn_id: "turn-record"
+    });
+    expect(getPiApprovalRequest(db, "approval-record-1")).toMatchObject({
+      resolved_decision: "approve",
+      resolved_scope: "turn"
+    });
+    expect(resolved).toMatchObject({ ok: true, status: "approved" });
+    expect(duplicate).toMatchObject({ ok: true, status: "approved" });
+    expect(resolutions).toEqual([{ decision: "approve", id: "approval-record-1", scope: "turn" }]);
   });
 
   test("returns expired approval callback status without resolving the provider", async () => {
     const db = await fixtureDatabase();
     const resolutions: Array<{ decision: string; id: string; scope: string }> = [];
-    try {
-      upsertPiApprovalRequest(db, {
-        approval_id: "approval-expired-1",
-        approval_source: "codex_provider_event",
-        issue_id: 392,
-        project_id: "demo",
-        provider: "codex",
-        provider_approval_id: "approval-expired-1",
-        request_summary: "command=bun test",
-        request_type: "command",
-        status: "expired",
-        thread_id: "thread-expired"
-      });
+    upsertPiApprovalRequest(db, {
+      approval_id: "approval-expired-1",
+      approval_source: "codex_provider_event",
+      issue_id: 392,
+      project_id: "demo",
+      provider: "codex",
+      provider_approval_id: "approval-expired-1",
+      request_summary: "command=bun test",
+      request_type: "command",
+      status: "expired",
+      thread_id: "thread-expired"
+    });
 
-      const result = await resolvePiApprovalRequestFromFeishu(db, {
-        decision: "approve",
-        provider: { resolveApproval: async (id, decision) => { resolutions.push({ id, decision: decision.decision, scope: decision.scope ?? "" }); } },
-        requestID: "approval-expired-1",
-        scope: "turn"
-      });
+    const result = await resolvePiApprovalRequestFromFeishu(db, {
+      decision: "approve",
+      provider: { resolveApproval: async (id, decision) => { resolutions.push({ id, decision: decision.decision, scope: decision.scope ?? "" }); } },
+      requestID: "approval-expired-1",
+      scope: "turn"
+    });
 
-      expect(result).toEqual({ ok: true, status: "expired" });
-      expect(resolutions).toEqual([]);
-      expect(getPiApprovalRequest(db, "approval-expired-1")).toMatchObject({
-        resolved_decision: "",
-        status: "expired"
-      });
-    } finally {
-      db.close();
-    }
+    expect(result).toEqual({ ok: true, status: "expired" });
+    expect(resolutions).toEqual([]);
+    expect(getPiApprovalRequest(db, "approval-expired-1")).toMatchObject({
+      resolved_decision: "",
+      status: "expired"
+    });
   });
 
   test("observer queues approval notification and records resolved provider event", async () => {
@@ -292,7 +277,7 @@ describe("Feishu approval notification queue", () => {
 async function fixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-approval-notify-"));
   tempRoots.push(root);
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   db.sqlite.run(`insert into projects (id, name, cwd, provider, provider_config_json, sort_order, created_at, updated_at)
     values (?, ?, ?, ?, ?, ?, ?, ?)`, [
     "demo", "Demo", join(root, "project"), "codex", '{"capabilities":["issue_execution"]}', 1,

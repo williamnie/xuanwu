@@ -14,6 +14,9 @@ import {
   migrateLegacyFeishuOutboxEnvelope,
   normalizeFeishuInboundEnvelope
 } from "./feishuChannelConnector.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 const NOW = new Date("2026-07-18T01:00:00.000Z");
@@ -25,38 +28,34 @@ afterAll(async () => {
 describe("P09.02 Feishu ChannelConnector migration", () => {
   test("normalizes, deduplicates, preserves explicit envelope hints without inferring message intent, and reuses conversation routing", async () => {
     const db = await fixtureDatabase();
-    try {
-      const config = configFixture();
-      const raw = messageFixture();
-      const normalized = normalizeFeishuInboundEnvelope(raw, {
-        projectId: "demo",
-        rawPayloadRef: "sha256:fixture"
-      });
-      expect(normalized.envelope).toMatchObject({
-        connector_id: "feishu",
-        cursor: { position: "om_fixture", scope: "chat:oc_fixture" },
-        event_id: "feishu:message:om_fixture",
-        event_type: "message.receive",
-        payload: { project_hint: "demo" }
-      });
+    const config = configFixture();
+    const raw = messageFixture();
+    const normalized = normalizeFeishuInboundEnvelope(raw, {
+      projectId: "demo",
+      rawPayloadRef: "sha256:fixture"
+    });
+    expect(normalized.envelope).toMatchObject({
+      connector_id: "feishu",
+      cursor: { position: "om_fixture", scope: "chat:oc_fixture" },
+      event_id: "feishu:message:om_fixture",
+      event_type: "message.receive",
+      payload: { project_hint: "demo" }
+    });
 
-      const first = ingestFeishuMessageEvent(raw, { config, database: db }, { transport: "websocket" });
-      const duplicate = ingestFeishuMessageEvent(raw, { config, database: db }, { transport: "websocket" });
-      const events = listExternalEvents(db, { source: "feishu" });
-      expect(duplicate.event_id).toBe(first.event_id);
-      expect(events).toHaveLength(1);
-      expect(events[0]).toMatchObject({ project_hint: "", project_id: "", trust_level: "untrusted" });
+    const first = ingestFeishuMessageEvent(raw, { config, database: db }, { transport: "websocket" });
+    const duplicate = ingestFeishuMessageEvent(raw, { config, database: db }, { transport: "websocket" });
+    const events = listExternalEvents(db, { source: "feishu" });
+    expect(duplicate.event_id).toBe(first.event_id);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ project_hint: "", project_id: "", trust_level: "untrusted" });
 
-      const firstRoute = routeFeishuConversation(db, {
-        clock: { now: () => NOW }, event: normalized.event, prompt: normalized.event.text
-      });
-      const replayRoute = routeFeishuConversation(db, {
-        clock: { now: () => NOW }, event: normalized.event, prompt: normalized.event.text
-      });
-      expect(replayRoute.conversationId).toBe(firstRoute.conversationId);
-    } finally {
-      db.close();
-    }
+    const firstRoute = routeFeishuConversation(db, {
+      clock: { now: () => NOW }, event: normalized.event, prompt: normalized.event.text
+    });
+    const replayRoute = routeFeishuConversation(db, {
+      clock: { now: () => NOW }, event: normalized.event, prompt: normalized.event.text
+    });
+    expect(replayRoute.conversationId).toBe(firstRoute.conversationId);
   });
 
   test("delivers text, cards, and reactions only through declared deterministic gates", async () => {
@@ -181,7 +180,7 @@ function messageFixture() {
 async function fixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-connector-"));
   roots.push(root);
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   db.sqlite.run(
     `insert into projects (id, name, cwd, provider, provider_config_json, sort_order, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, ?)`,

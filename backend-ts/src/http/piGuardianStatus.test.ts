@@ -9,6 +9,9 @@ import { createPiNotificationIntent, upsertPiGuardianWatchdogStatus } from "../d
 import { createIssueCompletionAutomation } from "../pi/issueCompletionAutomation.ts";
 import { createDefaultRouter, registerSystemStatusRoute } from "./server.ts";
 import { isoSeconds } from "../util/values.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
@@ -20,72 +23,64 @@ afterEach(async () => {
 describe("PI guardian system status", () => {
   test("returns watchdog last_seen stale_after and is_stale", async () => {
     const { config, database } = await openFixtureRuntime();
-    try {
-      const healthySeen = new Date(Date.now() - 30_000);
-      upsertPiGuardianWatchdogStatus(database, {
-        checked_components_json: [{ component: "outbox", status: "ok" }],
-        last_seen_at: isoSeconds(healthySeen),
-        last_success_at: isoSeconds(healthySeen)
-      });
-      const router = createDefaultRouter();
-      registerSystemStatusRoute(router, { authToken: "", config, database });
+    const healthySeen = new Date(Date.now() - 30_000);
+    upsertPiGuardianWatchdogStatus(database, {
+      checked_components_json: [{ component: "outbox", status: "ok" }],
+      last_seen_at: isoSeconds(healthySeen),
+      last_success_at: isoSeconds(healthySeen)
+    });
+    const router = createDefaultRouter();
+    registerSystemStatusRoute(router, { authToken: "", config, database });
 
-      const healthy = await statusBody(router);
-      const staleSeen = new Date(Date.now() - 180_000);
-      upsertPiGuardianWatchdogStatus(database, { last_seen_at: isoSeconds(staleSeen) });
-      const stale = await statusBody(router);
+    const healthy = await statusBody(router);
+    const staleSeen = new Date(Date.now() - 180_000);
+    upsertPiGuardianWatchdogStatus(database, { last_seen_at: isoSeconds(staleSeen) });
+    const stale = await statusBody(router);
 
-      expect(healthy.pi_guardian.watchdog).toEqual({
-        is_stale: false,
-        last_seen: isoSeconds(healthySeen),
-        stale_after: isoSeconds(new Date(healthySeen.getTime() + 120_000))
-      });
-      expect(stale.pi_guardian.watchdog).toEqual({
-        is_stale: true,
-        last_seen: isoSeconds(staleSeen),
-        stale_after: isoSeconds(new Date(staleSeen.getTime() + 120_000))
-      });
-    } finally {
-      database.close();
-    }
+    expect(healthy.pi_guardian.watchdog).toEqual({
+      is_stale: false,
+      last_seen: isoSeconds(healthySeen),
+      stale_after: isoSeconds(new Date(healthySeen.getTime() + 120_000))
+    });
+    expect(stale.pi_guardian.watchdog).toEqual({
+      is_stale: true,
+      last_seen: isoSeconds(staleSeen),
+      stale_after: isoSeconds(new Date(staleSeen.getTime() + 120_000))
+    });
   });
 
   test("exposes completion watch operational counters", async () => {
     const { config, database } = await openFixtureRuntime();
-    try {
-      insertProject(database, config.stateDir);
-      const issue = createIssue(database, { project_id: "demo", status: "todo", title: "Active watch" });
-      createIssueCompletionAutomation(database, {
-        issue_ids: [issue.id],
-        project_id: "demo",
-        source_event_id: "watch-active",
-        target_channel: "feishu",
-        target_chat_id: "oc_watch"
-      });
-      createPiNotificationIntent(database, watchIntent("watch-pending", ""));
-      createPiNotificationIntent(database, watchIntent("watch-failed", "missing_feishu_target"));
-      const router = createDefaultRouter();
-      registerSystemStatusRoute(router, { authToken: "", config, database });
+    insertProject(database, config.stateDir);
+    const issue = createIssue(database, { project_id: "demo", status: "todo", title: "Active watch" });
+    createIssueCompletionAutomation(database, {
+      issue_ids: [issue.id],
+      project_id: "demo",
+      source_event_id: "watch-active",
+      target_channel: "feishu",
+      target_chat_id: "oc_watch"
+    });
+    createPiNotificationIntent(database, watchIntent("watch-pending", ""));
+    createPiNotificationIntent(database, watchIntent("watch-failed", "missing_feishu_target"));
+    const router = createDefaultRouter();
+    registerSystemStatusRoute(router, { authToken: "", config, database });
 
-      const body = await statusBody(router);
+    const body = await statusBody(router);
 
-      expect(body.pi_guardian.completion_watch).toEqual({
-        active_watches: 1,
-        failed_notification: 1,
-        satisfied_pending_notification: 1
-      });
-      expect(body.pi_guardian.runtime_modes).toMatchObject({
-        contract: "xuanwu.guardian-runtime-modes.v2",
-        managed_projects: 1,
-        unmanaged_projects: 0,
-        projects: [{
-          managed: true,
-          project_id: "demo"
-        }]
-      });
-    } finally {
-      database.close();
-    }
+    expect(body.pi_guardian.completion_watch).toEqual({
+      active_watches: 1,
+      failed_notification: 1,
+      satisfied_pending_notification: 1
+    });
+    expect(body.pi_guardian.runtime_modes).toMatchObject({
+      contract: "xuanwu.guardian-runtime-modes.v2",
+      managed_projects: 1,
+      unmanaged_projects: 0,
+      projects: [{
+        managed: true,
+        project_id: "demo"
+      }]
+    });
   });
 });
 
@@ -97,7 +92,7 @@ async function openFixtureRuntime(): Promise<{
   tempRoots.push(root);
   const stateDir = join(root, "state");
   const config = buildConfig({ stateDir });
-  const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
+  const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir }).then(trackDatabase);
   return { config, database };
 }
 

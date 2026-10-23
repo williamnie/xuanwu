@@ -14,6 +14,9 @@ import { createImGuardianAlertDelivery } from "./imGuardianAlerts.ts";
 import { createTelegramChannelModule } from "./telegramChannelModule.ts";
 import type { TelegramBotClient } from "./telegramClient.ts";
 import { buildTelegramConnectorConfig } from "./telegramConfig.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 
@@ -25,128 +28,116 @@ describe("generic IM Guardian alert delivery", () => {
   test("routes a linked Telegram issue alert through the durable generic outbox", async () => {
     const db = await fixture();
     const sent: Array<{ chatId: string; messageThreadId?: string; replyToMessageId?: string; text: string }> = [];
-    try {
-      const issue = createIssue(db, { project_id: "demo", status: "todo", title: "Telegram issue" });
-      const event = createExternalEvent(db, {
-        content: "check runtime",
-        dedupe_key: "telegram:update:901",
-        external_id: "901",
-        normalized_message: {
-          conversation: { id: "-100901", kind: "group" },
-          message_id: "901",
-          thread: { id: "17" }
-        },
-        provider: "telegram",
-        source: "telegram"
-      });
-      createExternalLink(db, {
-        conversation_id: "telegram-thread-17",
-        external_event_id: event.id,
-        external_type: "telegram_message",
-        issue_id: issue.id,
-        project_id: "demo",
-        relationship: "origin",
-        source: "telegram"
-      });
-      const config = telegramConfig({ allowedChatIds: ["-100901"] });
-      const registry = telegramRegistry(db, config, sent);
-      const fallback = fallbackSpy();
-      const delivery = createImGuardianAlertDelivery({ database: db, fallback, imChannels: registry, telegramConfig: () => config });
-      const alert = upsertPiGuardianAlert(db, {
-        alert_type: "pi_runtime_down",
-        id: "guardian-telegram-linked",
-        issue_id: issue.id,
-        message: "runtime unavailable",
-        project_id: "demo"
-      });
+    const issue = createIssue(db, { project_id: "demo", status: "todo", title: "Telegram issue" });
+    const event = createExternalEvent(db, {
+      content: "check runtime",
+      dedupe_key: "telegram:update:901",
+      external_id: "901",
+      normalized_message: {
+        conversation: { id: "-100901", kind: "group" },
+        message_id: "901",
+        thread: { id: "17" }
+      },
+      provider: "telegram",
+      source: "telegram"
+    });
+    createExternalLink(db, {
+      conversation_id: "telegram-thread-17",
+      external_event_id: event.id,
+      external_type: "telegram_message",
+      issue_id: issue.id,
+      project_id: "demo",
+      relationship: "origin",
+      source: "telegram"
+    });
+    const config = telegramConfig({ allowedChatIds: ["-100901"] });
+    const registry = telegramRegistry(db, config, sent);
+    const fallback = fallbackSpy();
+    const delivery = createImGuardianAlertDelivery({ database: db, fallback, imChannels: registry, telegramConfig: () => config });
+    const alert = upsertPiGuardianAlert(db, {
+      alert_type: "pi_runtime_down",
+      id: "guardian-telegram-linked",
+      issue_id: issue.id,
+      message: "runtime unavailable",
+      project_id: "demo"
+    });
 
-      await delivery.send(alert, { now: new Date("2026-08-16T12:00:00Z") });
-      await delivery.send(alert, { now: new Date("2026-08-16T12:01:00Z") });
+    await delivery.send(alert, { now: new Date("2026-08-16T12:00:00Z") });
+    await delivery.send(alert, { now: new Date("2026-08-16T12:01:00Z") });
 
-      expect(fallback.calls).toBe(0);
-      expect(sent).toHaveLength(1);
-      expect(sent[0]).toMatchObject({ chatId: "-100901", messageThreadId: "17", replyToMessageId: "901" });
-      expect(sent[0]?.text).toContain("项目 PI Runtime 不可用");
-      expect(listSyncOutbox(db, { source: "telegram" })).toMatchObject([
-        expect.objectContaining({ status: "sent", target_chat_id: "-100901", target_thread_id: "17" })
-      ]);
-    } finally {
-      db.close();
-    }
+    expect(fallback.calls).toBe(0);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ chatId: "-100901", messageThreadId: "17", replyToMessageId: "901" });
+    expect(sent[0]?.text).toContain("项目 PI Runtime 不可用");
+    expect(listSyncOutbox(db, { source: "telegram" })).toMatchObject([
+      expect.objectContaining({ status: "sent", target_chat_id: "-100901", target_thread_id: "17" })
+    ]);
   });
 
   test("uses an explicit Telegram project mapping before the Feishu compatibility fallback", async () => {
     const db = await fixture();
     const sent: Array<{ chatId: string; text: string }> = [];
-    try {
-      const config = telegramConfig({
-        allowedChatIds: ["-100902"],
-        projectMappings: [{ chatId: "-100902", projectId: "demo" }]
-      });
-      const fallback = fallbackSpy();
-      const delivery = createImGuardianAlertDelivery({
-        database: db,
-        fallback,
-        feishuConfigured: () => true,
-        imChannels: telegramRegistry(db, config, sent),
-        telegramConfig: () => config
-      });
-      const alert = upsertPiGuardianAlert(db, {
-        alert_type: "approval_fast_path_error",
-        id: "guardian-telegram-mapping",
-        message: "approval unavailable",
-        project_id: "demo"
-      });
+    const config = telegramConfig({
+      allowedChatIds: ["-100902"],
+      projectMappings: [{ chatId: "-100902", projectId: "demo" }]
+    });
+    const fallback = fallbackSpy();
+    const delivery = createImGuardianAlertDelivery({
+      database: db,
+      fallback,
+      feishuConfigured: () => true,
+      imChannels: telegramRegistry(db, config, sent),
+      telegramConfig: () => config
+    });
+    const alert = upsertPiGuardianAlert(db, {
+      alert_type: "approval_fast_path_error",
+      id: "guardian-telegram-mapping",
+      message: "approval unavailable",
+      project_id: "demo"
+    });
 
-      await delivery.send(alert);
+    await delivery.send(alert);
 
-      expect(fallback.calls).toBe(0);
-      expect(sent).toMatchObject([{ chatId: "-100902" }]);
-    } finally {
-      db.close();
-    }
+    expect(fallback.calls).toBe(0);
+    expect(sent).toMatchObject([{ chatId: "-100902" }]);
   });
 
   test("uses the Telegram default chat for system alerts when Feishu is not configured", async () => {
     const db = await fixture();
     const sent: Array<{ chatId: string; text: string }> = [];
-    try {
-      const config = buildTelegramConnectorConfig({
-        allowedChatIds: ["-100903"],
-        allowedUserIds: ["42"],
-        botToken: "fixture",
-        defaultChatId: "-100903",
-        enabled: true
-      });
-      const fallback = fallbackSpy();
-      const delivery = createImGuardianAlertDelivery({
-        database: db,
-        fallback,
-        feishuConfigured: () => false,
-        imChannels: telegramRegistry(db, config, sent),
-        telegramConfig: () => config
-      });
-      const alert = upsertPiGuardianAlert(db, {
-        alert_type: "automation_dead_letter",
-        id: "guardian-telegram-default",
-        message: "automation stopped",
-        project_id: ""
-      });
+    const config = buildTelegramConnectorConfig({
+      allowedChatIds: ["-100903"],
+      allowedUserIds: ["42"],
+      botToken: "fixture",
+      defaultChatId: "-100903",
+      enabled: true
+    });
+    const fallback = fallbackSpy();
+    const delivery = createImGuardianAlertDelivery({
+      database: db,
+      fallback,
+      feishuConfigured: () => false,
+      imChannels: telegramRegistry(db, config, sent),
+      telegramConfig: () => config
+    });
+    const alert = upsertPiGuardianAlert(db, {
+      alert_type: "automation_dead_letter",
+      id: "guardian-telegram-default",
+      message: "automation stopped",
+      project_id: ""
+    });
 
-      await delivery.send(alert);
+    await delivery.send(alert);
 
-      expect(fallback.calls).toBe(0);
-      expect(sent).toMatchObject([{ chatId: "-100903" }]);
-    } finally {
-      db.close();
-    }
+    expect(fallback.calls).toBe(0);
+    expect(sent).toMatchObject([{ chatId: "-100903" }]);
   });
 });
 
 async function fixture(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "im-guardian-alerts-"));
   roots.push(root);
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   db.sqlite.run(`insert into projects (id, name, cwd, provider, created_at, updated_at)
     values ('demo', 'Demo', '/tmp/demo', 'codex', ?, ?)`, [
     "2026-08-16T00:00:00Z", "2026-08-16T00:00:00Z"

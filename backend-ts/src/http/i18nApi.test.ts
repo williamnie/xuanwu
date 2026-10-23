@@ -8,13 +8,16 @@ import { createDefaultRouter } from "./server.ts";
 import { inferAppLanguageFromText } from "../i18n/language.ts";
 import { updatePiPersona } from "../db/repositories/pi.ts";
 import { conversationOutputLanguage } from "./piConversationApi.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const BASE_URL = "http://127.0.0.1:3008";
 
 describe("i18n API", () => {
   test("persists the selected application language and injects it into the PI prompt", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-i18n-"));
-    const database = await openDatabase({ stateDir: join(root, "state") });
+    const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     try {
       const router = createDefaultRouter({ database });
       const initial = await router.handle(new Request(`${BASE_URL}/api/i18n`));
@@ -66,7 +69,7 @@ describe("i18n API", () => {
 
   test("lets a chat turn override the global language without changing internal profiles", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-conversation-language-"));
-    const database = await openDatabase({ stateDir: join(root, "state") });
+    const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     try {
       const router = createDefaultRouter({ database });
       await router.handle(new Request(`${BASE_URL}/api/i18n`, {
@@ -88,7 +91,7 @@ describe("i18n API", () => {
 
   test("rejects unsupported languages without changing the preference", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-i18n-invalid-"));
-    const database = await openDatabase({ stateDir: join(root, "state") });
+    const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     try {
       const router = createDefaultRouter({ database });
       const response = await router.handle(new Request(`${BASE_URL}/api/i18n`, {

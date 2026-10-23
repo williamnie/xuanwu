@@ -6,6 +6,9 @@ import { dirname, join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "./database.ts";
 import { runMigrations } from "./migrations.ts";
 import { migrations } from "./schema/index.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 const MIGRATION_ID = "045_automation_model";
@@ -16,7 +19,7 @@ describe("Automation model migration", () => {
   test("upgrades an existing runner database additively and creates query indexes", async () => {
     const root = await path();
     await createPreAutomationDatabase(join(root, "runner.db"));
-    const db = await openDatabase({ stateDir: root });
+    const db = await openDatabase({ stateDir: root }).then(trackDatabase);
     try {
       expect(tableNames(db)).toEqual(expect.arrayContaining([
         "automation_definitions", "automation_trigger_configs", "automation_runs", "automation_events"
@@ -38,13 +41,11 @@ async function path(): Promise<string> { const root = await mkdtemp(join(tmpdir(
 async function createPreAutomationDatabase(file: string): Promise<void> {
   await mkdir(dirname(file), { recursive: true });
   const db = new Database(file, { strict: true });
-  try {
-    db.run("pragma foreign_keys=on");
-    const index = migrations.findIndex((migration) => migration.id === MIGRATION_ID);
-    runMigrations(db, migrations.slice(0, index));
-    db.run("insert into projects (id, name, cwd, created_at, updated_at) values ('demo', 'Demo', '/tmp/demo', '2026-07-17T00:00:00.000Z', '2026-07-17T00:00:00.000Z')");
-    db.run("insert into issues (project_id, title, status, created_at, updated_at) values ('demo', 'legacy issue', 'todo', '2026-07-17T00:00:00.000Z', '2026-07-17T00:00:00.000Z')");
-  } finally { db.close(); }
+  db.run("pragma foreign_keys=on");
+  const index = migrations.findIndex((migration) => migration.id === MIGRATION_ID);
+  runMigrations(db, migrations.slice(0, index));
+  db.run("insert into projects (id, name, cwd, created_at, updated_at) values ('demo', 'Demo', '/tmp/demo', '2026-07-17T00:00:00.000Z', '2026-07-17T00:00:00.000Z')");
+  db.run("insert into issues (project_id, title, status, created_at, updated_at) values ('demo', 'legacy issue', 'todo', '2026-07-17T00:00:00.000Z', '2026-07-17T00:00:00.000Z')");
 }
 function tableNames(db: RunnerDatabase): string[] { return db.sqlite.query("select name from sqlite_master where type='table'").all().map((row) => (row as { name: string }).name); }
 function indexNames(db: RunnerDatabase, table: string): string[] { return db.sqlite.query(`pragma index_list(${table})`).all().map((row) => (row as { name: string }).name); }

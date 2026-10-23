@@ -10,6 +10,9 @@ import { getProject, type Project } from "../db/repositories/projects.ts";
 import { createDefaultRouter } from "../http/server.ts";
 import { createPiRunnerActions } from "./runnerActions.ts";
 import { createPiRunnerActionTools } from "./runnerActionTools.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const BASE_URL = "http://127.0.0.1:3008";
 
@@ -120,7 +123,7 @@ function fakeFixture(): { db: RunnerDatabase } {
 
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase; project: Project }> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-executor-issue-proposal-"));
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   db.sqlite.run(
     `insert into projects (id, name, cwd, provider, sort_order, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?)`,

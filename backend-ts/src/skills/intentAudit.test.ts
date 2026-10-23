@@ -7,6 +7,9 @@ import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { createProject } from "../db/repositories/projects.ts";
 import { auditIssueSkillIntents, listSkillIntentAudits } from "./intentAudit.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const tempRoots: string[] = [];
 
@@ -56,5 +59,5 @@ async function openFixture(): Promise<{ cwd: string; db: RunnerDatabase }> {
   tempRoots.push(root);
   const cwd = join(root, "project");
   await mkdir(cwd, { recursive: true });
-  return { cwd, db: await openDatabase({ stateDir: join(root, "state") }) };
+  return { cwd, db: await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase) };
 }

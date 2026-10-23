@@ -7,6 +7,9 @@ import { createIssueRun } from "../../db/repositories/issueRuns.ts";
 import { runIssueWithProvider } from "../../runner/providerRuntime.ts";
 import { EXECUTOR_PROVIDER_IDS } from "../types.ts";
 import { CONFORMANCE_FIXTURES, ExecutionOnlyProvider, ResumableSessionProvider } from "./conformanceFixtures.ts";
+import { useDatabaseCleanup } from "../../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const tempRoots: string[] = [];
 afterEach(async () => {
@@ -16,36 +19,32 @@ afterEach(async () => {
 async function tempDatabase(): Promise<RunnerDatabase> {
   const dir = await mkdtemp(join(tmpdir(), "p0-fixture-"));
   tempRoots.push(dir);
-  return openDatabase({ dbPath: join(dir, "xuanwu.db") });
+  return openDatabase({ dbPath: join(dir, "xuanwu.db") }).then(trackDatabase);
 }
 
 describe("P0 baseline: execution-only provider 形态", () => {
   test("不写 agent_sessions、不产出 session ref，仍可完成 Attempt", async () => {
     const db = await tempDatabase();
-    try {
-      insertProject(db, "p0-project");
-      const issueId = insertIssue(db, "p0-project");
-      const issueRunId = createIssueRun(db, issueId).id;
-      const provider = new ExecutionOnlyProvider();
-      const result = await runIssueWithProvider(provider, {
-        issueId,
-        issueRunId,
-        projectId: "p0-project",
-        cwd: "/tmp/p0",
-        prompt: "run",
-        database: db,
-        onRunStart: () => {},
-        onRunComplete: () => {}
-      });
-      expect(result).toMatchObject({ runId: `fake-execution-${issueId}` });
-      expect(result.session).toBeUndefined();
-      // execution-only 只声明 issue_execution
-      expect(provider.capabilities).toEqual(["issue_execution"]);
-      expect(provider.capabilities).not.toContain("sessions");
-      expect(provider.capabilities).not.toContain("resume_session");
-    } finally {
-      db.close();
-    }
+    insertProject(db, "p0-project");
+    const issueId = insertIssue(db, "p0-project");
+    const issueRunId = createIssueRun(db, issueId).id;
+    const provider = new ExecutionOnlyProvider();
+    const result = await runIssueWithProvider(provider, {
+      issueId,
+      issueRunId,
+      projectId: "p0-project",
+      cwd: "/tmp/p0",
+      prompt: "run",
+      database: db,
+      onRunStart: () => {},
+      onRunComplete: () => {}
+    });
+    expect(result).toMatchObject({ runId: `fake-execution-${issueId}` });
+    expect(result.session).toBeUndefined();
+    // execution-only 只声明 issue_execution
+    expect(provider.capabilities).toEqual(["issue_execution"]);
+    expect(provider.capabilities).not.toContain("sessions");
+    expect(provider.capabilities).not.toContain("resume_session");
   });
 });
 

@@ -10,6 +10,9 @@ import { claudeManifest } from "../providers/claude/factory.ts";
 import { providerSessionDetail, providerSessionSummary } from "../providers/core/sessionView.ts";
 import { qoderManifest } from "../providers/qoder/factory.ts";
 import { qoderExecutionPolicyAdapter } from "../providers/qoder/executionPolicy.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const BASE_URL = "http://127.0.0.1:3008";
 const EMPTY_ROLLOUT_ERROR = [
@@ -22,7 +25,7 @@ const tempRoots: string[] = [];
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-session-api-"));
   tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
+  return openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
 }
 
 afterEach(async () => {
@@ -39,20 +42,18 @@ describe("Bun Sessions API compatibility", () => {
       id: "claude", capabilities: ["sessions"],
       async run(): Promise<never> { throw new Error("not used by metadata reads"); },
     };
-    try {
-      upsertAgentSession(database, {
-        provider: "claude", provider_session_id: "metadata", title: "Indexed title",
-        raw_ref: { model: "claude-history-model", settings_provider: "claude" }, status: "idle",
-      });
-      claude.readSession = async (id, input = {}) => {
-        expect(input.includeTurns).toBe(false);
-        return providerSessionDetail("claude", { sessionRef: id, name: "Native title", cwd: "/tmp/project", status: "idle" });
-      };
-      const response = await createDefaultRouter({ database, providers: { claude } }).handle(new Request(`${BASE_URL}/api/sessions/claude:metadata`));
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({ model: "claude-history-model", name: "Native title", cwd: "/tmp/project", status: "idle", turns: [] });
-      expect(JSON.parse(getAgentSession(database, "claude:metadata")!.raw_ref).model).toBe("claude-history-model");
-    } finally { database.close(); }
+    upsertAgentSession(database, {
+      provider: "claude", provider_session_id: "metadata", title: "Indexed title",
+      raw_ref: { model: "claude-history-model", settings_provider: "claude" }, status: "idle",
+    });
+    claude.readSession = async (id, input = {}) => {
+      expect(input.includeTurns).toBe(false);
+      return providerSessionDetail("claude", { sessionRef: id, name: "Native title", cwd: "/tmp/project", status: "idle" });
+    };
+    const response = await createDefaultRouter({ database, providers: { claude } }).handle(new Request(`${BASE_URL}/api/sessions/claude:metadata`));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ model: "claude-history-model", name: "Native title", cwd: "/tmp/project", status: "idle", turns: [] });
+    expect(JSON.parse(getAgentSession(database, "claude:metadata")!.raw_ref).model).toBe("claude-history-model");
   });
 
   test("Codex 创建请求传递用户明确指定的标题", async () => {
@@ -61,111 +62,101 @@ describe("Bun Sessions API compatibility", () => {
     let title: string | undefined;
     const create = provider.createSession.bind(provider);
     provider.createSession = async (input) => { title = input.title as string | undefined; return create(input); };
-    try {
-      insertProject(database, { id: "demo", cwd: "/tmp/demo" });
-      const response = await createDefaultRouter({ database, providers: { codex: provider } }).handle(jsonRequest("/api/sessions", {
-        project_id: "demo", prompt: "修复消息重复", title: " 用户的标题 "
-      }));
-      expect(response.status).toBe(201);
-      expect(title).toBe("用户的标题");
-    } finally { database.close(); }
+    insertProject(database, { id: "demo", cwd: "/tmp/demo" });
+    const response = await createDefaultRouter({ database, providers: { codex: provider } }).handle(jsonRequest("/api/sessions", {
+      project_id: "demo", prompt: "修复消息重复", title: " 用户的标题 "
+    }));
+    expect(response.status).toBe(201);
+    expect(title).toBe("用户的标题");
   });
 
   test("lists, creates, reads, and sends Codex session turns", async () => {
     const database = await openFixtureDatabase();
     const provider = new SessionsProvider();
-    try {
-      insertProject(database, { id: "demo", cwd: "/tmp/demo" });
-      const router = createDefaultRouter({ database, providers: { codex: provider } });
+    insertProject(database, { id: "demo", cwd: "/tmp/demo" });
+    const router = createDefaultRouter({ database, providers: { codex: provider } });
 
-      const created = await router.handle(jsonRequest("/api/sessions", {
-        project_id: "demo",
-        prompt: "hello session",
-        reasoning_effort: "high",
-        service_tier: "priority"
-      }));
-      const list = await router.handle(new Request(`${BASE_URL}/api/sessions?limit=20`));
-      const detail = await router.handle(new Request(`${BASE_URL}/api/sessions/codex:thread-new`));
-      const turns = await router.handle(new Request(`${BASE_URL}/api/sessions/codex:thread-new/turns?limit=20`));
-      const message = await router.handle(jsonRequest("/api/sessions/codex:thread-new/messages", {
-        prompt: "follow up",
-        model: "codex-default",
-        service_tier: "priority"
-      }));
-      const interrupt = await router.handle(new Request(`${BASE_URL}/api/sessions/codex:thread-new/interrupt`, { method: "POST" }));
+    const created = await router.handle(jsonRequest("/api/sessions", {
+      project_id: "demo",
+      prompt: "hello session",
+      reasoning_effort: "high",
+      service_tier: "priority"
+    }));
+    const list = await router.handle(new Request(`${BASE_URL}/api/sessions?limit=20`));
+    const detail = await router.handle(new Request(`${BASE_URL}/api/sessions/codex:thread-new`));
+    const turns = await router.handle(new Request(`${BASE_URL}/api/sessions/codex:thread-new/turns?limit=20`));
+    const message = await router.handle(jsonRequest("/api/sessions/codex:thread-new/messages", {
+      prompt: "follow up",
+      model: "codex-default",
+      service_tier: "priority"
+    }));
+    const interrupt = await router.handle(new Request(`${BASE_URL}/api/sessions/codex:thread-new/interrupt`, { method: "POST" }));
 
-      expect(created.status).toBe(201);
-      expect(await created.json()).toEqual({
-        id: "codex:thread-new",
-        isRunning: true,
-        provider: "codex",
-        provider_session_id: "thread-new",
-        provider_turn_id: "turn-initial",
-        status: "running",
-        thread_id: "thread-new",
-        turn_id: "turn-initial"
-      });
-      expect(list.status).toBe(200);
-      expect(await list.json()).toMatchObject({ data: [{ id: "codex:thread-new", provider_session_id: "thread-new" }] });
-      expect(detail.status).toBe(200);
-      expect(await detail.json()).toMatchObject({ id: "codex:thread-new", provider_session_id: "thread-new", turns: [] });
-      expect(turns.status).toBe(200);
-      expect(await turns.json()).toMatchObject({ data: [{ id: "turn-new" }], nextCursor: "older" });
-      expect(message.status).toBe(201);
-      expect(await message.json()).toEqual({
-        isRunning: true,
-        provider: "codex",
-        status: "running",
-        thread_id: "thread-new",
-        turn_id: "turn-follow-up"
-      });
-      expect(interrupt.status).toBe(200);
-      expect(await interrupt.json()).toEqual({ interrupted: true });
-      expect(provider.interrupts).toEqual([{ sessionId: "thread-new", turnId: "turn-follow-up" }]);
-      expect(provider.calls).toEqual([
-        ["createSession", { cwd: "/tmp/demo", prompt: "hello session", reasoningEffort: "high", serviceTier: "priority" }],
-        ["listSessions", { limit: 20 }],
-        ["readSession", { includeTurns: false, sessionId: "thread-new" }],
-        ["listSessionTurns", { itemsView: "summary", limit: 20, sessionId: "thread-new", sortDirection: "desc" }],
-        ["sendSessionMessage", { sessionId: "thread-new", prompt: "follow up", serviceTier: "priority" }]
-      ]);
-    } finally {
-      database.close();
-    }
+    expect(created.status).toBe(201);
+    expect(await created.json()).toEqual({
+      id: "codex:thread-new",
+      isRunning: true,
+      provider: "codex",
+      provider_session_id: "thread-new",
+      provider_turn_id: "turn-initial",
+      status: "running",
+      thread_id: "thread-new",
+      turn_id: "turn-initial"
+    });
+    expect(list.status).toBe(200);
+    expect(await list.json()).toMatchObject({ data: [{ id: "codex:thread-new", provider_session_id: "thread-new" }] });
+    expect(detail.status).toBe(200);
+    expect(await detail.json()).toMatchObject({ id: "codex:thread-new", provider_session_id: "thread-new", turns: [] });
+    expect(turns.status).toBe(200);
+    expect(await turns.json()).toMatchObject({ data: [{ id: "turn-new" }], nextCursor: "older" });
+    expect(message.status).toBe(201);
+    expect(await message.json()).toEqual({
+      isRunning: true,
+      provider: "codex",
+      status: "running",
+      thread_id: "thread-new",
+      turn_id: "turn-follow-up"
+    });
+    expect(interrupt.status).toBe(200);
+    expect(await interrupt.json()).toEqual({ interrupted: true });
+    expect(provider.interrupts).toEqual([{ sessionId: "thread-new", turnId: "turn-follow-up" }]);
+    expect(provider.calls).toEqual([
+      ["createSession", { cwd: "/tmp/demo", prompt: "hello session", reasoningEffort: "high", serviceTier: "priority" }],
+      ["listSessions", { limit: 20 }],
+      ["readSession", { includeTurns: false, sessionId: "thread-new" }],
+      ["listSessionTurns", { itemsView: "summary", limit: 20, sessionId: "thread-new", sortDirection: "desc" }],
+      ["sendSessionMessage", { sessionId: "thread-new", prompt: "follow up", serviceTier: "priority" }]
+    ]);
   });
 
   test("steers a running persisted Codex session turn", async () => {
     const database = await openFixtureDatabase();
     const provider = new SessionsProvider();
-    try {
-      upsertAgentSession(database, {
-        provider: "codex",
-        provider_session_id: "thread-running",
-        raw_ref: { provider_turn_id: "turn-running" },
-        status: "running"
-      });
-      const response = await createDefaultRouter({
-        database,
-        providers: { codex: provider }
-      }).handle(jsonRequest("/api/sessions/codex:thread-running/messages", {
-        prompt: "adjust",
-        mode: "steer"
-      }));
+    upsertAgentSession(database, {
+      provider: "codex",
+      provider_session_id: "thread-running",
+      raw_ref: { provider_turn_id: "turn-running" },
+      status: "running"
+    });
+    const response = await createDefaultRouter({
+      database,
+      providers: { codex: provider }
+    }).handle(jsonRequest("/api/sessions/codex:thread-running/messages", {
+      prompt: "adjust",
+      mode: "steer"
+    }));
 
-      expect(response.status).toBe(201);
-      expect(await response.json()).toEqual({
-        isRunning: true,
-        provider: "codex",
-        status: "running",
-        thread_id: "thread-running",
-        turn_id: "turn-running"
-      });
-      expect(provider.calls).toEqual([
-        ["sendSessionMessage", { sessionId: "thread-running", prompt: "adjust", mode: "steer", turnId: "turn-running" }]
-      ]);
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      isRunning: true,
+      provider: "codex",
+      status: "running",
+      thread_id: "thread-running",
+      turn_id: "turn-running"
+    });
+    expect(provider.calls).toEqual([
+      ["sendSessionMessage", { sessionId: "thread-running", prompt: "adjust", mode: "steer", turnId: "turn-running" }]
+    ]);
   });
 
 
@@ -186,63 +177,55 @@ describe("Bun Sessions API compatibility", () => {
       } })
     ].join("\n") + "\n");
     provider.readSessionResult = { ...sessionSummary("thread-runtime"), path: rolloutPath };
-    try {
-      const response = await createDefaultRouter({
-        database,
-        providers: { codex: provider }
-      }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-runtime`));
+    const response = await createDefaultRouter({
+      database,
+      providers: { codex: provider }
+    }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-runtime`));
 
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      model: "gpt-5.5",
+      reasoning_effort: "xhigh",
+      service_tier: "priority",
+      approval_policy: "never",
+      sandbox: "danger-full-access",
+      runtime_settings: {
         model: "gpt-5.5",
         reasoning_effort: "xhigh",
         service_tier: "priority",
         approval_policy: "never",
-        sandbox: "danger-full-access",
-        runtime_settings: {
-          model: "gpt-5.5",
-          reasoning_effort: "xhigh",
-          service_tier: "priority",
-          approval_policy: "never",
-          sandbox: "danger-full-access"
-        }
-      });
-    } finally {
-      database.close();
-    }
+        sandbox: "danger-full-access"
+      }
+    });
   });
 
   test("keeps a newly created Codex session selectable while rollout file is still empty", async () => {
     const database = await openFixtureDatabase();
     const provider = new SessionsProvider();
     provider.readSessionError = new Error(EMPTY_ROLLOUT_ERROR);
-    try {
-      upsertAgentSession(database, {
-        provider: "codex",
-        provider_session_id: "thread-empty",
-        raw_ref: { provider_turn_id: "turn-pending" },
-        status: "running"
-      });
-      const response = await createDefaultRouter({
-        database,
-        providers: { codex: provider }
-      }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-empty`));
+    upsertAgentSession(database, {
+      provider: "codex",
+      provider_session_id: "thread-empty",
+      raw_ref: { provider_turn_id: "turn-pending" },
+      status: "running"
+    });
+    const response = await createDefaultRouter({
+      database,
+      providers: { codex: provider }
+    }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-empty`));
 
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({
-        id: "codex:thread-empty",
-        provider: "codex",
-        provider_session_id: "thread-empty",
-        sessionId: "thread-empty",
-        turns: [],
-        isRunning: true
-      });
-      expect(provider.calls).toEqual([
-        ["readSession", { includeTurns: false, sessionId: "thread-empty" }]
-      ]);
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      id: "codex:thread-empty",
+      provider: "codex",
+      provider_session_id: "thread-empty",
+      sessionId: "thread-empty",
+      turns: [],
+      isRunning: true
+    });
+    expect(provider.calls).toEqual([
+      ["readSession", { includeTurns: false, sessionId: "thread-empty" }]
+    ]);
   });
 
   test("read session detail reconciles a stale running Codex session index", async () => {
@@ -253,31 +236,27 @@ describe("Bun Sessions API compatibility", () => {
       status: { type: "idle" },
       turns: [{ id: "turn-idle", status: "completed" }]
     };
-    try {
-      upsertAgentSession(database, {
-        provider: "codex",
-        provider_session_id: "thread-idle",
-        status: "running"
-      });
+    upsertAgentSession(database, {
+      provider: "codex",
+      provider_session_id: "thread-idle",
+      status: "running"
+    });
 
-      const response = await createDefaultRouter({
-        database,
-        providers: { codex: provider }
-      }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-idle`));
+    const response = await createDefaultRouter({
+      database,
+      providers: { codex: provider }
+    }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-idle`));
 
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({
-        id: "codex:thread-idle",
-        provider_session_id: "thread-idle",
-        status: { type: "idle" }
-      });
-      expect(getAgentSession(database, "codex:thread-idle")).toMatchObject({
-        provider_session_id: "thread-idle",
-        status: "idle"
-      });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      id: "codex:thread-idle",
+      provider_session_id: "thread-idle",
+      status: { type: "idle" }
+    });
+    expect(getAgentSession(database, "codex:thread-idle")).toMatchObject({
+      provider_session_id: "thread-idle",
+      status: "idle"
+    });
   });
 
   test("read session detail does not persist Codex process load state as lifecycle activity", async () => {
@@ -288,31 +267,27 @@ describe("Bun Sessions API compatibility", () => {
       status: { type: "notLoaded" },
       turns: [{ id: "turn-passive", status: "completed" }]
     };
-    try {
-      upsertAgentSession(database, {
-        provider: "codex",
-        provider_session_id: "thread-passive",
-        status: "idle"
-      });
-      const before = getAgentSession(database, "codex:thread-passive");
+    upsertAgentSession(database, {
+      provider: "codex",
+      provider_session_id: "thread-passive",
+      status: "idle"
+    });
+    const before = getAgentSession(database, "codex:thread-passive");
 
-      const response = await createDefaultRouter({
-        database,
-        providers: { codex: provider }
-      }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-passive`));
+    const response = await createDefaultRouter({
+      database,
+      providers: { codex: provider }
+    }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-passive`));
 
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({
-        id: "codex:thread-passive",
-        status: { type: "notLoaded" }
-      });
-      expect(getAgentSession(database, "codex:thread-passive")).toMatchObject({
-        status: "idle",
-        updated_at: before?.updated_at
-      });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      id: "codex:thread-passive",
+      status: { type: "notLoaded" }
+    });
+    expect(getAgentSession(database, "codex:thread-passive")).toMatchObject({
+      status: "idle",
+      updated_at: before?.updated_at
+    });
   });
 
   test("read session detail preserves indexed Codex activity when the fresh process reports notLoaded", async () => {
@@ -323,28 +298,24 @@ describe("Bun Sessions API compatibility", () => {
       status: { type: "notLoaded" },
       turns: []
     };
-    try {
-      upsertAgentSession(database, {
-        provider: "codex",
-        provider_session_id: "thread-running-not-loaded",
-        status: "running"
-      });
+    upsertAgentSession(database, {
+      provider: "codex",
+      provider_session_id: "thread-running-not-loaded",
+      status: "running"
+    });
 
-      const response = await createDefaultRouter({
-        database,
-        providers: { codex: provider }
-      }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-running-not-loaded`));
+    const response = await createDefaultRouter({
+      database,
+      providers: { codex: provider }
+    }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-running-not-loaded`));
 
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({
-        id: "codex:thread-running-not-loaded",
-        status: "running",
-        isRunning: true
-      });
-      expect(getAgentSession(database, "codex:thread-running-not-loaded")).toMatchObject({ status: "running" });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      id: "codex:thread-running-not-loaded",
+      status: "running",
+      isRunning: true
+    });
+    expect(getAgentSession(database, "codex:thread-running-not-loaded")).toMatchObject({ status: "running" });
   });
 
   test("list sessions reconciles stale running Codex session indexes", async () => {
@@ -357,30 +328,26 @@ describe("Bun Sessions API compatibility", () => {
       }],
       nextCursor: ""
     };
-    try {
-      upsertAgentSession(database, {
-        provider: "codex",
-        provider_session_id: "thread-idle",
-        project_id: "demo",
-        status: "running"
-      });
+    upsertAgentSession(database, {
+      provider: "codex",
+      provider_session_id: "thread-idle",
+      project_id: "demo",
+      status: "running"
+    });
 
-      const response = await createDefaultRouter({
-        database,
-        providers: { codex: provider }
-      }).handle(new Request(`${BASE_URL}/api/sessions?limit=20`));
+    const response = await createDefaultRouter({
+      database,
+      providers: { codex: provider }
+    }).handle(new Request(`${BASE_URL}/api/sessions?limit=20`));
 
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({
-        data: [{ id: "codex:thread-idle", status: { type: "idle" } }]
-      });
-      expect(getAgentSession(database, "codex:thread-idle")).toMatchObject({
-        project_id: "demo",
-        status: "idle"
-      });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      data: [{ id: "codex:thread-idle", status: { type: "idle" } }]
+    });
+    expect(getAgentSession(database, "codex:thread-idle")).toMatchObject({
+      project_id: "demo",
+      status: "idle"
+    });
   });
 
   test("persists a created Codex session even before a provider turn id exists", async () => {
@@ -392,367 +359,331 @@ describe("Bun Sessions API compatibility", () => {
       provider_session_id: "thread-created",
       thread_id: "thread-created"
     };
-    try {
-      insertProject(database, { id: "demo", cwd: "/tmp/demo" });
-      const response = await createDefaultRouter({
-        database,
-        providers: { codex: provider }
-      }).handle(jsonRequest("/api/sessions", {
-        project_id: "demo",
-        prompt: "needs approval before first turn"
-      }));
+    insertProject(database, { id: "demo", cwd: "/tmp/demo" });
+    const response = await createDefaultRouter({
+      database,
+      providers: { codex: provider }
+    }).handle(jsonRequest("/api/sessions", {
+      project_id: "demo",
+      prompt: "needs approval before first turn"
+    }));
 
-      expect(response.status).toBe(201);
-      expect(getAgentSession(database, "codex:thread-created")).toMatchObject({
-        provider_session_id: "thread-created",
-        project_id: "demo",
-        status: "running"
-      });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(201);
+    expect(getAgentSession(database, "codex:thread-created")).toMatchObject({
+      provider_session_id: "thread-created",
+      project_id: "demo",
+      status: "running"
+    });
   });
 
   test("filters indexed sessions by role without breaking PI session reads", async () => {
     const database = await openFixtureDatabase();
     const provider = new SessionsProvider();
-    try {
-      upsertAgentSession(database, {
-        provider: "pi-sdk",
-        provider_session_id: "conv-1",
-        agent_role: "pi_manager",
-        project_id: "demo",
-        title: "PI manager",
-        raw_ref: { conversation_id: "conv-1" },
-        status: "active"
-      });
-      upsertAgentSession(database, {
-        provider: "codex",
-        provider_session_id: "thread-reviewer",
+    upsertAgentSession(database, {
+      provider: "pi-sdk",
+      provider_session_id: "conv-1",
+      agent_role: "pi_manager",
+      project_id: "demo",
+      title: "PI manager",
+      raw_ref: { conversation_id: "conv-1" },
+      status: "active"
+    });
+    upsertAgentSession(database, {
+      provider: "codex",
+      provider_session_id: "thread-reviewer",
+      agent_role: "reviewer",
+      project_id: "demo",
+      issue_id: 260,
+      status: "running"
+    });
+
+    const router = createDefaultRouter({ database, providers: { codex: provider } });
+    const reviewerList = await router.handle(new Request(`${BASE_URL}/api/sessions?role=reviewer`));
+    const piList = await router.handle(new Request(`${BASE_URL}/api/sessions?role=pi_manager`));
+    const piDetail = await router.handle(new Request(`${BASE_URL}/api/sessions/pi-sdk:conv-1`));
+
+    expect(reviewerList.status).toBe(200);
+    expect(await reviewerList.json()).toMatchObject({
+      data: [{
         agent_role: "reviewer",
-        project_id: "demo",
+        id: "codex:thread-reviewer",
         issue_id: 260,
-        status: "running"
-      });
-
-      const router = createDefaultRouter({ database, providers: { codex: provider } });
-      const reviewerList = await router.handle(new Request(`${BASE_URL}/api/sessions?role=reviewer`));
-      const piList = await router.handle(new Request(`${BASE_URL}/api/sessions?role=pi_manager`));
-      const piDetail = await router.handle(new Request(`${BASE_URL}/api/sessions/pi-sdk:conv-1`));
-
-      expect(reviewerList.status).toBe(200);
-      expect(await reviewerList.json()).toMatchObject({
-        data: [{
-          agent_role: "reviewer",
-          id: "codex:thread-reviewer",
-          issue_id: 260,
-          provider_session_id: "thread-reviewer"
-        }]
-      });
-      expect(piList.status).toBe(200);
-      expect(await piList.json()).toMatchObject({
-        data: [{
-          agent_role: "pi_manager",
-          id: "pi-sdk:conv-1",
-          provider: "pi-sdk",
-          provider_session_id: "conv-1"
-        }]
-      });
-      expect(piDetail.status).toBe(200);
-      expect(await piDetail.json()).toMatchObject({
+        provider_session_id: "thread-reviewer"
+      }]
+    });
+    expect(piList.status).toBe(200);
+    expect(await piList.json()).toMatchObject({
+      data: [{
         agent_role: "pi_manager",
         id: "pi-sdk:conv-1",
-        raw_ref: "{\"conversation_id\":\"conv-1\"}"
-      });
-      expect(provider.calls).toEqual([]);
-    } finally {
-      database.close();
-    }
+        provider: "pi-sdk",
+        provider_session_id: "conv-1"
+      }]
+    });
+    expect(piDetail.status).toBe(200);
+    expect(await piDetail.json()).toMatchObject({
+      agent_role: "pi_manager",
+      id: "pi-sdk:conv-1",
+      raw_ref: "{\"conversation_id\":\"conv-1\"}"
+    });
+    expect(provider.calls).toEqual([]);
   });
 
   test("reads an indexed Pi session when the provider has no native readSession", async () => {
     const database = await openFixtureDatabase();
     const provider = new IndexedOnlyProvider();
-    try {
-      upsertAgentSession(database, {
-        provider: "pi-coding-agent",
-        provider_session_id: "pi-session-1",
-        project_id: "demo",
-        title: "Pi session",
-        raw_ref: { model: "openai/gpt-5" },
-        status: "idle"
-      });
+    upsertAgentSession(database, {
+      provider: "pi-coding-agent",
+      provider_session_id: "pi-session-1",
+      project_id: "demo",
+      title: "Pi session",
+      raw_ref: { model: "openai/gpt-5" },
+      status: "idle"
+    });
 
-      const response = await createDefaultRouter({ database, providers: { "pi-coding-agent": provider } })
-        .handle(new Request(`${BASE_URL}/api/sessions/pi-coding-agent:pi-session-1`));
+    const response = await createDefaultRouter({ database, providers: { "pi-coding-agent": provider } })
+      .handle(new Request(`${BASE_URL}/api/sessions/pi-coding-agent:pi-session-1`));
 
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({
-        id: "pi-coding-agent:pi-session-1",
-        provider: "pi-coding-agent",
-        provider_session_id: "pi-session-1",
-        title: "Pi session",
-        model: "openai/gpt-5"
-      });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      id: "pi-coding-agent:pi-session-1",
+      provider: "pi-coding-agent",
+      provider_session_id: "pi-session-1",
+      title: "Pi session",
+      model: "openai/gpt-5"
+    });
   });
 
   test("keeps Codex project defaults out of an explicitly selected Pi session and persists terminal state", async () => {
     const database = await openFixtureDatabase();
     const provider = new PiSessionProvider();
-    try {
-      insertProject(database, {
-        id: "xuanwu",
-        cwd: "/tmp/xuanwu",
-        provider: "codex",
-        model: "codex-default"
-      });
-      const router = createDefaultRouter({ database, providers: { "pi-coding-agent": provider } });
-      const created = await router.handle(jsonRequest("/api/sessions", {
-        project_id: "xuanwu",
-        provider: "pi-coding-agent",
-        prompt: "hello Pi"
-      }));
+    insertProject(database, {
+      id: "xuanwu",
+      cwd: "/tmp/xuanwu",
+      provider: "codex",
+      model: "codex-default"
+    });
+    const router = createDefaultRouter({ database, providers: { "pi-coding-agent": provider } });
+    const created = await router.handle(jsonRequest("/api/sessions", {
+      project_id: "xuanwu",
+      provider: "pi-coding-agent",
+      prompt: "hello Pi"
+    }));
 
-      expect(created.status).toBe(201);
-      expect(await created.json()).toMatchObject({
-        id: "pi-coding-agent:pi-created",
-        isRunning: false,
-        provider: "pi-coding-agent",
-        status: "idle"
-      });
-      expect(provider.createInputs).toEqual([{ cwd: "/tmp/xuanwu", model: "", prompt: "hello Pi" }]);
-      expect(getAgentSession(database, "pi-coding-agent:pi-created")).toMatchObject({
-        project_id: "xuanwu",
-        status: "idle"
-      });
-      expect(getAgentSession(database, "pi-coding-agent:pi-created")?.raw_ref).not.toContain("codex-default");
+    expect(created.status).toBe(201);
+    expect(await created.json()).toMatchObject({
+      id: "pi-coding-agent:pi-created",
+      isRunning: false,
+      provider: "pi-coding-agent",
+      status: "idle"
+    });
+    expect(provider.createInputs).toEqual([{ cwd: "/tmp/xuanwu", model: "", prompt: "hello Pi" }]);
+    expect(getAgentSession(database, "pi-coding-agent:pi-created")).toMatchObject({
+      project_id: "xuanwu",
+      status: "idle"
+    });
+    expect(getAgentSession(database, "pi-coding-agent:pi-created")?.raw_ref).not.toContain("codex-default");
 
-      upsertAgentSession(database, {
-        provider: "pi-coding-agent",
-        provider_session_id: "pi-legacy",
-        project_id: "xuanwu",
-        status: "running",
-        raw_ref: { model: "codex-default", approval_policy: "never" }
-      });
-      const detail = await router.handle(new Request("http://localhost/api/sessions/pi-coding-agent:pi-legacy"));
-      expect(detail.status).toBe(200);
-      const detailBody = await detail.json() as Record<string, unknown>;
-      expect(detailBody).toMatchObject({
-        model: "deepseek/deepseek-v4-flash",
-        project_id: "xuanwu",
-        status: "idle",
-        runtime_settings: { model: "deepseek/deepseek-v4-flash" }
-      });
-      expect(detailBody.raw_ref).not.toContain("codex-default");
-      expect(getAgentSession(database, "pi-coding-agent:pi-legacy")?.raw_ref).not.toContain("codex-default");
-    } finally {
-      database.close();
-    }
+    upsertAgentSession(database, {
+      provider: "pi-coding-agent",
+      provider_session_id: "pi-legacy",
+      project_id: "xuanwu",
+      status: "running",
+      raw_ref: { model: "codex-default", approval_policy: "never" }
+    });
+    const detail = await router.handle(new Request("http://localhost/api/sessions/pi-coding-agent:pi-legacy"));
+    expect(detail.status).toBe(200);
+    const detailBody = await detail.json() as Record<string, unknown>;
+    expect(detailBody).toMatchObject({
+      model: "deepseek/deepseek-v4-flash",
+      project_id: "xuanwu",
+      status: "idle",
+      runtime_settings: { model: "deepseek/deepseek-v4-flash" }
+    });
+    expect(detailBody.raw_ref).not.toContain("codex-default");
+    expect(getAgentSession(database, "pi-coding-agent:pi-legacy")?.raw_ref).not.toContain("codex-default");
   });
 
   test("routes provider-qualified Claude create/read/message/list/interrupt without Codex reconciliation", async () => {
     const database = await openFixtureDatabase();
     const codex = new SessionsProvider();
     const claude = new ClaudeSessionsProvider();
-    try {
-      insertProject(database, { id: "claude-demo", cwd: "/tmp/claude-demo", provider: "claude" });
-      upsertAgentSession(database, {
-        provider: "claude",
-        provider_session_id: "claude-existing",
-        project_id: "claude-demo",
-        raw_ref: { model: "codex-default", provider_turn_id: "claude-turn-existing" },
-        status: "running"
-      });
-      const router = createDefaultRouter({ database, providers: { codex, claude } });
+    insertProject(database, { id: "claude-demo", cwd: "/tmp/claude-demo", provider: "claude" });
+    upsertAgentSession(database, {
+      provider: "claude",
+      provider_session_id: "claude-existing",
+      project_id: "claude-demo",
+      raw_ref: { model: "codex-default", provider_turn_id: "claude-turn-existing" },
+      status: "running"
+    });
+    const router = createDefaultRouter({ database, providers: { codex, claude } });
 
-      const liveInterrupt = await router.handle(new Request(`${BASE_URL}/api/sessions/claude:claude-live-unindexed/interrupt`, { method: "POST" }));
-      const created = await router.handle(jsonRequest("/api/sessions", {
-        project_id: "claude-demo",
-        prompt: "hello Claude"
-      }));
-      const list = await router.handle(new Request(`${BASE_URL}/api/sessions?provider=claude&limit=20`));
-      const legacyDetail = await router.handle(new Request(`${BASE_URL}/api/sessions/claude:claude-existing`));
-      const detail = await router.handle(new Request(`${BASE_URL}/api/sessions/claude:claude-new`));
-      const message = await router.handle(jsonRequest("/api/sessions/claude:claude-new/messages", { prompt: "continue" }));
-      const interrupt = await router.handle(new Request(`${BASE_URL}/api/sessions/claude:claude-new/interrupt`, { method: "POST" }));
+    const liveInterrupt = await router.handle(new Request(`${BASE_URL}/api/sessions/claude:claude-live-unindexed/interrupt`, { method: "POST" }));
+    const created = await router.handle(jsonRequest("/api/sessions", {
+      project_id: "claude-demo",
+      prompt: "hello Claude"
+    }));
+    const list = await router.handle(new Request(`${BASE_URL}/api/sessions?provider=claude&limit=20`));
+    const legacyDetail = await router.handle(new Request(`${BASE_URL}/api/sessions/claude:claude-existing`));
+    const detail = await router.handle(new Request(`${BASE_URL}/api/sessions/claude:claude-new`));
+    const message = await router.handle(jsonRequest("/api/sessions/claude:claude-new/messages", { prompt: "continue" }));
+    const interrupt = await router.handle(new Request(`${BASE_URL}/api/sessions/claude:claude-new/interrupt`, { method: "POST" }));
 
-      expect(created.status).toBe(201);
-      expect(liveInterrupt.status).toBe(200);
-      expect(await liveInterrupt.json()).toEqual({ interrupted: true });
-      expect(await created.json()).toMatchObject({
-        id: "claude:claude-new",
-        provider: "claude",
-        provider_session_id: "claude-new",
-        provider_turn_id: "claude-turn-initial"
-      });
-      expect(getAgentSession(database, "claude:claude-new")).toMatchObject({
-        project_id: "claude-demo",
-        provider: "claude"
-      });
-      expect(list.status).toBe(200);
-      const listed = await list.json() as { data: Array<Record<string, unknown>> };
-      expect(listed.data.find((item) => item.id === "claude:claude-existing")).toMatchObject({
-        id: "claude:claude-existing",
-        provider: "claude"
-      });
-      expect(getAgentSession(database, "claude:claude-existing")?.status).toBe("running");
-      expect(legacyDetail.status).toBe(200);
-      const legacyBody = await legacyDetail.json() as Record<string, unknown>;
-      expect(legacyBody).not.toHaveProperty("model");
-      expect(legacyBody.raw_ref).not.toContain("codex-default");
-      expect(getAgentSession(database, "claude:claude-existing")?.raw_ref).not.toContain("codex-default");
-      expect(detail.status).toBe(200);
-      expect(await detail.json()).toMatchObject({ id: "claude:claude-new", provider: "claude" });
-      expect(message.status).toBe(201);
-      expect(await message.json()).toEqual({
-        isRunning: false,
-        provider: "claude",
-        status: "idle",
-        thread_id: "claude-new",
-        turn_id: "claude-turn-follow-up"
-      });
-      expect(interrupt.status).toBe(200);
-      expect(await interrupt.json()).toEqual({ interrupted: true });
-      expect(claude.interrupts).toEqual([
-        { sessionId: "claude-live-unindexed", turnId: "" },
-        { sessionId: "claude-new", turnId: "claude-turn-follow-up" }
-      ]);
-      expect(codex.calls).toEqual([]);
-      expect(claude.calls).toEqual([
-        ["createSession", { cwd: "/tmp/claude-demo", prompt: "hello Claude" }],
-        ["listSessions", { limit: 20 }],
-        ["readSession", { includeTurns: false, sessionId: "claude-existing" }],
-        ["readSession", { includeTurns: false, sessionId: "claude-new" }],
-        ["sendSessionMessage", { cwd: "/tmp/claude-demo", sessionId: "claude-new", prompt: "continue" }]
-      ]);
-    } finally {
-      database.close();
-    }
+    expect(created.status).toBe(201);
+    expect(liveInterrupt.status).toBe(200);
+    expect(await liveInterrupt.json()).toEqual({ interrupted: true });
+    expect(await created.json()).toMatchObject({
+      id: "claude:claude-new",
+      provider: "claude",
+      provider_session_id: "claude-new",
+      provider_turn_id: "claude-turn-initial"
+    });
+    expect(getAgentSession(database, "claude:claude-new")).toMatchObject({
+      project_id: "claude-demo",
+      provider: "claude"
+    });
+    expect(list.status).toBe(200);
+    const listed = await list.json() as { data: Array<Record<string, unknown>> };
+    expect(listed.data.find((item) => item.id === "claude:claude-existing")).toMatchObject({
+      id: "claude:claude-existing",
+      provider: "claude"
+    });
+    expect(getAgentSession(database, "claude:claude-existing")?.status).toBe("running");
+    expect(legacyDetail.status).toBe(200);
+    const legacyBody = await legacyDetail.json() as Record<string, unknown>;
+    expect(legacyBody).not.toHaveProperty("model");
+    expect(legacyBody.raw_ref).not.toContain("codex-default");
+    expect(getAgentSession(database, "claude:claude-existing")?.raw_ref).not.toContain("codex-default");
+    expect(detail.status).toBe(200);
+    expect(await detail.json()).toMatchObject({ id: "claude:claude-new", provider: "claude" });
+    expect(message.status).toBe(201);
+    expect(await message.json()).toEqual({
+      isRunning: false,
+      provider: "claude",
+      status: "idle",
+      thread_id: "claude-new",
+      turn_id: "claude-turn-follow-up"
+    });
+    expect(interrupt.status).toBe(200);
+    expect(await interrupt.json()).toEqual({ interrupted: true });
+    expect(claude.interrupts).toEqual([
+      { sessionId: "claude-live-unindexed", turnId: "" },
+      { sessionId: "claude-new", turnId: "claude-turn-follow-up" }
+    ]);
+    expect(codex.calls).toEqual([]);
+    expect(claude.calls).toEqual([
+      ["createSession", { cwd: "/tmp/claude-demo", prompt: "hello Claude" }],
+      ["listSessions", { limit: 20 }],
+      ["readSession", { includeTurns: false, sessionId: "claude-existing" }],
+      ["readSession", { includeTurns: false, sessionId: "claude-new" }],
+      ["sendSessionMessage", { cwd: "/tmp/claude-demo", sessionId: "claude-new", prompt: "continue" }]
+    ]);
   });
 
   test("serves Qoder list/read contracts, keeps indexed running activity, and propagates bounded provider pagination", async () => {
     const database = await openFixtureDatabase();
     const qoder = new QoderSessionsProvider();
-    try {
-      upsertAgentSession(database, {
-        provider: "qoder",
-        provider_session_id: "qoder-existing",
-        project_id: "qoder-demo",
-        status: "running"
-      });
-      const router = createDefaultRouter({ database, providers: { qoder } });
-      const list = await router.handle(new Request(`${BASE_URL}/api/sessions?provider=qoder&limit=20`));
-      const detail = await router.handle(new Request(`${BASE_URL}/api/sessions/qoder:qoder-existing`));
+    upsertAgentSession(database, {
+      provider: "qoder",
+      provider_session_id: "qoder-existing",
+      project_id: "qoder-demo",
+      status: "running"
+    });
+    const router = createDefaultRouter({ database, providers: { qoder } });
+    const list = await router.handle(new Request(`${BASE_URL}/api/sessions?provider=qoder&limit=20`));
+    const detail = await router.handle(new Request(`${BASE_URL}/api/sessions/qoder:qoder-existing`));
 
-      expect(list.status).toBe(200);
-      expect(await list.json()).toMatchObject({
-        data: [{
-          id: "qoder:qoder-existing",
-          isRunning: true,
-          provider: "qoder",
-          session_contract: "xw.provider-session.v1",
-          status: "running"
-        }],
-        nextCursor: "20"
-      });
-      expect(detail.status).toBe(200);
-      expect(await detail.json()).toMatchObject({
+    expect(list.status).toBe(200);
+    expect(await list.json()).toMatchObject({
+      data: [{
         id: "qoder:qoder-existing",
         isRunning: true,
         provider: "qoder",
         session_contract: "xw.provider-session.v1",
-        status: "running",
-        turns: []
-      });
-      expect(getAgentSession(database, "qoder:qoder-existing")?.status).toBe("running");
-    } finally {
-      database.close();
-    }
+        status: "running"
+      }],
+      nextCursor: "20"
+    });
+    expect(detail.status).toBe(200);
+    expect(await detail.json()).toMatchObject({
+      id: "qoder:qoder-existing",
+      isRunning: true,
+      provider: "qoder",
+      session_contract: "xw.provider-session.v1",
+      status: "running",
+      turns: []
+    });
+    expect(getAgentSession(database, "qoder:qoder-existing")?.status).toBe("running");
   });
 
   test("reports Qoder provider-unavailable state without a native-history fallback", async () => {
     const database = await openFixtureDatabase();
     const qoder = new QoderSessionsProvider();
     qoder.ready = false;
-    try {
-      const router = createDefaultRouter({ database, providers: { qoder } });
-      const list = await router.handle(new Request(`${BASE_URL}/api/sessions?provider=qoder`));
-      const detail = await router.handle(new Request(`${BASE_URL}/api/sessions/qoder:qoder-existing`));
+    const router = createDefaultRouter({ database, providers: { qoder } });
+    const list = await router.handle(new Request(`${BASE_URL}/api/sessions?provider=qoder`));
+    const detail = await router.handle(new Request(`${BASE_URL}/api/sessions/qoder:qoder-existing`));
 
-      expect(list.status).toBe(200);
-      expect(await list.json()).toMatchObject({
-        data: [],
-        provider_errors: [{ provider: "qoder", error: expect.stringContaining("configuration required") }]
-      });
-      expect(detail.status).toBe(400);
-      expect(await detail.text()).toContain("configuration required");
-      expect(qoder.calls).toEqual([]);
-    } finally {
-      database.close();
-    }
+    expect(list.status).toBe(200);
+    expect(await list.json()).toMatchObject({
+      data: [],
+      provider_errors: [{ provider: "qoder", error: expect.stringContaining("configuration required") }]
+    });
+    expect(detail.status).toBe(400);
+    expect(await detail.text()).toContain("configuration required");
+    expect(qoder.calls).toEqual([]);
   });
 
   test("Session create and resume use the shared resolver for legacy and explicit policy inputs", async () => {
     const database = await openFixtureDatabase();
     const qoder = new PolicySessionsProvider();
-    try {
-      const router = createDefaultRouter({ database, providers: { qoder } });
-      const created = await router.handle(jsonRequest("/api/sessions", {
-        approval_policy: "always",
-        cwd: "/tmp",
-        prompt: "legacy policy",
-        provider: "qoder",
-        sandbox: "danger-full-access"
-      }));
-      expect(created.status).toBe(201);
-      expect(qoder.createPolicies[0]?.requested).toEqual({
-        contract: "xw.execution-policy.v1",
+    const router = createDefaultRouter({ database, providers: { qoder } });
+    const created = await router.handle(jsonRequest("/api/sessions", {
+      approval_policy: "always",
+      cwd: "/tmp",
+      prompt: "legacy policy",
+      provider: "qoder",
+      sandbox: "danger-full-access"
+    }));
+    expect(created.status).toBe(201);
+    expect(qoder.createPolicies[0]?.requested).toEqual({
+      contract: "xw.execution-policy.v1",
+      access: "unrestricted-host",
+      approval: "ask-every-side-effect"
+    });
+    expect(JSON.parse(getAgentSession(database, "qoder:policy-session")?.raw_ref ?? "{}")).toMatchObject({
+      requested_execution_policy: {
         access: "unrestricted-host",
         approval: "ask-every-side-effect"
-      });
-      expect(JSON.parse(getAgentSession(database, "qoder:policy-session")?.raw_ref ?? "{}")).toMatchObject({
-        requested_execution_policy: {
-          access: "unrestricted-host",
-          approval: "ask-every-side-effect"
-        }
-      });
+      }
+    });
 
-      const resumed = await router.handle(jsonRequest("/api/sessions/qoder:policy-session/messages", {
-        execution_policy: {
-          contract: "xw.execution-policy.v1",
-          access: "read-only",
-          approval: "unattended"
-        },
-        prompt: "explicit policy"
-      }));
-      expect(resumed.status).toBe(201);
-      expect(qoder.messagePolicies[0]?.requested).toEqual({
+    const resumed = await router.handle(jsonRequest("/api/sessions/qoder:policy-session/messages", {
+      execution_policy: {
         contract: "xw.execution-policy.v1",
         access: "read-only",
         approval: "unattended"
-      });
-    } finally {
-      database.close();
-    }
+      },
+      prompt: "explicit policy"
+    }));
+    expect(resumed.status).toBe(201);
+    expect(qoder.messagePolicies[0]?.requested).toEqual({
+      contract: "xw.execution-policy.v1",
+      access: "read-only",
+      approval: "unattended"
+    });
   });
 
   test("keeps legacy bare session ids routed to Codex", async () => {
     const database = await openFixtureDatabase();
     const codex = new SessionsProvider();
     const claude = new ClaudeSessionsProvider();
-    try {
-      const response = await createDefaultRouter({ database, providers: { codex, claude } })
-        .handle(new Request(`${BASE_URL}/api/sessions/thread-legacy`));
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({ id: "codex:thread-legacy", provider: "codex" });
-      expect(codex.calls).toEqual([["readSession", { includeTurns: false, sessionId: "thread-legacy" }]]);
-      expect(claude.calls).toEqual([]);
-    } finally {
-      database.close();
-    }
+    const response = await createDefaultRouter({ database, providers: { codex, claude } })
+      .handle(new Request(`${BASE_URL}/api/sessions/thread-legacy`));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ id: "codex:thread-legacy", provider: "codex" });
+    expect(codex.calls).toEqual([["readSession", { includeTurns: false, sessionId: "thread-legacy" }]]);
+    expect(claude.calls).toEqual([]);
   });
 
   test("redacts provider credentials from provider-neutral session errors", async () => {
@@ -762,30 +693,22 @@ describe("Bun Sessions API compatibility", () => {
     claude.listSessions = async () => {
       throw new Error(`upstream rejected ANTHROPIC_API_KEY=${secret}`);
     };
-    try {
-      const response = await createDefaultRouter({ database, providers: { claude } })
-        .handle(new Request(`${BASE_URL}/api/sessions?provider=claude`));
-      const text = await response.text();
-      expect(response.status).toBe(200);
-      expect(text).toContain("provider_errors");
-      expect(text).not.toContain(secret);
-      expect(text).toContain("ANTHROPIC_API_KEY=[redacted]");
-    } finally {
-      database.close();
-    }
+    const response = await createDefaultRouter({ database, providers: { claude } })
+      .handle(new Request(`${BASE_URL}/api/sessions?provider=claude`));
+    const text = await response.text();
+    expect(response.status).toBe(200);
+    expect(text).toContain("provider_errors");
+    expect(text).not.toContain(secret);
+    expect(text).toContain("ANTHROPIC_API_KEY=[redacted]");
   });
 
   test("fails a project-filtered session list closed when the project does not exist", async () => {
     const database = await openFixtureDatabase();
     const claude = new ClaudeSessionsProvider();
-    try {
-      const response = await createDefaultRouter({ database, providers: { claude } })
-        .handle(new Request(`${BASE_URL}/api/sessions?project_id=missing`));
-      expect(response.status).toBe(404);
-      expect(claude.calls).toEqual([]);
-    } finally {
-      database.close();
-    }
+    const response = await createDefaultRouter({ database, providers: { claude } })
+      .handle(new Request(`${BASE_URL}/api/sessions?project_id=missing`));
+    expect(response.status).toBe(404);
+    expect(claude.calls).toEqual([]);
   });
 
   test("reports an explicitly requested unready Claude SDK without routing to Codex", async () => {
@@ -793,45 +716,37 @@ describe("Bun Sessions API compatibility", () => {
     const codex = new SessionsProvider();
     const claude = new ClaudeSessionsProvider();
     claude.ready = false;
-    try {
-      const router = createDefaultRouter({ database, providers: { codex, claude } });
-      const list = await router.handle(new Request(`${BASE_URL}/api/sessions?provider=claude`));
-      const create = await router.handle(jsonRequest("/api/sessions", {
-        cwd: "/tmp",
-        prompt: "hello",
-        provider: "claude"
-      }));
+    const router = createDefaultRouter({ database, providers: { codex, claude } });
+    const list = await router.handle(new Request(`${BASE_URL}/api/sessions?provider=claude`));
+    const create = await router.handle(jsonRequest("/api/sessions", {
+      cwd: "/tmp",
+      prompt: "hello",
+      provider: "claude"
+    }));
 
-      expect(list.status).toBe(200);
-      expect(await list.json()).toMatchObject({
-        provider_errors: [{ provider: "claude", error: expect.stringContaining("configuration required") }]
-      });
-      expect(create.status).toBe(400);
-      expect(await create.text()).toContain("尚未就绪");
-      expect(codex.calls).toEqual([]);
-      expect(claude.calls).toEqual([]);
-    } finally {
-      database.close();
-    }
+    expect(list.status).toBe(200);
+    expect(await list.json()).toMatchObject({
+      provider_errors: [{ provider: "claude", error: expect.stringContaining("configuration required") }]
+    });
+    expect(create.status).toBe(400);
+    expect(await create.text()).toContain("尚未就绪");
+    expect(codex.calls).toEqual([]);
+    expect(claude.calls).toEqual([]);
   });
 
   test("fails closed when a migrated adapter leaks provider-native session data", async () => {
     const database = await openFixtureDatabase();
     const claude = Object.assign(new ClaudeSessionsProvider(), { manifest: claudeManifest() });
-    try {
-      const router = createDefaultRouter({ database, providers: { claude } });
-      const list = await router.handle(new Request(`${BASE_URL}/api/sessions?provider=claude`));
-      const detail = await router.handle(new Request(`${BASE_URL}/api/sessions/claude:claude-existing`));
+    const router = createDefaultRouter({ database, providers: { claude } });
+    const list = await router.handle(new Request(`${BASE_URL}/api/sessions?provider=claude`));
+    const detail = await router.handle(new Request(`${BASE_URL}/api/sessions/claude:claude-existing`));
 
-      expect(list.status).toBe(200);
-      expect(await list.json()).toMatchObject({
-        provider_errors: [{ provider: "claude", error: expect.stringContaining("invalid xw.provider-session.v1 view") }]
-      });
-      expect(detail.status).toBe(400);
-      expect(await detail.text()).toContain("invalid xw.provider-session.v1 view");
-    } finally {
-      database.close();
-    }
+    expect(list.status).toBe(200);
+    expect(await list.json()).toMatchObject({
+      provider_errors: [{ provider: "claude", error: expect.stringContaining("invalid xw.provider-session.v1 view") }]
+    });
+    expect(detail.status).toBe(400);
+    expect(await detail.text()).toContain("invalid xw.provider-session.v1 view");
   });
 
   test("fails closed when a migrated adapter returns another Session detail", async () => {
@@ -842,15 +757,11 @@ describe("Bun Sessions API compatibility", () => {
         return providerSessionDetail("claude", { sessionRef: "claude-other", turns: [] });
       }
     });
-    try {
-      const detail = await createDefaultRouter({ database, providers: { claude } })
-        .handle(new Request(`${BASE_URL}/api/sessions/claude:claude-requested`));
+    const detail = await createDefaultRouter({ database, providers: { claude } })
+      .handle(new Request(`${BASE_URL}/api/sessions/claude:claude-requested`));
 
-      expect(detail.status).toBe(400);
-      expect(await detail.text()).toContain("invalid xw.provider-session.v1 view");
-    } finally {
-      database.close();
-    }
+    expect(detail.status).toBe(400);
+    expect(await detail.text()).toContain("invalid xw.provider-session.v1 view");
   });
 });
 

@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
 import { invokeReadOnlyAssistantTool } from "./readOnlyToolInvocation.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const tempRoots: string[] = [];
 
@@ -18,114 +21,102 @@ afterEach(async () => {
 describe("read-only assistant tool invocation", () => {
   test("invokes builtin read-only tools as ToolResult and audits without pending approval", async () => {
     const db = await openFixture();
-    try {
-      const result = await invokeReadOnlyAssistantTool({
-        auditContext: { conversationID: "conv-builtin", source: "test" },
-        db,
-        input: {},
-        providerID: "runner-builtin",
-        toolName: "project_status"
-      });
+    const result = await invokeReadOnlyAssistantTool({
+      auditContext: { conversationID: "conv-builtin", source: "test" },
+      db,
+      input: {},
+      providerID: "runner-builtin",
+      toolName: "project_status"
+    });
 
-      expect(result).toMatchObject({ output: { items: [] }, status: "succeeded" });
-      expect(listPiActions(db, { status: "pending" })).toEqual([]);
-      expect(auditPayloads(db, "conv-builtin")[0]).toMatchObject({
-        provider_id: "runner-builtin",
-        source: "test",
-        status: "succeeded",
-        tool: "project_status"
-      });
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ output: { items: [] }, status: "succeeded" });
+    expect(listPiActions(db, { status: "pending" })).toEqual([]);
+    expect(auditPayloads(db, "conv-builtin")[0]).toMatchObject({
+      provider_id: "runner-builtin",
+      source: "test",
+      status: "succeeded",
+      tool: "project_status"
+    });
   });
 
   test("invokes CLI read-only tools and denies non-read tools through the same service", async () => {
     const { db, dir } = await openCliFixture();
-    try {
-      const succeeded = await invokeReadOnlyAssistantTool({
-        auditContext: { conversationID: "conv-cli", source: "test" },
-        db,
-        input: { payload: "hello" },
-        manifestDirs: [dir],
-        providerID: "fixture-cli",
-        toolName: "echo"
-      });
-      const denied = await invokeReadOnlyAssistantTool({
-        auditContext: { conversationID: "conv-cli-denied", source: "test" },
-        db,
-        input: { payload: "write" },
-        manifestDirs: [dir],
-        providerID: "fixture-cli",
-        toolName: "mutate"
-      });
+    const succeeded = await invokeReadOnlyAssistantTool({
+      auditContext: { conversationID: "conv-cli", source: "test" },
+      db,
+      input: { payload: "hello" },
+      manifestDirs: [dir],
+      providerID: "fixture-cli",
+      toolName: "echo"
+    });
+    const denied = await invokeReadOnlyAssistantTool({
+      auditContext: { conversationID: "conv-cli-denied", source: "test" },
+      db,
+      input: { payload: "write" },
+      manifestDirs: [dir],
+      providerID: "fixture-cli",
+      toolName: "mutate"
+    });
 
-      expect(succeeded).toMatchObject({ output: { payload: "hello" }, status: "succeeded" });
-      expect(denied).toMatchObject({ error: { code: "permission_denied" }, status: "denied" });
-      expect(listPiActions(db, { status: "pending" })).toEqual([]);
-      expect(auditPayloads(db, "conv-cli")[0]).toMatchObject({
-        provider_id: "fixture-cli",
-        status: "succeeded",
-        tool: "echo"
-      });
-      expect(auditPayloads(db, "conv-cli-denied")[0]).toMatchObject({
-        provider_id: "fixture-cli",
-        status: "denied",
-        tool: "mutate"
-      });
-    } finally {
-      db.close();
-    }
+    expect(succeeded).toMatchObject({ output: { payload: "hello" }, status: "succeeded" });
+    expect(denied).toMatchObject({ error: { code: "permission_denied" }, status: "denied" });
+    expect(listPiActions(db, { status: "pending" })).toEqual([]);
+    expect(auditPayloads(db, "conv-cli")[0]).toMatchObject({
+      provider_id: "fixture-cli",
+      status: "succeeded",
+      tool: "echo"
+    });
+    expect(auditPayloads(db, "conv-cli-denied")[0]).toMatchObject({
+      provider_id: "fixture-cli",
+      status: "denied",
+      tool: "mutate"
+    });
   });
 
   test("invokes transported MCP tools and stored aliases as ToolResult", async () => {
     const db = await openFixture();
     const script = await writeMcpServer();
     const env = { XUANWU_MCP_REGISTRY_JSON: JSON.stringify({ servers: [docsServer(script)] }) };
-    try {
-      seedStoredMcpAlias(db);
-      const succeeded = await invokeReadOnlyAssistantTool({
-        auditContext: { conversationID: "conv-mcp", source: "test" },
-        db,
-        env,
-        input: { query: "deploy" },
-        providerID: "mcp-docs",
-        toolName: "search"
-      });
-      const egressDenied = await invokeReadOnlyAssistantTool({
-        auditContext: { conversationID: "conv-mcp-egress", source: "test" },
-        db,
-        env,
-        input: { query: "deploy", token: "secret-token-value" },
-        providerID: "mcp-docs",
-        toolName: "search"
-      });
-      const stored = await invokeReadOnlyAssistantTool({
-        auditContext: { conversationID: "conv-stored", source: "test" },
-        db,
-        env,
-        input: { query: "deploy" },
-        providerID: "stored-mcp",
-        toolName: "stored_search"
-      });
+    seedStoredMcpAlias(db);
+    const succeeded = await invokeReadOnlyAssistantTool({
+      auditContext: { conversationID: "conv-mcp", source: "test" },
+      db,
+      env,
+      input: { query: "deploy" },
+      providerID: "mcp-docs",
+      toolName: "search"
+    });
+    const egressDenied = await invokeReadOnlyAssistantTool({
+      auditContext: { conversationID: "conv-mcp-egress", source: "test" },
+      db,
+      env,
+      input: { query: "deploy", token: "secret-token-value" },
+      providerID: "mcp-docs",
+      toolName: "search"
+    });
+    const stored = await invokeReadOnlyAssistantTool({
+      auditContext: { conversationID: "conv-stored", source: "test" },
+      db,
+      env,
+      input: { query: "deploy" },
+      providerID: "stored-mcp",
+      toolName: "stored_search"
+    });
 
-      expect(succeeded).toMatchObject({ output: { results: ["runbook"], query: "deploy" }, status: "succeeded" });
-      expect(egressDenied).toMatchObject({ error: { code: "sensitive_egress_denied" }, status: "denied" });
-      expect(stored).toMatchObject({ output: { results: ["runbook"], query: "deploy" }, status: "succeeded" });
-      expect(auditPayloads(db, "conv-mcp")[0]).toMatchObject({ provider_id: "mcp-docs", status: "succeeded", tool: "search" });
-      expect(JSON.stringify(auditPayloads(db, "conv-mcp"))).not.toContain("secret-token-value");
-      expect(JSON.stringify(auditPayloads(db, "conv-mcp-egress"))).not.toContain("secret-token-value");
-      expect(auditPayloads(db, "conv-stored")[0]).toMatchObject({ provider_id: "stored-mcp", status: "succeeded", tool: "stored_search" });
-    } finally {
-      db.close();
-    }
+    expect(succeeded).toMatchObject({ output: { results: ["runbook"], query: "deploy" }, status: "succeeded" });
+    expect(egressDenied).toMatchObject({ error: { code: "sensitive_egress_denied" }, status: "denied" });
+    expect(stored).toMatchObject({ output: { results: ["runbook"], query: "deploy" }, status: "succeeded" });
+    expect(auditPayloads(db, "conv-mcp")[0]).toMatchObject({ provider_id: "mcp-docs", status: "succeeded", tool: "search" });
+    expect(JSON.stringify(auditPayloads(db, "conv-mcp"))).not.toContain("secret-token-value");
+    expect(JSON.stringify(auditPayloads(db, "conv-mcp-egress"))).not.toContain("secret-token-value");
+    expect(auditPayloads(db, "conv-stored")[0]).toMatchObject({ provider_id: "stored-mcp", status: "succeeded", tool: "stored_search" });
   });
 });
 
 async function openFixture(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-read-only-tools-"));
   tempRoots.push(root);
-  return await openDatabase({ stateDir: join(root, "state") });
+  return await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
 }
 
 async function openCliFixture(): Promise<{ db: RunnerDatabase; dir: string }> {

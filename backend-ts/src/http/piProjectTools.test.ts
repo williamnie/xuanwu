@@ -8,6 +8,9 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listPiActionEvents, listPiActions, type PiActionEvent } from "../db/repositories/pi.ts";
 import { URL_FETCH_TOOL_NAME } from "../pi/httpToolProvider.ts";
 import { createPiRuntimeSession } from "./piRuntime.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const tempRoots: string[] = [];
 
@@ -19,7 +22,7 @@ async function openFixture(): Promise<Fixture> {
   mkdirSync(projectCwd, { recursive: true });
   writeFileSync(join(projectCwd, "README.md"), "# Demo\n");
   tempRoots.push(root);
-  return { db: await openDatabase({ stateDir: join(root, "state") }), projectCwd };
+  return { db: await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase), projectCwd };
 }
 
 afterEach(async () => {

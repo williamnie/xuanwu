@@ -7,7 +7,9 @@ import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { createPiConversation, PI_MANAGER_CYCLE_TITLE } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { createDefaultRouter } from "./server.ts";
-import { useTestDatabase } from "../testing/harness.ts";
+import { useDatabaseCleanup, useTestDatabase } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const BASE_URL = "http://127.0.0.1:3008";
 const openFixtureDatabase = useTestDatabase();
@@ -192,7 +194,7 @@ describe("Bun PI settings API", () => {
       const dbPath = database.path;
       database.close();
       database = undefined;
-      restored = await openDatabase({ dbPath });
+      restored = trackDatabase(await openDatabase({ dbPath }));
       const restoredRouter = createDefaultRouter({ database: restored });
       const detail = await restoredRouter.handle(new Request(`${BASE_URL}/api/pi/conversations/conv-1`));
       const list = await restoredRouter.handle(new Request(`${BASE_URL}/api/pi/conversations?project_id=demo`));

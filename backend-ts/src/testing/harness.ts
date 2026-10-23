@@ -36,6 +36,18 @@ export function useTestDatabase(prefix = "xuanwu-test-db-"): () => Promise<Runne
   };
 }
 
+/** Returns `track(db)`; every tracked database is closed after each test of the calling file. */
+export function useDatabaseCleanup(): <T extends { close(): void }>(db: T) => T {
+  const open: Array<{ close(): void }> = [];
+  afterEach(() => {
+    for (const db of open.splice(0)) db.close();
+  });
+  return (db) => {
+    open.push(db);
+    return db;
+  };
+}
+
 export function insertRow(db: RunnerDatabase, table: string, values: Record<string, SQLQueryBindings>): number {
   const columns = Object.keys(values);
   db.sqlite.run(

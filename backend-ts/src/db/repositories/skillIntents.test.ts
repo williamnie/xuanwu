@@ -7,6 +7,9 @@ import { createIssue } from "./issueCreate.ts";
 import { updateIssue } from "./issueUpdate.ts";
 import { createPiDelegation, getPiDelegation, updatePiDelegation } from "./pi.ts";
 import { createProject } from "./projects.ts";
+import { useDatabaseCleanup } from "../../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const tempRoots: string[] = [];
 
@@ -96,5 +99,5 @@ async function openFixture(): Promise<{ cwd: string; db: RunnerDatabase }> {
   tempRoots.push(root);
   const cwd = join(root, "project");
   await mkdir(cwd, { recursive: true });
-  return { cwd, db: await openDatabase({ stateDir: join(root, "state") }) };
+  return { cwd, db: await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase) };
 }

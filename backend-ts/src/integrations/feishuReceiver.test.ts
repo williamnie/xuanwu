@@ -12,6 +12,9 @@ import { createImInteractionBinding } from "../db/repositories/imInteractionBind
 import { createPiAction, getPiAction } from "../db/repositories/pi.ts";
 import { createFeishuPendingProjectSelection } from "../db/repositories/feishuProjectSelection.ts";
 import { EventBus } from "../events/bus.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const tempRoots: string[] = [];
 
@@ -114,7 +117,7 @@ describe("Feishu WebSocket receiver", () => {
   test("ignores message, card and health callbacks from a stopped receiver generation", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-ws-generation-"));
     tempRoots.push(root);
-    const database = await openDatabase({ stateDir: join(root, "state") });
+    const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     const generations: Parameters<FeishuWsFactory>[0][] = [];
     const manager = createFeishuReceiverManager({
       database,
@@ -296,7 +299,7 @@ async function receiverFixture(): Promise<{
 }> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-ws-"));
   tempRoots.push(root);
-  const database = await openDatabase({ stateDir: join(root, "state") });
+  const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   const messages = { emit: async (_event: unknown) => undefined as unknown };
   const factory = Object.assign(((input) => {
     messages.emit = (event: unknown) => isCardAction(event) ? input.onCardAction(event) : input.onMessage(event);

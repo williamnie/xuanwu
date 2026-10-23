@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { openDatabase } from "../db/database.ts";
 import { EventBus } from "../events/bus.ts";
 import { createDefaultRouter } from "./server.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const BASE = "http://127.0.0.1:3008";
 const roots: string[] = [];
@@ -15,7 +18,7 @@ describe("native Automation API", () => {
   test("supports create, filters, detail editing, pause/resume, run-now, history, and live events", async () => {
     const root = await mkdtemp(join(tmpdir(), "automation-api-"));
     roots.push(root);
-    const db = await openDatabase({ stateDir: root });
+    const db = await openDatabase({ stateDir: root }).then(trackDatabase);
     const bus = new EventBus();
     const events: string[] = [];
     const stop = bus.observe((event) => events.push(event.type));
@@ -82,22 +85,20 @@ describe("native Automation API", () => {
   test("rejects stale and inactive run-now requests", async () => {
     const root = await mkdtemp(join(tmpdir(), "automation-api-"));
     roots.push(root);
-    const db = await openDatabase({ stateDir: root });
-    try {
-      const router = createDefaultRouter({ database: db });
-      await jsonRequest(router, "/api/automations", "POST", {
-        id: "manual-review", name: "Manual review", status: "draft",
-        trigger: { type: "manual", config: {} }, workflow_ref: "workflow:investigate@1"
-      });
-      const inactive = await jsonRequest(router, "/api/automations/automation%3Amanual-review/run-now", "POST", { expected_revision: 0 });
-      expect(inactive.response.status).toBe(409);
-      expect(inactive.body.message).toContain("only active");
-      const stale = await jsonRequest(router, "/api/automations/automation%3Amanual-review/status", "POST", {
-        expected_revision: 4, status: "active"
-      });
-      expect(stale.response.status).toBe(409);
-      expect(stale.body.message).toContain("revision conflict");
-    } finally { db.close(); }
+    const db = await openDatabase({ stateDir: root }).then(trackDatabase);
+    const router = createDefaultRouter({ database: db });
+    await jsonRequest(router, "/api/automations", "POST", {
+      id: "manual-review", name: "Manual review", status: "draft",
+      trigger: { type: "manual", config: {} }, workflow_ref: "workflow:investigate@1"
+    });
+    const inactive = await jsonRequest(router, "/api/automations/automation%3Amanual-review/run-now", "POST", { expected_revision: 0 });
+    expect(inactive.response.status).toBe(409);
+    expect(inactive.body.message).toContain("only active");
+    const stale = await jsonRequest(router, "/api/automations/automation%3Amanual-review/status", "POST", {
+      expected_revision: 4, status: "active"
+    });
+    expect(stale.response.status).toBe(409);
+    expect(stale.body.message).toContain("revision conflict");
   });
 });
 

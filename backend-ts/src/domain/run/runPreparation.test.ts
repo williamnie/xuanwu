@@ -11,6 +11,9 @@ import {
 } from "../../db/repositories/issueRuns.ts";
 import { ISSUE_RUN_GIT_WORKSPACE_BASELINE_EVENT } from "../evidence/runGitWorkspaceBaseline.ts";
 import { prepareReservedIssueRun } from "./runPreparation.ts";
+import { useDatabaseCleanup } from "../../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -20,52 +23,48 @@ afterEach(async () => {
 describe("two-phase Run preparation", () => {
   test("keeps Git observation outside the writer transaction and finalizes a captured baseline once", async () => {
     const db = await fixture();
-    try {
-      const issue = createIssue(db, { project_id: "demo", status: "in_progress", title: "Prepare" });
-      const reservation = db.transaction(() => insertIssueRunRecord(db, issue.id)).immediate();
-      let release!: () => void;
-      const observation = new Promise<void>((resolve) => { release = resolve; });
-      const baseline = capturedBaseline();
-      const pending = prepareReservedIssueRun(db, reservation, async () => {
-        await observation;
-        return baseline;
-      });
-      await Promise.resolve();
+    const issue = createIssue(db, { project_id: "demo", status: "in_progress", title: "Prepare" });
+    const reservation = db.transaction(() => insertIssueRunRecord(db, issue.id)).immediate();
+    let release!: () => void;
+    const observation = new Promise<void>((resolve) => { release = resolve; });
+    const baseline = capturedBaseline();
+    const pending = prepareReservedIssueRun(db, reservation, async () => {
+      await observation;
+      return baseline;
+    });
+    await Promise.resolve();
 
-      const started = performance.now();
-      db.sqlite.run("update issues set title='Writer stayed live' where id=?", [issue.id]);
-      expect(performance.now() - started).toBeLessThan(100);
-      release();
-      const prepared = await pending;
+    const started = performance.now();
+    db.sqlite.run("update issues set title='Writer stayed live' where id=?", [issue.id]);
+    expect(performance.now() - started).toBeLessThan(100);
+    release();
+    const prepared = await pending;
 
-      expect(prepared).toMatchObject({ baseline_recorded: true, status: "ready" });
-      if (prepared.status !== "ready") throw new Error("preparation failed");
-      expect(prepared.run.git_base_revision).toBe(baseline.base_revision);
-      expect(eventCount(db, issue.id)).toBe(1);
-      expect(finalizeIssueRunPreparation(db, reservation, baseline).status).toBe("claim_invalidated");
-      expect(eventCount(db, issue.id)).toBe(1);
-    } finally { db.close(); }
+    expect(prepared).toMatchObject({ baseline_recorded: true, status: "ready" });
+    if (prepared.status !== "ready") throw new Error("preparation failed");
+    expect(prepared.run.git_base_revision).toBe(baseline.base_revision);
+    expect(eventCount(db, issue.id)).toBe(1);
+    expect(finalizeIssueRunPreparation(db, reservation, baseline).status).toBe("claim_invalidated");
+    expect(eventCount(db, issue.id)).toBe(1);
   });
 
   test("allows a missing baseline only while the reservation remains the canonical current Run", async () => {
     const db = await fixture();
-    try {
-      const issue = createIssue(db, { project_id: "demo", status: "in_progress", title: "Unavailable" });
-      const reservation = insertIssueRunRecord(db, issue.id);
-      const ready = await prepareReservedIssueRun(db, reservation, async () => null);
-      expect(ready).toMatchObject({ baseline_recorded: false, status: "ready" });
-      expect(eventCount(db, issue.id)).toBe(0);
+    const issue = createIssue(db, { project_id: "demo", status: "in_progress", title: "Unavailable" });
+    const reservation = insertIssueRunRecord(db, issue.id);
+    const ready = await prepareReservedIssueRun(db, reservation, async () => null);
+    expect(ready).toMatchObject({ baseline_recorded: false, status: "ready" });
+    expect(eventCount(db, issue.id)).toBe(0);
 
-      db.sqlite.run("update issues set status='cancelled' where id=?", [issue.id]);
-      expect(finalizeIssueRunPreparation(db, reservation, null).status).toBe("claim_invalidated");
-    } finally { db.close(); }
+    db.sqlite.run("update issues set status='cancelled' where id=?", [issue.id]);
+    expect(finalizeIssueRunPreparation(db, reservation, null).status).toBe("claim_invalidated");
   });
 });
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-run-preparation-"));
   roots.push(root);
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   db.sqlite.run(
     "insert into projects (id, name, cwd, created_at, updated_at) values (?, ?, ?, ?, ?)",
     ["demo", "demo", root, "2026-08-19T00:00:00Z", "2026-08-19T00:00:00Z"]

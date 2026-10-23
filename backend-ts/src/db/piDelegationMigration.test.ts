@@ -6,6 +6,9 @@ import { dirname, join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "./database.ts";
 import { runMigrations } from "./migrations.ts";
 import { migrations } from "./schema/index.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const tempRoots: string[] = [];
 
@@ -22,34 +25,30 @@ describe("PI delegation migration", () => {
     const stateDir = join(root, "state");
     await createLegacyDelegationDatabase(join(stateDir, "runner.db"));
 
-    const migrated = await openDatabase({ stateDir });
-    try {
-      expect(columnNames(migrated, "pi_delegations")).toEqual(expect.arrayContaining([
-        "allowed_actions_json",
-        "allowed_skill_intents_json",
-        "audit_source",
-        "expires_at",
-        "forbidden_actions_json",
-        "scope_json",
-        "starts_at"
-      ]));
-      expect(migrated.sqlite.query("select title from issues where project_id='demo'").get())
-        .toEqual({ title: "Legacy issue" });
-      expect(migrationRow(migrated)).toEqual({ id: "012_pi_delegation_envelope" });
-      expect(legacyDelegationRow(migrated)).toEqual({
-        allowed_actions_json: "[]",
-        allowed_skill_intents_json: "[]",
-        audit_source: "",
-        authorization_json: "{\"mode\":\"delegated\"}",
-        expires_at: "",
-        forbidden_actions_json: "[]",
-        id: "legacy-delegation",
-        scope_json: "{}",
-        starts_at: ""
-      });
-    } finally {
-      migrated.close();
-    }
+    const migrated = await openDatabase({ stateDir }).then(trackDatabase);
+    expect(columnNames(migrated, "pi_delegations")).toEqual(expect.arrayContaining([
+      "allowed_actions_json",
+      "allowed_skill_intents_json",
+      "audit_source",
+      "expires_at",
+      "forbidden_actions_json",
+      "scope_json",
+      "starts_at"
+    ]));
+    expect(migrated.sqlite.query("select title from issues where project_id='demo'").get())
+      .toEqual({ title: "Legacy issue" });
+    expect(migrationRow(migrated)).toEqual({ id: "012_pi_delegation_envelope" });
+    expect(legacyDelegationRow(migrated)).toEqual({
+      allowed_actions_json: "[]",
+      allowed_skill_intents_json: "[]",
+      audit_source: "",
+      authorization_json: "{\"mode\":\"delegated\"}",
+      expires_at: "",
+      forbidden_actions_json: "[]",
+      id: "legacy-delegation",
+      scope_json: "{}",
+      starts_at: ""
+    });
   });
 });
 

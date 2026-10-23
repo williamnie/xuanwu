@@ -6,6 +6,9 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter, createRequestHandler } from "../http/server.ts";
 import { runCli } from "./command.ts";
 import type { Fetcher } from "./types.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 const TOKEN = "cli-work-token";
 const roots: string[] = [];
 
@@ -16,42 +19,38 @@ afterEach(async () => {
 describe("Work CLI", () => {
   test("creates an Issue-backed Work idempotently, then queries its status and result through HTTP", async () => {
     const database = await fixtureDatabase();
-    try {
-      seedProject(database, "demo");
-      const handle = createRequestHandler(createDefaultRouter({ database }), TOKEN);
-      const fetcher = (async (input: Parameters<Fetcher>[0], init?: Parameters<Fetcher>[1]) => {
-        return await handle(new Request(input instanceof Request ? input.url : String(input), init));
-      }) as unknown as Fetcher;
-      const env = (key: string) => key === "XUANWU_AUTH_TOKEN" ? TOKEN : undefined;
+    seedProject(database, "demo");
+    const handle = createRequestHandler(createDefaultRouter({ database }), TOKEN);
+    const fetcher = (async (input: Parameters<Fetcher>[0], init?: Parameters<Fetcher>[1]) => {
+      return await handle(new Request(input instanceof Request ? input.url : String(input), init));
+    }) as unknown as Fetcher;
+    const env = (key: string) => key === "XUANWU_AUTH_TOKEN" ? TOKEN : undefined;
 
-      const created = await invoke([
-        "work", "create", "--project", "demo", "--title", "CLI Work", "--goal", "Create through the CLI",
-        "--agent-profile", "xuanwu-provider-qoder", "--idempotency-key", "ci-719-create",
-        "--occurred-at", "2026-07-18T00:00:00.000Z", "--json"
-      ], env, fetcher);
-      const replay = await invoke([
-        "work", "create", "--project", "demo", "--title", "CLI Work", "--goal", "Create through the CLI",
-        "--agent-profile", "xuanwu-provider-qoder", "--idempotency-key", "ci-719-create",
-        "--occurred-at", "2026-07-18T00:00:00.000Z", "--json"
-      ], env, fetcher);
-      expect(created).toMatchObject({ code: 0, stderr: "" });
-      expect(replay).toMatchObject({ code: 0, stderr: "" });
-      const workID = String((JSON.parse(created.stdout).work as Record<string, unknown>).id);
-      const status = await invoke(["work", "status", "--id", workID, "--json"], env, fetcher);
-      const result = await invoke(["work", "result", "--id", workID, "--json"], env, fetcher);
+    const created = await invoke([
+      "work", "create", "--project", "demo", "--title", "CLI Work", "--goal", "Create through the CLI",
+      "--agent-profile", "xuanwu-provider-qoder", "--idempotency-key", "ci-719-create",
+      "--occurred-at", "2026-07-18T00:00:00.000Z", "--json"
+    ], env, fetcher);
+    const replay = await invoke([
+      "work", "create", "--project", "demo", "--title", "CLI Work", "--goal", "Create through the CLI",
+      "--agent-profile", "xuanwu-provider-qoder", "--idempotency-key", "ci-719-create",
+      "--occurred-at", "2026-07-18T00:00:00.000Z", "--json"
+    ], env, fetcher);
+    expect(created).toMatchObject({ code: 0, stderr: "" });
+    expect(replay).toMatchObject({ code: 0, stderr: "" });
+    const workID = String((JSON.parse(created.stdout).work as Record<string, unknown>).id);
+    const status = await invoke(["work", "status", "--id", workID, "--json"], env, fetcher);
+    const result = await invoke(["work", "result", "--id", workID, "--json"], env, fetcher);
 
-      expect(JSON.parse(created.stdout)).toMatchObject({
-        work: { agent_profile_id: "xuanwu-provider-qoder", id: workID, status: "triage" }
-      });
-      expect(JSON.parse(replay.stdout)).toMatchObject({ work: { id: workID } });
-      expect(status).toMatchObject({ code: 0, stderr: "" });
-      expect(JSON.parse(status.stdout)).toMatchObject({ work: { id: workID, status: "triage" } });
-      expect(JSON.parse(result.stdout)).toEqual({ work: expect.objectContaining({ id: workID, status: "triage" }) });
-      expect(database.sqlite.query("select count(*) as count from issues").get()).toEqual({ count: 1 });
-      expect(`${created.stdout}${replay.stdout}${status.stdout}${result.stdout}`).not.toContain(TOKEN);
-    } finally {
-      database.close();
-    }
+    expect(JSON.parse(created.stdout)).toMatchObject({
+      work: { agent_profile_id: "xuanwu-provider-qoder", id: workID, status: "triage" }
+    });
+    expect(JSON.parse(replay.stdout)).toMatchObject({ work: { id: workID } });
+    expect(status).toMatchObject({ code: 0, stderr: "" });
+    expect(JSON.parse(status.stdout)).toMatchObject({ work: { id: workID, status: "triage" } });
+    expect(JSON.parse(result.stdout)).toEqual({ work: expect.objectContaining({ id: workID, status: "triage" }) });
+    expect(database.sqlite.query("select count(*) as count from issues").get()).toEqual({ count: 1 });
+    expect(`${created.stdout}${replay.stdout}${status.stdout}${result.stdout}`).not.toContain(TOKEN);
   });
 
   test("requires an explicit replay key and keeps auth failures redacted", async () => {
@@ -72,7 +71,7 @@ describe("Work CLI", () => {
 async function fixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-cli-work-"));
   roots.push(root);
-  return await openDatabase({ dbPath: join(root, "runner.sqlite") });
+  return await openDatabase({ dbPath: join(root, "runner.sqlite") }).then(trackDatabase);
 }
 
 function seedProject(database: RunnerDatabase, id: string): void {

@@ -16,6 +16,9 @@ import {
   unsafeUrlEgressReason,
   type UntrustedContentSource
 } from "./promptInjectionDefense.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 type AttackFixture = { content: string; id: string; source: UntrustedContentSource };
 
@@ -58,7 +61,7 @@ describe("Prompt injection defense", () => {
 
   test("does not invoke an unauthorized write callback and records the denial", async () => {
     const root = await mkdtemp(join(tmpdir(), "xw-prompt-write-gate-"));
-    const db = await openDatabase({ stateDir: join(root, "state") });
+    const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     let mutated = false;
     try {
       const result = executeSafePiAction(db, {
@@ -126,7 +129,7 @@ describe("Prompt injection defense", () => {
 
   test("assembles the trust contract before runtime resource and Skill data", async () => {
     const root = await mkdtemp(join(tmpdir(), "xw-prompt-defense-"));
-    const db = await openDatabase({ stateDir: join(root, "state") });
+    const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     try {
       const prompt = buildPiRuntimeSystemPrompt({
         agent: {

@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { registerSecretForRedaction } from "../security/redactionRegistry.ts";
 import { buildRuntimeObservability, primeRuntimeObservability } from "./runtimeObservability.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 
@@ -17,60 +20,56 @@ describe("runtime observability", () => {
     const db = await fixtureDatabase();
     const secret = "fixture-diagnostic-secret";
     registerSecretForRedaction(secret);
-    try {
-      insertTraceFixture(db, secret);
+    insertTraceFixture(db, secret);
 
-      const snapshot = buildRuntimeObservability(db, new Date("2026-07-18T06:00:00.000Z"));
-      const text = JSON.stringify(snapshot);
-      const dimensions = snapshot.dimensions as Record<string, Record<string, unknown>>;
-      const trace = ((snapshot.trace_correlation as { items: Array<Record<string, unknown>> }).items)[0];
-      const event = ((snapshot.structured_events as { items: Array<Record<string, unknown>> }).items)[0];
+    const snapshot = buildRuntimeObservability(db, new Date("2026-07-18T06:00:00.000Z"));
+    const text = JSON.stringify(snapshot);
+    const dimensions = snapshot.dimensions as Record<string, Record<string, unknown>>;
+    const trace = ((snapshot.trace_correlation as { items: Array<Record<string, unknown>> }).items)[0];
+    const event = ((snapshot.structured_events as { items: Array<Record<string, unknown>> }).items)[0];
 
-      expect(snapshot).toMatchObject({
-        schema_version: "xuanwu.runtime-observability.v1",
-        generated_at: "2026-07-18T06:00:00.000Z",
-        query_contract: {
-          event_payload_source: "event_summary_projection",
-          provider_session_scan: false,
-          raw_log_scan: false
-        },
-        cost: {
-          attempts: 1,
-          usage: { known_attempts: 1, total_tokens: 120 },
-          money: { by_currency: [{ amount_micros: 2500, attempts: 1, currency: "USD" }], known_attempts: 1 }
-        }
-      });
-      expect(dimensions.work).toMatchObject({ total: 1, statuses: { in_progress: 1 } });
-      expect(dimensions.run).toMatchObject({ total: 1, attempts: 1, statuses: { in_progress: 1 } });
-      expect(dimensions.automation).toMatchObject({ total: 1, linked_runs: 1, statuses: { running: 1 } });
-      expect((dimensions.provider.items as Array<Record<string, unknown>>)[0]).toMatchObject({
-        provider: "codex",
+    expect(snapshot).toMatchObject({
+      schema_version: "xuanwu.runtime-observability.v1",
+      generated_at: "2026-07-18T06:00:00.000Z",
+      query_contract: {
+        event_payload_source: "event_summary_projection",
+        provider_session_scan: false,
+        raw_log_scan: false
+      },
+      cost: {
         attempts: 1,
-        known_usage_attempts: 1,
-        total_tokens: 120,
-        money_by_currency: [{ amount_micros: 2500, attempts: 1, currency: "USD" }]
-      });
-      expect(trace).toMatchObject({
-        trace_id: "xw:work:issues:1",
-        work: { id: "xw:work:issues:1", issue_id: 1 },
-        run: { id: "xw:run:issue_runs:run-1", attempts: 1 },
-        workflow: { ref: "workflow:fixture@1" },
-        provider: { id: "codex", invocation_ref: "run-1" },
-        automation: { id: "automation:fixture", run_id: "automation-run:fixture" },
-        cost: { usage_completeness: "complete", total_tokens: 120 }
-      });
-      expect(event).toMatchObject({
-        event_id: "issue_events:1",
-        event_type: "run.progress",
-        trace: { work_id: "xw:work:issues:1", run_id: "xw:run:issue_runs:run-1" },
-        fields: { authorization: "[redacted]", path: "[redacted-path]" }
-      });
-      expect(text).not.toContain(secret);
-      expect(text).not.toContain("raw-only-event-must-not-appear");
-      expect(text).not.toContain("/Users/alice");
-    } finally {
-      db.close();
-    }
+        usage: { known_attempts: 1, total_tokens: 120 },
+        money: { by_currency: [{ amount_micros: 2500, attempts: 1, currency: "USD" }], known_attempts: 1 }
+      }
+    });
+    expect(dimensions.work).toMatchObject({ total: 1, statuses: { in_progress: 1 } });
+    expect(dimensions.run).toMatchObject({ total: 1, attempts: 1, statuses: { in_progress: 1 } });
+    expect(dimensions.automation).toMatchObject({ total: 1, linked_runs: 1, statuses: { running: 1 } });
+    expect((dimensions.provider.items as Array<Record<string, unknown>>)[0]).toMatchObject({
+      provider: "codex",
+      attempts: 1,
+      known_usage_attempts: 1,
+      total_tokens: 120,
+      money_by_currency: [{ amount_micros: 2500, attempts: 1, currency: "USD" }]
+    });
+    expect(trace).toMatchObject({
+      trace_id: "xw:work:issues:1",
+      work: { id: "xw:work:issues:1", issue_id: 1 },
+      run: { id: "xw:run:issue_runs:run-1", attempts: 1 },
+      workflow: { ref: "workflow:fixture@1" },
+      provider: { id: "codex", invocation_ref: "run-1" },
+      automation: { id: "automation:fixture", run_id: "automation-run:fixture" },
+      cost: { usage_completeness: "complete", total_tokens: 120 }
+    });
+    expect(event).toMatchObject({
+      event_id: "issue_events:1",
+      event_type: "run.progress",
+      trace: { work_id: "xw:work:issues:1", run_id: "xw:run:issue_runs:run-1" },
+      fields: { authorization: "[redacted]", path: "[redacted-path]" }
+    });
+    expect(text).not.toContain(secret);
+    expect(text).not.toContain("raw-only-event-must-not-appear");
+    expect(text).not.toContain("/Users/alice");
   });
 
   test("caches the polling snapshot while explicit report timestamps stay fresh", async () => {
@@ -117,7 +116,7 @@ describe("runtime observability", () => {
 async function fixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-observability-"));
   roots.push(root);
-  return await openDatabase({ dbPath: join(root, "runner.sqlite") });
+  return await openDatabase({ dbPath: join(root, "runner.sqlite") }).then(trackDatabase);
 }
 
 function insertTraceFixture(db: RunnerDatabase, secret: string): void {

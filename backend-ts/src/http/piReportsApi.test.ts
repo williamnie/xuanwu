@@ -5,6 +5,9 @@ import { dirname, join } from "node:path";
 import { buildConfig } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter } from "./server.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
@@ -19,171 +22,163 @@ afterEach(async () => {
 describe("PI reports API", () => {
   test("generates a manual report with evidence links, escalation, verification gap, and usage", async () => {
     const root = await tempDir("xuanwu-pi-reports-api-");
-    const database = await openDatabase({ stateDir: join(root, "state") });
+    const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     const sessionsDir = join(root, "sessions");
-    try {
-      insertProject(database, "demo");
-      const done = insertIssue(database, "demo", {
-        codexThreadID: "thread-done",
-        error: "bun test passed",
-        status: "done",
-        title: "Completed issue"
-      });
-      const failed = insertIssue(database, "demo", {
-        error: "approval denied; API_KEY=secret-value; /Users/xiaobei/private.txt; waiting for user input",
-        status: "failed",
-        title: "Needs user"
-      });
-      const weakDone = insertIssue(database, "demo", { status: "done", title: "Weak done" });
-      insertRun(database, done, "issue-done-attempt-1", "done", "thread-done");
-      insertSession(database, done, "thread-done");
-      insertHeartbeat(database, "demo", "hb-1");
-      insertAudit(database, "demo", failed, "act-1");
-      insertSupervisorEvent(database, done, "action", {
-        actionType: "session.resume_followup",
-        decision: "resume_session"
-      });
-      insertSupervisorEvent(database, failed, "action", {
-        actionType: "issue.retry_after",
-        decision: "wait",
-        retryAfterAt: "2026-06-03T11:00:00Z"
-      });
-      insertSupervisorEvent(database, failed, "decision", {
-        diagnosisCode: "session_recovery_exhausted",
-        decision: "needs_user"
-      });
-      await writeUsage(sessionsDir, "thread-done", "/tmp/demo", 15);
+    insertProject(database, "demo");
+    const done = insertIssue(database, "demo", {
+      codexThreadID: "thread-done",
+      error: "bun test passed",
+      status: "done",
+      title: "Completed issue"
+    });
+    const failed = insertIssue(database, "demo", {
+      error: "approval denied; API_KEY=secret-value; /Users/xiaobei/private.txt; waiting for user input",
+      status: "failed",
+      title: "Needs user"
+    });
+    const weakDone = insertIssue(database, "demo", { status: "done", title: "Weak done" });
+    insertRun(database, done, "issue-done-attempt-1", "done", "thread-done");
+    insertSession(database, done, "thread-done");
+    insertHeartbeat(database, "demo", "hb-1");
+    insertAudit(database, "demo", failed, "act-1");
+    insertSupervisorEvent(database, done, "action", {
+      actionType: "session.resume_followup",
+      decision: "resume_session"
+    });
+    insertSupervisorEvent(database, failed, "action", {
+      actionType: "issue.retry_after",
+      decision: "wait",
+      retryAfterAt: "2026-06-03T11:00:00Z"
+    });
+    insertSupervisorEvent(database, failed, "decision", {
+      diagnosisCode: "session_recovery_exhausted",
+      decision: "needs_user"
+    });
+    await writeUsage(sessionsDir, "thread-done", "/tmp/demo", 15);
 
-      const router = createDefaultRouter({ codexSessionsDir: sessionsDir, database });
-      const response = await request(router, "/api/pi/reports/generate", {
-        project_id: "demo",
-        since: "2026-06-03T00:00:00Z",
-        type: "night_run",
-        until: "2026-06-04T00:00:00Z"
-      });
-      const body = await response.json() as Record<string, any>;
+    const router = createDefaultRouter({ codexSessionsDir: sessionsDir, database });
+    const response = await request(router, "/api/pi/reports/generate", {
+      project_id: "demo",
+      since: "2026-06-03T00:00:00Z",
+      type: "night_run",
+      until: "2026-06-04T00:00:00Z"
+    });
+    const body = await response.json() as Record<string, any>;
 
-      expect(response.status).toBe(201);
-      expect(body).toMatchObject({
-        project_id: "demo",
-        source: "manual",
-        status: "generated",
-        type: "night_run",
-        window: { since: "2026-06-03T00:00:00Z", until: "2026-06-04T00:00:00Z" }
-      });
-      expect(body.completed_issues).toEqual([
-        expect.objectContaining({
-          evidence_links: expect.objectContaining({
-            issue: `/api/issues/${done}`,
-            runs: `/api/issues/${done}/runs`,
-            session: "/api/sessions/codex:thread-done"
-          }),
-          id: done
+    expect(response.status).toBe(201);
+    expect(body).toMatchObject({
+      project_id: "demo",
+      source: "manual",
+      status: "generated",
+      type: "night_run",
+      window: { since: "2026-06-03T00:00:00Z", until: "2026-06-04T00:00:00Z" }
+    });
+    expect(body.completed_issues).toEqual([
+      expect.objectContaining({
+        evidence_links: expect.objectContaining({
+          issue: `/api/issues/${done}`,
+          runs: `/api/issues/${done}/runs`,
+          session: "/api/sessions/codex:thread-done"
         }),
-        expect.objectContaining({
-          id: weakDone
-        })
-      ]);
-      expect(body.failed_retry_summary.failed_issues).toEqual([expect.objectContaining({
-        evidence_links: expect.objectContaining({ audit: "/api/pi/audit-events?project_id=demo&issue_id=" + failed }),
-        error: expect.stringContaining("[redacted]"),
-        id: failed
-      })]);
-      expect(body.failed_retry_summary.failed_issues[0].error).not.toContain("secret-value");
-      expect(body.failed_retry_summary.failed_issues[0].error).not.toContain("/Users/xiaobei");
-      expect(body.issue_categories.needs_user).toEqual([expect.objectContaining({ id: failed })]);
-      expect(body.summary_text_zh).toContain("夜间任务有结果");
-      expect(body.summary_text_zh).toContain("需要你处理 1");
-      expect(body.blocked_escalations).toEqual([expect.objectContaining({
-        issue_id: failed,
-        notification_event: "pi.needs_user"
-      })]);
-      expect(body.verification_gaps).toEqual([]);
-      expect(body.usage_cost).toMatchObject({
-        events_scanned: 1,
-        status: "available",
-        summary: { all_time: { total_tokens: 15 } },
-        total_tokens: 15
-      });
-      expect(body.provider_health).toMatchObject({ warnings: [] });
-      expect(body.notification.channels).toEqual({ mobile: false, sse: true });
-      expect(body.supervisor_summary).toMatchObject({
-        exhausted_recoveries: 1,
+        id: done
+      }),
+      expect.objectContaining({
+        id: weakDone
+      })
+    ]);
+    expect(body.failed_retry_summary.failed_issues).toEqual([expect.objectContaining({
+      evidence_links: expect.objectContaining({ audit: "/api/pi/audit-events?project_id=demo&issue_id=" + failed }),
+      error: expect.stringContaining("[redacted]"),
+      id: failed
+    })]);
+    expect(body.failed_retry_summary.failed_issues[0].error).not.toContain("secret-value");
+    expect(body.failed_retry_summary.failed_issues[0].error).not.toContain("/Users/xiaobei");
+    expect(body.issue_categories.needs_user).toEqual([expect.objectContaining({ id: failed })]);
+    expect(body.summary_text_zh).toContain("夜间任务有结果");
+    expect(body.summary_text_zh).toContain("需要你处理 1");
+    expect(body.blocked_escalations).toEqual([expect.objectContaining({
+      issue_id: failed,
+      notification_event: "pi.needs_user"
+    })]);
+    expect(body.verification_gaps).toEqual([]);
+    expect(body.usage_cost).toMatchObject({
+      events_scanned: 1,
+      status: "available",
+      summary: { all_time: { total_tokens: 15 } },
+      total_tokens: 15
+    });
+    expect(body.provider_health).toMatchObject({ warnings: [] });
+    expect(body.notification.channels).toEqual({ mobile: false, sse: true });
+    expect(body.supervisor_summary).toMatchObject({
+      exhausted_recoveries: 1,
+      needs_user_escalations: 1,
+      rate_limit_waits: 1,
+      recovered_issues: 1,
+      recovery_actions: 1
+    });
+    expect(body.summary).toMatchObject({
+      supervisor_needs_user_escalations: 1,
+      supervisor_rate_limit_waits: 1,
+      supervisor_recovered_issues: 1
+    });
+
+    const list = await router.handle(new Request(`${BASE_URL}/api/pi/reports?project_id=demo`));
+    const reports = await list.json() as Array<Record<string, unknown>>;
+    expect(list.status).toBe(200);
+    expect(reports[0]).toMatchObject({
+      id: body.report_id,
+      project_id: "demo",
+      source: "manual",
+      supervisor_summary: {
         needs_user_escalations: 1,
         rate_limit_waits: 1,
-        recovered_issues: 1,
-        recovery_actions: 1
-      });
-      expect(body.summary).toMatchObject({
-        supervisor_needs_user_escalations: 1,
-        supervisor_rate_limit_waits: 1,
-        supervisor_recovered_issues: 1
-      });
+        recovered_issues: 1
+      },
+      status: "generated",
+      type: "night_run"
+    });
 
-      const list = await router.handle(new Request(`${BASE_URL}/api/pi/reports?project_id=demo`));
-      const reports = await list.json() as Array<Record<string, unknown>>;
-      expect(list.status).toBe(200);
-      expect(reports[0]).toMatchObject({
-        id: body.report_id,
-        project_id: "demo",
-        source: "manual",
-        supervisor_summary: {
-          needs_user_escalations: 1,
-          rate_limit_waits: 1,
-          recovered_issues: 1
-        },
-        status: "generated",
-        type: "night_run"
-      });
-
-      const detail = await router.handle(new Request(`${BASE_URL}/api/pi/reports/${body.report_id}`));
-      expect(detail.status).toBe(200);
-      expect(await detail.json()).toMatchObject({ report_id: body.report_id, project_id: "demo" });
-    } finally {
-      database.close();
-    }
+    const detail = await router.handle(new Request(`${BASE_URL}/api/pi/reports/${body.report_id}`));
+    expect(detail.status).toBe(200);
+    expect(await detail.json()).toMatchObject({ report_id: body.report_id, project_id: "demo" });
   });
 
   test("warns when the selected provider is unavailable without leaking provider env", async () => {
     const root = await tempDir("xuanwu-pi-reports-health-");
-    const database = await openDatabase({ stateDir: join(root, "state") });
+    const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
     const sessionsDir = await tempDir("xuanwu-pi-reports-empty-usage-");
-    try {
-      insertProject(database, "demo");
-      const config = buildConfig({
-        codexCommand: "missing-codex-for-pi-report",
-        codexEnv: "CODEX_API_KEY=report-secret,SAFE_ENV=ok",
-        stateDir: join(root, "runtime")
-      });
-      const router = createDefaultRouter({ codexSessionsDir: sessionsDir, config, database });
+    insertProject(database, "demo");
+    const config = buildConfig({
+      codexCommand: "missing-codex-for-pi-report",
+      codexEnv: "CODEX_API_KEY=report-secret,SAFE_ENV=ok",
+      stateDir: join(root, "runtime")
+    });
+    const router = createDefaultRouter({ codexSessionsDir: sessionsDir, config, database });
 
-      const response = await request(router, "/api/pi/reports/generate", {
-        project_id: "demo",
-        since: "2026-06-03T00:00:00Z",
-        until: "2026-06-04T00:00:00Z"
-      });
-      const text = await response.text();
-      const body = JSON.parse(text) as Record<string, any>;
+    const response = await request(router, "/api/pi/reports/generate", {
+      project_id: "demo",
+      since: "2026-06-03T00:00:00Z",
+      until: "2026-06-04T00:00:00Z"
+    });
+    const text = await response.text();
+    const body = JSON.parse(text) as Record<string, any>;
 
-      expect(response.status).toBe(201);
-      expect(body.provider_health).toMatchObject({
-        available: false,
-        provider: "codex",
-        status: "warning"
-      });
-      expect(body.provider_health.warnings).toEqual([expect.objectContaining({
-        code: "provider_unavailable"
-      })]);
-      expect(body.warnings).toEqual([expect.objectContaining({
-        code: "provider_unavailable"
-      })]);
-      expect(text).not.toContain("report-secret");
-      expect(text).not.toContain("CODEX_API_KEY");
-      expect(text).not.toContain("SAFE_ENV");
-      expect(text).not.toContain("missing-codex-for-pi-report");
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(201);
+    expect(body.provider_health).toMatchObject({
+      available: false,
+      provider: "codex",
+      status: "warning"
+    });
+    expect(body.provider_health.warnings).toEqual([expect.objectContaining({
+      code: "provider_unavailable"
+    })]);
+    expect(body.warnings).toEqual([expect.objectContaining({
+      code: "provider_unavailable"
+    })]);
+    expect(text).not.toContain("report-secret");
+    expect(text).not.toContain("CODEX_API_KEY");
+    expect(text).not.toContain("SAFE_ENV");
+    expect(text).not.toContain("missing-codex-for-pi-report");
   });
 });
 

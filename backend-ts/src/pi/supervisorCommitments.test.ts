@@ -29,6 +29,9 @@ import {
   listSupervisorCommitments,
   sweepExpiredSupervisorCommitments
 } from "./supervisorCommitments.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const ADR = resolve(import.meta.dir, "../../../docs/architecture/xuanwu/0053-supervisor-goal-commitment.md");
 const tempRoots: string[] = [];
@@ -56,7 +59,7 @@ describe("Supervisor Goal, Commitment and conversation continuity", () => {
     const watchID = created.watch.id;
 
     fixture.db.close();
-    fixture.db = await openDatabase({ stateDir: fixture.stateDir });
+    fixture.db = await openDatabase({ stateDir: fixture.stateDir }).then(trackDatabase);
 
     const restored = listSupervisorCommitments(fixture.db, {
       conversationID: "conv-a",
@@ -216,7 +219,7 @@ async function openFixture(prefix: string): Promise<{
   const root = await mkdtemp(join(tmpdir(), prefix));
   tempRoots.push(root);
   const stateDir = join(root, "state");
-  const db = await openDatabase({ stateDir });
+  const db = await openDatabase({ stateDir }).then(trackDatabase);
   db.sqlite.run(
     `insert into projects (id, name, cwd, provider, provider_config_json, sort_order, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, ?)`,

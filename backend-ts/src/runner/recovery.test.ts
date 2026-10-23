@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { recoverInProgressIssues } from "./recovery.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 
@@ -15,69 +18,57 @@ afterEach(async () => {
 describe("startup reconciliation delegates recovery to PI", () => {
   test("signals PI instead of autonomously resuming a live Provider Session", async () => {
     const db = await fixture();
-    try {
-      const issueID = insertIssue(db, "in_progress", "thread-live");
-      insertRun(db, issueID, { session: "thread-live" });
-      insertSession(db, issueID, "thread-live", "disconnected");
+    const issueID = insertIssue(db, "in_progress", "thread-live");
+    insertRun(db, issueID, { session: "thread-live" });
+    insertSession(db, issueID, "thread-live", "disconnected");
 
-      const result = await recoverInProgressIssues({ database: db });
+    const result = await recoverInProgressIssues({ database: db });
 
-      expect(result).toEqual({ reconciled: 0, requeued: 0, signaled: 1 });
-      expect(getIssue(db, issueID)?.status).toBe("in_progress");
-      expect(listIssueRuns(db, issueID)[0]?.ended_at).toBe("");
-      expect(eventTypes(db, issueID)).toContain("issue.recovery_signal.v1");
-      expect(eventPayload(db, issueID, "issue.recovery_signal.v1")).toMatchObject({
-        provider_session_id: "thread-live",
-        required_action: expect.stringContaining("PI must read")
-      });
-    } finally {
-      db.close();
-    }
+    expect(result).toEqual({ reconciled: 0, requeued: 0, signaled: 1 });
+    expect(getIssue(db, issueID)?.status).toBe("in_progress");
+    expect(listIssueRuns(db, issueID)[0]?.ended_at).toBe("");
+    expect(eventTypes(db, issueID)).toContain("issue.recovery_signal.v1");
+    expect(eventPayload(db, issueID, "issue.recovery_signal.v1")).toMatchObject({
+      provider_session_id: "thread-live",
+      required_action: expect.stringContaining("PI must read")
+    });
   });
 
   test("reconciles a terminal Session into a terminal Run and requests PI acceptance", async () => {
     const db = await fixture();
-    try {
-      const issueID = insertIssue(db, "in_progress", "thread-done");
-      insertRun(db, issueID, { session: "thread-done" });
-      insertSession(db, issueID, "thread-done", "completed");
+    const issueID = insertIssue(db, "in_progress", "thread-done");
+    insertRun(db, issueID, { session: "thread-done" });
+    insertSession(db, issueID, "thread-done", "completed");
 
-      const result = await recoverInProgressIssues({ database: db });
+    const result = await recoverInProgressIssues({ database: db });
 
-      expect(result).toEqual({ reconciled: 1, requeued: 0, signaled: 0 });
-      expect(getIssue(db, issueID)?.status).toBe("in_progress");
-      expect(listIssueRuns(db, issueID)[0]).toMatchObject({ status: "succeeded" });
-      expect(listIssueRuns(db, issueID)[0]?.ended_at).not.toBe("");
-      expect(eventTypes(db, issueID)).toEqual(expect.arrayContaining([
-        "issue.pi_acceptance_requested.v1",
-        "issue.recovery_terminal_reconciled.v1"
-      ]));
-    } finally {
-      db.close();
-    }
+    expect(result).toEqual({ reconciled: 1, requeued: 0, signaled: 0 });
+    expect(getIssue(db, issueID)?.status).toBe("in_progress");
+    expect(listIssueRuns(db, issueID)[0]).toMatchObject({ status: "succeeded" });
+    expect(listIssueRuns(db, issueID)[0]?.ended_at).not.toBe("");
+    expect(eventTypes(db, issueID)).toEqual(expect.arrayContaining([
+      "issue.pi_acceptance_requested.v1",
+      "issue.recovery_terminal_reconciled.v1"
+    ]));
   });
 
   test("only requeues a claim when no Provider Session was ever created", async () => {
     const db = await fixture();
-    try {
-      const issueID = insertIssue(db, "in_progress", "");
-      insertRun(db, issueID, {});
+    const issueID = insertIssue(db, "in_progress", "");
+    insertRun(db, issueID, {});
 
-      const result = await recoverInProgressIssues({ database: db });
+    const result = await recoverInProgressIssues({ database: db });
 
-      expect(result).toEqual({ reconciled: 0, requeued: 1, signaled: 0 });
-      expect(getIssue(db, issueID)?.status).toBe("todo");
-      expect(eventTypes(db, issueID)).toContain("issue.recovery_requeued.v1");
-    } finally {
-      db.close();
-    }
+    expect(result).toEqual({ reconciled: 0, requeued: 1, signaled: 0 });
+    expect(getIssue(db, issueID)?.status).toBe("todo");
+    expect(eventTypes(db, issueID)).toContain("issue.recovery_requeued.v1");
   });
 });
 
 async function fixture(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "runner-pi-recovery-"));
   roots.push(root);
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   db.sqlite.run(
     `insert into projects (id, name, cwd, provider, created_at, updated_at)
      values ('demo', 'demo', ?, 'codex', ?, ?)`,

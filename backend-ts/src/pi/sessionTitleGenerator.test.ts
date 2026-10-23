@@ -8,6 +8,9 @@ import { updatePiSupervisor } from "../db/repositories/pi.ts";
 import { appLanguage, saveAppLanguage, type AppLanguage } from "../i18n/language.ts";
 import { generateSessionTitle } from "./sessionTitleGenerator.ts";
 import type { CodexThreadTitleInput } from "../providers/codex/threadNaming.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -15,7 +18,7 @@ afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { rec
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-title-"));
   roots.push(root);
-  const db = await openDatabase({ stateDir: root });
+  const db = await openDatabase({ stateDir: root }).then(trackDatabase);
   db.sqlite.run("insert into projects (id, name, cwd, created_at, updated_at) values ('demo', '玄武', '/tmp/demo', '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z')");
   db.sqlite.run("insert into issues (id, project_id, title, description, status, created_at, updated_at) values (913, 'demo', '优化批次文字显示', '调整长文本显示，提高可读性', 'todo', '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z')");
   const input: CodexThreadTitleInput = {
@@ -103,10 +106,8 @@ describe("通过 PI 模型配置直接生成标题", () => {
 
   test("createdAt 缺失时不能用 updatedAt 补日期", async () => {
     const { db, input } = await fixture();
-    try {
-      delete input.thread.createdAt;
-      delete input.issueId;
-      expect(await generateSessionTitle(db, input, new AbortController().signal)).toBeNull();
-    } finally { db.close(); }
+    delete input.thread.createdAt;
+    delete input.issueId;
+    expect(await generateSessionTitle(db, input, new AbortController().signal)).toBeNull();
   });
 });

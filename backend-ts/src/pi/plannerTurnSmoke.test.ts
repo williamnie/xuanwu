@@ -10,6 +10,9 @@ import { listPiActions, type PiAction } from "../db/repositories/pi.ts";
 import { EventBus, type AppEvent } from "../events/bus.ts";
 import { finalPiConversationSseData } from "../http/piConversationSse.testSupport.ts";
 import { createDefaultRouter } from "../http/server.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const BASE_URL = "http://127.0.0.1:3008";
 const FAUX_PROVIDER = "pi-planner-faux";
@@ -114,7 +117,7 @@ async function openFixture(): Promise<Fixture> {
   tempRoots.push(root);
   const projectCwd = join(root, "project");
   writeFixtureProject(projectCwd);
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   const bus = new EventBus();
   return { db, projectCwd, bus, router: createDefaultRouter({ bus, database: db }) };
 }

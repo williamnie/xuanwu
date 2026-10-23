@@ -24,6 +24,9 @@ import {
 import type { PiAcceptanceRuntimeResult } from "../pi/issueAcceptance.ts";
 import type { ExecutorProvider, ProviderRecoveryInput, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
 import { runPiAcceptanceCoordinatorOnce } from "./piAcceptanceCoordinator.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 
@@ -52,65 +55,55 @@ describe("issue-scoped PI acceptance coordinator", () => {
   });
   test("reconciles post-acceptance delivery events without invoking PI again", async () => {
     const db = await fixture();
-    try {
-      setMemoryReflectionEnabled(db, "demo", true);
-      completedIssue(db, "Reflection recovery");
-      await runPiAcceptanceCoordinatorOnce({ database: db, decideIssueAcceptance: async () => acceptance("accept") });
-      db.sqlite.run("delete from pi_memory_reflections"); // 模拟验收提交后请求入库前崩溃。
-      await runPiAcceptanceCoordinatorOnce({ database: db, decideIssueAcceptance: async () => { throw new Error("unexpected PI call"); } });
-      expect(db.sqlite.query("select count(*) n from pi_memory_reflections").get()).toEqual({ n: 1 });
-      await runPiAcceptanceCoordinatorOnce({ database: db, decideIssueAcceptance: async () => { throw new Error("unexpected PI call"); } });
-      expect(db.sqlite.query("select count(*) n from pi_memory_reflections").get()).toEqual({ n: 1 });
-    } finally { db.close(); }
+    setMemoryReflectionEnabled(db, "demo", true);
+    completedIssue(db, "Reflection recovery");
+    await runPiAcceptanceCoordinatorOnce({ database: db, decideIssueAcceptance: async () => acceptance("accept") });
+    db.sqlite.run("delete from pi_memory_reflections"); // 模拟验收提交后请求入库前崩溃。
+    await runPiAcceptanceCoordinatorOnce({ database: db, decideIssueAcceptance: async () => { throw new Error("unexpected PI call"); } });
+    expect(db.sqlite.query("select count(*) n from pi_memory_reflections").get()).toEqual({ n: 1 });
+    await runPiAcceptanceCoordinatorOnce({ database: db, decideIssueAcceptance: async () => { throw new Error("unexpected PI call"); } });
+    expect(db.sqlite.query("select count(*) n from pi_memory_reflections").get()).toEqual({ n: 1 });
   });
 
   test("calls PI once with a bounded completion card and accepts without a Verifier Issue", async () => {
     const db = await fixture();
-    try {
-      const issue = completedIssue(db, "Delivery");
-      const seen: Array<{ issue: number; commands: number }> = [];
-      const result = await runPiAcceptanceCoordinatorOnce({
-        database: db,
-        decideIssueAcceptance: async (card) => {
-          seen.push({ issue: card.issue.id, commands: card.commands.total });
-          return acceptance("accept");
-        }
-      });
+    const issue = completedIssue(db, "Delivery");
+    const seen: Array<{ issue: number; commands: number }> = [];
+    const result = await runPiAcceptanceCoordinatorOnce({
+      database: db,
+      decideIssueAcceptance: async (card) => {
+        seen.push({ issue: card.issue.id, commands: card.commands.total });
+        return acceptance("accept");
+      }
+    });
 
-      expect(result).toEqual({ failed: 0, issues: 1, projects: 1, skipped: 0, started: 1 });
-      expect(seen).toEqual([{ issue: issue.id, commands: 0 }]);
-      expect(getIssue(db, issue.id)?.status).toBe("done");
-      expect(db.sqlite.query<{ count: number }, []>("select count(*) as count from issues").get()?.count).toBe(1);
-      expect(eventTypes(db, issue.id)).toEqual(expect.arrayContaining([
-        "issue.completion_card.v1",
-        "issue.pi_acceptance_decision.v1",
-        "issue.pi_acceptance_applied.v1",
-        "issue.pi_lifecycle_decision.v1"
-      ]));
-    } finally {
-      db.close();
-    }
+    expect(result).toEqual({ failed: 0, issues: 1, projects: 1, skipped: 0, started: 1 });
+    expect(seen).toEqual([{ issue: issue.id, commands: 0 }]);
+    expect(getIssue(db, issue.id)?.status).toBe("done");
+    expect(db.sqlite.query<{ count: number }, []>("select count(*) as count from issues").get()?.count).toBe(1);
+    expect(eventTypes(db, issue.id)).toEqual(expect.arrayContaining([
+      "issue.completion_card.v1",
+      "issue.pi_acceptance_decision.v1",
+      "issue.pi_acceptance_applied.v1",
+      "issue.pi_lifecycle_decision.v1"
+    ]));
   });
 
   test("does not launch PI acceptance while a human review request is open", async () => {
     const db = await fixture();
     let calls = 0;
-    try {
-      const issue = completedIssue(db, "Needs product choice");
-      updateIssue(db, issue.id, { status: "needs_user" });
-      createHumanReviewRequest(db, issue.id, { question: "是否接受当前范围？" });
-      updateIssue(db, issue.id, { status: "in_progress" });
-      const result = await runPiAcceptanceCoordinatorOnce({
-        database: db,
-        decideIssueAcceptance: async () => { calls += 1; return acceptance("accept"); }
-      });
-      expect(result).toMatchObject({ issues: 0, projects: 0, started: 0 });
-      expect(calls).toBe(0);
-      expect(getIssue(db, issue.id)?.status).toBe("needs_user");
-      expect(eventTypes(db, issue.id)).toContain("issue.human_review_restored.v1");
-    } finally {
-      db.close();
-    }
+    const issue = completedIssue(db, "Needs product choice");
+    updateIssue(db, issue.id, { status: "needs_user" });
+    createHumanReviewRequest(db, issue.id, { question: "是否接受当前范围？" });
+    updateIssue(db, issue.id, { status: "in_progress" });
+    const result = await runPiAcceptanceCoordinatorOnce({
+      database: db,
+      decideIssueAcceptance: async () => { calls += 1; return acceptance("accept"); }
+    });
+    expect(result).toMatchObject({ issues: 0, projects: 0, started: 0 });
+    expect(calls).toBe(0);
+    expect(getIssue(db, issue.id)?.status).toBe("needs_user");
+    expect(eventTypes(db, issue.id)).toContain("issue.human_review_restored.v1");
   });
 
   test("regression #827: accepts the original completion after interrupting a mistaken retry without a third Run", async () => {
@@ -204,267 +197,235 @@ describe("issue-scoped PI acceptance coordinator", () => {
   test("repairs an existing repeated acceptance request and closes it in the same coordinator cycle", async () => {
     const db = await fixture();
     let calls = 0;
-    try {
-      const issue = completedIssue(db, "Already accepted delivery");
-      const originalCard = await buildIssueCompletionCard(db, issue.id);
-      recordIssueCompletionCard(db, originalCard, "test");
-      updateIssue(db, issue.id, { status: "needs_user" });
-      const accepted = createHumanReviewRequest(db, issue.id, {
-        consequences: "真实 smoke 未执行",
-        evidence_refs: [`completion-card:${originalCard.fingerprint}`],
-        kind: "acceptance",
-        question: "是否接受当前离线实现？"
-      });
-      await reviewHumanIssue(db, issue.id, {
-        action: "accept",
-        comment: "接受当前交付，不要求真实 smoke。",
-        review_request_id: accepted.id,
-        review_revision: accepted.revision
-      });
-      updateIssue(db, issue.id, { status: "needs_user" });
-      const repeated = createHumanReviewRequest(db, issue.id, {
-        consequences: "仍未执行真实 smoke",
-        evidence_refs: [`completion-card:${originalCard.fingerprint}`],
-        kind: "acceptance",
-        question: "是否提供配置再执行真实 smoke？"
-      });
+    const issue = completedIssue(db, "Already accepted delivery");
+    const originalCard = await buildIssueCompletionCard(db, issue.id);
+    recordIssueCompletionCard(db, originalCard, "test");
+    updateIssue(db, issue.id, { status: "needs_user" });
+    const accepted = createHumanReviewRequest(db, issue.id, {
+      consequences: "真实 smoke 未执行",
+      evidence_refs: [`completion-card:${originalCard.fingerprint}`],
+      kind: "acceptance",
+      question: "是否接受当前离线实现？"
+    });
+    await reviewHumanIssue(db, issue.id, {
+      action: "accept",
+      comment: "接受当前交付，不要求真实 smoke。",
+      review_request_id: accepted.id,
+      review_revision: accepted.revision
+    });
+    updateIssue(db, issue.id, { status: "needs_user" });
+    const repeated = createHumanReviewRequest(db, issue.id, {
+      consequences: "仍未执行真实 smoke",
+      evidence_refs: [`completion-card:${originalCard.fingerprint}`],
+      kind: "acceptance",
+      question: "是否提供配置再执行真实 smoke？"
+    });
 
-      const result = await runPiAcceptanceCoordinatorOnce({
-        database: db,
-        decideIssueAcceptance: async () => {
-          calls += 1;
-          return acceptance("needs_user");
-        }
-      });
+    const result = await runPiAcceptanceCoordinatorOnce({
+      database: db,
+      decideIssueAcceptance: async () => {
+        calls += 1;
+        return acceptance("needs_user");
+      }
+    });
 
-      expect(result).toMatchObject({ failed: 0, issues: 1, started: 1 });
-      expect(calls).toBe(1);
-      expect(getIssue(db, issue.id)?.status).toBe("done");
-      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
-        owner: "pi",
-        phase: "complete",
-        request: { id: repeated.id, status: "superseded" }
-      });
-      expect(eventTypes(db, issue.id)).toContain("issue.human_review_redundant_closed.v1");
-      expect(listIssueRuns(db, issue.id)).toHaveLength(1);
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ failed: 0, issues: 1, started: 1 });
+    expect(calls).toBe(1);
+    expect(getIssue(db, issue.id)?.status).toBe("done");
+    expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
+      owner: "pi",
+      phase: "complete",
+      request: { id: repeated.id, status: "superseded" }
+    });
+    expect(eventTypes(db, issue.id)).toContain("issue.human_review_redundant_closed.v1");
+    expect(listIssueRuns(db, issue.id)).toHaveLength(1);
   });
 
   test("respects an explicit project heartbeat pause", async () => {
     const db = await fixture();
     let calls = 0;
-    try {
-      completedIssue(db, "Paused");
-      pausePiHeartbeat(db, { reason: "maintenance", scopeId: "demo", scopeType: "project" });
-      const result = await runPiAcceptanceCoordinatorOnce({
-        database: db,
-        decideIssueAcceptance: async () => { calls += 1; return acceptance("accept"); }
-      });
-      expect(result).toMatchObject({ issues: 0, started: 0 });
-      expect(calls).toBe(0);
-    } finally {
-      db.close();
-    }
+    completedIssue(db, "Paused");
+    pausePiHeartbeat(db, { reason: "maintenance", scopeId: "demo", scopeType: "project" });
+    const result = await runPiAcceptanceCoordinatorOnce({
+      database: db,
+      decideIssueAcceptance: async () => { calls += 1; return acceptance("accept"); }
+    });
+    expect(result).toMatchObject({ issues: 0, started: 0 });
+    expect(calls).toBe(0);
   });
 
   test("keeps retrying PI infrastructure failures without changing Issue semantics", async () => {
     const db = await fixture();
     let calls = 0;
-    try {
-      const issue = completedIssue(db, "Broken PI RPC");
-      const run = () => runPiAcceptanceCoordinatorOnce({
-        cooldownMs: 0,
-        database: db,
-        decideIssueAcceptance: async () => {
-          calls += 1;
-          throw new Error("agentic RPC unavailable");
-        },
-        now: new Date(`2026-07-31T05:0${calls}:30Z`)
-      });
-      expect((await run()).failed).toBe(1);
-      expect((await run()).failed).toBe(1);
-      expect((await run()).failed).toBe(1);
-      expect(calls).toBe(3);
-      expect(getIssue(db, issue.id)?.status).toBe("in_progress");
-      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({ owner: "pi", phase: "pi_error" });
-      expect(eventTypes(db, issue.id).filter((type) => type === "issue.pi_acceptance_runtime_failed.v1")).toHaveLength(3);
-      expect(eventTypes(db, issue.id).filter((type) => type === "issue.pi_acceptance_started.v1")).toHaveLength(3);
-    } finally {
-      db.close();
-    }
+    const issue = completedIssue(db, "Broken PI RPC");
+    const run = () => runPiAcceptanceCoordinatorOnce({
+      cooldownMs: 0,
+      database: db,
+      decideIssueAcceptance: async () => {
+        calls += 1;
+        throw new Error("agentic RPC unavailable");
+      },
+      now: new Date(`2026-07-31T05:0${calls}:30Z`)
+    });
+    expect((await run()).failed).toBe(1);
+    expect((await run()).failed).toBe(1);
+    expect((await run()).failed).toBe(1);
+    expect(calls).toBe(3);
+    expect(getIssue(db, issue.id)?.status).toBe("in_progress");
+    expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({ owner: "pi", phase: "pi_error" });
+    expect(eventTypes(db, issue.id).filter((type) => type === "issue.pi_acceptance_runtime_failed.v1")).toHaveLength(3);
+    expect(eventTypes(db, issue.id).filter((type) => type === "issue.pi_acceptance_started.v1")).toHaveLength(3);
   });
 
   test("treats invalid PI schema as a system failure, never as needs_user", async () => {
     const db = await fixture();
-    try {
-      const issue = completedIssue(db, "Invalid PI response");
-      const run = () => runPiAcceptanceCoordinatorOnce({
-        cooldownMs: 0,
-        database: db,
-        decideIssueAcceptance: async (): Promise<PiAcceptanceRuntimeResult> => ({
-          error: "PI acceptance returned invalid JSON or schema",
-          raw_text: "not-json",
-          valid: false
-        }),
-        now: new Date("2026-07-31T05:09:30Z")
-      });
+    const issue = completedIssue(db, "Invalid PI response");
+    const run = () => runPiAcceptanceCoordinatorOnce({
+      cooldownMs: 0,
+      database: db,
+      decideIssueAcceptance: async (): Promise<PiAcceptanceRuntimeResult> => ({
+        error: "PI acceptance returned invalid JSON or schema",
+        raw_text: "not-json",
+        valid: false
+      }),
+      now: new Date("2026-07-31T05:09:30Z")
+    });
 
-      expect((await run()).failed).toBe(1);
-      expect((await run()).failed).toBe(1);
-      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({ owner: "pi", phase: "pi_error" });
-      expect(eventTypes(db, issue.id)).not.toContain("issue.human_review_requested.v1");
-      expect(eventTypes(db, issue.id)).not.toContain("issue.pi_acceptance_decision.v1");
-    } finally {
-      db.close();
-    }
+    expect((await run()).failed).toBe(1);
+    expect((await run()).failed).toBe(1);
+    expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({ owner: "pi", phase: "pi_error" });
+    expect(eventTypes(db, issue.id)).not.toContain("issue.human_review_requested.v1");
+    expect(eventTypes(db, issue.id)).not.toContain("issue.pi_acceptance_decision.v1");
   });
 
   test("does not schedule PI before a canonical Run reaches terminal state", async () => {
     const db = await fixture();
     let calls = 0;
-    try {
-      const issue = createIssue(db, { project_id: "demo", status: "in_progress", title: "Missing terminal Run" });
-      const openRun = createIssueRun(db, issue.id);
-      recordIssueEvent(db, issue.id, "issue.pi_acceptance_requested.v1", { issue_run_id: openRun.id });
-      const run = () => runPiAcceptanceCoordinatorOnce({
-        cooldownMs: 0,
-        database: db,
-        decideIssueAcceptance: async () => { calls += 1; return acceptance("accept"); },
-        now: new Date("2026-07-31T05:10:00Z")
-      });
+    const issue = createIssue(db, { project_id: "demo", status: "in_progress", title: "Missing terminal Run" });
+    const openRun = createIssueRun(db, issue.id);
+    recordIssueEvent(db, issue.id, "issue.pi_acceptance_requested.v1", { issue_run_id: openRun.id });
+    const run = () => runPiAcceptanceCoordinatorOnce({
+      cooldownMs: 0,
+      database: db,
+      decideIssueAcceptance: async () => { calls += 1; return acceptance("accept"); },
+      now: new Date("2026-07-31T05:10:00Z")
+    });
 
-      expect((await run()).issues).toBe(0);
-      expect((await run()).issues).toBe(0);
-      expect(calls).toBe(0);
-      expect(eventTypes(db, issue.id)).not.toContain("issue.pi_acceptance_runtime_failed.v1");
-    } finally {
-      db.close();
-    }
+    expect((await run()).issues).toBe(0);
+    expect((await run()).issues).toBe(0);
+    expect(calls).toBe(0);
+    expect(eventTypes(db, issue.id)).not.toContain("issue.pi_acceptance_runtime_failed.v1");
   });
 
   test("regression #821: reads the latest Provider Session Turn before judging a stale canonical Run", async () => {
     const db = await fixture();
     const provider = new LatestTurnProvider();
     let seenLatestTurn = "";
-    try {
-      const issue = completedIssue(db, "Implementation continued outside the terminal Run");
-      const run = listIssueRuns(db, issue.id)[0]!;
-      updateIssueRuntime(db, issue.id, {
-        issue_run_id: run.id,
-        provider: "codex",
-        provider_session_id: "019fbb19-ff89-75c3-b4ec-b9562359cf16",
-        provider_turn_id: "019fbb1a-134b-7da1-ba36-9725d960c543"
-      });
+    const issue = completedIssue(db, "Implementation continued outside the terminal Run");
+    const run = listIssueRuns(db, issue.id)[0]!;
+    updateIssueRuntime(db, issue.id, {
+      issue_run_id: run.id,
+      provider: "codex",
+      provider_session_id: "019fbb19-ff89-75c3-b4ec-b9562359cf16",
+      provider_turn_id: "019fbb1a-134b-7da1-ba36-9725d960c543"
+    });
 
-      const result = await runPiAcceptanceCoordinatorOnce({
-        database: db,
-        decideIssueAcceptance: async (card) => {
-          seenLatestTurn = card.session.latest_turn_id;
-          expect(card.session).toMatchObject({
-            inspected: true,
-            latest_turn_id: "019fbb3c-886f-74d0-a834-2d488e237a5d",
-            latest_turn_matches_run: false,
-            run_turn_id: "019fbb1a-134b-7da1-ba36-9725d960c543",
-            turn_count: 2
-          });
-          expect(card.session.latest_turn_items).toEqual(expect.arrayContaining([
-            expect.objectContaining({ type: "agentMessage", text: expect.stringContaining("实现和验证已经完成") }),
-            expect.objectContaining({ command: expect.stringContaining("custom-check"), exit_code: 0 })
-          ]));
-          expect(card.session.current_git).toMatchObject({
-            observed_at: "2026-07-31T05:02:00.000Z",
-            source: "session_observation"
-          });
-          return acceptance("accept");
-        },
-        providers: { codex: provider }
-      });
+    const result = await runPiAcceptanceCoordinatorOnce({
+      database: db,
+      decideIssueAcceptance: async (card) => {
+        seenLatestTurn = card.session.latest_turn_id;
+        expect(card.session).toMatchObject({
+          inspected: true,
+          latest_turn_id: "019fbb3c-886f-74d0-a834-2d488e237a5d",
+          latest_turn_matches_run: false,
+          run_turn_id: "019fbb1a-134b-7da1-ba36-9725d960c543",
+          turn_count: 2
+        });
+        expect(card.session.latest_turn_items).toEqual(expect.arrayContaining([
+          expect.objectContaining({ type: "agentMessage", text: expect.stringContaining("实现和验证已经完成") }),
+          expect.objectContaining({ command: expect.stringContaining("custom-check"), exit_code: 0 })
+        ]));
+        expect(card.session.current_git).toMatchObject({
+          observed_at: "2026-07-31T05:02:00.000Z",
+          source: "session_observation"
+        });
+        return acceptance("accept");
+      },
+      providers: { codex: provider }
+    });
 
-      expect(result).toMatchObject({ failed: 0, started: 1 });
-      expect(seenLatestTurn).toBe("019fbb3c-886f-74d0-a834-2d488e237a5d");
-      expect(getIssue(db, issue.id)?.status).toBe("done");
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ failed: 0, started: 1 });
+    expect(seenLatestTurn).toBe("019fbb3c-886f-74d0-a834-2d488e237a5d");
+    expect(getIssue(db, issue.id)?.status).toBe("done");
   });
 
   test("re-evaluates the fresh card after same-session continuation finishes", async () => {
     const db = await fixture();
     const provider = new CoordinatorContinuationProvider();
     let calls = 0;
-    try {
-      const issue = completedIssue(db, "Continue then accept");
-      const firstRun = listIssueRuns(db, issue.id)[0]!;
-      updateIssueRuntime(db, issue.id, {
-        issue_run_id: firstRun.id,
-        provider: "codex",
-        provider_session_id: "session-original",
-        provider_turn_id: "turn-original"
-      });
-      const decide = async (): Promise<PiAcceptanceRuntimeResult> => {
-        calls += 1;
-        return calls === 1
-          ? {
-            decision: {
-              confidence: "high",
-              decision: "continue_same_session",
-              evidence_refs: ["run:fixture"],
-              follow_up_prompt: "补一项真实验证。",
-              progress: { made_progress: true, evidence_refs: ["run:fixture"], summary: "已完成部分实现。" },
-              rationale: "还缺少一项验证。",
-              unmet_requirements: ["真实验证"]
-            },
-            raw_text: "{}",
-            valid: true
-          }
-          : acceptance("accept");
-      };
+    const issue = completedIssue(db, "Continue then accept");
+    const firstRun = listIssueRuns(db, issue.id)[0]!;
+    updateIssueRuntime(db, issue.id, {
+      issue_run_id: firstRun.id,
+      provider: "codex",
+      provider_session_id: "session-original",
+      provider_turn_id: "turn-original"
+    });
+    const decide = async (): Promise<PiAcceptanceRuntimeResult> => {
+      calls += 1;
+      return calls === 1
+        ? {
+          decision: {
+            confidence: "high",
+            decision: "continue_same_session",
+            evidence_refs: ["run:fixture"],
+            follow_up_prompt: "补一项真实验证。",
+            progress: { made_progress: true, evidence_refs: ["run:fixture"], summary: "已完成部分实现。" },
+            rationale: "还缺少一项验证。",
+            unmet_requirements: ["真实验证"]
+          },
+          raw_text: "{}",
+          valid: true
+        }
+        : acceptance("accept");
+    };
 
-      await runPiAcceptanceCoordinatorOnce({
-        cooldownMs: 0,
-        database: db,
-        decideIssueAcceptance: decide,
-        providers: { codex: provider }
-      });
-      expect(getIssue(db, issue.id)?.status).toBe("in_progress");
-      await runPiAcceptanceCoordinatorOnce({
-        cooldownMs: 0,
-        database: db,
-        decideIssueAcceptance: decide,
-        providers: { codex: provider }
-      });
+    await runPiAcceptanceCoordinatorOnce({
+      cooldownMs: 0,
+      database: db,
+      decideIssueAcceptance: decide,
+      providers: { codex: provider }
+    });
+    expect(getIssue(db, issue.id)?.status).toBe("in_progress");
+    await runPiAcceptanceCoordinatorOnce({
+      cooldownMs: 0,
+      database: db,
+      decideIssueAcceptance: decide,
+      providers: { codex: provider }
+    });
 
-      expect(calls).toBe(2);
-      expect(getIssue(db, issue.id)?.status).toBe("done");
-      expect(listIssueRuns(db, issue.id)).toHaveLength(2);
-      expect(provider.inputs[0]?.session.sessionId).toBe("session-original");
-      expect(db.sqlite.query<{ count: number }, []>("select count(*) as count from issues").get()?.count).toBe(1);
-    } finally {
-      db.close();
-    }
+    expect(calls).toBe(2);
+    expect(getIssue(db, issue.id)?.status).toBe("done");
+    expect(listIssueRuns(db, issue.id)).toHaveLength(2);
+    expect(provider.inputs[0]?.session.sessionId).toBe("session-original");
+    expect(db.sqlite.query<{ count: number }, []>("select count(*) as count from issues").get()?.count).toBe(1);
   });
 
   test("accepting one Issue releases the project lock and starts the next ready Issue", async () => {
     const db = await fixture();
     const provider = new NextIssueProvider();
-    try {
-      const first = completedIssue(db, "First delivery");
-      const second = createIssue(db, { project_id: "demo", status: "todo", title: "Second delivery" });
+    const first = completedIssue(db, "First delivery");
+    const second = createIssue(db, { project_id: "demo", status: "todo", title: "Second delivery" });
 
-      await runPiAcceptanceCoordinatorOnce({
-        database: db,
-        decideIssueAcceptance: async () => acceptance("accept"),
-        providers: { codex: provider }
-      });
-      await waitFor(() => provider.inputs.some((input) => input.issueId === second.id));
+    await runPiAcceptanceCoordinatorOnce({
+      database: db,
+      decideIssueAcceptance: async () => acceptance("accept"),
+      providers: { codex: provider }
+    });
+    await waitFor(() => provider.inputs.some((input) => input.issueId === second.id));
 
-      expect(getIssue(db, first.id)?.status).toBe("done");
-      expect(getIssue(db, second.id)).toMatchObject({ status: "in_progress", attempt_count: 1 });
-    } finally {
-      db.close();
-    }
+    expect(getIssue(db, first.id)?.status).toBe("done");
+    expect(getIssue(db, second.id)).toMatchObject({ status: "in_progress", attempt_count: 1 });
   });
 });
 
@@ -561,7 +522,7 @@ function acceptance(
 async function fixture(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-acceptance-"));
   roots.push(root);
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   db.sqlite.run(
     `insert into projects (id, name, cwd, provider, auto_run, created_at, updated_at)
      values ('demo', 'Demo', ?, 'codex', 1, ?, ?)`,

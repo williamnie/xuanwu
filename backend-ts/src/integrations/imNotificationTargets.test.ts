@@ -7,6 +7,9 @@ import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createExternalLink } from "../db/repositories/externalLinks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { resolveImNotificationTarget } from "./imNotificationTargets.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 
@@ -17,40 +20,38 @@ afterEach(async () => {
 describe("generic IM notification target resolver", () => {
   test("resolves canonical Telegram ids as opaque strings from shared external facts", async () => {
     const db = await fixture();
-    try {
-      const issue = createIssue(db, { project_id: "demo", status: "todo", title: "Telegram source" });
-      const event = createExternalEvent(db, {
-        content: "hello",
-        dedupe_key: "telegram:update-1",
-        external_id: "message-9",
-        normalized_message: {
-          conversation: { id: "-100opaque", kind: "group" },
-          message_id: "message-9",
-          thread: { id: "topic-4" }
-        },
-        provider: "telegram",
-        source: "telegram"
-      });
-      createExternalLink(db, {
-        conversation_id: "internal-conversation",
-        external_event_id: event.id,
-        external_id: "message-9",
-        external_type: "im_message",
-        issue_id: issue.id,
-        project_id: "demo",
-        relationship: "origin",
-        source: "telegram"
-      });
+    const issue = createIssue(db, { project_id: "demo", status: "todo", title: "Telegram source" });
+    const event = createExternalEvent(db, {
+      content: "hello",
+      dedupe_key: "telegram:update-1",
+      external_id: "message-9",
+      normalized_message: {
+        conversation: { id: "-100opaque", kind: "group" },
+        message_id: "message-9",
+        thread: { id: "topic-4" }
+      },
+      provider: "telegram",
+      source: "telegram"
+    });
+    createExternalLink(db, {
+      conversation_id: "internal-conversation",
+      external_event_id: event.id,
+      external_id: "message-9",
+      external_type: "im_message",
+      issue_id: issue.id,
+      project_id: "demo",
+      relationship: "origin",
+      source: "telegram"
+    });
 
-      expect(resolveImNotificationTarget(db, { connectorID: "telegram", issueID: issue.id })).toEqual({
-        connector_id: "telegram",
-        conversation_id: "-100opaque",
-        external_event_id: event.id,
-        reply_to_message_id: "message-9",
-        thread_id: "topic-4"
-      });
-      expect(resolveImNotificationTarget(db, { connectorID: "feishu", issueID: issue.id })).toBeNull();
-    } finally { db.close(); }
+    expect(resolveImNotificationTarget(db, { connectorID: "telegram", issueID: issue.id })).toEqual({
+      connector_id: "telegram",
+      conversation_id: "-100opaque",
+      external_event_id: event.id,
+      reply_to_message_id: "message-9",
+      thread_id: "topic-4"
+    });
+    expect(resolveImNotificationTarget(db, { connectorID: "feishu", issueID: issue.id })).toBeNull();
   });
 
   test("fails closed when the linked event belongs to another connector", async () => {
@@ -80,7 +81,7 @@ describe("generic IM notification target resolver", () => {
 async function fixture(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "im-notification-target-"));
   roots.push(root);
-  const db = await openDatabase({ stateDir: root });
+  const db = await openDatabase({ stateDir: root }).then(trackDatabase);
   db.sqlite.run(`insert into projects (id, name, cwd, provider, created_at, updated_at)
     values ('demo', 'Demo', '/tmp/demo', 'fake-execution-only', ?, ?)`, [
     "2026-08-10T00:00:00Z", "2026-08-10T00:00:00Z"

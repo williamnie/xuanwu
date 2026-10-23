@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { diagnoseIssueState } from "./issueStateManager.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const tempRoots: string[] = [];
 const NOW = new Date("2026-01-01T01:00:00Z");
@@ -18,53 +21,45 @@ afterEach(async () => {
 describe("Todo without session detector", () => {
   test("generates kick/enqueue candidate when todo only has ended historical runtime", async () => {
     const db = await openFixture();
-    try {
-      const todo = insertIssue(db, "todo", "Requeued without active session", "thread-old");
-      insertRun(db, todo, { endedAt: "2026-01-01T00:20:00Z", sessionID: "thread-old", status: "done" });
-      insertSession(db, todo, { sessionID: "thread-old", status: "completed" });
+    const todo = insertIssue(db, "todo", "Requeued without active session", "thread-old");
+    insertRun(db, todo, { endedAt: "2026-01-01T00:20:00Z", sessionID: "thread-old", status: "done" });
+    insertSession(db, todo, { sessionID: "thread-old", status: "completed" });
 
-      const result = diagnoseIssueState(db, { now: NOW, projectID: "demo" });
+    const result = diagnoseIssueState(db, { now: NOW, projectID: "demo" });
 
-      expect(result.diagnostics).toContainEqual(expect.objectContaining({
-        code: "todo_without_session",
-        issue_id: todo,
-        recommended_actions: [expect.objectContaining({
-          operation: "enqueue",
-          suggested_operation: "kick_project_loop"
-        })]
-      }));
-      expect(JSON.stringify(result.diagnostics)).toContain("project auto_run=1");
-    } finally {
-      db.close();
-    }
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "todo_without_session",
+      issue_id: todo,
+      recommended_actions: [expect.objectContaining({
+        operation: "enqueue",
+        suggested_operation: "kick_project_loop"
+      })]
+    }));
+    expect(JSON.stringify(result.diagnostics)).toContain("project auto_run=1");
   });
 
   test("skips active runtime and non-todo issues", async () => {
     const db = await openFixture();
-    try {
-      const openRun = insertIssue(db, "todo", "Todo with open run");
-      insertRun(db, openRun, { endedAt: "", sessionID: "thread-open", status: "in_progress" });
-      const runningSession = insertIssue(db, "todo", "Todo with running session");
-      insertSession(db, runningSession, { sessionID: "thread-running", status: "running" });
-      const triage = insertIssue(db, "triage", "Triage without session");
+    const openRun = insertIssue(db, "todo", "Todo with open run");
+    insertRun(db, openRun, { endedAt: "", sessionID: "thread-open", status: "in_progress" });
+    const runningSession = insertIssue(db, "todo", "Todo with running session");
+    insertSession(db, runningSession, { sessionID: "thread-running", status: "running" });
+    const triage = insertIssue(db, "triage", "Triage without session");
 
-      const ids = diagnoseIssueState(db, { now: NOW, projectID: "demo" }).diagnostics
-        .filter((item) => item.code === "todo_without_session")
-        .map((item) => item.issue_id);
+    const ids = diagnoseIssueState(db, { now: NOW, projectID: "demo" }).diagnostics
+      .filter((item) => item.code === "todo_without_session")
+      .map((item) => item.issue_id);
 
-      expect(ids).not.toContain(openRun);
-      expect(ids).not.toContain(runningSession);
-      expect(ids).not.toContain(triage);
-    } finally {
-      db.close();
-    }
+    expect(ids).not.toContain(openRun);
+    expect(ids).not.toContain(runningSession);
+    expect(ids).not.toContain(triage);
   });
 });
 
 async function openFixture(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-todo-detector-"));
   tempRoots.push(root);
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   db.sqlite.run(
     `insert into projects (id, name, cwd, provider, auto_run, sort_order, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, ?)`,

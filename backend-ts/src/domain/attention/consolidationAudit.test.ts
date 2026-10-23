@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { openDatabase } from "../../db/database.ts";
 import { createPiAction, createPiActionEvent } from "../../db/repositories/pi.ts";
 import { auditPiDecisionConsolidation } from "./consolidationAudit.ts";
+import { useDatabaseCleanup } from "../../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 
@@ -18,7 +21,7 @@ describe("PI decision consolidation delete gate", () => {
     roots.push(root);
     const dbPath = join(root, "runner-copy.db");
     const reportPath = join(root, "reports", "attention-audit.json");
-    const db = await openDatabase({ dbPath, stateDir: root });
+    const db = await openDatabase({ dbPath, stateDir: root }).then(trackDatabase);
     createPiAction(db, {
       action_type: "issue.read",
       gate_decision: "execute",

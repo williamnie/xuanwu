@@ -18,6 +18,9 @@ import {
 import { createPiMemoryTools, PI_MEMORY_TOOL_NAMES } from "./memoryTools.ts";
 import { seedMemoryExperience } from "./memoryExperienceTestFixtures.ts";
 import { retrievePiMemoryContext } from "./memoryContext.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 describe("PI memory tools", () => {
   test("remembers an explicit preference as active memory and reuses its stable key", async () => {
@@ -338,7 +341,7 @@ describe("PI memory tools", () => {
 
   test("serializes independent processes and preserves correction ownership after reopening", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-memory-concurrent-"));
-    let db = await openDatabase({ stateDir: join(root, "state"), writerBusyTimeoutMs: 10000 });
+    let db = await openDatabase({ stateDir: join(root, "state"), writerBusyTimeoutMs: 10000 }).then(trackDatabase);
     try {
       const original = seedMemoryExperience(db);
       const left = seedMemoryExperience(db);
@@ -356,7 +359,7 @@ describe("PI memory tools", () => {
       expect(outcomes.filter((item) => item.rejected === true)).toMatchObject([{ reason: expect.stringContaining("revision conflict") }]);
       const winner = outcomes.find((item) => item.revision === 2)!;
       db.close();
-      db = await openDatabase({ dbPath: join(root, "state", "runner.db") });
+      db = await openDatabase({ dbPath: join(root, "state", "runner.db") }).then(trackDatabase);
       const persisted = getPiMemoryItem(db, a.id);
       if (!persisted) throw new Error("concurrent memory missing after restart");
       expect(winner).toEqual(persisted);
@@ -563,7 +566,7 @@ describe("PI memory tools", () => {
 
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase }> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-memory-tools-"));
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   return { db, close: async () => { db.close(); await rm(root, { recursive: true, force: true }); } };
 }
 

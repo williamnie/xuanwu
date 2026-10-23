@@ -10,6 +10,9 @@ import {
   issueRunGitDeliveryScope,
   recordIssueRunGitWorkspaceBaseline
 } from "./runGitWorkspaceBaseline.ts";
+import { useDatabaseCleanup } from "../../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 
@@ -20,76 +23,60 @@ afterEach(async () => {
 describe("Run Git workspace attribution", () => {
   test("selects clean committed files and current-Run untracked artifacts", async () => {
     const fixture = await repositoryFixture();
-    try {
-      recordBaseline(fixture);
-      write(fixture.repository, "src/committed.ts", "export const committed = true;\n");
-      git(fixture.repository, ["add", "src/committed.ts"]);
-      commit(fixture.repository, "current Work");
-      write(fixture.repository, "artifacts/current.json", "{\"current\":true}\n");
+    recordBaseline(fixture);
+    write(fixture.repository, "src/committed.ts", "export const committed = true;\n");
+    git(fixture.repository, ["add", "src/committed.ts"]);
+    commit(fixture.repository, "current Work");
+    write(fixture.repository, "artifacts/current.json", "{\"current\":true}\n");
 
-      expect(scope(fixture)).toEqual({
-        base_revision: fixture.baseRevision,
-        pathspecs: ["artifacts/current.json", "src/committed.ts"],
-        uncertainty_reasons: []
-      });
-    } finally {
-      fixture.db.close();
-    }
+    expect(scope(fixture)).toEqual({
+      base_revision: fixture.baseRevision,
+      pathspecs: ["artifacts/current.json", "src/committed.ts"],
+      uncertainty_reasons: []
+    });
   });
 
   test("excludes pre-existing tracked/untracked changes from a shared dirty tree", async () => {
     const fixture = await repositoryFixture();
-    try {
-      write(fixture.repository, "shared.txt", "other Work tracked\n");
-      write(fixture.repository, "shared-untracked.txt", "other Work untracked\n");
-      recordBaseline(fixture);
-      write(fixture.repository, "src/current.ts", "export const current = true;\n");
-      git(fixture.repository, ["add", "src/current.ts"]);
-      commit(fixture.repository, "current Work");
+    write(fixture.repository, "shared.txt", "other Work tracked\n");
+    write(fixture.repository, "shared-untracked.txt", "other Work untracked\n");
+    recordBaseline(fixture);
+    write(fixture.repository, "src/current.ts", "export const current = true;\n");
+    git(fixture.repository, ["add", "src/current.ts"]);
+    commit(fixture.repository, "current Work");
 
-      expect(scope(fixture)).toEqual({
-        base_revision: fixture.baseRevision,
-        pathspecs: ["src/current.ts"],
-        uncertainty_reasons: []
-      });
-    } finally {
-      fixture.db.close();
-    }
+    expect(scope(fixture)).toEqual({
+      base_revision: fixture.baseRevision,
+      pathspecs: ["src/current.ts"],
+      uncertainty_reasons: []
+    });
   });
 
   test("excludes changed pre-existing paths and reports attribution uncertainty", async () => {
     const fixture = await repositoryFixture();
-    try {
-      write(fixture.repository, "shared.txt", "other Work baseline dirty\n");
-      recordBaseline(fixture);
-      write(fixture.repository, "shared.txt", "mixed ownership cannot be proven\n");
-      write(fixture.repository, "src/current.ts", "export const current = true;\n");
+    write(fixture.repository, "shared.txt", "other Work baseline dirty\n");
+    recordBaseline(fixture);
+    write(fixture.repository, "shared.txt", "mixed ownership cannot be proven\n");
+    write(fixture.repository, "src/current.ts", "export const current = true;\n");
 
-      const result = scope(fixture);
-      expect(result.pathspecs).toEqual(["src/current.ts"]);
-      expect(result.uncertainty_reasons).toEqual([
-        "Pre-existing workspace paths changed during the Run and were excluded as unattributable: shared.txt"
-      ]);
-    } finally {
-      fixture.db.close();
-    }
+    const result = scope(fixture);
+    expect(result.pathspecs).toEqual(["src/current.ts"]);
+    expect(result.uncertainty_reasons).toEqual([
+      "Pre-existing workspace paths changed during the Run and were excluded as unattributable: shared.txt"
+    ]);
   });
 
   test("falls back to committed files with explicit uncertainty when no baseline exists", async () => {
     const fixture = await repositoryFixture();
-    try {
-      write(fixture.repository, "src/committed.ts", "export const committed = true;\n");
-      git(fixture.repository, ["add", "src/committed.ts"]);
-      commit(fixture.repository, "committed without workspace baseline");
+    write(fixture.repository, "src/committed.ts", "export const committed = true;\n");
+    git(fixture.repository, ["add", "src/committed.ts"]);
+    commit(fixture.repository, "committed without workspace baseline");
 
-      const result = scope(fixture);
-      expect(result.pathspecs).toEqual(["src/committed.ts"]);
-      expect(result.uncertainty_reasons).toEqual([
-        "Run workspace baseline is unavailable; only committed paths are attributed and dirty/untracked paths are excluded"
-      ]);
-    } finally {
-      fixture.db.close();
-    }
+    const result = scope(fixture);
+    expect(result.pathspecs).toEqual(["src/committed.ts"]);
+    expect(result.uncertainty_reasons).toEqual([
+      "Run workspace baseline is unavailable; only committed paths are attributed and dirty/untracked paths are excluded"
+    ]);
   });
 
   test("rejects a baseline whose content-addressed snapshot was altered", async () => {
@@ -138,7 +125,7 @@ async function repositoryFixture(): Promise<Fixture> {
   git(repository, ["add", "README.md", "shared.txt"]);
   commit(repository, "baseline");
   const baseRevision = gitText(repository, ["rev-parse", "HEAD"]);
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   db.sqlite.run(`
     insert into projects (id, name, cwd, provider, created_at, updated_at)
     values ('fixture', 'fixture', ?, 'codex', ?, ?)

@@ -12,11 +12,14 @@ import { createPiNotificationIntent } from '../../db/repositories/pi.ts';
 import { completeFirstDelivery } from './firstDelivery.ts';
 import { createDefaultRouter } from '../../http/server.ts';
 import { buildDeliveryEffectiveness } from '../../observability/deliveryEffectiveness.ts';
+import { useDatabaseCleanup } from "../../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const now = '2026-09-05T04:00:00.000Z';
 test('first delivery requires an audited sample and real evidence, persists once, and leaves Git unchanged', async () => {
   const root = await mkdtemp(join(tmpdir(), 'xw-first-delivery-'));
-  const db = await openDatabase({ stateDir: join(root, 'state') });
+  const db = await openDatabase({ stateDir: join(root, 'state') }).then(trackDatabase);
   const repo = join(root, 'repo');
   const git = (args: string[]) => {
     const result = Bun.spawnSync(['git', '-C', repo, ...args]);

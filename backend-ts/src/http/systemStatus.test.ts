@@ -12,6 +12,9 @@ import {
   projectPendingCompactEventSummaries,
   updateEventSummaryProjectionSwitch
 } from "../db/repositories/compactEventSummaryProjection.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
@@ -55,193 +58,185 @@ describe("Bun system status endpoints", () => {
 
   test("returns a compact authenticated Web-shell status without heavy projections", async () => {
     const { config, database } = await openFixtureRuntime({ claudeMode: "sdk" });
-    try {
-      const router = createDefaultRouter();
-      registerSystemStatusRoute(router, {
-        authToken: "status-secret",
-        config,
-        database,
-        startedAt: new Date("2026-05-28T00:00:00.000Z")
-      });
-      const handle = createRequestHandler(router, "status-secret");
-      const response = await handle(new Request(`${BASE_URL}/api/system/status?compact=1`, {
-        headers: { authorization: "Bearer status-secret" }
-      }));
-      const body = await response.json() as Record<string, any>;
-      expect(response.status).toBe(200);
-      expect(body.service.alive).toBe(true);
-      expect(body.db.ok).toBe(true);
-      expect(body.codex.command_ok).toBe(true);
-      expect(body.pi_guardian.watchdog).toBeDefined();
-      expect(body.event_projection).toBeUndefined();
-      expect(body.run_progress_projection).toBeUndefined();
-      expect(body.observability).toBeUndefined();
-    } finally {
-      database.close();
-    }
+    const router = createDefaultRouter();
+    registerSystemStatusRoute(router, {
+      authToken: "status-secret",
+      config,
+      database,
+      startedAt: new Date("2026-05-28T00:00:00.000Z")
+    });
+    const handle = createRequestHandler(router, "status-secret");
+    const response = await handle(new Request(`${BASE_URL}/api/system/status?compact=1`, {
+      headers: { authorization: "Bearer status-secret" }
+    }));
+    const body = await response.json() as Record<string, any>;
+    expect(response.status).toBe(200);
+    expect(body.service.alive).toBe(true);
+    expect(body.db.ok).toBe(true);
+    expect(body.codex.command_ok).toBe(true);
+    expect(body.pi_guardian.watchdog).toBeDefined();
+    expect(body.event_projection).toBeUndefined();
+    expect(body.run_progress_projection).toBeUndefined();
+    expect(body.observability).toBeUndefined();
   });
 
   test("returns service db auth and config summary", async () => {
     const { config, database } = await openFixtureRuntime({ claudeMode: "sdk" });
-    try {
-      const router = createDefaultRouter();
-      registerSystemStatusRoute(router, {
-        authToken: "status-secret",
-        config,
-        database,
-        startedAt: new Date("2026-05-28T00:00:00.000Z")
-      });
+    const router = createDefaultRouter();
+    registerSystemStatusRoute(router, {
+      authToken: "status-secret",
+      config,
+      database,
+      startedAt: new Date("2026-05-28T00:00:00.000Z")
+    });
 
-      const handle = createRequestHandler(router, "status-secret");
-      const response = await handle(new Request(`${BASE_URL}/api/system/status`, {
-        headers: { authorization: "Bearer status-secret" }
-      }));
-      const body = await response.json() as SystemStatusBody;
+    const handle = createRequestHandler(router, "status-secret");
+    const response = await handle(new Request(`${BASE_URL}/api/system/status`, {
+      headers: { authorization: "Bearer status-secret" }
+    }));
+    const body = await response.json() as SystemStatusBody;
 
-      expect(response.status).toBe(200);
-      expect(body.service.alive).toBe(true);
-      expect(body.service.runtime).toBe("bun");
-      expect(body.service.version).not.toBe("0.0.0-dev");
-      expect(body.service.build).toMatchObject({
-        artifact: "xuanwu",
-        bun_version: Bun.version,
-        stamp: expect.any(String),
-        version: body.service.version
-      });
-      expect(body.service.memory).toMatchObject({
-        array_buffers_bytes: expect.any(Number),
-        external_bytes: expect.any(Number),
-        heap_total_bytes: expect.any(Number),
-        heap_used_bytes: expect.any(Number),
-        rss_bytes: expect.any(Number)
-      });
-      expect(body.process_group_memory).toMatchObject({
-        contract: "runner-process-group-memory.v1",
-        freshness: { status: "unavailable" },
-        budget: { auto_restart: false, status: "unavailable" }
-      });
-      expect(body.db.ok).toBe(true);
-      expect(body.auth.enabled).toBe(true);
-      expect(body.config.addr).toBe("127.0.0.1:3008");
-      expect(body.config.auth_enabled).toBe(true);
-      expect(body.config.db_path).toBe("<stateDir>/runner.db");
-      expect(body.event_projection).toMatchObject({
-        lag_rows: 0,
-        last_event_id: 0,
-        projected_row_count: 0,
-        source_of_truth: "issue_events",
-        status: "ready"
-      });
-      expect(body.run_progress_projection).toMatchObject({
-        active_runs: 0,
-        projection_mode: "read_through_rebuild",
-        source_of_truth: "issue_runs+run_attempts+issue_events",
-        stalled_runs: 0,
-        status: "ready",
-        waiting_approval_runs: 0
-      });
-      expect(body.observability).toMatchObject({
-        schema_version: "xuanwu.runtime-observability.v1",
-        query_contract: { raw_log_scan: false, provider_session_scan: false },
-        dimensions: {
-          work: { source: "issues", total: 0 },
-          run: { source: "issue_runs", total: 0, attempts: 0 },
-          automation: { source: "automation_runs", total: 0 }
-        },
-        trace_correlation: { trace_id_contract: "canonical Work id", items: [] }
-      });
-      expect(body.health).toMatchObject({ state: expect.any(String), reasons: expect.any(Array) });
-      expect(body.codex).toMatchObject({
-        command: "codex app-server --listen stdio://",
-        command_ok: true,
-        capability_summary: "issue_execution,sessions,resume_session,interrupt,approvals,model_list",
-        capabilities: ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"],
-        app_server: "not_checked",
-        model_list: "not_checked"
-      });
-      const codex = body.providers.find((provider) => provider.id === "codex");
-      const claude = body.providers.find((provider) => provider.id === "claude");
-      expect(codex).toMatchObject({
-        id: "codex",
-        label: "Codex",
-        role: "executor",
-        enabled: true,
-        capabilities: ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"],
-        command: "codex app-server --listen stdio://",
-        cli: { command: "codex app-server --listen stdio://" },
-        cwd_configured: false,
-        env_keys: [],
-        secrets: { api_key: { configured: false } },
-        settings_mode: "runner_settings:cli",
-        timeout_ms: 1_800_000,
-        effective_rpc_timeout_ms: 90_000
-      });
-      expect(claude).toMatchObject({
-        id: "claude",
-        label: "Claude Agent SDK",
-        role: "executor",
-        enabled: true,
-        capabilities: ["issue_execution", "sessions", "resume_session", "interrupt"],
-        command: "bundled:@anthropic-ai/claude-agent-sdk",
-        cli: { available: false, mode: "not_used" },
-        cwd_configured: false,
-        default_model: "",
-        env_keys: [],
-        mode: "sdk",
-        ready: false,
-        sdk: { executable_ready: true, installed: true, ready: false, version: "0.3.152" },
-        secrets: { api_key: { configured: false } },
-        settings_mode: "runner_env_to_anthropic_sdk",
-        status: "configuration_required",
-        timeout_ms: 1_800_000
-      });
-      expect(body.providers.some((provider) => provider.id === "pi")).toBe(false);
-      expect(body.connectors).toEqual([{
-        id: "feishu",
-        label: "Feishu IM",
-        enabled: false,
-        status: "disabled",
-        settings_mode: "settings_page_or_local_config",
+    expect(response.status).toBe(200);
+    expect(body.service.alive).toBe(true);
+    expect(body.service.runtime).toBe("bun");
+    expect(body.service.version).not.toBe("0.0.0-dev");
+    expect(body.service.build).toMatchObject({
+      artifact: "xuanwu",
+      bun_version: Bun.version,
+      stamp: expect.any(String),
+      version: body.service.version
+    });
+    expect(body.service.memory).toMatchObject({
+      array_buffers_bytes: expect.any(Number),
+      external_bytes: expect.any(Number),
+      heap_total_bytes: expect.any(Number),
+      heap_used_bytes: expect.any(Number),
+      rss_bytes: expect.any(Number)
+    });
+    expect(body.process_group_memory).toMatchObject({
+      contract: "runner-process-group-memory.v1",
+      freshness: { status: "unavailable" },
+      budget: { auto_restart: false, status: "unavailable" }
+    });
+    expect(body.db.ok).toBe(true);
+    expect(body.auth.enabled).toBe(true);
+    expect(body.config.addr).toBe("127.0.0.1:3008");
+    expect(body.config.auth_enabled).toBe(true);
+    expect(body.config.db_path).toBe("<stateDir>/runner.db");
+    expect(body.event_projection).toMatchObject({
+      lag_rows: 0,
+      last_event_id: 0,
+      projected_row_count: 0,
+      source_of_truth: "issue_events",
+      status: "ready"
+    });
+    expect(body.run_progress_projection).toMatchObject({
+      active_runs: 0,
+      projection_mode: "read_through_rebuild",
+      source_of_truth: "issue_runs+run_attempts+issue_events",
+      stalled_runs: 0,
+      status: "ready",
+      waiting_approval_runs: 0
+    });
+    expect(body.observability).toMatchObject({
+      schema_version: "xuanwu.runtime-observability.v1",
+      query_contract: { raw_log_scan: false, provider_session_scan: false },
+      dimensions: {
+        work: { source: "issues", total: 0 },
+        run: { source: "issue_runs", total: 0, attempts: 0 },
+        automation: { source: "automation_runs", total: 0 }
+      },
+      trace_correlation: { trace_id_contract: "canonical Work id", items: [] }
+    });
+    expect(body.health).toMatchObject({ state: expect.any(String), reasons: expect.any(Array) });
+    expect(body.codex).toMatchObject({
+      command: "codex app-server --listen stdio://",
+      command_ok: true,
+      capability_summary: "issue_execution,sessions,resume_session,interrupt,approvals,model_list",
+      capabilities: ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"],
+      app_server: "not_checked",
+      model_list: "not_checked"
+    });
+    const codex = body.providers.find((provider) => provider.id === "codex");
+    const claude = body.providers.find((provider) => provider.id === "claude");
+    expect(codex).toMatchObject({
+      id: "codex",
+      label: "Codex",
+      role: "executor",
+      enabled: true,
+      capabilities: ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"],
+      command: "codex app-server --listen stdio://",
+      cli: { command: "codex app-server --listen stdio://" },
+      cwd_configured: false,
+      env_keys: [],
+      secrets: { api_key: { configured: false } },
+      settings_mode: "runner_settings:cli",
+      timeout_ms: 1_800_000,
+      effective_rpc_timeout_ms: 90_000
+    });
+    expect(claude).toMatchObject({
+      id: "claude",
+      label: "Claude Agent SDK",
+      role: "executor",
+      enabled: true,
+      capabilities: ["issue_execution", "sessions", "resume_session", "interrupt"],
+      command: "bundled:@anthropic-ai/claude-agent-sdk",
+      cli: { available: false, mode: "not_used" },
+      cwd_configured: false,
+      default_model: "",
+      env_keys: [],
+      mode: "sdk",
+      ready: false,
+      sdk: { executable_ready: true, installed: true, ready: false, version: "0.3.152" },
+      secrets: { api_key: { configured: false } },
+      settings_mode: "runner_env_to_anthropic_sdk",
+      status: "configuration_required",
+      timeout_ms: 1_800_000
+    });
+    expect(body.providers.some((provider) => provider.id === "pi")).toBe(false);
+    expect(body.connectors).toEqual([{
+      id: "feishu",
+      label: "Feishu IM",
+      enabled: false,
+      status: "disabled",
+      settings_mode: "settings_page_or_local_config",
+      receive_mode: "websocket",
+      supported_events: ["message.text", "message.mention"],
+      attachment_policy: "metadata_only",
+      auto_reply: false,
+      secrets: {
+        app_id: { configured: false },
+        app_secret: { configured: false },
+        verification_token: { configured: false, optional: true },
+        encrypt_key: { configured: false, optional: true }
+      },
+      allowed_chat_count: 0,
+      allowed_user_count: 0,
+      project_mapping_count: 0,
+      missing_required: ["FEISHU_APP_ID", "FEISHU_APP_SECRET"],
+      summary: {
+        callback_path: "/api/integrations/feishu/events",
+        configured: false,
+        error: "",
+        public_url_required: false,
+        receive_enabled: false,
         receive_mode: "websocket",
-        supported_events: ["message.text", "message.mention"],
-        attachment_policy: "metadata_only",
-        auto_reply: false,
-        secrets: {
-          app_id: { configured: false },
-          app_secret: { configured: false },
-          verification_token: { configured: false, optional: true },
-          encrypt_key: { configured: false, optional: true }
-        },
-        allowed_chat_count: 0,
-        allowed_user_count: 0,
-        project_mapping_count: 0,
-        missing_required: ["FEISHU_APP_ID", "FEISHU_APP_SECRET"],
-        summary: {
-          callback_path: "/api/integrations/feishu/events",
-          configured: false,
-          error: "",
-          public_url_required: false,
-          receive_enabled: false,
-          receive_mode: "websocket",
-          reply_mode: "draft",
-          state: "disabled"
-        }
-      }]);
-      expect(body.connector_health.map((connector) => connector.id)).toEqual([
-        "feishu", "telegram", "webhook", "github-events", "gitlab-events", "github-issues", "gitlab-issues", "linear-issues"
-      ]);
-      expect(body.connector_health[0]).toMatchObject({
-        health: { state: "unconfigured" },
-        permissions: expect.any(Array),
-        secret_refs: expect.any(Array),
-        test_connection: { supported: true }
-      });
-      expect(body.runner.running_loops).toBeGreaterThanOrEqual(0);
-      expect(body.runner.auto_run_projects).toBe(0);
-      expect(body.runner.in_progress_issues).toBe(0);
-    } finally {
-      database.close();
-    }
+        reply_mode: "draft",
+        state: "disabled"
+      }
+    }]);
+    expect(body.connector_health.map((connector) => connector.id)).toEqual([
+      "feishu", "telegram", "webhook", "github-events", "gitlab-events", "github-issues", "gitlab-issues", "linear-issues"
+    ]);
+    expect(body.connector_health[0]).toMatchObject({
+      health: { state: "unconfigured" },
+      permissions: expect.any(Array),
+      secret_refs: expect.any(Array),
+      test_connection: { supported: true }
+    });
+    expect(body.runner.running_loops).toBeGreaterThanOrEqual(0);
+    expect(body.runner.auto_run_projects).toBe(0);
+    expect(body.runner.in_progress_issues).toBe(0);
   });
 
   test("reports projection health from the active V2 reader", async () => {
@@ -292,47 +287,41 @@ describe("Bun system status endpoints", () => {
 
   test("reports partially configured Feishu connector as error summary", async () => {
     const { config, database } = await openFixtureRuntime({ feishuAppId: "cli_app_id" });
-    try {
-      const router = createDefaultRouter();
-      registerSystemStatusRoute(router, { authToken: "", config, database });
+    const router = createDefaultRouter();
+    registerSystemStatusRoute(router, { authToken: "", config, database });
 
-      const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
-      const body = await response.json() as SystemStatusBody;
+    const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
+    const body = await response.json() as SystemStatusBody;
 
-      expect(response.status).toBe(200);
-      expect(body.connectors[0]).toMatchObject({
-        enabled: false,
-        id: "feishu",
-        status: "misconfigured",
-        summary: {
-          configured: false,
-          error: "missing FEISHU_APP_SECRET",
-          public_url_required: false,
-          receive_enabled: false,
-          receive_mode: "websocket",
-          reply_mode: "draft",
-          state: "error"
-        }
-      });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(body.connectors[0]).toMatchObject({
+      enabled: false,
+      id: "feishu",
+      status: "misconfigured",
+      summary: {
+        configured: false,
+        error: "missing FEISHU_APP_SECRET",
+        public_url_required: false,
+        receive_enabled: false,
+        receive_mode: "websocket",
+        reply_mode: "draft",
+        state: "error"
+      }
+    });
   });
 
   test("an unprobed Telegram connector does not report a service outage", async () => {
     const { config, database } = await openFixtureRuntime({ telegramBotToken: "123456:fixture-token" });
     config.integrations.telegram.allowedChatIds = ["1"];
     config.integrations.telegram.allowedUserIds = ["2"];
-    try {
-      const router = createDefaultRouter();
-      registerSystemStatusRoute(router, { authToken: "", config, database });
-      const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
-      const body = await response.json() as SystemStatusBody;
-      expect(body.connector_health.find(connector => connector.id === "telegram"))
-        .toMatchObject({ enabled: true, health: { checked: false, state: "unknown" } });
-      expect((body.health as { reasons?: Array<{ source_ref?: string }> }).reasons ?? [])
-        .not.toContainEqual(expect.objectContaining({ source_ref: "connector:telegram" }));
-    } finally { database.close(); }
+    const router = createDefaultRouter();
+    registerSystemStatusRoute(router, { authToken: "", config, database });
+    const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
+    const body = await response.json() as SystemStatusBody;
+    expect(body.connector_health.find(connector => connector.id === "telegram"))
+      .toMatchObject({ enabled: true, health: { checked: false, state: "unknown" } });
+    expect((body.health as { reasons?: Array<{ source_ref?: string }> }).reasons ?? [])
+      .not.toContainEqual(expect.objectContaining({ source_ref: "connector:telegram" }));
   });
 
   test("uses the live Feishu websocket receiver as connector health authority", async () => {
@@ -340,63 +329,55 @@ describe("Bun system status endpoints", () => {
       feishuAppId: "cli_app_id",
       feishuAppSecret: "cli_app_secret"
     });
-    try {
-      const router = createDefaultRouter();
-      registerSystemStatusRoute(router, {
-        authToken: "",
-        config,
-        database,
-        feishuReceiverStatus: () => ({
-          connected: true,
-          last_error: "",
-          last_event_at: "2026-07-23T12:00:00Z",
-          receive_mode: "websocket",
-          reconnect_attempts: 0,
-          state: "connected"
-        })
-      });
+    const router = createDefaultRouter();
+    registerSystemStatusRoute(router, {
+      authToken: "",
+      config,
+      database,
+      feishuReceiverStatus: () => ({
+        connected: true,
+        last_error: "",
+        last_event_at: "2026-07-23T12:00:00Z",
+        receive_mode: "websocket",
+        reconnect_attempts: 0,
+        state: "connected"
+      })
+    });
 
-      const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
-      const body = await response.json() as SystemStatusBody;
-      const feishu = body.connector_health.find((connector) => connector.id === "feishu");
+    const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
+    const body = await response.json() as SystemStatusBody;
+    const feishu = body.connector_health.find((connector) => connector.id === "feishu");
 
-      expect(response.status).toBe(200);
-      expect(feishu).toMatchObject({
-        health: {
-          checked: true,
-          last_sync_at: "2026-07-23T12:00:00Z",
-          state: "healthy"
-        },
-        runtime: { connected: true, state: "connected" }
-      });
-      expect((body.health as { reasons?: Array<{ source_ref?: string }> }).reasons ?? [])
-        .not.toContainEqual(expect.objectContaining({ source_ref: "connector:feishu" }));
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(feishu).toMatchObject({
+      health: {
+        checked: true,
+        last_sync_at: "2026-07-23T12:00:00Z",
+        state: "healthy"
+      },
+      runtime: { connected: true, state: "connected" }
+    });
+    expect((body.health as { reasons?: Array<{ source_ref?: string }> }).reasons ?? [])
+      .not.toContainEqual(expect.objectContaining({ source_ref: "connector:feishu" }));
   });
 
   test("reports runner counts from database state", async () => {
     const { config, database } = await openFixtureRuntime();
-    try {
-      insertRunnerStatusFixture(database);
-      const router = createDefaultRouter();
-      registerSystemStatusRoute(router, { authToken: "", config, database });
+    insertRunnerStatusFixture(database);
+    const router = createDefaultRouter();
+    registerSystemStatusRoute(router, { authToken: "", config, database });
 
-      const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
-      const body = await response.json() as SystemStatusBody;
+    const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
+    const body = await response.json() as SystemStatusBody;
 
-      expect(response.status).toBe(200);
-      expect(body.runner).toMatchObject({
-        auto_run_projects: 1,
-        held_projects: 1,
-        in_progress_issues: 1,
-        running_issues: 1,
-        running_sessions: 1
-      });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(body.runner).toMatchObject({
+      auto_run_projects: 1,
+      held_projects: 1,
+      in_progress_issues: 1,
+      running_issues: 1,
+      running_sessions: 1
+    });
   });
 
 
@@ -410,39 +391,35 @@ describe("Bun system status endpoints", () => {
       claudeApiBaseUrl: "https://gateway.example/private/tenant",
       claudeModel: "claude-sonnet-4-5"
     });
-    try {
-      const router = createDefaultRouter();
-      registerSystemStatusRoute(router, { authToken: "", config, database });
+    const router = createDefaultRouter();
+    registerSystemStatusRoute(router, { authToken: "", config, database });
 
-      const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
-      const text = await response.text();
-      const body = JSON.parse(text) as SystemStatusBody;
-      const claude = body.providers.find((provider) => provider.id === "claude");
-      const codex = body.providers.find((provider) => provider.id === "codex");
+    const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
+    const text = await response.text();
+    const body = JSON.parse(text) as SystemStatusBody;
+    const claude = body.providers.find((provider) => provider.id === "claude");
+    const codex = body.providers.find((provider) => provider.id === "codex");
 
-      expect(response.status).toBe(200);
-      expect(claude).toMatchObject({
-        id: "claude",
-        status: "available",
-        available: true,
-        capabilities: ["issue_execution", "sessions", "resume_session", "interrupt"],
-        command: "bundled:@anthropic-ai/claude-agent-sdk",
-        cli: { available: false, mode: "not_used" },
-        default_model: "claude-sonnet-4-5",
-        env_keys: ["ANTHROPIC_BASE_URL", "PATH", "SAFE_CLAUDE"],
-        mode: "sdk",
-        ready: true,
-        api_base_url_summary: "https://gateway.example/…",
-        sdk: { executable_ready: true, installed: true, ready: true, version: "0.3.152" },
-        secrets: { api_key: { configured: true } }
-      });
-      expect(codex?.capabilities).toEqual(["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"]);
-      expect(text).not.toContain(secret);
-      expect(text).not.toContain("ANTHROPIC_API_KEY");
-      expect(text).not.toContain("/private/tenant");
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(claude).toMatchObject({
+      id: "claude",
+      status: "available",
+      available: true,
+      capabilities: ["issue_execution", "sessions", "resume_session", "interrupt"],
+      command: "bundled:@anthropic-ai/claude-agent-sdk",
+      cli: { available: false, mode: "not_used" },
+      default_model: "claude-sonnet-4-5",
+      env_keys: ["ANTHROPIC_BASE_URL", "PATH", "SAFE_CLAUDE"],
+      mode: "sdk",
+      ready: true,
+      api_base_url_summary: "https://gateway.example/…",
+      sdk: { executable_ready: true, installed: true, ready: true, version: "0.3.152" },
+      secrets: { api_key: { configured: true } }
+    });
+    expect(codex?.capabilities).toEqual(["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"]);
+    expect(text).not.toContain(secret);
+    expect(text).not.toContain("ANTHROPIC_API_KEY");
+    expect(text).not.toContain("/private/tenant");
   });
 
   test("reports an Anthropic platform OAuth profile without exposing its credential contents", async () => {
@@ -461,32 +438,28 @@ describe("Bun system status endpoints", () => {
       claudePlatformConfigDir: profileRoot,
       claudePlatformProfile: "runner"
     });
-    try {
-      const router = createDefaultRouter();
-      registerSystemStatusRoute(router, { authToken: "", config, database });
-      const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
-      const text = await response.text();
-      const body = JSON.parse(text) as SystemStatusBody;
-      const claude = body.providers.find((provider) => provider.id === "claude");
+    const router = createDefaultRouter();
+    registerSystemStatusRoute(router, { authToken: "", config, database });
+    const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
+    const text = await response.text();
+    const body = JSON.parse(text) as SystemStatusBody;
+    const claude = body.providers.find((provider) => provider.id === "claude");
 
-      expect(claude).toMatchObject({
-        auth_configured: true,
-        auth_mode: "platform-profile",
-        auth_source: "platform_profile",
-        ready: true,
-        settings_mode: "anthropic_platform_profile",
-        status: "available",
-        platform_profile: {
-          auth_type: "user_oauth",
-          credentials_file_ready: true,
-          profile: "runner"
-        }
-      });
-      expect(text).not.toContain(profileRoot);
-      expect(text).not.toContain("profile-refresh-secret");
-    } finally {
-      database.close();
-    }
+    expect(claude).toMatchObject({
+      auth_configured: true,
+      auth_mode: "platform-profile",
+      auth_source: "platform_profile",
+      ready: true,
+      settings_mode: "anthropic_platform_profile",
+      status: "available",
+      platform_profile: {
+        auth_type: "user_oauth",
+        credentials_file_ready: true,
+        profile: "runner"
+      }
+    });
+    expect(text).not.toContain(profileRoot);
+    expect(text).not.toContain("profile-refresh-secret");
   });
 
   test("reports local Claude CLI login as an explicit fallback auth source", async () => {
@@ -497,27 +470,23 @@ describe("Bun system status endpoints", () => {
       claudeCommand: join(binDir, "claude"),
       claudeMode: "cli-fallback"
     });
-    try {
-      const router = createDefaultRouter();
-      registerSystemStatusRoute(router, { authToken: "", config, database });
-      const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
-      const body = await response.json() as SystemStatusBody;
-      const claude = body.providers.find((provider) => provider.id === "claude");
+    const router = createDefaultRouter();
+    registerSystemStatusRoute(router, { authToken: "", config, database });
+    const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
+    const body = await response.json() as SystemStatusBody;
+    const claude = body.providers.find((provider) => provider.id === "claude");
 
-      expect(claude).toMatchObject({
-        auth_configured: true,
-        auth_mode: "local-cli",
-        auth_source: "local_cli",
-        available: true,
-        capabilities: ["issue_execution", "sessions", "resume_session", "interrupt"],
-        local_cli: { checked: true, logged_in: true },
-        mode: "cli-fallback",
-        ready: true,
-        status: "available"
-      });
-    } finally {
-      database.close();
-    }
+    expect(claude).toMatchObject({
+      auth_configured: true,
+      auth_mode: "local-cli",
+      auth_source: "local_cli",
+      available: true,
+      capabilities: ["issue_execution", "sessions", "resume_session", "interrupt"],
+      local_cli: { checked: true, logged_in: true },
+      mode: "cli-fallback",
+      ready: true,
+      status: "available"
+    });
   });
 
   test("returns doctor provider metadata for missing Claude without leaking secrets", async () => {
@@ -528,40 +497,36 @@ describe("Bun system status endpoints", () => {
       claudeEnv: "ANTHROPIC_API_KEY=doctor-secret",
       claudeMode: "cli-fallback"
     });
-    try {
-      const router = createDefaultRouter();
-      registerSystemStatusRoute(router, { authToken: secret, config, database });
+    const router = createDefaultRouter();
+    registerSystemStatusRoute(router, { authToken: secret, config, database });
 
-      const handle = createRequestHandler(router, secret);
-      const response = await handle(new Request(`${BASE_URL}/api/system/doctor`, {
-        headers: { authorization: `Bearer ${secret}` }
-      }));
-      const text = await response.text();
-      const body = JSON.parse(text) as RuntimeDoctorBody;
-      const claude = body.providers.find((provider) => provider.id === "claude");
+    const handle = createRequestHandler(router, secret);
+    const response = await handle(new Request(`${BASE_URL}/api/system/doctor`, {
+      headers: { authorization: `Bearer ${secret}` }
+    }));
+    const text = await response.text();
+    const body = JSON.parse(text) as RuntimeDoctorBody;
+    const claude = body.providers.find((provider) => provider.id === "claude");
 
-      expect(response.status).toBe(200);
-      expect(body.listen.addr).toBe("127.0.0.1:3008");
-      expect(body.db.path).toBe("<stateDir>/runner.db");
-      expect(body.observability).toMatchObject({
-        schema_version: "xuanwu.runtime-observability.v1",
-        query_contract: { raw_log_scan: false }
-      });
-      expect(body.health).toMatchObject({ state: expect.any(String), reasons: expect.any(Array) });
-      expect(claude).toMatchObject({
-        id: "claude",
-        label: "Claude Code",
-        status: "missing",
-        available: false,
-        enabled: true,
-        capabilities: ["issue_execution", "sessions", "resume_session", "interrupt"]
-      });
-      expect(text).not.toContain(secret);
-      expect(text).not.toContain("doctor-secret");
-      expect(text).not.toContain("ANTHROPIC_API_KEY");
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(body.listen.addr).toBe("127.0.0.1:3008");
+    expect(body.db.path).toBe("<stateDir>/runner.db");
+    expect(body.observability).toMatchObject({
+      schema_version: "xuanwu.runtime-observability.v1",
+      query_contract: { raw_log_scan: false }
+    });
+    expect(body.health).toMatchObject({ state: expect.any(String), reasons: expect.any(Array) });
+    expect(claude).toMatchObject({
+      id: "claude",
+      label: "Claude Code",
+      status: "missing",
+      available: false,
+      enabled: true,
+      capabilities: ["issue_execution", "sessions", "resume_session", "interrupt"]
+    });
+    expect(text).not.toContain(secret);
+    expect(text).not.toContain("doctor-secret");
+    expect(text).not.toContain("ANTHROPIC_API_KEY");
   });
 
   test("reports configured Feishu connector without leaking secrets", async () => {
@@ -573,48 +538,44 @@ describe("Bun system status endpoints", () => {
       feishuVerificationToken: "verify-secret-value",
       secret
     });
-    try {
-      const router = createDefaultRouter();
-      registerSystemStatusRoute(router, { authToken: secret, config, database });
+    const router = createDefaultRouter();
+    registerSystemStatusRoute(router, { authToken: secret, config, database });
 
-      const handle = createRequestHandler(router, secret);
-      const response = await handle(new Request(`${BASE_URL}/api/system/status`, {
-        headers: { authorization: `Bearer ${secret}` }
-      }));
-      const text = await response.text();
-      const body = JSON.parse(text) as SystemStatusBody;
+    const handle = createRequestHandler(router, secret);
+    const response = await handle(new Request(`${BASE_URL}/api/system/status`, {
+      headers: { authorization: `Bearer ${secret}` }
+    }));
+    const text = await response.text();
+    const body = JSON.parse(text) as SystemStatusBody;
 
-      expect(response.status).toBe(200);
-      expect(body.connectors[0]).toMatchObject({
-        id: "feishu",
-        enabled: true,
+    expect(response.status).toBe(200);
+    expect(body.connectors[0]).toMatchObject({
+      id: "feishu",
+      enabled: true,
+      receive_mode: "websocket",
+      status: "configured",
+      missing_required: [],
+      secrets: {
+        app_id: { configured: true },
+        app_secret: { configured: true },
+        verification_token: { configured: true },
+        encrypt_key: { configured: true, optional: true }
+      },
+      summary: {
+        callback_path: "/api/integrations/feishu/events",
+        configured: true,
+        error: "",
+        public_url_required: false,
+        receive_enabled: true,
         receive_mode: "websocket",
-        status: "configured",
-        missing_required: [],
-        secrets: {
-          app_id: { configured: true },
-          app_secret: { configured: true },
-          verification_token: { configured: true },
-          encrypt_key: { configured: true, optional: true }
-        },
-        summary: {
-          callback_path: "/api/integrations/feishu/events",
-          configured: true,
-          error: "",
-          public_url_required: false,
-          receive_enabled: true,
-          receive_mode: "websocket",
-          reply_mode: "draft",
-          state: "configured"
-        }
-      });
-      expect(text).not.toContain(secret);
-      expect(text).not.toContain("app-secret-value");
-      expect(text).not.toContain("encrypt-secret-value");
-      expect(text).not.toContain("verify-secret-value");
-    } finally {
-      database.close();
-    }
+        reply_mode: "draft",
+        state: "configured"
+      }
+    });
+    expect(text).not.toContain(secret);
+    expect(text).not.toContain("app-secret-value");
+    expect(text).not.toContain("encrypt-secret-value");
+    expect(text).not.toContain("verify-secret-value");
   });
 
   test("does not leak token or raw paths in status JSON", async () => {
@@ -625,28 +586,24 @@ describe("Bun system status endpoints", () => {
       codexCommand: "codex --token=runtime-secret app-server --listen stdio://",
       codexEnv: "CODEX_API_KEY=runtime-secret,SAFE_VALUE=ok"
     });
-    try {
-      const router = createDefaultRouter();
-      registerSystemStatusRoute(router, { authToken: secret, config, database });
+    const router = createDefaultRouter();
+    registerSystemStatusRoute(router, { authToken: secret, config, database });
 
-      const handle = createRequestHandler(router, secret);
-      const response = await handle(new Request(`${BASE_URL}/api/system/status`, {
-        headers: { authorization: `Bearer ${secret}` }
-      }));
-      const text = await response.text();
+    const handle = createRequestHandler(router, secret);
+    const response = await handle(new Request(`${BASE_URL}/api/system/status`, {
+      headers: { authorization: `Bearer ${secret}` }
+    }));
+    const text = await response.text();
 
-      expect(response.status).toBe(200);
-      expect(text).not.toContain(secret);
-      expect(text).not.toContain(config.stateDir);
-      expect(text).not.toContain(config.dbPath);
-      expect(text).not.toContain(config.authTokenFile);
-      expect(text).not.toContain("auth_token");
-      expect(text).not.toContain("runtime-secret");
-      expect(text).not.toContain("CODEX_API_KEY");
-      expect(text).toContain("SAFE_VALUE");
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(text).not.toContain(secret);
+    expect(text).not.toContain(config.stateDir);
+    expect(text).not.toContain(config.dbPath);
+    expect(text).not.toContain(config.authTokenFile);
+    expect(text).not.toContain("auth_token");
+    expect(text).not.toContain("runtime-secret");
+    expect(text).not.toContain("CODEX_API_KEY");
+    expect(text).toContain("SAFE_VALUE");
   });
 });
 
@@ -692,7 +649,7 @@ async function openFixtureRuntime(options: {
     telegramBotToken: options.telegramBotToken,
     stateDir
   });
-  const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
+  const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir }).then(trackDatabase);
   return { config, database };
 }
 
@@ -753,44 +710,40 @@ type RuntimeDoctorBody = {
 describe("P4: registry 投影接入 system status", () => {
   test("registry 注册的测试 Provider 出现在 API status，无需修改 status builder switch", async () => {
     const { config, database } = await openFixtureRuntime({ claudeMode: "sdk" });
-    try {
-      const registry = createProviderRegistry();
-      registry.registerFactory({
-        manifest: {
-          id: asProviderId("fake-execution-only"),
-          displayName: "Fake Execution-Only",
-          supportLevel: "tested",
-          transports: ["stdio-json"],
-          capabilities: { issueExecution: true }
-        },
-        parseConfig: (raw: unknown) => ({ ...(raw as Record<string, unknown>) }),
-        autoDetect: () => ({ installed: true, ready: true }),
-        create: () => ({ id: "fake-execution-only", capabilities: ["issue_execution"], run: async () => ({ runId: "r" }) }) as never
-      });
-      await registry.startConfigured({});
-      const router = createDefaultRouter();
-      registerSystemStatusRoute(router, {
-        authToken: "status-secret",
-        config,
-        database,
-        providersRegistry: registry
-      });
-      const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
-      expect(response.status).toBe(200);
-      const body = (await response.json()) as SystemStatusBody;
-      const fake = body.providers.find((p) => p.id === "fake-execution-only");
-      expect(fake).toBeDefined();
-      expect(fake?.registry_state).toBe("ready");
-      expect(fake?.support_level).toBe("tested");
-      expect(fake?.capabilities).toContain("issue_execution");
-      expect(body.providers.map((provider) => provider.id)).toEqual(["fake-execution-only"]);
+    const registry = createProviderRegistry();
+    registry.registerFactory({
+      manifest: {
+        id: asProviderId("fake-execution-only"),
+        displayName: "Fake Execution-Only",
+        supportLevel: "tested",
+        transports: ["stdio-json"],
+        capabilities: { issueExecution: true }
+      },
+      parseConfig: (raw: unknown) => ({ ...(raw as Record<string, unknown>) }),
+      autoDetect: () => ({ installed: true, ready: true }),
+      create: () => ({ id: "fake-execution-only", capabilities: ["issue_execution"], run: async () => ({ runId: "r" }) }) as never
+    });
+    await registry.startConfigured({});
+    const router = createDefaultRouter();
+    registerSystemStatusRoute(router, {
+      authToken: "status-secret",
+      config,
+      database,
+      providersRegistry: registry
+    });
+    const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as SystemStatusBody;
+    const fake = body.providers.find((p) => p.id === "fake-execution-only");
+    expect(fake).toBeDefined();
+    expect(fake?.registry_state).toBe("ready");
+    expect(fake?.support_level).toBe("tested");
+    expect(fake?.capabilities).toContain("issue_execution");
+    expect(body.providers.map((provider) => provider.id)).toEqual(["fake-execution-only"]);
 
-      const compactResponse = await router.handle(new Request(`${BASE_URL}/api/system/status?compact=1`));
-      expect(compactResponse.status).toBe(200);
-      const compactBody = (await compactResponse.json()) as SystemStatusBody;
-      expect(compactBody.providers.map((provider) => provider.id)).toEqual(["fake-execution-only"]);
-    } finally {
-      database.close();
-    }
+    const compactResponse = await router.handle(new Request(`${BASE_URL}/api/system/status?compact=1`));
+    expect(compactResponse.status).toBe(200);
+    const compactBody = (await compactResponse.json()) as SystemStatusBody;
+    expect(compactBody.providers.map((provider) => provider.id)).toEqual(["fake-execution-only"]);
   });
 });

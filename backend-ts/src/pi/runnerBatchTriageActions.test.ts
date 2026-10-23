@@ -7,6 +7,9 @@ import { getIssue, listIssues } from "../db/repositories/issues.ts";
 import { listPiActionEvents, listPiActions, listPiRunGroupItems, listPiRunGroups } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import { createPiRunnerActions } from "./runnerActions.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 describe("PI batch triage enqueue ranges", () => {
   test("delegated runner chat enqueues the requested issue range in order", async () => {
@@ -83,7 +86,7 @@ describe("PI batch triage enqueue ranges", () => {
 
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase; project: Project }> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-batch-triage-"));
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   insertProject(db, "demo", join(root, "project"));
   const project = getProject(db, "demo");
   if (!project) throw new Error("missing fixture project");

@@ -18,6 +18,9 @@ import {
   SkillRuntimeError,
   type SkillRuntimeHandler
 } from "./runtime.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const tempRoots: string[] = [];
 
@@ -31,101 +34,93 @@ afterEach(async () => {
 describe("controlled skill runtime", () => {
   test("runs the real built-in domain skill with schema, evidence, and run audit", async () => {
     const db = await openFixture();
-    try {
-      const item = seedInboxItem(db, "status_question");
-      const result = await runDomainSkillAndMarkProposal(db, item);
-      const payload = JSON.parse(result.action.payload_json) as Record<string, any>;
-      const events = listPiActionEvents(db, { actionId: result.action.id });
+    const item = seedInboxItem(db, "status_question");
+    const result = await runDomainSkillAndMarkProposal(db, item);
+    const payload = JSON.parse(result.action.payload_json) as Record<string, any>;
+    const events = listPiActionEvents(db, { actionId: result.action.id });
 
-      expect(result.output).toMatchObject({
-        item_id: item.id,
-        skill_id: DEFAULT_DOMAIN_SKILL_ID
-      });
-      expect(result.output.action_proposals.map((action) => action.type)).toEqual([
-        "issue.status_lookup",
-        "message.reply_draft"
-      ]);
-      expect(result.output.action_proposals.every((action) =>
-        action.evidence_refs.every((ref) => item.evidence_refs.includes(ref)))).toBe(true);
-      expect(result.runtime).toMatchObject({
-        handler: "builtin:pi-domain-proposal",
-        sandbox: "capability",
-        skill_id: DEFAULT_DOMAIN_SKILL_ID,
-        status: "succeeded"
-      });
-      expect(payload.skill_runtime).toMatchObject({ skill_id: DEFAULT_DOMAIN_SKILL_ID, status: "succeeded" });
-      expect(result.action.id).not.toContain("fixture-domain");
-      expect(events.map((event) => event.event_type)).toEqual([
-        "skill_runtime.started",
-        "skill_runtime.completed"
-      ]);
-      expect(JSON.parse(events.at(-1)?.payload_json ?? "{}")).toMatchObject({
-        evidence_validation: "passed",
-        input_validation: "passed",
-        kind: "domain",
-        output_validation: "passed",
-        status: "succeeded"
-      });
-    } finally {
-      db.close();
-    }
+    expect(result.output).toMatchObject({
+      item_id: item.id,
+      skill_id: DEFAULT_DOMAIN_SKILL_ID
+    });
+    expect(result.output.action_proposals.map((action) => action.type)).toEqual([
+      "issue.status_lookup",
+      "message.reply_draft"
+    ]);
+    expect(result.output.action_proposals.every((action) =>
+      action.evidence_refs.every((ref) => item.evidence_refs.includes(ref)))).toBe(true);
+    expect(result.runtime).toMatchObject({
+      handler: "builtin:pi-domain-proposal",
+      sandbox: "capability",
+      skill_id: DEFAULT_DOMAIN_SKILL_ID,
+      status: "succeeded"
+    });
+    expect(payload.skill_runtime).toMatchObject({ skill_id: DEFAULT_DOMAIN_SKILL_ID, status: "succeeded" });
+    expect(result.action.id).not.toContain("fixture-domain");
+    expect(events.map((event) => event.event_type)).toEqual([
+      "skill_runtime.started",
+      "skill_runtime.completed"
+    ]);
+    expect(JSON.parse(events.at(-1)?.payload_json ?? "{}")).toMatchObject({
+      evidence_validation: "passed",
+      input_validation: "passed",
+      kind: "domain",
+      output_validation: "passed",
+      status: "succeeded"
+    });
   });
 
   test("isolates invalid input and invalid output before persistence", async () => {
     const db = await openFixture();
-    try {
-      let called = false;
-      await expectRuntimeError(executeSkillRuntime({
-        db,
-        handlers: { "test:input": () => { called = true; return {}; } },
-        input: {},
-        runID: "skill-run-bad-input",
-        skill: fixtureSkill("bad-input", "test:input", {
-          input_schema: { properties: { inbox_item: { type: "object" } }, required: ["inbox_item"], type: "object" }
-        })
-      }), "input_schema_invalid");
-      expect(called).toBe(false);
+    let called = false;
+    await expectRuntimeError(executeSkillRuntime({
+      db,
+      handlers: { "test:input": () => { called = true; return {}; } },
+      input: {},
+      runID: "skill-run-bad-input",
+      skill: fixtureSkill("bad-input", "test:input", {
+        input_schema: { properties: { inbox_item: { type: "object" } }, required: ["inbox_item"], type: "object" }
+      })
+    }), "input_schema_invalid");
+    expect(called).toBe(false);
 
-      await expectRuntimeError(executeSkillRuntime({
-        db,
-        handlers: { "test:output": () => ({ action_proposals: "not-an-array" }) },
-        input: { inbox_item: { evidence_refs: ["external_event:1"] } },
-        runID: "skill-run-bad-output",
-        skill: fixtureSkill("bad-output", "test:output", {
-          output_schema: {
-            properties: { action_proposals: { type: "array" } },
-            required: ["action_proposals"],
-            type: "object"
-          }
-        })
-      }), "output_schema_invalid");
+    await expectRuntimeError(executeSkillRuntime({
+      db,
+      handlers: { "test:output": () => ({ action_proposals: "not-an-array" }) },
+      input: { inbox_item: { evidence_refs: ["external_event:1"] } },
+      runID: "skill-run-bad-output",
+      skill: fixtureSkill("bad-output", "test:output", {
+        output_schema: {
+          properties: { action_proposals: { type: "array" } },
+          required: ["action_proposals"],
+          type: "object"
+        }
+      })
+    }), "output_schema_invalid");
 
-      await expectRuntimeError(executeSkillRuntime({
-        db,
-        handlers: { "test:evidence": () => ({
-          action_proposals: [{ evidence_refs: ["external_event:forged"] }]
-        }) },
-        input: { inbox_item: { evidence_refs: ["external_event:1"] } },
-        runID: "skill-run-bad-evidence",
-        skill: fixtureSkill("bad-evidence", "test:evidence")
-      }), "evidence_out_of_scope");
+    await expectRuntimeError(executeSkillRuntime({
+      db,
+      handlers: { "test:evidence": () => ({
+        action_proposals: [{ evidence_refs: ["external_event:forged"] }]
+      }) },
+      input: { inbox_item: { evidence_refs: ["external_event:1"] } },
+      runID: "skill-run-bad-evidence",
+      skill: fixtureSkill("bad-evidence", "test:evidence")
+    }), "evidence_out_of_scope");
 
-      expect(listPiActions(db)).toEqual([]);
-      expect(completedPayload(db, "skill-run-bad-input")).toMatchObject({
-        error_code: "input_schema_invalid",
-        status: "failed"
-      });
-      expect(completedPayload(db, "skill-run-bad-output")).toMatchObject({
-        error_code: "output_schema_invalid",
-        status: "failed"
-      });
-      expect(completedPayload(db, "skill-run-bad-evidence")).toMatchObject({
-        error_code: "evidence_out_of_scope",
-        status: "failed"
-      });
-    } finally {
-      db.close();
-    }
+    expect(listPiActions(db)).toEqual([]);
+    expect(completedPayload(db, "skill-run-bad-input")).toMatchObject({
+      error_code: "input_schema_invalid",
+      status: "failed"
+    });
+    expect(completedPayload(db, "skill-run-bad-output")).toMatchObject({
+      error_code: "output_schema_invalid",
+      status: "failed"
+    });
+    expect(completedPayload(db, "skill-run-bad-evidence")).toMatchObject({
+      error_code: "evidence_out_of_scope",
+      status: "failed"
+    });
   });
 
   test("routes granted write tools into the governed pending Action chain", async () => {
@@ -134,31 +129,27 @@ describe("controlled skill runtime", () => {
       await context.invokeTool("issue_create_proposal", { project_id: "demo", title: "must not write" });
       return { action_proposals: [] };
     };
-    try {
-      const result = await executeSkillRuntime({
-        auditContext: { conversationID: "skill-permission-test" },
-        db,
-        handlers: { "test:write": handler },
-        input: { inbox_item: { evidence_refs: ["external_event:1"] } },
-        runID: "skill-run-write-denied",
-        skill: fixtureSkill("write-denied", "test:write", {
-          permissions: { max_tool_permission: "write" },
-          required_tools: ["issue_create_proposal"]
-        })
-      });
+    const result = await executeSkillRuntime({
+      auditContext: { conversationID: "skill-permission-test" },
+      db,
+      handlers: { "test:write": handler },
+      input: { inbox_item: { evidence_refs: ["external_event:1"] } },
+      runID: "skill-run-write-denied",
+      skill: fixtureSkill("write-denied", "test:write", {
+        permissions: { max_tool_permission: "write" },
+        required_tools: ["issue_create_proposal"]
+      })
+    });
 
-      expect(result.run.status).toBe("succeeded");
-      expect(listPiActions(db)).toEqual([
-        expect.objectContaining({ action_type: "issue.create", gate_decision: "ask", status: "pending" })
-      ]);
-      expect(listPiActionEvents(db, { conversationId: "skill-permission-test" }).map((event) => event.event_type))
-        .toEqual(expect.arrayContaining(["candidate", "gate_decision", "pending_approval"]));
-      expect(completedPayload(db, "skill-run-write-denied")).toMatchObject({
-        status: "succeeded"
-      });
-    } finally {
-      db.close();
-    }
+    expect(result.run.status).toBe("succeeded");
+    expect(listPiActions(db)).toEqual([
+      expect.objectContaining({ action_type: "issue.create", gate_decision: "ask", status: "pending" })
+    ]);
+    expect(listPiActionEvents(db, { conversationId: "skill-permission-test" }).map((event) => event.event_type))
+      .toEqual(expect.arrayContaining(["candidate", "gate_decision", "pending_approval"]));
+    expect(completedPayload(db, "skill-run-write-denied")).toMatchObject({
+      status: "succeeded"
+    });
   });
 
   test("executes a granted CLI write tool only after the pending Action is approved", async () => {
@@ -172,39 +163,35 @@ describe("controlled skill runtime", () => {
         value: "approved"
       })
     });
-    try {
-      const result = await executeSkillRuntime<Record<string, unknown>>({
-        auditContext: { conversationID: "skill-cli-write", projectID: "skill-write-project" },
-        cliConnectorDirs: [connector.dir],
-        db,
-        handlers: { "test:cli-write": handler },
-        input: { inbox_item: { evidence_refs: ["external_event:1"] } },
-        runID: "skill-run-cli-write",
-        skill: fixtureSkill("cli-write", "test:cli-write", {
-          permissions: { max_tool_permission: "write" },
-          required_tools: ["skill-write-cli:write-marker"]
-        })
-      });
+    const result = await executeSkillRuntime<Record<string, unknown>>({
+      auditContext: { conversationID: "skill-cli-write", projectID: "skill-write-project" },
+      cliConnectorDirs: [connector.dir],
+      db,
+      handlers: { "test:cli-write": handler },
+      input: { inbox_item: { evidence_refs: ["external_event:1"] } },
+      runID: "skill-run-cli-write",
+      skill: fixtureSkill("cli-write", "test:cli-write", {
+        permissions: { max_tool_permission: "write" },
+        required_tools: ["skill-write-cli:write-marker"]
+      })
+    });
 
-      const [pending] = listPiActions(db, { status: "pending" });
-      expect(result.output).toMatchObject({ invocation: { decision: "ask", status: "pending" } });
-      expect(pending).toMatchObject({ action_type: "assistant.tool.call", gate_decision: "ask" });
-      expect(await Bun.file(connector.marker).exists()).toBe(false);
+    const [pending] = listPiActions(db, { status: "pending" });
+    expect(result.output).toMatchObject({ invocation: { decision: "ask", status: "pending" } });
+    expect(pending).toMatchObject({ action_type: "assistant.tool.call", gate_decision: "ask" });
+    expect(await Bun.file(connector.marker).exists()).toBe(false);
 
-      const completed = await resolvePiActionDecision({ database: db }, {
-        actionID: pending.id,
-        actor: "test:user",
-        decision: "approve"
-      });
-      expect(completed.status).toBe("completed");
-      expect(await Bun.file(connector.marker).text()).toBe("approved");
-      expect(JSON.parse(completed.result_json)).toMatchObject({
-        output: { marker: connector.marker, value: "approved" },
-        status: "succeeded"
-      });
-    } finally {
-      db.close();
-    }
+    const completed = await resolvePiActionDecision({ database: db }, {
+      actionID: pending.id,
+      actor: "test:user",
+      decision: "approve"
+    });
+    expect(completed.status).toBe("completed");
+    expect(await Bun.file(connector.marker).text()).toBe("approved");
+    expect(JSON.parse(completed.result_json)).toMatchObject({
+      output: { marker: connector.marker, value: "approved" },
+      status: "succeeded"
+    });
   });
 
   test("invokes a granted read tool through the shared audited gateway", async () => {
@@ -213,27 +200,23 @@ describe("controlled skill runtime", () => {
       action_proposals: [],
       projects: await context.invokeTool("project_status")
     });
-    try {
-      const result = await executeSkillRuntime<Record<string, unknown>>({
-        auditContext: { conversationID: "skill-read-test" },
-        db,
-        handlers: { "test:read": handler },
-        input: { inbox_item: { evidence_refs: ["external_event:1"] } },
-        runID: "skill-run-read",
-        skill: fixtureSkill("read", "test:read", { required_tools: ["project_status"] })
-      });
+    const result = await executeSkillRuntime<Record<string, unknown>>({
+      auditContext: { conversationID: "skill-read-test" },
+      db,
+      handlers: { "test:read": handler },
+      input: { inbox_item: { evidence_refs: ["external_event:1"] } },
+      runID: "skill-run-read",
+      skill: fixtureSkill("read", "test:read", { required_tools: ["project_status"] })
+    });
 
-      expect(result.output).toMatchObject({ projects: { items: [] } });
-      const audit = listPiActionEvents(db, { conversationId: "skill-read-test" })
-        .find((event) => event.event_type === "tool_call_audit");
-      expect(JSON.parse(audit?.payload_json ?? "{}")).toMatchObject({
-        provider_id: "runner-builtin",
-        status: "succeeded",
-        tool: "project_status"
-      });
-    } finally {
-      db.close();
-    }
+    expect(result.output).toMatchObject({ projects: { items: [] } });
+    const audit = listPiActionEvents(db, { conversationId: "skill-read-test" })
+      .find((event) => event.event_type === "tool_call_audit");
+    expect(JSON.parse(audit?.payload_json ?? "{}")).toMatchObject({
+      provider_id: "runner-builtin",
+      status: "succeeded",
+      tool: "project_status"
+    });
   });
 
   test("times out a handler and closes its capability sandbox", async () => {
@@ -243,58 +226,50 @@ describe("controlled skill runtime", () => {
       await context.invokeTool("project_status");
       return { action_proposals: [] };
     };
-    try {
-      await expectRuntimeError(executeSkillRuntime({
-        auditContext: { conversationID: "skill-timeout-test" },
-        db,
-        handlers: { "test:slow": handler },
-        input: { inbox_item: { evidence_refs: ["external_event:1"] } },
-        runID: "skill-run-timeout",
-        skill: fixtureSkill("slow", "test:slow", {
-          execution: { adapter: "builtin", handler: "test:slow", sandbox: "capability", timeout_ms: 5 },
-          required_tools: ["project_status"]
-        })
-      }), "skill_timeout");
-      await Bun.sleep(40);
+    await expectRuntimeError(executeSkillRuntime({
+      auditContext: { conversationID: "skill-timeout-test" },
+      db,
+      handlers: { "test:slow": handler },
+      input: { inbox_item: { evidence_refs: ["external_event:1"] } },
+      runID: "skill-run-timeout",
+      skill: fixtureSkill("slow", "test:slow", {
+        execution: { adapter: "builtin", handler: "test:slow", sandbox: "capability", timeout_ms: 5 },
+        required_tools: ["project_status"]
+      })
+    }), "skill_timeout");
+    await Bun.sleep(40);
 
-      expect(completedPayload(db, "skill-run-timeout")).toMatchObject({
-        error_code: "skill_timeout",
-        status: "timeout"
-      });
-      expect(listPiActionEvents(db, { conversationId: "skill-timeout-test" })
-        .filter((event) => event.event_type === "tool_call_audit")).toEqual([]);
-    } finally {
-      db.close();
-    }
+    expect(completedPayload(db, "skill-run-timeout")).toMatchObject({
+      error_code: "skill_timeout",
+      status: "timeout"
+    });
+    expect(listPiActionEvents(db, { conversationId: "skill-timeout-test" })
+      .filter((event) => event.event_type === "tool_call_audit")).toEqual([]);
   });
 
   test("intersects skill grants with the frozen workflow stage", async () => {
     const db = await openFixture();
-    try {
-      const skill = fixtureSkill("workflow-bound", "test:workflow", { required_tools: ["project_status"] });
-      await expectRuntimeError(executeSkillRuntime({
-        db,
-        handlers: { "test:workflow": () => ({ action_proposals: [] }) },
-        input: { inbox_item: { evidence_refs: ["external_event:1"] } },
-        runID: "skill-run-workflow-denied",
-        skill,
-        workflow: { manifest_ref: "workflow:test@1", stage: workflowStage(skill.id, []) }
-      }), "workflow_tool_denied");
-      expect(completedPayload(db, "skill-run-workflow-denied")).toMatchObject({
-        error_code: "workflow_tool_denied",
-        workflow_ref: "workflow:test@1",
-        workflow_stage_id: "execute"
-      });
-    } finally {
-      db.close();
-    }
+    const skill = fixtureSkill("workflow-bound", "test:workflow", { required_tools: ["project_status"] });
+    await expectRuntimeError(executeSkillRuntime({
+      db,
+      handlers: { "test:workflow": () => ({ action_proposals: [] }) },
+      input: { inbox_item: { evidence_refs: ["external_event:1"] } },
+      runID: "skill-run-workflow-denied",
+      skill,
+      workflow: { manifest_ref: "workflow:test@1", stage: workflowStage(skill.id, []) }
+    }), "workflow_tool_denied");
+    expect(completedPayload(db, "skill-run-workflow-denied")).toMatchObject({
+      error_code: "workflow_tool_denied",
+      workflow_ref: "workflow:test@1",
+      workflow_stage_id: "execute"
+    });
   });
 });
 
 async function openFixture(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-skill-runtime-"));
   tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
+  return openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
 }
 
 async function writeCliWriteFixture(): Promise<{ dir: string; marker: string; root: string }> {

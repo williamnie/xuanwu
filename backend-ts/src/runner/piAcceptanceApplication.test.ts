@@ -31,6 +31,9 @@ import type {
 } from "../providers/types.ts";
 import { applyPiAcceptanceDecision } from "./piAcceptanceApplication.ts";
 import { observeGitHubIssue, updateGitHubIssueCase } from "../integrations/github/issueCaseStore.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 
@@ -119,304 +122,264 @@ describe("PI acceptance decision application", () => {
   });
   test("a new human decision resets the GitHub report retry budget once without accepting an invalid report", async () => {
     const db = await fixture(); const provider = new ContinuingProvider();
-    try {
-      const issue = completedIssue(db, "GitHub report recovery");
-      observeGitHubIssue(db, { nodeId: "I_report", repositoryId: 1, repository: "acme/demo", number: 1,
-        title: "Broken report", body: "", author: "author", url: "https://github.com/acme/demo/issues/1", state: "open", stateReason: "", updatedAt: new Date().toISOString(), labels: ["xuanwu"] }, "demo");
-      updateGitHubIssueCase(db, "I_report", 1, { issue_id: issue.id, work_source_revision: 1, stage: "repair" });
-      for (const runID of ["old-1", "old-2"]) recordIssueEvent(db, issue.id, "github.acceptance_contract_failed.v1", { run_id: runID, problem: "invalid report" });
-      const runtime = { database: db, providers: { codex: provider } };
-      expect((await applyPiAcceptanceDecision(runtime, await buildIssueCompletionCard(db, issue.id), decision("accept"))).status).toBe("needs_user");
-      expect(provider.inputs).toHaveLength(0);
-      const request = readIssueDecisionProjection(db, issue.id).request!;
-      await reviewHumanIssue(db, issue.id, { action: "accept", comment: "CI 限制已确认，请收尾本地验证并修正报告。", review_request_id: request.id, review_revision: request.revision });
-      for (let i = 0; i < 2; i++) {
-        expect((await applyPiAcceptanceDecision(runtime, await buildIssueCompletionCard(db, issue.id), decision("accept"))).status).toBe("in_progress");
-      }
-      expect(provider.inputs).toHaveLength(2);
-      expect(provider.inputs[0]?.prompt).toContain("CI 限制已确认");
-      expect(provider.inputs[0]?.prompt).toContain("reproduction.status 只能为 reproduced 或 not_reproduced");
-      expect(provider.inputs[0]?.prompt).toContain("不能使用 verified_fixed");
-      expect((await applyPiAcceptanceDecision(runtime, await buildIssueCompletionCard(db, issue.id), decision("accept"))).status).toBe("needs_user");
-      expect(provider.inputs).toHaveLength(2);
-      expect(getIssue(db, issue.id)?.status).not.toBe("done");
-    } finally { db.close(); }
+    const issue = completedIssue(db, "GitHub report recovery");
+    observeGitHubIssue(db, { nodeId: "I_report", repositoryId: 1, repository: "acme/demo", number: 1,
+      title: "Broken report", body: "", author: "author", url: "https://github.com/acme/demo/issues/1", state: "open", stateReason: "", updatedAt: new Date().toISOString(), labels: ["xuanwu"] }, "demo");
+    updateGitHubIssueCase(db, "I_report", 1, { issue_id: issue.id, work_source_revision: 1, stage: "repair" });
+    for (const runID of ["old-1", "old-2"]) recordIssueEvent(db, issue.id, "github.acceptance_contract_failed.v1", { run_id: runID, problem: "invalid report" });
+    const runtime = { database: db, providers: { codex: provider } };
+    expect((await applyPiAcceptanceDecision(runtime, await buildIssueCompletionCard(db, issue.id), decision("accept"))).status).toBe("needs_user");
+    expect(provider.inputs).toHaveLength(0);
+    const request = readIssueDecisionProjection(db, issue.id).request!;
+    await reviewHumanIssue(db, issue.id, { action: "accept", comment: "CI 限制已确认，请收尾本地验证并修正报告。", review_request_id: request.id, review_revision: request.revision });
+    for (let i = 0; i < 2; i++) {
+      expect((await applyPiAcceptanceDecision(runtime, await buildIssueCompletionCard(db, issue.id), decision("accept"))).status).toBe("in_progress");
+    }
+    expect(provider.inputs).toHaveLength(2);
+    expect(provider.inputs[0]?.prompt).toContain("CI 限制已确认");
+    expect(provider.inputs[0]?.prompt).toContain("reproduction.status 只能为 reproduced 或 not_reproduced");
+    expect(provider.inputs[0]?.prompt).toContain("不能使用 verified_fixed");
+    expect((await applyPiAcceptanceDecision(runtime, await buildIssueCompletionCard(db, issue.id), decision("accept"))).status).toBe("needs_user");
+    expect(provider.inputs).toHaveLength(2);
+    expect(getIssue(db, issue.id)?.status).not.toBe("done");
   });
 
   test("automatically persists one reflection for accepted evidence; request failure never rolls back done", async () => {
     const db = await fixture();
-    try {
-      const seed = seedMemoryExperience(db);
-      setMemoryReflectionEnabled(db, "demo", true);
-      db.sqlite.run("update issue_runs set status='succeeded', ended_at=? where id=?", [new Date().toISOString(), seed.legacyRunID]);
-      recordIssueEvent(db, seed.issueID, "issue.pi_acceptance_requested.v1", { issue_run_id: seed.legacyRunID });
-      const card = await buildIssueCompletionCard(db, seed.issueID);
-      db.sqlite.run("create trigger reflection_storage_error before insert on pi_memory_reflections begin select raise(abort, 'storage unavailable'); end");
-      expect((await applyPiAcceptanceDecision({ database: db }, card, decision("accept"))).status).toBe("done");
-      db.sqlite.run("drop trigger reflection_storage_error");
-      await applyPiAcceptanceDecision({ database: db }, card, decision("accept"));
-      await applyPiAcceptanceDecision({ database: db }, card, decision("accept"));
-      expect(db.sqlite.query("select status, attempts from pi_memory_reflections").all()).toEqual([{ status: "pending", attempts: 0 }]);
-      expect(db.sqlite.query("select count(*) n from pi_memory_items").get()).toEqual({ n: 0 });
-    } finally { db.close(); }
+    const seed = seedMemoryExperience(db);
+    setMemoryReflectionEnabled(db, "demo", true);
+    db.sqlite.run("update issue_runs set status='succeeded', ended_at=? where id=?", [new Date().toISOString(), seed.legacyRunID]);
+    recordIssueEvent(db, seed.issueID, "issue.pi_acceptance_requested.v1", { issue_run_id: seed.legacyRunID });
+    const card = await buildIssueCompletionCard(db, seed.issueID);
+    db.sqlite.run("create trigger reflection_storage_error before insert on pi_memory_reflections begin select raise(abort, 'storage unavailable'); end");
+    expect((await applyPiAcceptanceDecision({ database: db }, card, decision("accept"))).status).toBe("done");
+    db.sqlite.run("drop trigger reflection_storage_error");
+    await applyPiAcceptanceDecision({ database: db }, card, decision("accept"));
+    await applyPiAcceptanceDecision({ database: db }, card, decision("accept"));
+    expect(db.sqlite.query("select status, attempts from pi_memory_reflections").all()).toEqual([{ status: "pending", attempts: 0 }]);
+    expect(db.sqlite.query("select count(*) n from pi_memory_items").get()).toEqual({ n: 0 });
   });
 
   test("final failure persists a diagnostic reflection but needs_user does not", async () => {
     const db = await fixture();
-    try {
-      setMemoryReflectionEnabled(db, "demo", true);
-      for (const outcome of ["failed", "needs_user"] as const) {
-        const seed = seedMemoryExperience(db);
-        db.sqlite.run("update issue_runs set status='failed', ended_at=? where id=?", [new Date().toISOString(), seed.legacyRunID]);
-        recordIssueEvent(db, seed.issueID, "issue.pi_acceptance_requested.v1", { issue_run_id: seed.legacyRunID });
-        const card = await buildIssueCompletionCard(db, seed.issueID);
-        expect((await applyPiAcceptanceDecision({ database: db }, card, decision(outcome))).status).toBe(outcome);
-      }
-      const rows = db.sqlite.query<{ summary_json: string }, []>("select summary_json from pi_memory_reflections").all();
-      expect(rows).toHaveLength(1);
-      expect(JSON.parse(rows[0]!.summary_json).outcome).toBe("failed");
-    } finally { db.close(); }
+    setMemoryReflectionEnabled(db, "demo", true);
+    for (const outcome of ["failed", "needs_user"] as const) {
+      const seed = seedMemoryExperience(db);
+      db.sqlite.run("update issue_runs set status='failed', ended_at=? where id=?", [new Date().toISOString(), seed.legacyRunID]);
+      recordIssueEvent(db, seed.issueID, "issue.pi_acceptance_requested.v1", { issue_run_id: seed.legacyRunID });
+      const card = await buildIssueCompletionCard(db, seed.issueID);
+      expect((await applyPiAcceptanceDecision({ database: db }, card, decision(outcome))).status).toBe(outcome);
+    }
+    const rows = db.sqlite.query<{ summary_json: string }, []>("select summary_json from pi_memory_reflections").all();
+    expect(rows).toHaveLength(1);
+    expect(JSON.parse(rows[0]!.summary_json).outcome).toBe("failed");
   });
 
   test("accepts the exact current card, persists semantic acceptance, and is idempotent", async () => {
     const db = await fixture();
-    try {
-      const issue = completedIssue(db, "Accept delivery");
-      const card = await buildIssueCompletionCard(db, issue.id);
-      const first = await applyPiAcceptanceDecision({ database: db }, card, decision("accept"));
-      const replay = await applyPiAcceptanceDecision({ database: db }, card, decision("accept"));
+    const issue = completedIssue(db, "Accept delivery");
+    const card = await buildIssueCompletionCard(db, issue.id);
+    const first = await applyPiAcceptanceDecision({ database: db }, card, decision("accept"));
+    const replay = await applyPiAcceptanceDecision({ database: db }, card, decision("accept"));
 
-      expect(first.status).toBe("done");
-      expect(replay.status).toBe("done");
-      expect(db.sqlite.query<{ count: number }, [number]>(
-        "select count(*) as count from issue_events where issue_id=? and type='issue.pi_acceptance_applied.v1'"
-      ).get(issue.id)?.count).toBe(1);
-      expect(diagnoseIssueState(db, { includeDoneIssues: true, issueIDs: [issue.id] }).diagnostics).toEqual([]);
-    } finally {
-      db.close();
-    }
+    expect(first.status).toBe("done");
+    expect(replay.status).toBe("done");
+    expect(db.sqlite.query<{ count: number }, [number]>(
+      "select count(*) as count from issue_events where issue_id=? and type='issue.pi_acceptance_applied.v1'"
+    ).get(issue.id)?.count).toBe(1);
+    expect(diagnoseIssueState(db, { includeDoneIssues: true, issueIDs: [issue.id] }).diagnostics).toEqual([]);
   });
 
   test("acceptance depends on PI's Session judgment, not Handoff artifacts", async () => {
     const db = await fixture();
-    try {
-      const issue = completedIssue(db, "Required handoff");
-      const card = await buildIssueCompletionCard(db, issue.id);
+    const issue = completedIssue(db, "Required handoff");
+    const card = await buildIssueCompletionCard(db, issue.id);
 
-      const accepted = await applyPiAcceptanceDecision({ database: db }, card, decision("accept"));
-      expect(accepted.status).toBe("done");
-    } finally {
-      db.close();
-    }
+    const accepted = await applyPiAcceptanceDecision({ database: db }, card, decision("accept"));
+    expect(accepted.status).toBe("done");
   });
 
   test("PI can hold the Issue for one explicit human decision", async () => {
     const db = await fixture();
-    try {
-      const issue = completedIssue(db, "Need product choice");
-      const card = await buildIssueCompletionCard(db, issue.id);
-      const updated = await applyPiAcceptanceDecision(
-        { database: db },
-        card,
-        decision("needs_user", "请确认是否接受这个范围取舍。")
-      );
+    const issue = completedIssue(db, "Need product choice");
+    const card = await buildIssueCompletionCard(db, issue.id);
+    const updated = await applyPiAcceptanceDecision(
+      { database: db },
+      card,
+      decision("needs_user", "请确认是否接受这个范围取舍。")
+    );
 
-      expect(updated.status).toBe("needs_user");
-      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
-        owner: "human",
-        phase: "human_review",
-        request: { kind: "decision", question: "需要在原 Session 补充明确工作。" }
-      });
-    } finally {
-      db.close();
-    }
+    expect(updated.status).toBe("needs_user");
+    expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
+      owner: "human",
+      phase: "human_review",
+      request: { kind: "decision", question: "需要在原 Session 补充明确工作。" }
+    });
   });
 
   test("PI retry creates a fresh Provider Session and a new canonical Run", async () => {
     const db = await fixture();
     const provider = new FreshSessionProvider("claude");
-    try {
-      const issue = completedIssue(db, "Retry delivery", "session-broken", "turn-broken", "claude");
-      selectProviderDefaultProfile(db, issue.id, "claude");
-      const card = await buildIssueCompletionCard(db, issue.id);
-      const updated = await applyPiAcceptanceDecision(
-        { database: db, providers: { claude: provider } },
-        card,
-        decision("retry", "原 Session 已损坏，读取工作区后从剩余步骤继续。")
-      );
+    const issue = completedIssue(db, "Retry delivery", "session-broken", "turn-broken", "claude");
+    selectProviderDefaultProfile(db, issue.id, "claude");
+    const card = await buildIssueCompletionCard(db, issue.id);
+    const updated = await applyPiAcceptanceDecision(
+      { database: db, providers: { claude: provider } },
+      card,
+      decision("retry", "原 Session 已损坏，读取工作区后从剩余步骤继续。")
+    );
 
-      expect(provider.inputs).toHaveLength(1);
-      expect(provider.inputs[0]?.model).toBe("");
-      expect(provider.inputs[0]?.prompt).toContain("原 Session 已损坏");
-      expect(provider.inputs[0]?.prompt).toContain("新 Session");
-      expect(provider.inputs[0]?.prompt).toContain("不要因为任务是对话或没有仓库改动而使用 needs_user");
-      expect(updated.status).toBe("in_progress");
-      expect(listIssueRuns(db, issue.id)).toMatchObject([
-        { attempt: 1, provider_session_id: "session-broken" },
-        { attempt: 2, provider_session_id: "session-fresh", provider_turn_id: "turn-fresh", status: "succeeded" }
-      ]);
-    } finally {
-      db.close();
-    }
+    expect(provider.inputs).toHaveLength(1);
+    expect(provider.inputs[0]?.model).toBe("");
+    expect(provider.inputs[0]?.prompt).toContain("原 Session 已损坏");
+    expect(provider.inputs[0]?.prompt).toContain("新 Session");
+    expect(provider.inputs[0]?.prompt).toContain("不要因为任务是对话或没有仓库改动而使用 needs_user");
+    expect(updated.status).toBe("in_progress");
+    expect(listIssueRuns(db, issue.id)).toMatchObject([
+      { attempt: 1, provider_session_id: "session-broken" },
+      { attempt: 2, provider_session_id: "session-fresh", provider_turn_id: "turn-fresh", status: "succeeded" }
+    ]);
   });
 
   test("stops automatic fresh-session retries at the safety limit", async () => {
     const db = await fixture();
     const provider = new FreshSessionProvider();
-    try {
-      const issue = completedIssue(db, "Retry guard", "session-latest", "turn-latest");
-      recordIssueEvent(db, issue.id, "issue.pi_acceptance_applied.v1", { action: "retry", run_id: "old-1" });
-      recordIssueEvent(db, issue.id, "issue.pi_acceptance_applied.v1", { action: "retry", run_id: "old-2" });
-      const card = await buildIssueCompletionCard(db, issue.id);
+    const issue = completedIssue(db, "Retry guard", "session-latest", "turn-latest");
+    recordIssueEvent(db, issue.id, "issue.pi_acceptance_applied.v1", { action: "retry", run_id: "old-1" });
+    recordIssueEvent(db, issue.id, "issue.pi_acceptance_applied.v1", { action: "retry", run_id: "old-2" });
+    const card = await buildIssueCompletionCard(db, issue.id);
 
-      const updated = await applyPiAcceptanceDecision(
-        { database: db, providers: { codex: provider } },
-        card,
-        decision("retry", "再开一个 Session 重试。")
-      );
+    const updated = await applyPiAcceptanceDecision(
+      { database: db, providers: { codex: provider } },
+      card,
+      decision("retry", "再开一个 Session 重试。")
+    );
 
-      expect(updated.status).toBe("needs_user");
-      expect(provider.inputs).toHaveLength(0);
-      expect(listIssueRuns(db, issue.id)).toHaveLength(1);
-      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
-        owner: "human",
-        phase: "human_review"
-      });
-    } finally {
-      db.close();
-    }
+    expect(updated.status).toBe("needs_user");
+    expect(provider.inputs).toHaveLength(0);
+    expect(listIssueRuns(db, issue.id)).toHaveLength(1);
+    expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
+      owner: "human",
+      phase: "human_review"
+    });
   });
 
   test("accepted delivery review blocks PI retry from creating another Provider Session", async () => {
     const db = await fixture();
     const provider = new FreshSessionProvider();
-    try {
-      const issue = completedIssue(db, "Accepted delivery", "session-original", "turn-original");
-      const originCard = await buildIssueCompletionCard(db, issue.id);
-      recordIssueCompletionCard(db, originCard, "test");
-      updateIssue(db, issue.id, { status: "needs_user" });
-      const request = createHumanReviewRequest(db, issue.id, {
-        consequences: "真实 smoke 未执行",
-        evidence_refs: [`completion-card:${originCard.fingerprint}`],
-        kind: "acceptance",
-        question: "是否接受当前离线实现？"
-      });
-      await reviewHumanIssue(db, issue.id, {
-        action: "accept",
-        comment: "接受当前交付，不要求真实 smoke。",
-        review_request_id: request.id,
-        review_revision: request.revision
-      });
-      const card = await buildIssueCompletionCard(db, issue.id);
+    const issue = completedIssue(db, "Accepted delivery", "session-original", "turn-original");
+    const originCard = await buildIssueCompletionCard(db, issue.id);
+    recordIssueCompletionCard(db, originCard, "test");
+    updateIssue(db, issue.id, { status: "needs_user" });
+    const request = createHumanReviewRequest(db, issue.id, {
+      consequences: "真实 smoke 未执行",
+      evidence_refs: [`completion-card:${originCard.fingerprint}`],
+      kind: "acceptance",
+      question: "是否接受当前离线实现？"
+    });
+    await reviewHumanIssue(db, issue.id, {
+      action: "accept",
+      comment: "接受当前交付，不要求真实 smoke。",
+      review_request_id: request.id,
+      review_revision: request.revision
+    });
+    const card = await buildIssueCompletionCard(db, issue.id);
 
-      const updated = await applyPiAcceptanceDecision(
-        { database: db, providers: { codex: provider } },
-        card,
-        decision("retry", "真实 smoke 未执行，应启动新 Session。")
-      );
+    const updated = await applyPiAcceptanceDecision(
+      { database: db, providers: { codex: provider } },
+      card,
+      decision("retry", "真实 smoke 未执行，应启动新 Session。")
+    );
 
-      expect(updated.status).toBe("done");
-      expect(provider.inputs).toHaveLength(0);
-      expect(listIssueRuns(db, issue.id)).toHaveLength(1);
-      expect(db.sqlite.query<{ count: number }, [number]>(
-        "select count(*) as count from issue_events where issue_id=? and type='issue.pi_human_acceptance_honored.v1'"
-      ).get(issue.id)?.count).toBe(1);
-    } finally {
-      db.close();
-    }
+    expect(updated.status).toBe("done");
+    expect(provider.inputs).toHaveLength(0);
+    expect(listIssueRuns(db, issue.id)).toHaveLength(1);
+    expect(db.sqlite.query<{ count: number }, [number]>(
+      "select count(*) as count from issue_events where issue_id=? and type='issue.pi_human_acceptance_honored.v1'"
+    ).get(issue.id)?.count).toBe(1);
   });
 
   test("accepted delivery review blocks PI continuation in the existing Provider Session", async () => {
     const db = await fixture();
     const provider = new ContinuingProvider();
-    try {
-      const issue = completedIssue(db, "Accepted delivery", "session-original", "turn-original");
-      const originCard = await buildIssueCompletionCard(db, issue.id);
-      recordIssueCompletionCard(db, originCard, "test");
-      updateIssue(db, issue.id, { status: "needs_user" });
-      const request = createHumanReviewRequest(db, issue.id, {
-        consequences: "真实 smoke 未执行",
-        evidence_refs: [`completion-card:${originCard.fingerprint}`],
-        kind: "acceptance",
-        question: "是否接受当前离线实现？"
-      });
-      await reviewHumanIssue(db, issue.id, {
-        action: "accept",
-        comment: "同意，我来测试。",
-        review_request_id: request.id,
-        review_revision: request.revision
-      });
-      const card = await buildIssueCompletionCard(db, issue.id);
+    const issue = completedIssue(db, "Accepted delivery", "session-original", "turn-original");
+    const originCard = await buildIssueCompletionCard(db, issue.id);
+    recordIssueCompletionCard(db, originCard, "test");
+    updateIssue(db, issue.id, { status: "needs_user" });
+    const request = createHumanReviewRequest(db, issue.id, {
+      consequences: "真实 smoke 未执行",
+      evidence_refs: [`completion-card:${originCard.fingerprint}`],
+      kind: "acceptance",
+      question: "是否接受当前离线实现？"
+    });
+    await reviewHumanIssue(db, issue.id, {
+      action: "accept",
+      comment: "同意，我来测试。",
+      review_request_id: request.id,
+      review_revision: request.revision
+    });
+    const card = await buildIssueCompletionCard(db, issue.id);
 
-      const updated = await applyPiAcceptanceDecision(
-        { database: db, providers: { codex: provider } },
-        card,
-        decision("continue_same_session", "仍需补充正式提交和真实 Provider 验证。")
-      );
+    const updated = await applyPiAcceptanceDecision(
+      { database: db, providers: { codex: provider } },
+      card,
+      decision("continue_same_session", "仍需补充正式提交和真实 Provider 验证。")
+    );
 
-      expect(updated.status).toBe("done");
-      expect(provider.inputs).toHaveLength(0);
-      expect(listIssueRuns(db, issue.id)).toHaveLength(1);
-      expect(db.sqlite.query<{ count: number }, [number]>(
-        "select count(*) as count from issue_events where issue_id=? and type='issue.pi_human_acceptance_honored.v1'"
-      ).get(issue.id)?.count).toBe(1);
-    } finally {
-      db.close();
-    }
+    expect(updated.status).toBe("done");
+    expect(provider.inputs).toHaveLength(0);
+    expect(listIssueRuns(db, issue.id)).toHaveLength(1);
+    expect(db.sqlite.query<{ count: number }, [number]>(
+      "select count(*) as count from issue_events where issue_id=? and type='issue.pi_human_acceptance_honored.v1'"
+    ).get(issue.id)?.count).toBe(1);
   });
 
   test("continues in the same Provider Session and creates a new canonical Run", async () => {
     const db = await fixture();
     const provider = new ContinuingProvider("claude");
-    try {
-      const issue = completedIssue(db, "Continue delivery", "session-original", "turn-original", "claude");
-      selectProviderDefaultProfile(db, issue.id, "claude");
-      const card = await buildIssueCompletionCard(db, issue.id);
-      const updated = await applyPiAcceptanceDecision(
-        { database: db, providers: { claude: provider } },
-        card,
-        decision("continue_same_session", "补充 Node 22 下的完整回归并报告退出码。")
-      );
+    const issue = completedIssue(db, "Continue delivery", "session-original", "turn-original", "claude");
+    selectProviderDefaultProfile(db, issue.id, "claude");
+    const card = await buildIssueCompletionCard(db, issue.id);
+    const updated = await applyPiAcceptanceDecision(
+      { database: db, providers: { claude: provider } },
+      card,
+      decision("continue_same_session", "补充 Node 22 下的完整回归并报告退出码。")
+    );
 
-      expect(provider.inputs).toHaveLength(1);
-      expect(provider.inputs[0]?.model).toBe("");
-      expect(provider.inputs[0]).toMatchObject({
-        issueId: issue.id,
-        session: { provider: "claude", sessionId: "session-original", turnId: "turn-original" }
-      });
-      expect(provider.inputs[0]?.prompt).toContain("补充 Node 22 下的完整回归并报告退出码");
-      expect(provider.inputs[0]?.prompt).toContain("不要因为任务是对话或没有仓库改动而使用 needs_user");
-      expect(updated.status).toBe("in_progress");
-      expect(listIssueRuns(db, issue.id)).toMatchObject([
-        { attempt: 1, provider_session_id: "session-original", provider_turn_id: "turn-original" },
-        { attempt: 2, provider_session_id: "session-original", provider_turn_id: "turn-next", status: "succeeded" }
-      ]);
-      expect(db.sqlite.query<{ count: number }, []>("select count(*) as count from issues").get()?.count).toBe(1);
-    } finally {
-      db.close();
-    }
+    expect(provider.inputs).toHaveLength(1);
+    expect(provider.inputs[0]?.model).toBe("");
+    expect(provider.inputs[0]).toMatchObject({
+      issueId: issue.id,
+      session: { provider: "claude", sessionId: "session-original", turnId: "turn-original" }
+    });
+    expect(provider.inputs[0]?.prompt).toContain("补充 Node 22 下的完整回归并报告退出码");
+    expect(provider.inputs[0]?.prompt).toContain("不要因为任务是对话或没有仓库改动而使用 needs_user");
+    expect(updated.status).toBe("in_progress");
+    expect(listIssueRuns(db, issue.id)).toMatchObject([
+      { attempt: 1, provider_session_id: "session-original", provider_turn_id: "turn-original" },
+      { attempt: 2, provider_session_id: "session-original", provider_turn_id: "turn-next", status: "succeeded" }
+    ]);
+    expect(db.sqlite.query<{ count: number }, []>("select count(*) as count from issues").get()?.count).toBe(1);
   });
 
   for (const action of ["continue_same_session", "retry"] as const) {
     test(`${action} retains the original feature goal when PI wrongly requests a planning-only rollback`, async () => {
       const db = await fixture();
       const provider = action === "retry" ? new FreshSessionProvider() : new ContinuingProvider();
-      try {
-        const issue = completedIssue(db, "安全释放等待任务工作目录");
-        const goal = "满足安全条件时释放目录；恢复时复核工作区。\n本批次只建 Issue，不启动。\n不自动 stash/reset/commit。";
-        db.sqlite.run("update issues set description=? where id=?", [goal, issue.id]);
-        const card = await buildIssueCompletionCard(db, issue.id);
-        await applyPiAcceptanceDecision({ database: db, providers: { codex: provider } }, card,
-          decision(action, "撤销本 Run 的全部实现，恢复为仅创建待办 Issue。"));
-        const prompt = provider.inputs[0]?.prompt ?? "";
-        expect(prompt).toContain(goal);
-        expect(prompt).toContain("pre-dispatch planning state and is not a reason to undo this active Run");
-        expect(prompt).toContain("PI follow-up instructions do not replace the original Issue goal");
-        expect(prompt).toContain("A successful rollback or a clean workspace alone does not satisfy a feature implementation goal");
-        expect(prompt).toContain("If substantive authorization is genuinely ambiguous, preserve the workspace and request a human decision");
-        expect(getIssue(db, issue.id)?.status).toBe("in_progress");
-        expect((await buildIssueCompletionCard(db, issue.id)).issue.goal).toBe(goal);
-      } finally { db.close(); }
+      const issue = completedIssue(db, "安全释放等待任务工作目录");
+      const goal = "满足安全条件时释放目录；恢复时复核工作区。\n本批次只建 Issue，不启动。\n不自动 stash/reset/commit。";
+      db.sqlite.run("update issues set description=? where id=?", [goal, issue.id]);
+      const card = await buildIssueCompletionCard(db, issue.id);
+      await applyPiAcceptanceDecision({ database: db, providers: { codex: provider } }, card,
+        decision(action, "撤销本 Run 的全部实现，恢复为仅创建待办 Issue。"));
+      const prompt = provider.inputs[0]?.prompt ?? "";
+      expect(prompt).toContain(goal);
+      expect(prompt).toContain("pre-dispatch planning state and is not a reason to undo this active Run");
+      expect(prompt).toContain("PI follow-up instructions do not replace the original Issue goal");
+      expect(prompt).toContain("A successful rollback or a clean workspace alone does not satisfy a feature implementation goal");
+      expect(prompt).toContain("If substantive authorization is genuinely ambiguous, preserve the workspace and request a human decision");
+      expect(getIssue(db, issue.id)?.status).toBe("in_progress");
+      expect((await buildIssueCompletionCard(db, issue.id)).issue.goal).toBe(goal);
     });
   }
 
@@ -424,179 +387,159 @@ describe("PI acceptance decision application", () => {
     const db = await fixture();
     const provider = new ContinuingProvider();
     const published: Array<{ type: string }> = [];
-    try {
-      const issue = completedIssue(db, "No-progress loop", "session-loop", "turn-1");
-      const runtime = {
-        bus: { publish: (event: { type: string }) => published.push(event) },
-        database: db,
-        providers: { codex: provider }
-      };
+    const issue = completedIssue(db, "No-progress loop", "session-loop", "turn-1");
+    const runtime = {
+      bus: { publish: (event: { type: string }) => published.push(event) },
+      database: db,
+      providers: { codex: provider }
+    };
 
-      for (let index = 0; index < 2; index += 1) {
-        const card = await buildIssueCompletionCard(db, issue.id);
-        const updated = await applyPiAcceptanceDecision(
-          runtime,
-          card,
-          decision("continue_same_session", "继续完成实现。", undefined, false)
-        );
-        expect(updated.status).toBe("in_progress");
-      }
-      const thirdCard = await buildIssueCompletionCard(db, issue.id);
+    for (let index = 0; index < 2; index += 1) {
+      const card = await buildIssueCompletionCard(db, issue.id);
       const updated = await applyPiAcceptanceDecision(
         runtime,
-        thirdCard,
+        card,
         decision("continue_same_session", "继续完成实现。", undefined, false)
       );
-
-      expect(updated.status).toBe("needs_user");
-      expect(provider.inputs).toHaveLength(2);
-      expect(listIssueRuns(db, issue.id)).toHaveLength(3);
-      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
-        owner: "human",
-        phase: "human_review",
-        request: { kind: "decision" }
-      });
-      expect(published).toContainEqual(expect.objectContaining({ type: "pi.needs_user" }));
-      expect(continuationStreaks(db, issue.id)).toEqual([1, 2, 3]);
-    } finally {
-      db.close();
+      expect(updated.status).toBe("in_progress");
     }
+    const thirdCard = await buildIssueCompletionCard(db, issue.id);
+    const updated = await applyPiAcceptanceDecision(
+      runtime,
+      thirdCard,
+      decision("continue_same_session", "继续完成实现。", undefined, false)
+    );
+
+    expect(updated.status).toBe("needs_user");
+    expect(provider.inputs).toHaveLength(2);
+    expect(listIssueRuns(db, issue.id)).toHaveLength(3);
+    expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
+      owner: "human",
+      phase: "human_review",
+      request: { kind: "decision" }
+    });
+    expect(published).toContainEqual(expect.objectContaining({ type: "pi.needs_user" }));
+    expect(continuationStreaks(db, issue.id)).toEqual([1, 2, 3]);
   });
 
   test("resets the no-progress streak when PI observes meaningful progress", async () => {
     const db = await fixture();
     const provider = new ContinuingProvider();
-    try {
-      const issue = completedIssue(db, "Progressing loop", "session-progress", "turn-1");
-      const runtime = { database: db, providers: { codex: provider } };
-      for (const madeProgress of [false, true, false]) {
-        const card = await buildIssueCompletionCard(db, issue.id);
-        const updated = await applyPiAcceptanceDecision(
-          runtime,
-          card,
-          decision("continue_same_session", "继续完成实现。", undefined, madeProgress)
-        );
-        expect(updated.status).toBe("in_progress");
-      }
-
-      expect(provider.inputs).toHaveLength(3);
-      expect(listIssueRuns(db, issue.id)).toHaveLength(4);
-      expect(continuationStreaks(db, issue.id)).toEqual([1, 0, 1]);
-    } finally {
-      db.close();
+    const issue = completedIssue(db, "Progressing loop", "session-progress", "turn-1");
+    const runtime = { database: db, providers: { codex: provider } };
+    for (const madeProgress of [false, true, false]) {
+      const card = await buildIssueCompletionCard(db, issue.id);
+      const updated = await applyPiAcceptanceDecision(
+        runtime,
+        card,
+        decision("continue_same_session", "继续完成实现。", undefined, madeProgress)
+      );
+      expect(updated.status).toBe("in_progress");
     }
+
+    expect(provider.inputs).toHaveLength(3);
+    expect(listIssueRuns(db, issue.id)).toHaveLength(4);
+    expect(continuationStreaks(db, issue.id)).toEqual([1, 0, 1]);
   });
 
   test("does not race past an open human review request", async () => {
     const db = await fixture();
-    try {
-      const issue = completedIssue(db, "Human owned");
-      updateIssue(db, issue.id, { status: "needs_user" });
-      createHumanReviewRequest(db, issue.id, { question: "请确认产品范围。" });
-      updateIssue(db, issue.id, { status: "in_progress" });
-      const card = await buildIssueCompletionCard(db, issue.id);
+    const issue = completedIssue(db, "Human owned");
+    updateIssue(db, issue.id, { status: "needs_user" });
+    createHumanReviewRequest(db, issue.id, { question: "请确认产品范围。" });
+    updateIssue(db, issue.id, { status: "in_progress" });
+    const card = await buildIssueCompletionCard(db, issue.id);
 
-      await expect(applyPiAcceptanceDecision({ database: db }, card, decision("accept")))
-        .rejects.toThrow("cannot bypass an open human review request");
-      expect(getIssue(db, issue.id)?.status).toBe("in_progress");
-    } finally {
-      db.close();
-    }
+    await expect(applyPiAcceptanceDecision({ database: db }, card, decision("accept")))
+      .rejects.toThrow("cannot bypass an open human review request");
+    expect(getIssue(db, issue.id)?.status).toBe("in_progress");
   });
 
   test("does not treat acceptance of a bounded product decision as terminal delivery acceptance", async () => {
     const db = await fixture();
-    try {
-      const issue = completedIssue(db, "Product decision only");
-      const originCard = await buildIssueCompletionCard(db, issue.id);
-      recordIssueCompletionCard(db, originCard, "test");
-      updateIssue(db, issue.id, { status: "needs_user" });
-      const request = createHumanReviewRequest(db, issue.id, {
-        evidence_refs: [`completion-card:${originCard.fingerprint}`],
-        kind: "decision",
-        question: "是否选择方案 A？"
-      });
-      await reviewHumanIssue(db, issue.id, {
-        action: "accept",
-        comment: "选择方案 A。",
-        review_request_id: request.id,
-        review_revision: request.revision
-      });
-      const card = await buildIssueCompletionCard(db, issue.id);
+    const issue = completedIssue(db, "Product decision only");
+    const originCard = await buildIssueCompletionCard(db, issue.id);
+    recordIssueCompletionCard(db, originCard, "test");
+    updateIssue(db, issue.id, { status: "needs_user" });
+    const request = createHumanReviewRequest(db, issue.id, {
+      evidence_refs: [`completion-card:${originCard.fingerprint}`],
+      kind: "decision",
+      question: "是否选择方案 A？"
+    });
+    await reviewHumanIssue(db, issue.id, {
+      action: "accept",
+      comment: "选择方案 A。",
+      review_request_id: request.id,
+      review_revision: request.revision
+    });
+    const card = await buildIssueCompletionCard(db, issue.id);
 
-      const updated = await applyPiAcceptanceDecision(
-        { database: db },
-        card,
-        decision("needs_user", "还需要另一个独立产品决定。")
-      );
+    const updated = await applyPiAcceptanceDecision(
+      { database: db },
+      card,
+      decision("needs_user", "还需要另一个独立产品决定。")
+    );
 
-      expect(updated.status).toBe("needs_user");
-      expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
-        owner: "human",
-        request: { kind: "decision", revision: 2, status: "open" }
-      });
-      expect(db.sqlite.query<{ count: number }, [number]>(
-        "select count(*) as count from issue_events where issue_id=? and type='issue.pi_human_acceptance_honored.v1'"
-      ).get(issue.id)?.count).toBe(0);
-    } finally {
-      db.close();
-    }
+    expect(updated.status).toBe("needs_user");
+    expect(readIssueDecisionProjection(db, issue.id)).toMatchObject({
+      owner: "human",
+      request: { kind: "decision", revision: 2, status: "open" }
+    });
+    expect(db.sqlite.query<{ count: number }, [number]>(
+      "select count(*) as count from issue_events where issue_id=? and type='issue.pi_human_acceptance_honored.v1'"
+    ).get(issue.id)?.count).toBe(0);
   });
 
   for (const action of ["continue_same_session", "retry"] as const) {
     test(`Q7 authorization survives ${action} without accepting delivery or widening its scope`, async () => {
       const db = await fixture();
       const provider = action === "retry" ? new FreshSessionProvider() : new ContinuingProvider();
-      try {
-        const issue = completedIssue(db, "Qoder Q7：安装登录与真实账号最终验收", "q7-codex-session", "q7-blocked-turn");
-        const originCard = await buildIssueCompletionCard(db, issue.id);
-        await applyPiAcceptanceDecision(
-          { database: db },
-          originCard,
-          decision(
-            "needs_user",
-            "请授权安装、登录和真实付费测试，并提供认证方式及预算上限。",
-            "risk_acceptance"
-          )
-        );
-        const request = readIssueDecisionProjection(db, issue.id).request!;
-        expect(request).toMatchObject({ kind: "risk_acceptance", status: "open" });
+      const issue = completedIssue(db, "Qoder Q7：安装登录与真实账号最终验收", "q7-codex-session", "q7-blocked-turn");
+      const originCard = await buildIssueCompletionCard(db, issue.id);
+      await applyPiAcceptanceDecision(
+        { database: db },
+        originCard,
+        decision(
+          "needs_user",
+          "请授权安装、登录和真实付费测试，并提供认证方式及预算上限。",
+          "risk_acceptance"
+        )
+      );
+      const request = readIssueDecisionProjection(db, issue.id).request!;
+      expect(request).toMatchObject({ kind: "risk_acceptance", status: "open" });
 
-        await reviewHumanIssue(db, issue.id, {
-          action: "accept",
-          comment: "授权真实测试；认证使用已登录的 local-cli；MAX_PAID_TURNS=10；MAX_CREDITS=3。",
-          review_request_id: request.id,
-          review_revision: request.revision
+      await reviewHumanIssue(db, issue.id, {
+        action: "accept",
+        comment: "授权真实测试；认证使用已登录的 local-cli；MAX_PAID_TURNS=10；MAX_CREDITS=3。",
+        review_request_id: request.id,
+        review_revision: request.revision
+      });
+      const answeredCard = await buildIssueCompletionCard(db, issue.id);
+      const updated = await applyPiAcceptanceDecision(
+        { database: db, providers: { codex: provider } },
+        answeredCard,
+        decision(action, "按已授权预算继续 Q7 真实验收。")
+      );
+
+      expect(updated.status).toBe("in_progress");
+      expect(provider.inputs).toHaveLength(1);
+      if (action === "continue_same_session") {
+        expect(provider.inputs[0]).toMatchObject({
+          session: { provider: "codex", sessionId: "q7-codex-session", turnId: "q7-blocked-turn" }
         });
-        const answeredCard = await buildIssueCompletionCard(db, issue.id);
-        const updated = await applyPiAcceptanceDecision(
-          { database: db, providers: { codex: provider } },
-          answeredCard,
-          decision(action, "按已授权预算继续 Q7 真实验收。")
-        );
-
-        expect(updated.status).toBe("in_progress");
-        expect(provider.inputs).toHaveLength(1);
-        if (action === "continue_same_session") {
-          expect(provider.inputs[0]).toMatchObject({
-            session: { provider: "codex", sessionId: "q7-codex-session", turnId: "q7-blocked-turn" }
-          });
-        }
-        expect(provider.inputs[0]?.prompt).toContain("已认证的人类回复类型：risk_acceptance");
-        expect(provider.inputs[0]?.prompt).toContain("已认证的人类回复动作：accept");
-        expect(provider.inputs[0]?.prompt).toContain("MAX_PAID_TURNS=10；MAX_CREDITS=3");
-        expect(provider.inputs[0]?.prompt).toContain("release or paid-operation gates remain binding");
-        expect(listIssueRuns(db, issue.id)).toMatchObject([
-          { attempt: 1, provider_session_id: "q7-codex-session", provider_turn_id: "q7-blocked-turn" },
-          { attempt: 2, provider_session_id: action === "retry" ? "session-fresh" : "q7-codex-session",
-            provider_turn_id: action === "retry" ? "turn-fresh" : "turn-next" }
-        ]);
-        expect(db.sqlite.query<{ count: number }, [number]>(
-          "select count(*) as count from issue_events where issue_id=? and type='issue.pi_human_acceptance_honored.v1'"
-        ).get(issue.id)?.count).toBe(0);
-      } finally {
-        db.close();
       }
+      expect(provider.inputs[0]?.prompt).toContain("已认证的人类回复类型：risk_acceptance");
+      expect(provider.inputs[0]?.prompt).toContain("已认证的人类回复动作：accept");
+      expect(provider.inputs[0]?.prompt).toContain("MAX_PAID_TURNS=10；MAX_CREDITS=3");
+      expect(provider.inputs[0]?.prompt).toContain("release or paid-operation gates remain binding");
+      expect(listIssueRuns(db, issue.id)).toMatchObject([
+        { attempt: 1, provider_session_id: "q7-codex-session", provider_turn_id: "q7-blocked-turn" },
+        { attempt: 2, provider_session_id: action === "retry" ? "session-fresh" : "q7-codex-session",
+          provider_turn_id: action === "retry" ? "turn-fresh" : "turn-next" }
+      ]);
+      expect(db.sqlite.query<{ count: number }, [number]>(
+        "select count(*) as count from issue_events where issue_id=? and type='issue.pi_human_acceptance_honored.v1'"
+      ).get(issue.id)?.count).toBe(0);
     });
   }
 });
@@ -655,7 +598,7 @@ class FreshSessionProvider implements ExecutorProvider {
 async function fixture(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "pi-acceptance-application-"));
   roots.push(root);
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   db.sqlite.run(
     `insert into projects (id, name, cwd, provider, auto_run, created_at, updated_at)
      values ('demo', 'Demo', ?, 'codex', 1, ?, ?)`,

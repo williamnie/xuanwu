@@ -7,6 +7,9 @@ import { getIssue } from "../db/repositories/issues.ts";
 import { listPiActions } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import { createPiRunnerActions } from "./runnerActions.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 describe("PI runner issue-manager scope", () => {
   test("can read issue summaries for any issue project", async () => {
@@ -126,7 +129,7 @@ function issueManagerAuthorization(actions: string[]) {
 
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase; project: Project }> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-issue-manager-scope-"));
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   insertProject(db, "demo", join(root, "project"));
   const project = getProject(db, "demo");
   if (!project) throw new Error("missing fixture project");

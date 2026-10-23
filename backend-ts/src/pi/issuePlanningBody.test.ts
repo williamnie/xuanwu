@@ -8,6 +8,9 @@ import { readIssueDependency } from "../domain/work/issueDependency.ts";
 import { materializeIssueBatch } from "./issueBatchProposal.ts";
 import { withIssueBodyDependencies } from "./issuePlanningBody.ts";
 import { renderIssueCreateProposalDescription } from "./issueProposalContext.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const context = { projectID: "demo" };
 
@@ -59,7 +62,7 @@ describe("shared Issue planning body", () => {
 
   test("materializes a mixed batch with real bidirectional references and only the intended success edge", async () => {
     const root = await mkdtemp(join(tmpdir(), "xw-planning-batch-"));
-    const db = await openDatabase({ stateDir: root });
+    const db = await openDatabase({ stateDir: root }).then(trackDatabase);
     try {
       db.sqlite.run("insert into projects (id, name, cwd, created_at, updated_at) values ('demo', 'Demo', ?, '', '')", [root]);
       const result = materializeIssueBatch(db, {

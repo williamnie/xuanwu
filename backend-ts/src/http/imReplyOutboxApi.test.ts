@@ -6,6 +6,9 @@ import { buildConfig } from "../config/env.ts";
 import type { FeishuMessageSender } from "../integrations/feishuOutboxDispatcherCompat.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createRequestHandler, createDefaultRouter } from "./server.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
@@ -21,96 +24,84 @@ describe("IM reply drafts and sync outbox", () => {
   test("creates a pending Feishu reply draft after runner issue creation", async () => {
     const { database, handle, root } = await fixtureHandler("chat:oc_group=demo");
     await insertProject(database, root, "demo");
-    try {
-      const inbox = await postFeishu(handle, messageEvent({ threadId: "omt_thread_1" }));
-      const inboxBody = await inbox.json() as Record<string, unknown>;
-      const response = await createIssueFromExternalEvent(handle, Number(inboxBody.event_id), { project_id: "demo" });
-      const body = await response.json() as Record<string, unknown>;
-      const drafts = await getReplyDrafts(handle, "source=feishu");
+    const inbox = await postFeishu(handle, messageEvent({ threadId: "omt_thread_1" }));
+    const inboxBody = await inbox.json() as Record<string, unknown>;
+    const response = await createIssueFromExternalEvent(handle, Number(inboxBody.event_id), { project_id: "demo" });
+    const body = await response.json() as Record<string, unknown>;
+    const drafts = await getReplyDrafts(handle, "source=feishu");
 
-      expect(response.status).toBe(201);
-      expect(drafts).toHaveLength(1);
-      expect(drafts[0]).toMatchObject({
-        content: `已记录为 runner issue #${body.issue_id}，等待确认是否开始执行。`,
-        created_by: "pi",
-        issue_id: body.issue_id,
-        risk: "low",
-        source: "feishu",
-        status: "pending",
-        target_chat_id: "oc_group",
-        target_message_id: "om_message_1",
-        target_thread_id: "omt_thread_1"
-      });
-      const text = JSON.stringify(drafts[0]);
-      expect(text).not.toContain("verify-token");
-      expect(text).not.toContain(root);
-      expect(text).not.toContain("at Object.");
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(201);
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({
+      content: `已记录为 runner issue #${body.issue_id}，等待确认是否开始执行。`,
+      created_by: "pi",
+      issue_id: body.issue_id,
+      risk: "low",
+      source: "feishu",
+      status: "pending",
+      target_chat_id: "oc_group",
+      target_message_id: "om_message_1",
+      target_thread_id: "omt_thread_1"
+    });
+    const text = JSON.stringify(drafts[0]);
+    expect(text).not.toContain("verify-token");
+    expect(text).not.toContain(root);
+    expect(text).not.toContain("at Object.");
   });
 
   test("approves and rejects reply drafts through API state transitions", async () => {
     const { database, handle, root } = await fixtureHandler("chat:oc_group=demo");
     await insertProject(database, root, "demo");
-    try {
-      const firstDraft = await createDraftFromMessage(handle);
-      const approved = await approveReplyDraft(handle, Number(firstDraft.id));
-      const outbox = await getSyncOutbox(handle, "source=feishu");
+    const firstDraft = await createDraftFromMessage(handle);
+    const approved = await approveReplyDraft(handle, Number(firstDraft.id));
+    const outbox = await getSyncOutbox(handle, "source=feishu");
 
-      expect(approved.status).toBe(200);
-      expect(await approved.json()).toMatchObject({
-        draft: { id: firstDraft.id, status: "approved" },
-        outbox: {
-          content: firstDraft.content,
-          issue_id: firstDraft.issue_id,
-          reply_draft_id: firstDraft.id,
-          source: "feishu",
-          status: "pending"
-        }
-      });
-      expect(outbox).toHaveLength(1);
+    expect(approved.status).toBe(200);
+    expect(await approved.json()).toMatchObject({
+      draft: { id: firstDraft.id, status: "approved" },
+      outbox: {
+        content: firstDraft.content,
+        issue_id: firstDraft.issue_id,
+        reply_draft_id: firstDraft.id,
+        source: "feishu",
+        status: "pending"
+      }
+    });
+    expect(outbox).toHaveLength(1);
 
-      const secondDraft = await createDraftFromMessage(handle, {
-        messageId: "om_message_2",
-        text: "@PI another task"
-      });
-      const rejected = await rejectReplyDraft(handle, Number(secondDraft.id), { reason: "暂不发送" });
+    const secondDraft = await createDraftFromMessage(handle, {
+      messageId: "om_message_2",
+      text: "@PI another task"
+    });
+    const rejected = await rejectReplyDraft(handle, Number(secondDraft.id), { reason: "暂不发送" });
 
-      expect(rejected.status).toBe(200);
-      expect(await rejected.json()).toMatchObject({
-        id: secondDraft.id,
-        rejection_reason: "暂不发送",
-        status: "rejected"
-      });
-      expect(await getSyncOutbox(handle, "source=feishu")).toHaveLength(1);
-    } finally {
-      database.close();
-    }
+    expect(rejected.status).toBe(200);
+    expect(await rejected.json()).toMatchObject({
+      id: secondDraft.id,
+      rejection_reason: "暂不发送",
+      status: "rejected"
+    });
+    expect(await getSyncOutbox(handle, "source=feishu")).toHaveLength(1);
   });
 
   test("dispatches approved Feishu outbox through API with injected client", async () => {
     const sender = new FakeFeishuSender();
     const { database, handle, root } = await fixtureHandler("chat:oc_group=demo", sender);
     await insertProject(database, root, "demo");
-    try {
-      const draft = await createDraftFromMessage(handle);
-      await approveReplyDraft(handle, Number(draft.id));
+    const draft = await createDraftFromMessage(handle);
+    await approveReplyDraft(handle, Number(draft.id));
 
-      const response = await handle(new Request(`${BASE_URL}/api/sync-outbox/dispatch`, {
-        body: JSON.stringify({ limit: 5 }),
-        headers: { "content-type": "application/json" },
-        method: "POST"
-      }));
-      const outbox = await getSyncOutbox(handle, "source=feishu");
+    const response = await handle(new Request(`${BASE_URL}/api/sync-outbox/dispatch`, {
+      body: JSON.stringify({ limit: 5 }),
+      headers: { "content-type": "application/json" },
+      method: "POST"
+    }));
+    const outbox = await getSyncOutbox(handle, "source=feishu");
 
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({ processed: 1, sent: 1 });
-      expect(sender.calls).toEqual([{ receiveId: "oc_group", receiveIdType: "chat_id", text: String(draft.content) }]);
-      expect(outbox[0]).toMatchObject({ feishu_message_id: "om_api_sent_1", status: "sent" });
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ processed: 1, sent: 1 });
+    expect(sender.calls).toEqual([{ receiveId: "oc_group", receiveIdType: "chat_id", text: String(draft.content) }]);
+    expect(outbox[0]).toMatchObject({ feishu_message_id: "om_api_sent_1", status: "sent" });
   });
 });
 
@@ -141,7 +132,7 @@ async function fixtureHandler(projectMappings = "", feishuSender?: FeishuMessage
 }> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-im-outbox-"));
   tempRoots.push(root);
-  const database = await openDatabase({ stateDir: join(root, "state") });
+  const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   const config = buildConfig({
     feishuAppId: "cli_app_id",
     feishuAppSecret: "app-secret-value",

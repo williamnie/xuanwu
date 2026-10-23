@@ -12,6 +12,9 @@ import {
   compactHistoricalIssueLogPayloads,
   restoreHistoricalIssueLogPayloads
 } from "./payloadCompactionService.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 const ACTOR = {
@@ -29,7 +32,7 @@ describe("historical issue.log payload compaction", () => {
     const root = mkdtempSync(join(tmpdir(), "issue-log-payload-compaction-"));
     roots.push(root);
     const dbPath = join(root, "state", "runner.db");
-    const db = await openDatabase({ dbPath, stateDir: dirname(dbPath) });
+    const db = await openDatabase({ dbPath, stateDir: dirname(dbPath) }).then(trackDatabase);
     const issueID = seed(db);
     projectPendingEventSummaries(db);
     const originalRows = eventRows(db.sqlite);
@@ -90,7 +93,7 @@ describe("historical issue.log payload compaction", () => {
       row.payload.includes('"issue_log_artifact"'))).toBe(true);
     compactedDB.close();
 
-    const hydrated = await openDatabase({ dbPath, stateDir: dirname(dbPath) });
+    const hydrated = await openDatabase({ dbPath, stateDir: dirname(dbPath) }).then(trackDatabase);
     expect(listIssueEvents(hydrated, issueID).map((event) => event.payload)).toEqual(
       originalRows.filter((row) => row.type === "issue.log").map((row) => row.payload)
     );

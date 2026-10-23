@@ -12,6 +12,9 @@ import {
   listPiNotificationIntents
 } from "../db/repositories/pi.ts";
 import { coordinateIssueLifecycleNotification } from "./notificationCoordinator.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const tempRoots: string[] = [];
 
@@ -25,193 +28,171 @@ afterEach(async () => {
 describe("PI notification coordinator preference boundaries", () => {
   test("suppresses raw failed lifecycle noise while autonomous recovery is pending", async () => {
     const db = await fixtureDatabase();
-    try {
-      createProjectPiSettings(db, { project_id: "demo" });
-      const issue = createIssue(db, { project_id: "demo", status: "failed", title: "Recover this first" });
-      const event = guardianEvent(db, issue, "event-failed-autonomous", { severity: "needs_user" });
+    createProjectPiSettings(db, { project_id: "demo" });
+    const issue = createIssue(db, { project_id: "demo", status: "failed", title: "Recover this first" });
+    const event = guardianEvent(db, issue, "event-failed-autonomous", { severity: "needs_user" });
 
-      const result = coordinateIssueLifecycleNotification(db, { event, issue });
+    const result = coordinateIssueLifecycleNotification(db, { event, issue });
 
-      expect(result).toMatchObject({ decision: "suppress" });
-      expect(result.intent).toMatchObject({ kind: "issue_failed", state: "suppressed" });
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ decision: "suppress" });
+    expect(result.intent).toMatchObject({ kind: "issue_failed", state: "suppressed" });
   });
 
   test("uses old preference for boundary event and new preference for later event", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issue = createIssue(db, { project_id: "demo", status: "done", title: "Boundary task" });
-      createPiNotificationPreference(db, {
-        effective_after_sequence: 0,
-        id: "pref-old-quiet",
-        mode: "quiet",
-        project_id: "demo",
-        scope: "project"
-      });
-      const boundaryEvent = guardianEvent(db, issue, "event-boundary", {
-        source: "scheduler",
-        sourceSequence: 100
-      });
-      createPiNotificationPreference(db, {
-        effective_after_sequence: boundaryEvent.sequence_id,
-        id: "pref-new-normal",
-        mode: "normal",
-        project_id: "demo",
-        scope: "project"
-      });
-      const laterEvent = guardianEvent(db, issue, "event-later", {
-        source: "issue_events",
-        sourceSequence: 1
-      });
+    const issue = createIssue(db, { project_id: "demo", status: "done", title: "Boundary task" });
+    createPiNotificationPreference(db, {
+      effective_after_sequence: 0,
+      id: "pref-old-quiet",
+      mode: "quiet",
+      project_id: "demo",
+      scope: "project"
+    });
+    const boundaryEvent = guardianEvent(db, issue, "event-boundary", {
+      source: "scheduler",
+      sourceSequence: 100
+    });
+    createPiNotificationPreference(db, {
+      effective_after_sequence: boundaryEvent.sequence_id,
+      id: "pref-new-normal",
+      mode: "normal",
+      project_id: "demo",
+      scope: "project"
+    });
+    const laterEvent = guardianEvent(db, issue, "event-later", {
+      source: "issue_events",
+      sourceSequence: 1
+    });
 
-      const oldResult = coordinateIssueLifecycleNotification(db, { event: boundaryEvent, issue });
-      const newResult = coordinateIssueLifecycleNotification(db, { event: laterEvent, issue });
+    const oldResult = coordinateIssueLifecycleNotification(db, { event: boundaryEvent, issue });
+    const newResult = coordinateIssueLifecycleNotification(db, { event: laterEvent, issue });
 
-      expect(oldResult).toMatchObject({ decision: "suppress" });
-      expect(newResult).toMatchObject({ decision: "send_now" });
-      expect(listPiNotificationIntents(db, { issueId: issue.id })).toEqual(expect.arrayContaining([
-        expect.objectContaining({
-          decision: "suppress",
-          preference_id: "pref-old-quiet",
-          source_event_sequence_id: boundaryEvent.sequence_id
-        }),
-        expect.objectContaining({
-          decision: "send_now",
-          preference_id: "pref-new-normal",
-          source_event_sequence_id: laterEvent.sequence_id
-        })
-      ]));
-    } finally {
-      db.close();
-    }
+    expect(oldResult).toMatchObject({ decision: "suppress" });
+    expect(newResult).toMatchObject({ decision: "send_now" });
+    expect(listPiNotificationIntents(db, { issueId: issue.id })).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        decision: "suppress",
+        preference_id: "pref-old-quiet",
+        source_event_sequence_id: boundaryEvent.sequence_id
+      }),
+      expect.objectContaining({
+        decision: "send_now",
+        preference_id: "pref-new-normal",
+        source_event_sequence_id: laterEvent.sequence_id
+      })
+    ]));
   });
 
   test("quiet preference still sends urgent and needs-user lifecycle intents now", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issue = createIssue(db, { project_id: "demo", status: "done", title: "Escalation task" });
-      createPiNotificationPreference(db, {
-        effective_after_sequence: 0,
-        id: "pref-project-quiet",
-        mode: "quiet",
-        project_id: "demo",
-        scope: "project"
-      });
-      const urgentEvent = guardianEvent(db, issue, "event-urgent", { severity: "urgent" });
-      const needsUserEvent = guardianEvent(db, issue, "event-needs-user", { severity: "needs_user" });
+    const issue = createIssue(db, { project_id: "demo", status: "done", title: "Escalation task" });
+    createPiNotificationPreference(db, {
+      effective_after_sequence: 0,
+      id: "pref-project-quiet",
+      mode: "quiet",
+      project_id: "demo",
+      scope: "project"
+    });
+    const urgentEvent = guardianEvent(db, issue, "event-urgent", { severity: "urgent" });
+    const needsUserEvent = guardianEvent(db, issue, "event-needs-user", { severity: "needs_user" });
 
-      const urgent = coordinateIssueLifecycleNotification(db, { event: urgentEvent, issue });
-      const needsUser = coordinateIssueLifecycleNotification(db, { event: needsUserEvent, issue });
+    const urgent = coordinateIssueLifecycleNotification(db, { event: urgentEvent, issue });
+    const needsUser = coordinateIssueLifecycleNotification(db, { event: needsUserEvent, issue });
 
-      expect(urgent).toMatchObject({ decision: "send_now" });
-      expect(needsUser).toMatchObject({ decision: "send_now" });
-      expect(listPiNotificationIntents(db, { issueId: issue.id })).toEqual(expect.arrayContaining([
-        expect.objectContaining({ decision: "send_now", preference_id: "pref-project-quiet", severity: "urgent" }),
-        expect.objectContaining({ decision: "send_now", preference_id: "pref-project-quiet", severity: "needs_user" })
-      ]));
-    } finally {
-      db.close();
-    }
+    expect(urgent).toMatchObject({ decision: "send_now" });
+    expect(needsUser).toMatchObject({ decision: "send_now" });
+    expect(listPiNotificationIntents(db, { issueId: issue.id })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ decision: "send_now", preference_id: "pref-project-quiet", severity: "urgent" }),
+      expect.objectContaining({ decision: "send_now", preference_id: "pref-project-quiet", severity: "needs_user" })
+    ]));
   });
 
   test("legacy no-run-group needs-user event bypasses conversation quiet", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issue = createIssue(db, { project_id: "demo", status: "done", title: "Needs user task" });
-      createPiNotificationPreference(db, {
-        conversation_id: "conv-1",
-        effective_after_sequence: 0,
-        id: "pref-conversation-quiet",
-        mode: "quiet",
-        project_id: "demo",
-        scope: "conversation"
-      });
-      const event = guardianEvent(db, issue, "event-needs-user-conversation", {
-        conversationID: "conv-1",
-        severity: "needs_user"
-      });
+    const issue = createIssue(db, { project_id: "demo", status: "done", title: "Needs user task" });
+    createPiNotificationPreference(db, {
+      conversation_id: "conv-1",
+      effective_after_sequence: 0,
+      id: "pref-conversation-quiet",
+      mode: "quiet",
+      project_id: "demo",
+      scope: "conversation"
+    });
+    const event = guardianEvent(db, issue, "event-needs-user-conversation", {
+      conversationID: "conv-1",
+      severity: "needs_user"
+    });
 
-      const result = coordinateIssueLifecycleNotification(db, { event, issue });
+    const result = coordinateIssueLifecycleNotification(db, { event, issue });
 
-      expect(result).toMatchObject({ decision: "send_now", runGroupID: "" });
-      expect(result.intent).toMatchObject({
-        decision: "send_now",
-        preference_id: "pref-conversation-quiet",
-        severity: "needs_user",
-        state: "ready"
-      });
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ decision: "send_now", runGroupID: "" });
+    expect(result.intent).toMatchObject({
+      decision: "send_now",
+      preference_id: "pref-conversation-quiet",
+      severity: "needs_user",
+      state: "ready"
+    });
   });
 
   test("admin enforced digest preference overrides conversation quiet routing", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issue = createIssue(db, { project_id: "demo", status: "done", title: "Admin enforced task" });
-      createPiNotificationPreference(db, {
-        conversation_id: "conv-1",
-        effective_after_sequence: 0,
-        id: "pref-conversation-quiet",
-        mode: "quiet",
-        project_id: "demo",
-        scope: "conversation"
-      });
-      createPiNotificationPreference(db, {
-        effective_after_sequence: 0,
-        id: "pref-project-enforced-digest",
-        mode: "digest",
-        policy_kind: "admin_enforced",
-        project_id: "demo",
-        scope: "project"
-      });
-      const event = guardianEvent(db, issue, "event-admin-enforced", { conversationID: "conv-1" });
+    const issue = createIssue(db, { project_id: "demo", status: "done", title: "Admin enforced task" });
+    createPiNotificationPreference(db, {
+      conversation_id: "conv-1",
+      effective_after_sequence: 0,
+      id: "pref-conversation-quiet",
+      mode: "quiet",
+      project_id: "demo",
+      scope: "conversation"
+    });
+    createPiNotificationPreference(db, {
+      effective_after_sequence: 0,
+      id: "pref-project-enforced-digest",
+      mode: "digest",
+      policy_kind: "admin_enforced",
+      project_id: "demo",
+      scope: "project"
+    });
+    const event = guardianEvent(db, issue, "event-admin-enforced", { conversationID: "conv-1" });
 
-      const result = coordinateIssueLifecycleNotification(db, { event, issue });
+    const result = coordinateIssueLifecycleNotification(db, { event, issue });
 
-      expect(result).toMatchObject({ decision: "aggregate" });
-      expect(result.intent).toMatchObject({
-        decision: "aggregate",
-        preference_id: "pref-project-enforced-digest",
-        state: "aggregated"
-      });
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ decision: "aggregate" });
+    expect(result.intent).toMatchObject({
+      decision: "aggregate",
+      preference_id: "pref-project-enforced-digest",
+      state: "aggregated"
+    });
   });
 
   test("persists the caller connector instead of assuming Feishu", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issue = createIssue(db, { project_id: "demo", status: "done", title: "Telegram lifecycle" });
-      const event = guardianEvent(db, issue, "event-telegram");
-      const result = coordinateIssueLifecycleNotification(db, {
-        event,
-        issue,
-        target: {
-          connectorID: "telegram",
-          chatID: "-100opaque",
-          messageID: "message-9",
-          threadID: "topic-4"
-        }
-      });
-      expect(result.intent).toMatchObject({
-        target_channel: "telegram",
-        target_chat_id: "-100opaque",
-        target_message_id: "message-9",
-        target_thread_id: "topic-4"
-      });
-      expect(result.intent.idempotency_key.endsWith(":telegram")).toBe(true);
-    } finally { db.close(); }
+    const issue = createIssue(db, { project_id: "demo", status: "done", title: "Telegram lifecycle" });
+    const event = guardianEvent(db, issue, "event-telegram");
+    const result = coordinateIssueLifecycleNotification(db, {
+      event,
+      issue,
+      target: {
+        connectorID: "telegram",
+        chatID: "-100opaque",
+        messageID: "message-9",
+        threadID: "topic-4"
+      }
+    });
+    expect(result.intent).toMatchObject({
+      target_channel: "telegram",
+      target_chat_id: "-100opaque",
+      target_message_id: "message-9",
+      target_thread_id: "topic-4"
+    });
+    expect(result.intent.idempotency_key.endsWith(":telegram")).toBe(true);
   });
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-pi-notification-coordinator-"));
   tempRoots.push(root);
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   db.sqlite.run(
     `insert into projects (id, name, cwd, provider, provider_config_json, sort_order, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, ?)`,

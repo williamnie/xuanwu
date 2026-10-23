@@ -15,6 +15,9 @@ import {
   buildIssueCompletionCard,
   recordCompletionGitObservation
 } from "./completionCard.ts";
+import { useDatabaseCleanup } from "../../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const roots: string[] = [];
 
@@ -32,7 +35,7 @@ describe("completion card", () => {
     await writeFile(join(root, "README.md"), "base\n");
     git(root, "add", "README.md");
     git(root, "commit", "-m", "base");
-    const db = await openDatabase({ stateDir: join(root, ".state") });
+    const db = await openDatabase({ stateDir: join(root, ".state") }).then(trackDatabase);
     try {
       db.sqlite.run(
         `insert into projects (id, name, cwd, provider, auto_run, created_at, updated_at)
@@ -121,7 +124,7 @@ describe("completion card", () => {
     await writeFile(join(root, "README.md"), "base\n");
     git(root, "add", "README.md");
     git(root, "commit", "-m", "base");
-    const db = await openDatabase({ stateDir: join(root, ".state") });
+    const db = await openDatabase({ stateDir: join(root, ".state") }).then(trackDatabase);
     try {
       db.sqlite.run(
         `insert into projects (id, name, cwd, provider, auto_run, created_at, updated_at)
@@ -155,7 +158,7 @@ describe("completion card", () => {
     await writeFile(join(root, "README.md"), "base\n");
     git(root, "add", "README.md");
     git(root, "commit", "-m", "base");
-    const db = await openDatabase({ stateDir: join(root, ".state") });
+    const db = await openDatabase({ stateDir: join(root, ".state") }).then(trackDatabase);
     try {
       db.sqlite.run(`insert into projects (id, name, cwd, provider, created_at, updated_at)
         values ('demo', 'Demo', ?, 'codex', ?, ?)`, [root, new Date().toISOString(), new Date().toISOString()]);

@@ -12,6 +12,9 @@ import { listContextBundles } from "../db/repositories/contextBundles.ts";
 import { listAttentionInboxItems, listIntakeRuns } from "../db/repositories/intakeRuns.ts";
 import { listPiActions } from "../db/repositories/pi.ts";
 import { runManualContextIntake } from "./manualTrigger.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const tempRoots: string[] = [];
 
@@ -25,119 +28,103 @@ afterEach(async () => {
 describe("manual context intake trigger", () => {
   test("requires a source when multiple recent sources are available", async () => {
     const db = await openFixtureDatabase();
-    try {
-      event(db, "fixture-im", "m1", "群里有截图");
-      event(db, "other-im", "m2", "另一个来源");
+    event(db, "fixture-im", "m1", "群里有截图");
+    event(db, "other-im", "m2", "另一个来源");
 
-      const result = await runManualContextIntake(db, {
-        now: "2026-07-06T01:10:00Z",
-        user_prompt: "看看刚刚群里的截图和消息"
-      });
+    const result = await runManualContextIntake(db, {
+      now: "2026-07-06T01:10:00Z",
+      user_prompt: "看看刚刚群里的截图和消息"
+    });
 
-      expect(result).toMatchObject({ reason: "source_required", status: "needs_user" });
-      expect(result.text).toContain("请指定来源");
-      expect(listContextBundles(db)).toEqual([]);
-      expect(listIntakeRuns(db)).toEqual([]);
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ reason: "source_required", status: "needs_user" });
+    expect(result.text).toContain("请指定来源");
+    expect(listContextBundles(db)).toEqual([]);
+    expect(listIntakeRuns(db)).toEqual([]);
   });
 
   test("returns context to PI without guessing project, intent, or action", async () => {
     const db = await openFixtureDatabase();
-    try {
-      event(db, "fixture-im", "m1", "登录页 500 了");
-      event(db, "fixture-im", "m2", "截图如下", [{ kind: "image", name: "login.png" }]);
+    event(db, "fixture-im", "m1", "登录页 500 了");
+    event(db, "fixture-im", "m2", "截图如下", [{ kind: "image", name: "login.png" }]);
 
-      const result = await runManualContextIntake(db, {
-        now: "2026-07-06T01:10:00Z",
-        require_attachments: true,
-        source: "fixture-im",
-        user_prompt: "看看刚刚群里的截图和消息，是个 bug，创建 issue"
-      });
-      expect(result).toMatchObject({
-        reason: "manual_context_bundle_ready",
-        status: "succeeded",
-        text: expect.stringContaining("请由 PI")
-      });
-      expect(listIntakeRuns(db)).toEqual([]);
-      expect(listAttentionInboxItems(db)).toEqual([]);
-      expect(listPiActions(db)).toEqual([]);
-    } finally {
-      db.close();
-    }
+    const result = await runManualContextIntake(db, {
+      now: "2026-07-06T01:10:00Z",
+      require_attachments: true,
+      source: "fixture-im",
+      user_prompt: "看看刚刚群里的截图和消息，是个 bug，创建 issue"
+    });
+    expect(result).toMatchObject({
+      reason: "manual_context_bundle_ready",
+      status: "succeeded",
+      text: expect.stringContaining("请由 PI")
+    });
+    expect(listIntakeRuns(db)).toEqual([]);
+    expect(listAttentionInboxItems(db)).toEqual([]);
+    expect(listPiActions(db)).toEqual([]);
   });
 
   test("pulls read-only source connector when local events are missing and dedupes reruns", async () => {
     const db = await openFixtureDatabase();
     const dir = await writeSourceConnector("fixture-im");
-    try {
-      const input = {
-        cursor: "wm-0",
-        lookback_minutes: 30,
-        now: "2026-07-06T01:10:00Z",
-        project_id: "demo",
-        require_attachments: true,
-        source: "fixture-im",
-        source_provider_id: "fixture-im",
-        source_tool_name: "pull-events",
-        thread_key: "thread-a",
-        user_prompt: "看看刚刚群里的截图和消息，是个 bug，创建 issue"
-      };
+    const input = {
+      cursor: "wm-0",
+      lookback_minutes: 30,
+      now: "2026-07-06T01:10:00Z",
+      project_id: "demo",
+      require_attachments: true,
+      source: "fixture-im",
+      source_provider_id: "fixture-im",
+      source_tool_name: "pull-events",
+      thread_key: "thread-a",
+      user_prompt: "看看刚刚群里的截图和消息，是个 bug，创建 issue"
+    };
 
-      const first = await runManualContextIntake(db, input, { connectorManifestDirs: [dir], env: {} });
-      const firstCounts = manualPipelineCounts(db);
-      const second = await runManualContextIntake(db, input, { connectorManifestDirs: [dir], env: {} });
+    const first = await runManualContextIntake(db, input, { connectorManifestDirs: [dir], env: {} });
+    const firstCounts = manualPipelineCounts(db);
+    const second = await runManualContextIntake(db, input, { connectorManifestDirs: [dir], env: {} });
 
-      expect(first).toMatchObject({ status: "succeeded" });
-      expect(first.bundle).toMatchObject({ created_by: "user", source: "fixture-im", trigger: "manual" });
-      expect(first.bundle?.source_query).toMatchObject({
-        cursor: "wm-0",
-        processed_watermark: "wm-1",
-        source_pull: expect.objectContaining({
-          provider_id: "fixture-im",
-          status: "succeeded",
-          tool_name: "pull-events"
-        })
-      });
-      expect(listAttentionInboxItems(db, { source: "fixture-im" })).toEqual([]);
-      expect(listIntakeRuns(db)).toEqual([]);
-      expect(listPiActions(db)).toEqual([]);
-      expect(listExternalEvents(db, { source: "fixture-im" })).toHaveLength(2);
-      expect(second).toMatchObject({ status: "succeeded" });
-      expect(manualPipelineCounts(db)).toEqual(firstCounts);
-    } finally {
-      db.close();
-    }
+    expect(first).toMatchObject({ status: "succeeded" });
+    expect(first.bundle).toMatchObject({ created_by: "user", source: "fixture-im", trigger: "manual" });
+    expect(first.bundle?.source_query).toMatchObject({
+      cursor: "wm-0",
+      processed_watermark: "wm-1",
+      source_pull: expect.objectContaining({
+        provider_id: "fixture-im",
+        status: "succeeded",
+        tool_name: "pull-events"
+      })
+    });
+    expect(listAttentionInboxItems(db, { source: "fixture-im" })).toEqual([]);
+    expect(listIntakeRuns(db)).toEqual([]);
+    expect(listPiActions(db)).toEqual([]);
+    expect(listExternalEvents(db, { source: "fixture-im" })).toHaveLength(2);
+    expect(second).toMatchObject({ status: "succeeded" });
+    expect(manualPipelineCounts(db)).toEqual(firstCounts);
   });
 
   test("returns needs_user when the source connector is not authorized", async () => {
     const db = await openFixtureDatabase();
     const dir = await writeSourceConnector("locked-im", { requiredEnv: "LOCKED_IM_TOKEN" });
-    try {
-      const result = await runManualContextIntake(db, {
-        now: "2026-07-06T01:10:00Z",
-        source: "locked-im",
-        source_provider_id: "locked-im",
-        source_tool_name: "pull-events",
-        user_prompt: "看看刚刚群里的截图和消息"
-      }, { connectorManifestDirs: [dir], env: {} });
+    const result = await runManualContextIntake(db, {
+      now: "2026-07-06T01:10:00Z",
+      source: "locked-im",
+      source_provider_id: "locked-im",
+      source_tool_name: "pull-events",
+      user_prompt: "看看刚刚群里的截图和消息"
+    }, { connectorManifestDirs: [dir], env: {} });
 
-      expect(result).toMatchObject({ reason: "source_pull_unauthorized", status: "needs_user" });
-      expect(result.text).toContain("授权");
-      expect(listExternalEvents(db, { source: "locked-im" })).toEqual([]);
-      expect(listContextBundles(db)).toEqual([]);
-      expect(listIntakeRuns(db)).toEqual([]);
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ reason: "source_pull_unauthorized", status: "needs_user" });
+    expect(result.text).toContain("授权");
+    expect(listExternalEvents(db, { source: "locked-im" })).toEqual([]);
+    expect(listContextBundles(db)).toEqual([]);
+    expect(listIntakeRuns(db)).toEqual([]);
   });
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-manual-trigger-"));
   tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
+  return openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
 }
 
 async function writeSourceConnector(

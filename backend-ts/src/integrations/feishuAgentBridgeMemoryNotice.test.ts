@@ -8,6 +8,9 @@ import { buildFeishuConnectorConfig, normalizeFeishuMessageEvent } from "./feish
 import { createFeishuAgentBridge } from "./feishuAgentBridge.ts";
 import { ingestFeishuMessageEvent } from "./feishuIngest.ts";
 import type { FeishuTextMessageInput } from "./feishuClient.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 describe("Feishu agent bridge automatic reusable memory", () => {
   test("does not append approve/reject guidance when normal chat auto-enables explicit preference", async () => {
@@ -160,7 +163,7 @@ describe("Feishu agent bridge automatic reusable memory", () => {
 
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase }> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-feishu-memory-notice-"));
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   return { db, close: async () => { db.close(); await rm(root, { recursive: true, force: true }); } };
 }
 

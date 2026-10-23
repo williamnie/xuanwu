@@ -8,6 +8,9 @@ import { applyPiMemoryBatchAction } from "./memoryLifecycle.ts";
 import { buildPiMemoryPromptContext } from "./memoryContext.ts";
 import { createPiMemoryTools } from "./memoryTools.ts";
 import { seedMemoryExperience } from "./memoryExperienceTestFixtures.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 describe("PI automatic reusable memory policy", () => {
   test("auto-enables an explicit user naming preference", async () => {
@@ -138,7 +141,7 @@ describe("PI automatic reusable memory policy", () => {
   test("persists disable/forget intent across restart and only a separate user request restores it", async () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-memory-suppression-"));
     const stateDir = join(root, "state");
-    let db = await openDatabase({ stateDir });
+    let db = await openDatabase({ stateDir }).then(trackDatabase);
     try {
       const own = seedMemoryExperience(db);
       const input = { kind: "resolution" as const, memory_key: "bug.timeout", content: JSON.stringify(own.experience) };
@@ -146,7 +149,7 @@ describe("PI automatic reusable memory policy", () => {
       const initial = (await execute("pi_manager_cycle")).details as { id: string };
       applyPiMemoryBatchAction(db, { action: "disable", ids: [initial.id] });
       db.close();
-      db = await openDatabase({ stateDir });
+      db = await openDatabase({ stateDir }).then(trackDatabase);
       expect((await execute("pi_manager_cycle")).details).toMatchObject({ rejected: true });
       expect((await execute("pi_manager_cycle", { reenable: true, user_authorized: true })).details).toMatchObject({ rejected: true });
       // user_authorized 表示内容来自用户，不隐含撤销之前的停用。
@@ -158,7 +161,7 @@ describe("PI automatic reusable memory policy", () => {
       expect((await execute("pi_manager_cycle")).details).toMatchObject({ disabled: 0, revision: 3, occurrence_count: 1 });
       applyPiMemoryBatchAction(db, { action: "forget", ids: [initial.id] });
       db.close();
-      db = await openDatabase({ stateDir });
+      db = await openDatabase({ stateDir }).then(trackDatabase);
       expect((await execute("pi_manager_cycle")).details).toMatchObject({ rejected: true });
       expect(() => rememberPiMemoryItem(db, {
         id: "other-id", scope: "project", scope_id: "demo", ...input, disabled: 0
@@ -191,7 +194,7 @@ describe("PI automatic reusable memory policy", () => {
 
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase }> {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-pi-memory-auto-enable-"));
-  const db = await openDatabase({ stateDir: join(root, "state") });
+  const db = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   return { db, close: async () => { db.close(); await rm(root, { recursive: true, force: true }); } };
 }
 

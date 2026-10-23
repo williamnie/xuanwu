@@ -20,6 +20,9 @@ import type { ChannelConnector, OutboundEnvelope } from "../integrations/channel
 import { FeishuClientError, type FeishuMessageClient } from "../integrations/feishuClient.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
 import { FEISHU_CONNECTOR_ID } from "../integrations/feishuChannelConnector.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 function testConfig(): FeishuConnectorConfig {
   return {
@@ -71,7 +74,7 @@ function queueOutbox(db: RunnerDatabase, input: { content?: string; externalEven
 describe("im outbox dispatcher (generic authority)", () => {
   let db: RunnerDatabase;
   beforeEach(async () => {
-    db = await openDatabase({ dbPath: ":memory:" });
+    db = await openDatabase({ dbPath: ":memory:" }).then(trackDatabase);
   });
 
   test("one intent produces one claim, one connector delivery and a provider-neutral receipt", async () => {

@@ -6,6 +6,9 @@ import { buildConfig } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent } from "../db/repositories/pi.ts";
 import { buildConnectorDiagnosticBundle, connectorTestHistory, probeConnectorConnection } from "./connectorDiagnostics.ts";
+import { useDatabaseCleanup } from "../testing/harness.ts";
+
+const trackDatabase = useDatabaseCleanup();
 
 const NOW = new Date("2026-07-18T03:00:00.000Z");
 const roots: string[] = [];
@@ -17,14 +20,12 @@ afterEach(async () => {
 describe("connector diagnostics", () => {
   test("configured connectors without a probe have unknown health, not a reported failure", async () => {
     const fixture = await databaseFixture();
-    try {
-      const config = buildConfig({ githubToken: "fixture-secret", stateDir: fixture.dir });
-      const bundle = buildConnectorDiagnosticBundle({ config, database: fixture.db, now: () => NOW });
-      const connector = (bundle.connectors as Array<Record<string, unknown>>).find(item => item.id === "github-events");
-      expect(connector).toMatchObject({
-        enabled: true, status: "configured", health: { checked: false, state: "unknown", last_error: null }
-      });
-    } finally { fixture.db.close(); }
+    const config = buildConfig({ githubToken: "fixture-secret", stateDir: fixture.dir });
+    const bundle = buildConnectorDiagnosticBundle({ config, database: fixture.db, now: () => NOW });
+    const connector = (bundle.connectors as Array<Record<string, unknown>>).find(item => item.id === "github-events");
+    expect(connector).toMatchObject({
+      enabled: true, status: "configured", health: { checked: false, state: "unknown", last_error: null }
+    });
   });
 
   test("reports unconfigured without making a network request", async () => {
@@ -161,5 +162,5 @@ describe("connector diagnostics", () => {
 async function databaseFixture(): Promise<{ db: RunnerDatabase; dir: string }> {
   const dir = await mkdtemp(join(tmpdir(), "connector-diagnostics-"));
   roots.push(dir);
-  return { db: await openDatabase({ stateDir: dir }), dir };
+  return { db: await openDatabase({ stateDir: dir }).then(trackDatabase), dir };
 }
