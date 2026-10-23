@@ -27,6 +27,9 @@ describe("PI-first decision boundary", () => {
 
     const production = [
       "backend-ts/src/http/pi/piConversationApi.ts",
+      "backend-ts/src/http/pi/piConversationAuthorization.ts",
+      "backend-ts/src/http/pi/piConversationRollover.ts",
+      "backend-ts/src/http/pi/piConversationView.ts",
       "backend-ts/src/http/pi/piRuntime.ts",
       "backend-ts/src/integrations/feishu/feishuAgentBridge.ts",
       "backend-ts/src/pi/intake/attentionRouter.ts",

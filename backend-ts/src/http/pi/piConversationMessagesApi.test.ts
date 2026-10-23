@@ -11,11 +11,7 @@ import { getPiConversation, getPiIssueCompletionWatch, listPiActionEvents, listP
 import type { ExecutorProvider, ProviderRunInput } from "../../providers/types.ts";
 import { EventBus } from "../../events/bus.ts";
 import { runPiConversationPrompt } from "./piConversationApi.ts";
-import {
-  finalPiConversationSseData,
-  parsePiConversationSse,
-  readPiConversationSse
-} from "./piConversationSse.testSupport.ts";
+import { finalPiConversationSseData, parsePiConversationSse, readPiConversationSse } from "./piConversationSse.testSupport.ts";
 import { createDefaultRouter } from "../server.ts";
 import { getAgentSession, upsertAgentSession } from "../../db/repositories/agentSessions.ts";
 import { createIssueRun } from "../../db/repositories/issueRuns.ts";
