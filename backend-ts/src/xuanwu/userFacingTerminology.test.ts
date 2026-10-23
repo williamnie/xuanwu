@@ -40,7 +40,6 @@ const CURRENT_PRODUCT_DOCS = [
   "README.md",
   "frontend/README.md",
   "docs/backup-restore.md",
-  "docs/benchmarks/xuanwu-capacity-baseline.md",
   "docs/codex-integration.md",
   "docs/feishu-im-connector-contract.md",
   "docs/feishu-im-local-smoke.md",

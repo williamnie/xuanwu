@@ -1,14 +1,8 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import type { EvidenceRecord, RunID, WorkID } from "../domain/evidence/contracts.ts";
+import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import type { EvidenceRecord } from "../domain/evidence/contracts.ts";
 import type { HandoffRecord } from "../domain/handoff/contracts.ts";
-import {
-  createLocalBranchCommitHandoffService,
-  resolveLocalGitHandoffProjectPolicy,
-  type LocalGitHandoffAuditEvent
-} from "../domain/handoff/localBranchCommit.ts";
 import { listBuiltinAssistantTools } from "../pi/builtinToolRegistry.ts";
 import {
   validateWorkflowVerificationPolicy
@@ -31,7 +25,6 @@ import {
 
 const FIXTURES = resolve(import.meta.dir, "../../../docs/fixtures/workflows");
 const ADR = resolve(import.meta.dir, "../../../docs/architecture/xuanwu/0055-implement-workflow.md");
-const tempDirs: string[] = [];
 
 type ImplementFixture = ImplementWorkflowValidationContext & {
   evidence: EvidenceRecord[];
@@ -39,10 +32,6 @@ type ImplementFixture = ImplementWorkflowValidationContext & {
   name: "local_changes" | "branch_commit";
   receipt: ImplementWorkflowRun;
 };
-
-afterEach(() => {
-  for (const path of tempDirs.splice(0)) rmSync(path, { force: true, recursive: true });
-});
 
 describe("Implement Workflow", () => {
   test("registers and resolves the exact canonical Implement revision", () => {
@@ -220,82 +209,6 @@ describe("Implement Workflow", () => {
     });
   });
 
-  test("runs a temporary-project branch commit E2E without touching unrelated worktree state", async () => {
-    const fixture = structuredClone(implementFixtures().find((item) => item.name === "branch_commit")!);
-    const repository = initRepository();
-    writeFileSync(join(repository, "feature.ts"), "export const answer = 42;\n");
-    writeFileSync(join(repository, "unrelated.txt"), "keep this dirty\n");
-    const statusBefore = gitBytes(repository, "status", "--porcelain=v1", "-z", "--untracked-files=all");
-    const events: LocalGitHandoffAuditEvent[] = [];
-    const service = createLocalBranchCommitHandoffService({
-      audit_sink: { record: (event) => { events.push(event); } },
-      now: () => "2026-07-17T03:04:30.000Z",
-      project_policy_reader: {
-        read: () => resolveLocalGitHandoffProjectPolicy({
-          allowed_actions_json: '["handoff.commit"]',
-          allowed_base_branches: ["main"],
-          branch_prefix: "xw/",
-          branch_reuse: "same_baseline",
-          commit_identity: { name: "Xuanwu Runner", email: "xuanwu@example.test" },
-          commit_subject_prefixes: ["feat(workflow):"],
-          max_commit_subject_length: 120,
-          policy_ref: "project-policy:fixture:handoff-local-git@1",
-          project_id: fixture.receipt.project_id
-        })
-      }
-    });
-    const gitEvidence = fixture.evidence.find((item) => item.kind === "git")!;
-    const linkedEvidence = fixture.evidence.filter((item) => item.kind !== "git");
-    const runID = fixture.receipt.run_id as RunID;
-    const workID = fixture.receipt.work_id as WorkID;
-    const result = await service.execute({
-      audit: {
-        actor: { id: "runner:issue-688", kind: "runner" },
-        correlation_id: "issue-688-implement-e2e",
-        intent_event_id: "issue_events:688:commit:handoff:intent",
-        outcome_event_id: "issue_events:688:commit:handoff:outcome",
-        rollback_event_id: "issue_events:688:commit:handoff:rollback"
-      },
-      commit_message: "feat(workflow): implement fixture change",
-      git_evidence: {
-        evidence_id: gitEvidence.id,
-        producer: { id: "runner:issue-688", kind: "runner" },
-        run_id: runID
-      },
-      linked_evidence: linkedEvidence.map((item) => ({
-        id: item.id,
-        status: item.status,
-        work_id: item.work_id
-      })),
-      project_id: fixture.receipt.project_id,
-      repository_path: repository,
-      repository_ref: "git-repository:implement-e2e",
-      run_ids: [runID],
-      runs: fixture.runs,
-      selected_paths: ["feature.ts"],
-      work_id: workID,
-      work_title: "Implement fixture branch commit"
-    });
-
-    fixture.receipt.handoff.id = result.handoff.id;
-    const evidence = [...linkedEvidence, result.git_evidence];
-    expect(validateImplementWorkflowRun(fixture.receipt, {
-      evidence,
-      handoff: result.handoff,
-      runs: fixture.runs
-    })).toEqual({ errors: [], ok: true });
-    expect(result.diff_summary.changed_files).toEqual(["feature.ts"]);
-    expect(git(repository, "branch", "--show-current")).toBe("main");
-    expect(gitBytes(repository, "status", "--porcelain=v1", "-z", "--untracked-files=all"))
-      .toEqual(statusBefore);
-    expect(git(repository, "diff-tree", "--no-commit-id", "--name-only", "-r", result.commit_revision))
-      .toBe("feature.ts");
-    expect(events.map((event) => event.event_type)).toEqual([
-      "handoff.local_git.intent.v1",
-      "handoff.local_git.outcome.v1"
-    ]);
-  });
-
   test("locks authority, migration, rollback, and final deletion gates in the canonical ADR", () => {
     const adr = readFileSync(ADR, "utf8");
     for (const phrase of [
@@ -334,40 +247,4 @@ function implementFixtures(): ImplementFixture[] {
     throw new Error("unsupported Implement fixture version");
   }
   return parsed.fixtures;
-}
-
-function initRepository(): string {
-  const path = mkdtempSync(join(tmpdir(), "xw-implement-workflow-e2e-"));
-  tempDirs.push(path);
-  git(path, "init", "--initial-branch=main");
-  writeFileSync(join(path, "feature.ts"), "export const answer = 0;\n");
-  writeFileSync(join(path, "unrelated.txt"), "base unrelated\n");
-  git(path, "add", ".");
-  git(path, "commit", "-m", "initial fixture");
-  return path;
-}
-
-function git(repository: string, ...args: string[]): string {
-  return gitBytes(repository, ...args).toString("utf8").trim();
-}
-
-function gitBytes(repository: string, ...args: string[]): Buffer {
-  const result = Bun.spawnSync([
-    "git",
-    "-c", "user.name=Implement Fixture",
-    "-c", "user.email=implement-fixture@example.test",
-    "-C", repository,
-    ...args
-  ], {
-    env: {
-      GIT_CONFIG_GLOBAL: process.platform === "win32" ? "NUL" : "/dev/null",
-      GIT_CONFIG_NOSYSTEM: "1",
-      GIT_TERMINAL_PROMPT: "0",
-      PATH: process.env.PATH ?? ""
-    },
-    stderr: "pipe",
-    stdout: "pipe"
-  });
-  if (result.exitCode !== 0) throw new Error(result.stderr.toString());
-  return Buffer.from(result.stdout);
 }

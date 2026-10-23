@@ -5,7 +5,18 @@ import { dirname, resolve } from "node:path";
 import type { RunnerDatabase } from "../../db/database.ts";
 import { migrateLegacyCompletionWatches } from "../../db/repositories/automationWatches.ts";
 import { comparePiAutomationShadows } from "../../db/repositories/piAutomationShadow.ts";
-import { AUTOMATION_TABLES, AUTOMATION_TARGET_TABLES } from "../../xuanwu/automationSemantics.ts";
+
+const AUTOMATION_TABLES = [
+  "cron_tasks", "cron_task_schedules", "pi_automations", "pi_delegations",
+  "pi_heartbeat_controls", "pi_heartbeat_runs", "pi_heartbeat_events",
+  "pi_issue_completion_watches", "pi_issue_completion_watch_items",
+  "nightly_batches", "nightly_batch_items"
+] as const;
+
+const AUTOMATION_TARGET_TABLES = [
+  "automation_definitions", "automation_trigger_configs", "automation_runs", "automation_events",
+  "automation_run_events", "automation_execution_links", "automation_watches"
+] as const;
 
 type CountRow = { count: number };
 

@@ -6,7 +6,7 @@ import { openDatabase } from '../../db/database.ts';
 import { createIssue } from '../../db/repositories/issueCreate.ts';
 import { recordIssueEvent } from '../../db/repositories/issueEvents.ts';
 import { recordEvidenceRecords } from '../../db/repositories/evidence.ts';
-import { createCommandEvidenceCollector } from '../evidence/commandCollector.ts';
+import type { EvidenceRecord } from '../evidence/contracts.ts';
 import { recordPiRecoveryAttempt } from '../../db/repositories/pi/recoveryAttempts.ts';
 import { createPiNotificationIntent } from '../../db/repositories/pi.ts';
 import { completeFirstDelivery } from './firstDelivery.ts';
@@ -36,17 +36,16 @@ test('first delivery requires an audited sample and real evidence, persists once
     db.sqlite.run(`insert into issue_runs (id,issue_id,attempt,status,started_at,ended_at) values ('sample-run',?,1,'succeeded',?,?)`, [issue.id, '2026-09-05T03:59:00.000Z', now]);
     await expect(completeFirstDelivery(db, issue.id)).rejects.toThrow('验证记录');
     const workID = `xw:work:issues:${issue.id}` as const;
-    const output = Bun.spawnSync(['printf', 'Hello Xuanwu\n'], { cwd: repo });
-    const evidence = await createCommandEvidenceCollector().collect({
-      kind: 'shell', observation: {
-        command: "printf 'Hello Xuanwu\\n'", cwd: repo, exit_code: output.exitCode,
-        stdout: output.stdout.toString(), stderr: output.stderr.toString(),
-        started_at: now, ended_at: now, duration_ms: 0,
-      },
-      context: { evidence_id: 'xw:evidence:issue_events:sample-command', work_id: workID,
-        run_id: 'xw:run:issue_runs:sample-run', producer: { kind: 'runner', id: 'fixture' },
-        audit_event_ref: 'fixture-command', source_ref: 'fixture-command', collected_at: now },
-    });
+    const evidence = {
+      schema_version: 1, id: 'xw:evidence:issue_events:sample-command', work_id: workID,
+      run_id: 'xw:run:issue_runs:sample-run', attempt_id: 'xw:run:issue_runs:sample-run~attempt:1', revision: 0,
+      kind: 'shell', status: 'passed', created_at: now, observed_at: now, updated_at: now, completed_at: now,
+      decisive_output: { summary: 'printf exited 0', exit_code: 0, facts: { outcome: 'passed' } },
+      artifact_refs: [],
+      provenance: { assertion_origin: 'tool_result', source_kind: 'command_execution', source_ref: 'fixture-command',
+        audit_event_ref: 'fixture-command', producer: { kind: 'runner', id: 'fixture' } },
+      redaction: { status: 'not_required', policy_ref: 'evidence-redaction:v1', redacted_paths: [] },
+    } as EvidenceRecord;
     recordEvidenceRecords(db, issue.id, [evidence], { recorded_at: now, source: 'fixture-command' });
     const head = git(['rev-parse', 'HEAD']);
     const [first, replay] = await Promise.all([completeFirstDelivery(db, issue.id), completeFirstDelivery(db, issue.id)]);

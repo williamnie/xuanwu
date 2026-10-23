@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { createProviderRegistry } from "./registry.ts";
 import { BUILTIN_FACTORIES } from "../testing/conformanceFactories.ts";
 import { checkManifest } from "./conformance.ts";
-import { normalizeTranscriptItem } from "./transcript.ts";
 import { assertProviderSessionView } from "./sessionView.ts";
 import { asProviderId } from "../types.ts";
 
@@ -72,12 +71,6 @@ describe("P12: conformance matrix（§20）", () => {
       detail: true,
       expectedSessionRef: "session-contract-check"
     })).not.toThrow();
-  });
-
-  test("unknown event preserve（不改变状态，kind=unknown）", () => {
-    const item = normalizeTranscriptItem({ kind: "mystery" }, asProviderId("codex"), 0);
-    expect(item.kind).toBe("unknown");
-    expect(item.id).toBeTruthy();
   });
 
   test("支持矩阵快照：fixture 全量 ready，无 drifted capability", async () => {

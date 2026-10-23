@@ -184,7 +184,6 @@ bun run build:binary
 
 cd ../frontend
 bun test \
-  src/pages/providerAvailabilityModel.test.js \
   src/pages/sessions/sessionMarkdownExport.test.js \
   src/pages/sessions/codexAppLink.test.js \
   src/pages/sessions/newSessionGuards.test.js \

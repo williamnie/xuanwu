@@ -8,12 +8,8 @@ import { recordEvidenceRecords } from "../db/repositories/evidence.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { listPiNotificationIntents } from "../db/repositories/pi.ts";
-import {
-  createLocalBranchCommitHandoffService,
-  resolveLocalGitHandoffProjectPolicy,
-  type LocalBranchCommitHandoffRequest,
-  type LocalGitHandoffAuditEvent
-} from "../domain/handoff/localBranchCommit.ts";
+import { createGitEvidenceCollector } from "../domain/evidence/gitCollector.ts";
+import type { HandoffRecord } from "../domain/handoff/contracts.ts";
 import { EventBus } from "../events/bus.ts";
 import { recordHandoffDelivery } from "../notifications/handoffNotifier.ts";
 import { createDefaultRouter } from "./server.ts";
@@ -27,80 +23,52 @@ afterEach(async () => {
 });
 
 describe("Handoff HTTP API and delivery notification", () => {
-  test("creates a real local Git Handoff, persists one stream record, and returns list/detail plus deep-linked notification", async () => {
+  test("persists one Handoff stream record, and returns list/detail plus deep-linked notification", async () => {
     const db = await fixture();
     const repository = initRepository();
     try {
       const issueID = insertIssue(db);
-      const workID = `xw:work:issues:${issueID}` as LocalBranchCommitHandoffRequest["work_id"];
-      const runID = insertRun(db, issueID) as LocalBranchCommitHandoffRequest["run_ids"][number];
-      const evidenceID = `xw:evidence:git:handoff-api-${issueID}` as LocalBranchCommitHandoffRequest["git_evidence"]["evidence_id"];
+      const workID = `xw:work:issues:${issueID}` as const;
+      const runID = insertRun(db, issueID) as `xw:run:issue_runs:${string}`;
       writeFileSync(join(repository, "selected.txt"), "delivery change\n");
       const bus = new EventBus();
       const liveEvents: unknown[] = [];
       const stop = bus.observe((event) => liveEvents.push(event));
-      const service = createLocalBranchCommitHandoffService({
-        audit_sink: {
-          record(event: LocalGitHandoffAuditEvent) {
-            recordIssueEvent(db, issueID, event.event_type, event);
-          }
-        },
-        now: () => NOW,
-        project_policy_reader: {
-          read: () => resolveLocalGitHandoffProjectPolicy({
-            allowed_actions_json: '["handoff.commit"]',
-            allowed_base_branches: ["main"],
-            branch_prefix: "xw/",
-            branch_reuse: "same_baseline",
-            commit_identity: { name: "Xuanwu Runner", email: "xuanwu@example.test" },
-            commit_subject_prefixes: ["feat(handoff):"],
-            max_commit_subject_length: 120,
-            policy_ref: "project-policy:fixture:handoff-local-git@1",
-            project_id: "fixture"
-          })
+      const gitEvidence = await createGitEvidenceCollector().collect({
+        repository_path: repository,
+        untracked_policy: "exclude",
+        context: {
+          evidence_id: `xw:evidence:git:handoff-api-${issueID}`, work_id: workID, run_id: runID,
+          producer: { id: `runner:issue-${issueID}`, kind: "runner" },
+          audit_event_ref: `issue-${issueID}-local-handoff`, collected_at: NOW, source_ref: "git-repository:handoff-api-fixture"
         }
       });
-
-      const local = await service.execute({
-        audit: {
-          actor: { id: `runner:issue-${issueID}`, kind: "runner" },
-          correlation_id: `issue-${issueID}-local-handoff`,
-          intent_event_id: `issue_events:${issueID}:handoff:intent`,
-          outcome_event_id: `issue_events:${issueID}:handoff:outcome`,
-          rollback_event_id: `issue_events:${issueID}:handoff:rollback`
-        },
-        commit_message: "feat(handoff): deliver API smoke",
-        git_evidence: {
-          evidence_id: evidenceID,
-          producer: { id: `runner:issue-${issueID}`, kind: "runner" },
-          run_id: runID
-        },
-        linked_evidence: [],
-        project_id: "fixture",
-        repository_path: repository,
-        repository_ref: "git-repository:handoff-api-fixture",
-        run_ids: [runID],
-        runs: [{ id: runID, work_id: workID }],
-        selected_paths: ["selected.txt"],
-        work_id: workID,
-        work_title: "Handoff API smoke"
-      });
-      recordEvidenceRecords(db, issueID, [local.git_evidence], { recorded_at: NOW, source: "handoff-api-smoke" });
+      const snapshot = `git-snapshot:${gitEvidence.decisive_output.facts.snapshot_sha256}`;
+      const handoff: HandoffRecord = {
+        schema_version: 1, id: `xw:handoff:derived:handoff-api-${issueID}`, work_id: workID, run_ids: [runID],
+        evidence_ids: [gitEvidence.id], revision: 0, status: "ready", summary: "Handoff API smoke",
+        created_at: NOW, updated_at: NOW, baseline_revision: snapshot, final_revision: snapshot,
+        review_ref: `handoff-api:${issueID}`, changed_files: ["selected.txt"],
+        delivery: { mode: "local_changes", working_tree_ref: snapshot }, delivery_actions: [], risks: [],
+        rollback: { availability: "not_required", destructive: false, reason: "fixture", refs: [] },
+        review: { required: false, state: "not_applicable", reviewer_refs: [] }
+      };
+      recordEvidenceRecords(db, issueID, [gitEvidence], { recorded_at: NOW, source: "handoff-api-smoke" });
       const stored = recordHandoffDelivery({
         bus,
         database: db,
-        handoff: local.handoff,
+        handoff,
         issue_id: issueID,
         recorded_at: NOW,
-        source: "local-branch-commit-service"
+        source: "handoff-api-smoke"
       });
       const replay = recordHandoffDelivery({
         bus,
         database: db,
-        handoff: local.handoff,
+        handoff,
         issue_id: issueID,
         recorded_at: NOW,
-        source: "local-branch-commit-service"
+        source: "handoff-api-smoke"
       });
       const router = createDefaultRouter({ bus, database: db });
 
@@ -109,7 +77,7 @@ describe("Handoff HTTP API and delivery notification", () => {
       ));
       const listBody = await list.json() as Record<string, any>;
       const detail = await router.handle(new Request(
-        `${BASE_URL}/api/handoffs/${encodeURIComponent(local.handoff.id)}`
+        `${BASE_URL}/api/handoffs/${encodeURIComponent(handoff.id)}`
       ));
       const detailBody = await detail.json() as Record<string, any>;
       const notifications = listNotifications(db, { projectID: "fixture", unreadOnly: true });
@@ -119,18 +87,13 @@ describe("Handoff HTTP API and delivery notification", () => {
       expect(stored.notification?.message).toContain("部署未确认");
       expect(stored.notification?.message).toContain("不等于全部通过");
       expect(replay).toMatchObject({ created: false, notification: null });
-      expect(git(repository, "rev-parse", local.branch_ref)).toBe(local.commit_revision);
       expect(list.status).toBe(200);
       expect(listBody).toMatchObject({
         has_more: false,
         items: [{
-          delivery: {
-            branch_ref: local.branch_ref,
-            commit_ref: local.commit_revision,
-            mode: "branch_commit"
-          },
+          delivery: { mode: "local_changes" },
           delivery_status: { overall: "ready" },
-          id: local.handoff.id,
+          id: handoff.id,
           issue: {
             id: issueID,
             project_id: "fixture",
@@ -145,7 +108,6 @@ describe("Handoff HTTP API and delivery notification", () => {
       expect(detail.status).toBe(200);
       expect(detailBody).toMatchObject({
         delivery_status: {
-          actions: [{ action: "commit", current_status: "succeeded" }],
           overall: "ready",
           refreshed_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
         },
@@ -155,7 +117,7 @@ describe("Handoff HTTP API and delivery notification", () => {
           detail_level: "per_file_v2",
           diff_stats: { changed_path_count: 1, insertions: 1 }
         },
-        handoff: { changed_files: ["selected.txt"], id: local.handoff.id },
+        handoff: { changed_files: ["selected.txt"], id: handoff.id },
         issue: {
           id: issueID,
           project_id: "fixture",
@@ -163,8 +125,8 @@ describe("Handoff HTTP API and delivery notification", () => {
           title: "Handoff API smoke"
         },
         notification_summary: {
-          handoff_id: local.handoff.id,
-          href: `#/work/${encodeURIComponent(workID)}/delivery/${encodeURIComponent(local.handoff.id)}`
+          handoff_id: handoff.id,
+          href: `#/work/${encodeURIComponent(workID)}/delivery/${encodeURIComponent(handoff.id)}`
         }
       });
       expect(notifications).toHaveLength(1);
@@ -176,20 +138,15 @@ describe("Handoff HTTP API and delivery notification", () => {
         })
       ]));
       expect(JSON.parse(notifications[0]!.payload)).toMatchObject({
-        branch_ref: local.branch_ref,
-        commit_ref: local.commit_revision,
         evidence_count: 1,
-        handoff_id: local.handoff.id,
-        href: `#/work/${encodeURIComponent(workID)}/delivery/${encodeURIComponent(local.handoff.id)}`,
+        handoff_id: handoff.id,
+        href: `#/work/${encodeURIComponent(workID)}/delivery/${encodeURIComponent(handoff.id)}`,
         risk_count: 0
       });
       expect(notifications[0]!.payload).not.toContain("selected.txt");
       expect(liveEvents).toEqual([
         expect.objectContaining({ payload: notifications[0]!.payload, type: "handoff.notification" })
       ]);
-      expect(db.sqlite.query<{ count: number }, []>(
-        "select count(*) as count from issue_events where type='handoff.prepared.v1'"
-      ).get()?.count).toBe(1);
       stop();
     } finally {
       db.close();

@@ -44,20 +44,6 @@ const backendProductionRoots = backendGraphRoot ? [
     invocation: 'scripts/package-release.sh:stage_pi_policy_extension',
     test: 'backend-ts/src/providers/pi/provider.test.ts',
   },
-  {
-    path: 'backend-ts/src/spikes/piSmoke.ts',
-    owner: 'provider-smoke',
-    purpose: 'standalone Pi provider smoke executable',
-    invocation: 'bun run backend-ts/src/spikes/piSmoke.ts',
-    test: 'backend-ts/src/spikes/piSmokeSupport.test.ts',
-  },
-  {
-    path: 'backend-ts/src/usage/benchmark.ts',
-    owner: 'usage-observability',
-    purpose: 'standalone provider usage benchmark executable',
-    invocation: 'bun run backend-ts/src/usage/benchmark.ts',
-    test: 'backend-ts/src/usage/providers.test.ts',
-  },
 ];
 
 if (backendGraphRoot) {

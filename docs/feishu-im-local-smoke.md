@@ -80,14 +80,6 @@ bun test src/http/feishuInboxApi.test.ts src/http/imReplyOutboxApi.test.ts src/i
 
 完成提醒（completion watch）使用创建提醒时的显式 Feishu target：`target_chat_id` / `target_message_id` / `target_thread_id`。它不依赖被 watch 的 issue 自身是否存在 Feishu link，因此不会再因 watched issue 缺少 external link 走到 `missing_feishu_link` 并静默丢通知。
 
-可复制的本地端到端 smoke：
-
-```bash
-scripts/completion-watch-smoke.mjs
-```
-
-该脚本会在临时数据库中创建 fake Feishu conversation/event，通过自然语言完成提醒命令创建一个 watch，模拟两个 watched issues 先后进入 `done` / `failed`，并断言 `sync_outbox` 只产生一条汇总通知。输出包含 `watch_id`、`watched_issue_ids`、fake conversation id 与 outbox 状态，不会触发真实飞书发送。
-
 最小管理 API：
 
 ```bash
