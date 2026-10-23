@@ -106,28 +106,24 @@ describe("Work Ledger schema migration", () => {
 
   test("uses the declared indexes for ledger queries", async () => {
     const connection = await openDatabase({ stateDir: await tempPath("work-ledger-query-plan-") }).then(trackDatabase);
-    try {
-      expect(queryPlan(connection, `
+    expect(queryPlan(connection, `
         select * from works
         where project_id='demo' and status='todo'
         order by updated_at desc, id
       `)).toContain("idx_works_project_status_updated");
-      expect(queryPlan(connection, `
+    expect(queryPlan(connection, `
         select target_work_id from work_relations
         where project_id='demo' and source_work_id='xw:work:issues:1' and kind='depends_on'
       `)).toContain("idx_work_relations_source");
-      expect(queryPlan(connection, `
+    expect(queryPlan(connection, `
         select source_work_id from work_relations
         where project_id='demo' and target_work_id='xw:work:issues:1' and kind='depends_on'
       `)).toContain("idx_work_relations_target");
-      expect(queryPlan(connection, `
+    expect(queryPlan(connection, `
         select * from work_events
         where work_id='xw:work:issues:1'
         order by occurred_at, event_id
       `)).toContain("idx_work_events_work_occurred");
-    } finally {
-      connection.close();
-    }
   });
 
   test("documents authority, bounded coexistence, and rollback safety", () => {

@@ -266,64 +266,60 @@ describe("Run HTTP API", () => {
   test("resumes the same provider session once and rejects a stale concurrent command", async () => {
     const db = await openFixtureDatabase();
     const provider = new ControlProvider();
-    try {
-      insertProject(db, "demo");
-      const issueID = insertIssue(db, "demo", "Resume", "in_progress");
-      const runID = insertRun(db, issueID, "in_progress", {
-        sessionID: "thread-resume",
-        startedAt: timestamp(1),
-        turnID: "turn-old"
-      });
-      db.sqlite.run(`update run_attempts set status='succeeded', revision=1, ended_at=?,
+    insertProject(db, "demo");
+    const issueID = insertIssue(db, "demo", "Resume", "in_progress");
+    const runID = insertRun(db, issueID, "in_progress", {
+      sessionID: "thread-resume",
+      startedAt: timestamp(1),
+      turnID: "turn-old"
+    });
+    db.sqlite.run(`update run_attempts set status='succeeded', revision=1, ended_at=?,
         terminal_reason='provider turn completed', terminal_source_ref='fixture:completed', updated_at=?
         where run_id=?`, [timestamp(2), timestamp(2), runID]);
-      const handle = createRequestHandler(createDefaultRouter({ database: db, providers: { codex: provider } }), AUTH_TOKEN);
-      const payload = {
-        audit: audit("resume-1", "supervisor"),
-        expected_attempt_revision: 1,
-        expected_revision: 0,
-        prompt: "Continue from the verified provider state."
-      };
+    const handle = createRequestHandler(createDefaultRouter({ database: db, providers: { codex: provider } }), AUTH_TOKEN);
+    const payload = {
+      audit: audit("resume-1", "supervisor"),
+      expected_attempt_revision: 1,
+      expected_revision: 0,
+      prompt: "Continue from the verified provider state."
+    };
 
-      const resumed = await handle(authenticatedJsonRequest(
-        `/api/runs/${encodeURIComponent(runID)}/actions/resume`, payload
-      ));
-      const replay = await handle(authenticatedJsonRequest(
-        `/api/runs/${encodeURIComponent(runID)}/actions/resume`, payload
-      ));
-      const stale = await handle(authenticatedJsonRequest(
-        `/api/runs/${encodeURIComponent(runID)}/actions/resume`, {
-          ...payload,
-          audit: audit("resume-stale", "supervisor")
-        }
-      ));
-      const resumedBody = await resumed.json() as Record<string, any>;
-      const staleBody = await stale.json() as Record<string, any>;
+    const resumed = await handle(authenticatedJsonRequest(
+      `/api/runs/${encodeURIComponent(runID)}/actions/resume`, payload
+    ));
+    const replay = await handle(authenticatedJsonRequest(
+      `/api/runs/${encodeURIComponent(runID)}/actions/resume`, payload
+    ));
+    const stale = await handle(authenticatedJsonRequest(
+      `/api/runs/${encodeURIComponent(runID)}/actions/resume`, {
+        ...payload,
+        audit: audit("resume-stale", "supervisor")
+      }
+    ));
+    const resumedBody = await resumed.json() as Record<string, any>;
+    const staleBody = await stale.json() as Record<string, any>;
 
-      expect(resumed.status).toBe(200);
-      expect(replay.status).toBe(200);
-      expect(stale.status).toBe(409);
-      expect(provider.messages).toEqual([{
-        prompt: "Continue from the verified provider state.",
-        sessionId: "thread-resume"
-      }]);
-      expect(resumedBody).toMatchObject({
-        mutation: { action: "resume", audit_event_id: "resume-1", replayed: false },
-        run: {
-          attempt_count: 2,
-          attempts: [
-            { kind: "initial", status: "succeeded" },
-            { kind: "resume", provider_ref: { session_ref: "thread-resume", turn_ref: "turn-resumed" }, status: "running" }
-          ],
-          progress: { attempt_sequence: 2, attempt_status: "running" },
-          revision: 2
-        }
-      });
-      expect(staleBody.code).toBe("run_precondition_failed");
-      expect(String(staleBody.message)).toContain("Run revision mismatch");
-    } finally {
-      db.close();
-    }
+    expect(resumed.status).toBe(200);
+    expect(replay.status).toBe(200);
+    expect(stale.status).toBe(409);
+    expect(provider.messages).toEqual([{
+      prompt: "Continue from the verified provider state.",
+      sessionId: "thread-resume"
+    }]);
+    expect(resumedBody).toMatchObject({
+      mutation: { action: "resume", audit_event_id: "resume-1", replayed: false },
+      run: {
+        attempt_count: 2,
+        attempts: [
+          { kind: "initial", status: "succeeded" },
+          { kind: "resume", provider_ref: { session_ref: "thread-resume", turn_ref: "turn-resumed" }, status: "running" }
+        ],
+        progress: { attempt_sequence: 2, attempt_status: "running" },
+        revision: 2
+      }
+    });
+    expect(staleBody.code).toBe("run_precondition_failed");
+    expect(String(staleBody.message)).toContain("Run revision mismatch");
   });
 
   test("serializes retry by expected revision and records rejected concurrent requests", async () => {

@@ -377,113 +377,105 @@ describe("Command Center aggregate API", () => {
 
   test("uses one Command Center decision seam for internal Actions and source-linked Proposals", async () => {
     const db = await fixtureDatabase();
-    try {
-      db.sqlite.run(`insert into issues
+    db.sqlite.run(`insert into issues
         (id,project_id,title,status,created_at,updated_at)
         values (738,'demo','Issue 738','triage',?,?)`, [SOURCE_TIME, SOURCE_TIME]);
-      createPiAction(db, {
-        action_type: "issue.enqueue",
-        gate_decision: "ask",
-        gate_reason: "risk requires user confirmation",
-        id: "internal-action-pending",
-        idempotency_key: "internal-action-pending",
-        payload_json: JSON.stringify({ issue_id: 738 }),
-        project_id: "demo",
-        rationale: "Enqueue issue 738",
-        requires_confirmation: 1,
-        risk_level: "medium",
+    createPiAction(db, {
+      action_type: "issue.enqueue",
+      gate_decision: "ask",
+      gate_reason: "risk requires user confirmation",
+      id: "internal-action-pending",
+      idempotency_key: "internal-action-pending",
+      payload_json: JSON.stringify({ issue_id: 738 }),
+      project_id: "demo",
+      rationale: "Enqueue issue 738",
+      requires_confirmation: 1,
+      risk_level: "medium",
+      status: "pending"
+    });
+    const itemID = insertAttention(db);
+    createActionProposal(db, {
+      actions: [{ payload: { reason: "duplicate" }, requires_approval: false, risk: "low", type: "no_action" }],
+      id: "proposal-command-center",
+      skill_run_id: "missing-legacy-skill-run",
+      source_item_ids: [`attention_inbox_item:${itemID}`],
+      status: "proposed",
+      summary: "Ignore duplicate request"
+    });
+    const router = createDefaultRouter({ database: db });
+
+    const summary = await router.handle(new Request(`${BASE_URL}/api/command-center/summary?sections=attention&limit=10`));
+    const items = ((await summary.json()) as Record<string, any>).sections.attention.items;
+    const internal = items.find((item: Record<string, any>) => item.source_refs.some((ref: Record<string, any>) => ref.authority === "pi_actions"));
+    const proposalAttention = items.find((item: Record<string, any>) => item.source_refs.some((ref: Record<string, any>) => ref.authority === "attention_inbox_items"));
+    expect(internal).toMatchObject({ type: "approval_required", status: "waiting" });
+
+    const detail = await router.handle(new Request(`${BASE_URL}/api/command-center/attention/${encodeURIComponent(internal.id)}`));
+    expect(await detail.json()).toMatchObject({
+      decisions: [{
+        gate: {
+          authorization_source: "deterministic_policy",
+          blocked_layer: "action_gate",
+          can_approve: true,
+          decision: "ask",
+          freshness: "current",
+          reason_code: "risk_confirmation_required",
+          scope: { issue_ids: [738], project_id: "demo" }
+        },
+        kind: "pi_action",
+        ref: "pi_action:internal-action-pending",
         status: "pending"
-      });
-      const itemID = insertAttention(db);
-      createActionProposal(db, {
-        actions: [{ payload: { reason: "duplicate" }, requires_approval: false, risk: "low", type: "no_action" }],
-        id: "proposal-command-center",
-        skill_run_id: "missing-legacy-skill-run",
-        source_item_ids: [`attention_inbox_item:${itemID}`],
-        status: "proposed",
-        summary: "Ignore duplicate request"
-      });
-      const router = createDefaultRouter({ database: db });
+      }]
+    });
+    const rejectedAction = await router.handle(jsonRequest(
+      `/api/command-center/attention/${encodeURIComponent(internal.id)}/actions/reject`,
+      { actor: "user:command-center", decision_ref: "pi_action:internal-action-pending", reason: "not authorized" }
+    ));
+    expect(rejectedAction.status).toBe(200);
+    expect(await rejectedAction.json()).toMatchObject({ attention: null, decision: { decision_ref: "pi_action:internal-action-pending" } });
 
-      const summary = await router.handle(new Request(`${BASE_URL}/api/command-center/summary?sections=attention&limit=10`));
-      const items = ((await summary.json()) as Record<string, any>).sections.attention.items;
-      const internal = items.find((item: Record<string, any>) => item.source_refs.some((ref: Record<string, any>) => ref.authority === "pi_actions"));
-      const proposalAttention = items.find((item: Record<string, any>) => item.source_refs.some((ref: Record<string, any>) => ref.authority === "attention_inbox_items"));
-      expect(internal).toMatchObject({ type: "approval_required", status: "waiting" });
-
-      const detail = await router.handle(new Request(`${BASE_URL}/api/command-center/attention/${encodeURIComponent(internal.id)}`));
-      expect(await detail.json()).toMatchObject({
-        decisions: [{
-          gate: {
-            authorization_source: "deterministic_policy",
-            blocked_layer: "action_gate",
-            can_approve: true,
-            decision: "ask",
-            freshness: "current",
-            reason_code: "risk_confirmation_required",
-            scope: { issue_ids: [738], project_id: "demo" }
-          },
-          kind: "pi_action",
-          ref: "pi_action:internal-action-pending",
-          status: "pending"
-        }]
-      });
-      const rejectedAction = await router.handle(jsonRequest(
-        `/api/command-center/attention/${encodeURIComponent(internal.id)}/actions/reject`,
-        { actor: "user:command-center", decision_ref: "pi_action:internal-action-pending", reason: "not authorized" }
-      ));
-      expect(rejectedAction.status).toBe(200);
-      expect(await rejectedAction.json()).toMatchObject({ attention: null, decision: { decision_ref: "pi_action:internal-action-pending" } });
-
-      const proposalDetail = await router.handle(new Request(
-        `${BASE_URL}/api/command-center/attention/${encodeURIComponent(proposalAttention.id)}`
-      ));
-      expect(await proposalDetail.json()).toMatchObject({
-        decisions: [{ kind: "proposal", ref: "proposal:proposal-command-center", status: "proposed" }]
-      });
-      const rejectedProposal = await router.handle(jsonRequest(
-        `/api/command-center/attention/${encodeURIComponent(proposalAttention.id)}/actions/reject`,
-        { actor: "user:command-center", decision_ref: "proposal:proposal-command-center", reason: "duplicate" }
-      ));
-      expect(rejectedProposal.status).toBe(200);
-      expect(db.sqlite.query("select status from attention_inbox_items where id=?").get(itemID)).toEqual({ status: "ignored" });
-      expect(db.sqlite.query("select status from pi_action_proposals where id='proposal-command-center'").get()).toEqual({ status: "rejected" });
-    } finally {
-      db.close();
-    }
+    const proposalDetail = await router.handle(new Request(
+      `${BASE_URL}/api/command-center/attention/${encodeURIComponent(proposalAttention.id)}`
+    ));
+    expect(await proposalDetail.json()).toMatchObject({
+      decisions: [{ kind: "proposal", ref: "proposal:proposal-command-center", status: "proposed" }]
+    });
+    const rejectedProposal = await router.handle(jsonRequest(
+      `/api/command-center/attention/${encodeURIComponent(proposalAttention.id)}/actions/reject`,
+      { actor: "user:command-center", decision_ref: "proposal:proposal-command-center", reason: "duplicate" }
+    ));
+    expect(rejectedProposal.status).toBe(200);
+    expect(db.sqlite.query("select status from attention_inbox_items where id=?").get(itemID)).toEqual({ status: "ignored" });
+    expect(db.sqlite.query("select status from pi_action_proposals where id='proposal-command-center'").get()).toEqual({ status: "rejected" });
   });
 
   test("keeps the active Work partition bounded on a large library", async () => {
     const db = await fixtureDatabase();
-    try {
-      const insert = db.sqlite.prepare(`
+    const insert = db.sqlite.prepare(`
         insert into issues (project_id, title, description, status, priority, created_at, updated_at)
         values ('demo', ?, '', 'todo', ?, ?, ?)
       `);
-      db.transaction(() => {
-        for (let index = 0; index < 12_000; index += 1) {
-          insert.run(`Large Work ${index}`, index, SOURCE_TIME, SOURCE_TIME);
-        }
-      }).immediate();
-      const router = createDefaultRouter({ database: db });
+    db.transaction(() => {
+      for (let index = 0; index < 12_000; index += 1) {
+        insert.run(`Large Work ${index}`, index, SOURCE_TIME, SOURCE_TIME);
+      }
+    }).immediate();
+    const router = createDefaultRouter({ database: db });
 
-      const startedAt = performance.now();
-      const response = await router.handle(new Request(
-        `${BASE_URL}/api/command-center/summary?sections=active_work&limit=10`
-      ));
-      const elapsedMs = performance.now() - startedAt;
-      const body = await response.json() as Record<string, any>;
+    const startedAt = performance.now();
+    const response = await router.handle(new Request(
+      `${BASE_URL}/api/command-center/summary?sections=active_work&limit=10`
+    ));
+    const elapsedMs = performance.now() - startedAt;
+    const body = await response.json() as Record<string, any>;
 
-      expect(response.status).toBe(200);
-      expect(body.sections.active_work).toMatchObject({
-        counts: { returned: 10, total: 12_000 },
-        status: "ok"
-      });
-      expect(body.sections.active_work.items).toHaveLength(10);
-      expect(elapsedMs).toBeLessThan(2_000);
-    } finally {
-      db.close();
-    }
+    expect(response.status).toBe(200);
+    expect(body.sections.active_work).toMatchObject({
+      counts: { returned: 10, total: 12_000 },
+      status: "ok"
+    });
+    expect(body.sections.active_work.items).toHaveLength(10);
+    expect(elapsedMs).toBeLessThan(2_000);
   });
 
   test("rejects unbounded limits and unknown sections with actionable errors", async () => {

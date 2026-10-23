@@ -26,31 +26,23 @@ afterEach(async () => {
 describe("automatic project takeover", () => {
   test("creates and updates projects with mandatory PI takeover", async () => {
     const { cwd, database } = await fixture();
-    try {
-      updatePiSupervisor(database, { enabled: 0 });
-      const created = createAutomaticallyManagedProject(database, { id: "demo", cwd, auto_run: 0 });
-      expect(created).toMatchObject({ id: "demo", auto_run: 1, pi_managed: 1 });
-      expect(getPiSupervisor(database)?.enabled).toBe(1);
+    updatePiSupervisor(database, { enabled: 0 });
+    const created = createAutomaticallyManagedProject(database, { id: "demo", cwd, auto_run: 0 });
+    expect(created).toMatchObject({ id: "demo", auto_run: 1, pi_managed: 1 });
+    expect(getPiSupervisor(database)?.enabled).toBe(1);
 
-      const updated = updateAutomaticallyManagedProject(database, "demo", { auto_run: 0, name: "Renamed" });
-      expect(updated).toMatchObject({ id: "demo", name: "Renamed", auto_run: 1, pi_managed: 1 });
-    } finally {
-      database.close();
-    }
+    const updated = updateAutomaticallyManagedProject(database, "demo", { auto_run: 0, name: "Renamed" });
+    expect(updated).toMatchObject({ id: "demo", name: "Renamed", auto_run: 1, pi_managed: 1 });
   });
 
   test("repairs a legacy project that is paused and not bound", async () => {
     const { cwd, database } = await fixture();
-    try {
-      const project = createAutomaticallyManagedProject(database, { id: "demo", cwd });
-      deleteProjectPiSettings(database, project.id);
-      updateProject(database, project.id, { auto_run: 0 });
+    const project = createAutomaticallyManagedProject(database, { id: "demo", cwd });
+    deleteProjectPiSettings(database, project.id);
+    updateProject(database, project.id, { auto_run: 0 });
 
-      expect(ensureProjectAutomaticTakeover(database, project.id))
-        .toMatchObject({ auto_run: 1, pi_managed: 1 });
-    } finally {
-      database.close();
-    }
+    expect(ensureProjectAutomaticTakeover(database, project.id))
+      .toMatchObject({ auto_run: 1, pi_managed: 1 });
   });
 });
 

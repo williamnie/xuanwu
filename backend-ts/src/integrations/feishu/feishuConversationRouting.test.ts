@@ -113,34 +113,30 @@ describe("Feishu conversation routing", () => {
 
   test("adopts the newest legacy daily conversation without losing its reset epoch", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertConversation(db, "feishu-chat-oc_group-20260720-n2", "2026-07-20T09:00:00.000Z");
-      db.sqlite.run(
-        `insert into feishu_conversation_state
+    insertConversation(db, "feishu-chat-oc_group-20260720-n2", "2026-07-20T09:00:00.000Z");
+    db.sqlite.run(
+      `insert into feishu_conversation_state
            (scope_key, active_conversation_id, active_project_id, active_project_source,
             epoch, started_at, updated_at)
          values (?, ?, ?, ?, ?, ?, ?)`,
-        [
-          "feishu-chat-oc_group-20260720",
-          "feishu-chat-oc_group-20260720-n2",
-          "demo",
-          "card_select",
-          2,
-          "2026-07-20T09:00:00.000Z",
-          "2026-07-20T09:00:00.000Z"
-        ]
-      );
+      [
+        "feishu-chat-oc_group-20260720",
+        "feishu-chat-oc_group-20260720-n2",
+        "demo",
+        "card_select",
+        2,
+        "2026-07-20T09:00:00.000Z",
+        "2026-07-20T09:00:00.000Z"
+      ]
+    );
 
-      const reset = routeFeishuConversation(db, {
-        clock: fixedClock("2026-07-21T01:01:00Z"),
-        event: eventFixture({ message_id: "om_reset_upgrade" }),
-        prompt: "/new"
-      });
+    const reset = routeFeishuConversation(db, {
+      clock: fixedClock("2026-07-21T01:01:00Z"),
+      event: eventFixture({ message_id: "om_reset_upgrade" }),
+      prompt: "/new"
+    });
 
-      expect(reset.conversationId).toBe("feishu-chat-oc_group-n3");
-    } finally {
-      db.close();
-    }
+    expect(reset.conversationId).toBe("feishu-chat-oc_group-n3");
   });
 
   test("falls back to message scoped conversations when chat id is missing", async () => {

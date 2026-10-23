@@ -93,10 +93,9 @@ describe("PI supervisor issue API", () => {
 
   test("keeps the issue view below one second with a large historical signal backlog", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "backlog");
-      const issueID = insertIssue(database, "backlog");
-      database.sqlite.run(`
+    insertProject(database, "backlog");
+    const issueID = insertIssue(database, "backlog");
+    database.sqlite.run(`
         with recursive seq(n) as (
           select 1
           union all
@@ -111,20 +110,17 @@ describe("PI supervisor issue API", () => {
         from seq
       `, [issueID]);
 
-      const startedAt = performance.now();
-      const response = await createDefaultRouter({ database }).handle(
-        new Request(`${BASE_URL}/api/issues/${issueID}/supervisor`)
-      );
-      const elapsedMs = performance.now() - startedAt;
-      const body = await response.json() as Record<string, any>;
+    const startedAt = performance.now();
+    const response = await createDefaultRouter({ database }).handle(
+      new Request(`${BASE_URL}/api/issues/${issueID}/supervisor`)
+    );
+    const elapsedMs = performance.now() - startedAt;
+    const body = await response.json() as Record<string, any>;
 
-      expect(response.status).toBe(200);
-      expect(body.summary.signals).toBe(12000);
-      expect(body.recovery_history).toHaveLength(20);
-      expect(elapsedMs).toBeLessThan(1000);
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(body.summary.signals).toBe(12000);
+    expect(body.recovery_history).toHaveLength(20);
+    expect(elapsedMs).toBeLessThan(1000);
   });
 });
 

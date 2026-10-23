@@ -74,48 +74,44 @@ describe("Telegram settings API", () => {
     const root = await mkdtemp(join(tmpdir(), "xuanwu-telegram-discovery-active-"));
     roots.push(root);
     const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
-    try {
-      const config = buildConfig({ dbPath: database.path, stateDir: dirname(database.path) });
-      Object.assign(config.integrations.telegram, {
-        allowedChatIds: ["42"],
-        allowedUserIds: ["42"],
-        botToken: "123:active-secret",
-        defaultChatId: "42",
-        enabled: true
-      });
-      database.sqlite.run(
-        `insert into external_events (source, content, dedupe_key, normalized_message_json)
+    const config = buildConfig({ dbPath: database.path, stateDir: dirname(database.path) });
+    Object.assign(config.integrations.telegram, {
+      allowedChatIds: ["42"],
+      allowedUserIds: ["42"],
+      botToken: "123:active-secret",
+      defaultChatId: "42",
+      enabled: true
+    });
+    database.sqlite.run(
+      `insert into external_events (source, content, dedupe_key, normalized_message_json)
          values ('telegram', ?, 'telegram:update:201', ?)`,
-        ["private message must not be returned", JSON.stringify({
-          conversation: { id: "42", kind: "direct" },
-          occurred_at: "2026-08-16T10:00:00.000Z",
-          sender: { display_name: "Fixture User", id: "42", kind: "user" },
-          text: "private message must not be returned"
-        })]
-      );
-      let polled = false;
-      const client = {
-        getMe: async () => ({ id: 9001, is_bot: true, username: "fixture_bot" }),
-        getWebhookInfo: async () => ({ pending_update_count: 0, url: "" }),
-        getUpdates: async () => { polled = true; return []; }
-      } as TelegramBotClient;
-      const router = createRouter();
-      registerTelegramSettingsRoutes(router, { config, database, telegramClientFactory: () => client });
+      ["private message must not be returned", JSON.stringify({
+        conversation: { id: "42", kind: "direct" },
+        occurred_at: "2026-08-16T10:00:00.000Z",
+        sender: { display_name: "Fixture User", id: "42", kind: "user" },
+        text: "private message must not be returned"
+      })]
+    );
+    let polled = false;
+    const client = {
+      getMe: async () => ({ id: 9001, is_bot: true, username: "fixture_bot" }),
+      getWebhookInfo: async () => ({ pending_update_count: 0, url: "" }),
+      getUpdates: async () => { polled = true; return []; }
+    } as TelegramBotClient;
+    const router = createRouter();
+    registerTelegramSettingsRoutes(router, { config, database, telegramClientFactory: () => client });
 
-      const response = await router.handle(new Request("http://127.0.0.1/api/integrations/telegram/discover-source", {
-        body: JSON.stringify({}), headers: { "content-type": "application/json" }, method: "POST"
-      }));
-      const bodyText = await response.text();
-      const body = JSON.parse(bodyText);
+    const response = await router.handle(new Request("http://127.0.0.1/api/integrations/telegram/discover-source", {
+      body: JSON.stringify({}), headers: { "content-type": "application/json" }, method: "POST"
+    }));
+    const bodyText = await response.text();
+    const body = JSON.parse(bodyText);
 
-      expect(response.status).toBe(200);
-      expect(polled).toBe(false);
-      expect(body).toMatchObject({ mode: "recent_events", sources: [{ chat_id: "42", user_id: "42" }] });
-      expect(bodyText).not.toContain("private message must not be returned");
-      expect(bodyText).not.toContain("active-secret");
-    } finally {
-      database.close();
-    }
+    expect(response.status).toBe(200);
+    expect(polled).toBe(false);
+    expect(body).toMatchObject({ mode: "recent_events", sources: [{ chat_id: "42", user_id: "42" }] });
+    expect(bodyText).not.toContain("private message must not be returned");
+    expect(bodyText).not.toContain("active-secret");
   });
 
   test("stores Bot Token through SecretService and never reads it back", async () => {

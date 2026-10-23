@@ -58,54 +58,50 @@ describe("Run progress repository", () => {
 
   test("treats approval wait as attention rather than a stalled execution", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const { issueID, runID } = insertRunningRun(db);
-      insertRunEvent(
-        db,
-        issueID,
-        "2026-01-01T00:01:00.000Z",
-        "approval_requested",
-        "waiting_approval",
-        "approval/requested",
-        "approval required"
-      );
-      const latestNormalizedID = db.sqlite.query<{ id: number }, []>(
-        "select max(id) as id from issue_events"
-      ).get()?.id ?? 0;
-      db.sqlite.run(
-        "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.log', ?, ?)",
-        [issueID, JSON.stringify({ type: "raw", text: "newer non-normalized event" }), "2026-01-01T00:02:00.000Z"]
-      );
+    const { issueID, runID } = insertRunningRun(db);
+    insertRunEvent(
+      db,
+      issueID,
+      "2026-01-01T00:01:00.000Z",
+      "approval_requested",
+      "waiting_approval",
+      "approval/requested",
+      "approval required"
+    );
+    const latestNormalizedID = db.sqlite.query<{ id: number }, []>(
+      "select max(id) as id from issue_events"
+    ).get()?.id ?? 0;
+    db.sqlite.run(
+      "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.log', ?, ?)",
+      [issueID, JSON.stringify({ type: "raw", text: "newer non-normalized event" }), "2026-01-01T00:02:00.000Z"]
+    );
 
-      const projection = rebuildRunProgressProjection(db, runID, {
-        now: new Date("2026-01-01T01:00:00.000Z"),
-        stalledAfterMs: 10 * 60 * 1000
-      });
+    const projection = rebuildRunProgressProjection(db, runID, {
+      now: new Date("2026-01-01T01:00:00.000Z"),
+      stalledAfterMs: 10 * 60 * 1000
+    });
 
-      expect(projection).toMatchObject({
-        provider_phase: "waiting_approval",
-        stalled: { detected: false, reason: "waiting_approval" }
-      });
-      expect(runProgressProjectionStatus(db, new Date("2026-01-01T01:00:00.000Z"))).toMatchObject({
-        active_runs: 1,
-        latest_source_event_id: latestNormalizedID,
-        stalled_runs: 0,
-        status: "ready",
-        waiting_approval_runs: 1
-      });
-      const plan = db.sqlite.query<{ detail: string }, []>(`
+    expect(projection).toMatchObject({
+      provider_phase: "waiting_approval",
+      stalled: { detected: false, reason: "waiting_approval" }
+    });
+    expect(runProgressProjectionStatus(db, new Date("2026-01-01T01:00:00.000Z"))).toMatchObject({
+      active_runs: 1,
+      latest_source_event_id: latestNormalizedID,
+      stalled_runs: 0,
+      status: "ready",
+      waiting_approval_runs: 1
+    });
+    const plan = db.sqlite.query<{ detail: string }, []>(`
         explain query plan select id from issue_events
           indexed by idx_issue_events_run_event_v1_id_desc
         where type='issue.log' and json_valid(payload)
           and json_extract(payload, '$.run_event.contract')='${NORMALIZED_RUN_EVENT_CONTRACT}'
         order by id desc limit 1
       `).all().map((row) => row.detail);
-      expect(plan).toEqual(expect.arrayContaining([
-        expect.stringContaining("idx_issue_events_run_event_v1_id_desc")
-      ]));
-    } finally {
-      db.close();
-    }
+    expect(plan).toEqual(expect.arrayContaining([
+      expect.stringContaining("idx_issue_events_run_event_v1_id_desc")
+    ]));
   });
 });
 

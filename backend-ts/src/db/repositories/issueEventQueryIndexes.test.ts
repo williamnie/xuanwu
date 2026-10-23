@@ -14,61 +14,56 @@ const openFixture = useTestDatabase();
 describe("Issue Event query indexes", () => {
   test("uses the global type/id index for every P0 point lookup and replay shape", async () => {
     const db = await openFixture();
-    try {
-      const lifecycle = plan(db, `
+    const lifecycle = plan(db, `
         select id, payload from issue_events
         where type=? and json_valid(payload) and json_extract(payload, '$.attempt_id')=?
         order by id desc limit 1
       `, ["run.lifecycle.intent.v1", "attempt-1"]);
-      const usageBaseline = plan(db, `
+    const usageBaseline = plan(db, `
         select id, payload from issue_events
         where type=? and json_valid(payload) and json_extract(payload, '$.attempt_id')=?
         order by id desc limit 1
       `, ["run.lifecycle.intent.v1", "attempt-1"]);
-      const workCreateReplay = plan(db, `
+    const workCreateReplay = plan(db, `
         select issue_id, payload from issue_events
         where type='issue.created'
           and json_extract(case when json_valid(payload) then payload else '{}' end, '$.event_id')=?
         order by id asc limit 1
       `, ["work-create-1"]);
-      const evidence = plan(db, `
+    const evidence = plan(db, `
         select id, payload from issue_events
         where type in (?, ?) and json_valid(payload)
           and json_extract(payload, '$.evidence.id')=?
         order by id desc limit 20
       `, [EVIDENCE_RECORDED_EVENT_TYPE, LEGACY_HUMAN_EVIDENCE_EVENT_TYPE, "evidence-1"]);
-      const handoff = plan(db, `
+    const handoff = plan(db, `
         select id, payload from issue_events
         where type in (?, ?, ?, ?, ?) and json_valid(payload)
           and json_extract(payload, '$.handoff.id')=?
         order by id desc limit 20
       `, [...HANDOFF_RECORD_EVENT_TYPES, "handoff-1"]);
-      const scopeAudit = plan(db, `
+    const scopeAudit = plan(db, `
         select event.id from issue_events event
         join issue_runs run on run.run_id=json_extract(event.payload, '$.run_id')
         where event.type in (?, ?, ?, ?) and json_valid(event.payload)
           and event.issue_id<>run.issue_id
         order by event.id asc limit ?
       `, [
-        "run.lifecycle.intent.v1",
-        "run.lifecycle.outcome.v1",
-        "run.lifecycle.run_materialized.v1",
-        "run.lifecycle.run_requested.v1",
-        20
-      ]);
+      "run.lifecycle.intent.v1",
+      "run.lifecycle.outcome.v1",
+      "run.lifecycle.run_materialized.v1",
+      "run.lifecycle.run_requested.v1",
+      20
+    ]);
 
-      for (const details of [lifecycle, usageBaseline, workCreateReplay, evidence, handoff, scopeAudit]) {
-        expectUsesTypeIndex(details);
-      }
-    } finally {
-      db.close();
+    for (const details of [lifecycle, usageBaseline, workCreateReplay, evidence, handoff, scopeAudit]) {
+      expectUsesTypeIndex(details);
     }
   });
 
   test("uses the type/id index on both sides of Evidence and Handoff anti-joins", async () => {
     const db = await openFixture();
-    try {
-      const evidenceList = plan(db, `
+    const evidenceList = plan(db, `
         select event.id, event.issue_id, event.type, event.payload, issue.project_id
         from issue_events event
         join issues issue on issue.id=event.issue_id
@@ -79,13 +74,13 @@ describe("Issue Event query indexes", () => {
         ))) and json_valid(event.payload)
         order by event.id desc limit ?
       `, [
-        EVIDENCE_RECORDED_EVENT_TYPE,
-        LEGACY_HUMAN_EVIDENCE_EVENT_TYPE,
-        EVIDENCE_RECORDED_EVENT_TYPE,
-        20
-      ]);
-      const placeholders = HANDOFF_RECORD_EVENT_TYPES.map(() => "?").join(", ");
-      const handoffList = plan(db, `
+      EVIDENCE_RECORDED_EVENT_TYPE,
+      LEGACY_HUMAN_EVIDENCE_EVENT_TYPE,
+      EVIDENCE_RECORDED_EVENT_TYPE,
+      20
+    ]);
+    const placeholders = HANDOFF_RECORD_EVENT_TYPES.map(() => "?").join(", ");
+    const handoffList = plan(db, `
         select event.id, event.type, event.issue_id, event.payload, issue.project_id
         from issue_events event
         join issues issue on issue.id=event.issue_id
@@ -107,11 +102,8 @@ describe("Issue Event query indexes", () => {
         order by event.id desc limit ?
       `, [...HANDOFF_RECORD_EVENT_TYPES, ...HANDOFF_RECORD_EVENT_TYPES, 20]);
 
-      expectUsesTypeIndex(evidenceList, 2);
-      expectUsesTypeIndex(handoffList, 2);
-    } finally {
-      db.close();
-    }
+    expectUsesTypeIndex(evidenceList, 2);
+    expectUsesTypeIndex(handoffList, 2);
   });
 });
 

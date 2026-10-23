@@ -239,66 +239,62 @@ describe("Claude Code provider", () => {
         { type: "result", session_id: "sess-1", uuid: "turn-1", is_error: false, terminal_reason: "end_turn" }
       ])
     });
-    try {
-      const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-claude-cwd-"));
-      tempRoots.push(cwd);
-      insertProject(db, "demo", cwd);
-      const issueId = insertIssue(db, "demo");
-      const issueRunId = createIssueRun(db, issueId).id;
-      const provider = new ClaudeExecutorProvider(runtimeConfig({ model: "sonnet" }), {
-        processFactory: factory.factory,
-        sessionIdFactory: () => "sess-1"
-      });
+    const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-claude-cwd-"));
+    tempRoots.push(cwd);
+    insertProject(db, "demo", cwd);
+    const issueId = insertIssue(db, "demo");
+    const issueRunId = createIssueRun(db, issueId).id;
+    const provider = new ClaudeExecutorProvider(runtimeConfig({ model: "sonnet" }), {
+      processFactory: factory.factory,
+      sessionIdFactory: () => "sess-1"
+    });
 
-      const result = await runIssueWithProvider(provider, {
-        database: db,
-        issueId,
-        issueRunId,
-        projectId: "demo",
-        cwd,
-        prompt: "issue prompt",
-        approvalPolicy: "never",
-        sandbox: "workspace-write"
-      });
+    const result = await runIssueWithProvider(provider, {
+      database: db,
+      issueId,
+      issueRunId,
+      projectId: "demo",
+      cwd,
+      prompt: "issue prompt",
+      approvalPolicy: "never",
+      sandbox: "workspace-write"
+    });
 
-      expect(factory.calls).toHaveLength(1);
-      expect(factory.calls[0].cwd).toBe(cwd);
-      expect(factory.calls[0].env.XUANWU_MANAGED_EXECUTION).toBe("1");
-      expect(factory.calls[0].command).toEqual([
-        "claude", "-p", "--verbose", "--output-format", "stream-json",
-        "--permission-mode", "dontAsk", "--allowedTools", "Read,Grep,Glob,LS,Edit,MultiEdit,Write,Bash",
-        "--session-id", "sess-1",
-        "--model", "sonnet", "--max-turns", "50", "issue prompt"
-      ]);
-      expect(result).toEqual({ runId: `cli:claude:${issueId}`, session: { provider: "claude", sessionId: "sess-1", turnId: "turn-1" } });
-      expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress", codex_thread_id: "", codex_turn_id: "" });
-      expect(listIssueRuns(db, issueId)).toMatchObject([{
-        provider: "claude",
-        provider_session_id: "sess-1",
-        provider_turn_id: "turn-1",
-        codex_thread_id: "",
-        codex_turn_id: "",
-        status: "succeeded",
-        ended_at: expect.any(String),
-        runtime_metadata_json: JSON.stringify({
-          run_id: `cli:claude:${issueId}`,
-          resolved_settings: {
-            approval_policy: "never",
-            model: "",
-            reasoning_effort: "",
-            sandbox: "workspace-write",
-            service_tier: "",
-            service_tier_source: "standard"
-          }
-        })
-      }]);
-      const payloads = listIssueEvents(db, issueId).map((event) => event.payload).join("\n");
-      expect(payloads).toContain("hello from claude");
-      expect(payloads).toContain("xuanwu issue update");
-      expect(payloads).toContain("end_turn");
-    } finally {
-      db.close();
-    }
+    expect(factory.calls).toHaveLength(1);
+    expect(factory.calls[0].cwd).toBe(cwd);
+    expect(factory.calls[0].env.XUANWU_MANAGED_EXECUTION).toBe("1");
+    expect(factory.calls[0].command).toEqual([
+      "claude", "-p", "--verbose", "--output-format", "stream-json",
+      "--permission-mode", "dontAsk", "--allowedTools", "Read,Grep,Glob,LS,Edit,MultiEdit,Write,Bash",
+      "--session-id", "sess-1",
+      "--model", "sonnet", "--max-turns", "50", "issue prompt"
+    ]);
+    expect(result).toEqual({ runId: `cli:claude:${issueId}`, session: { provider: "claude", sessionId: "sess-1", turnId: "turn-1" } });
+    expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress", codex_thread_id: "", codex_turn_id: "" });
+    expect(listIssueRuns(db, issueId)).toMatchObject([{
+      provider: "claude",
+      provider_session_id: "sess-1",
+      provider_turn_id: "turn-1",
+      codex_thread_id: "",
+      codex_turn_id: "",
+      status: "succeeded",
+      ended_at: expect.any(String),
+      runtime_metadata_json: JSON.stringify({
+        run_id: `cli:claude:${issueId}`,
+        resolved_settings: {
+          approval_policy: "never",
+          model: "",
+          reasoning_effort: "",
+          sandbox: "workspace-write",
+          service_tier: "",
+          service_tier_source: "standard"
+        }
+      })
+    }]);
+    const payloads = listIssueEvents(db, issueId).map((event) => event.payload).join("\n");
+    expect(payloads).toContain("hello from claude");
+    expect(payloads).toContain("xuanwu issue update");
+    expect(payloads).toContain("end_turn");
   });
 
   test("returns redacted error when Claude exits non-zero", async () => {
@@ -362,47 +358,43 @@ describe("Claude Code provider", () => {
       processFactory: factory.factory,
       sessionIdFactory: () => "session-cancel"
     });
-    try {
-      const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-claude-cancel-cwd-"));
-      tempRoots.push(cwd);
-      insertProject(db, "demo", cwd);
-      const issueId = insertIssue(db, "demo");
-      const issueRunId = createIssueRun(db, issueId).id;
-      const running = runIssueWithProvider(provider, {
-        database: db,
-        issueId,
-        issueRunId,
-        projectId: "demo",
-        cwd,
-        prompt: "issue prompt"
-      });
+    const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-claude-cancel-cwd-"));
+    tempRoots.push(cwd);
+    insertProject(db, "demo", cwd);
+    const issueId = insertIssue(db, "demo");
+    const issueRunId = createIssueRun(db, issueId).id;
+    const running = runIssueWithProvider(provider, {
+      database: db,
+      issueId,
+      issueRunId,
+      projectId: "demo",
+      cwd,
+      prompt: "issue prompt"
+    });
 
-      await waitFor(() => listIssueRuns(db, issueId)[0]?.provider_session_id === "session-cancel");
-      const issue = await cancelIssueWithInterrupt(db, issueId, {
-        interruptTimeoutMs: 50,
-        providers: { claude: provider }
-      });
-      await expect(running).rejects.toThrow("issue_cancel");
+    await waitFor(() => listIssueRuns(db, issueId)[0]?.provider_session_id === "session-cancel");
+    const issue = await cancelIssueWithInterrupt(db, issueId, {
+      interruptTimeoutMs: 50,
+      providers: { claude: provider }
+    });
+    await expect(running).rejects.toThrow("issue_cancel");
 
-      expect(factory.killed).toBe(true);
-      expect(issue.status).toBe("cancelled");
-      expect(getIssue(db, issueId)).toMatchObject({ status: "cancelled", codex_thread_id: "", codex_turn_id: "" });
-      expect(listIssueRuns(db, issueId)).toMatchObject([{
-        provider: "claude",
-        provider_session_id: "session-cancel",
-        provider_turn_id: "",
-        codex_thread_id: "",
-        codex_turn_id: "",
-        status: "cancelled",
-        exit_reason: "issue_cancel",
-        error: ""
-      }]);
-      const eventTypes = listIssueEvents(db, issueId).map((event) => event.type);
-      expect(eventTypes).toContain("issue.interrupt_requested");
-      expect(eventTypes).toContain("issue.interrupted");
-    } finally {
-      db.close();
-    }
+    expect(factory.killed).toBe(true);
+    expect(issue.status).toBe("cancelled");
+    expect(getIssue(db, issueId)).toMatchObject({ status: "cancelled", codex_thread_id: "", codex_turn_id: "" });
+    expect(listIssueRuns(db, issueId)).toMatchObject([{
+      provider: "claude",
+      provider_session_id: "session-cancel",
+      provider_turn_id: "",
+      codex_thread_id: "",
+      codex_turn_id: "",
+      status: "cancelled",
+      exit_reason: "issue_cancel",
+      error: ""
+    }]);
+    const eventTypes = listIssueEvents(db, issueId).map((event) => event.type);
+    expect(eventTypes).toContain("issue.interrupt_requested");
+    expect(eventTypes).toContain("issue.interrupted");
   });
 
   test("cancelled Claude run does not fail or pollute the next project loop claim", async () => {
@@ -412,29 +404,25 @@ describe("Claude Code provider", () => {
       processFactory: factory.factory,
       sessionIdFactory: () => "session-next-cancel"
     });
-    try {
-      const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-claude-next-cwd-"));
-      tempRoots.push(cwd);
-      insertProject(db, "demo", cwd);
-      const issueId = insertIssue(db, "demo", "todo");
-      const running = runProjectLoopOnce({ database: db, projectId: "demo", providers: { claude: provider } });
+    const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-claude-next-cwd-"));
+    tempRoots.push(cwd);
+    insertProject(db, "demo", cwd);
+    const issueId = insertIssue(db, "demo", "todo");
+    const running = runProjectLoopOnce({ database: db, projectId: "demo", providers: { claude: provider } });
 
-      await waitFor(() => listIssueRuns(db, issueId)[0]?.provider_session_id === "session-next-cancel");
-      await cancelIssueWithInterrupt(db, issueId, {
-        interruptTimeoutMs: 50,
-        providers: { claude: provider }
-      });
-      await running;
+    await waitFor(() => listIssueRuns(db, issueId)[0]?.provider_session_id === "session-next-cancel");
+    await cancelIssueWithInterrupt(db, issueId, {
+      interruptTimeoutMs: 50,
+      providers: { claude: provider }
+    });
+    await running;
 
-      expect(getIssue(db, issueId)).toMatchObject({ status: "cancelled", error: "" });
-      expect(listIssueRuns(db, issueId)[0]).toMatchObject({
-        status: "cancelled",
-        exit_reason: "issue_cancel",
-        error: ""
-      });
-    } finally {
-      db.close();
-    }
+    expect(getIssue(db, issueId)).toMatchObject({ status: "cancelled", error: "" });
+    expect(listIssueRuns(db, issueId)[0]).toMatchObject({
+      status: "cancelled",
+      exit_reason: "issue_cancel",
+      error: ""
+    });
   });
 });
 

@@ -56,25 +56,23 @@ describe("generic IM notification target resolver", () => {
 
   test("fails closed when the linked event belongs to another connector", async () => {
     const db = await fixture();
-    try {
-      const event = createExternalEvent(db, {
-        content: "cross source",
-        dedupe_key: "feishu:event-1",
-        normalized_message: { conversation: { id: "oc_secret", kind: "group" }, message_id: "m1" },
-        provider: "feishu",
-        source: "feishu"
-      });
-      db.sqlite.run(`insert into external_links
+    const event = createExternalEvent(db, {
+      content: "cross source",
+      dedupe_key: "feishu:event-1",
+      normalized_message: { conversation: { id: "oc_secret", kind: "group" }, message_id: "m1" },
+      provider: "feishu",
+      source: "feishu"
+    });
+    db.sqlite.run(`insert into external_links
         (source, external_type, external_id, external_event_id, project_id, issue_id,
          conversation_id, loop_run_id, relationship, created_at, updated_at)
         values ('telegram', 'im_message', 'm1', ?, 'demo', 0, 'conv', '', 'origin', ?, ?)`, [
-        event.id, "2026-08-10T00:00:00Z", "2026-08-10T00:00:00Z"
-      ]);
-      expect(resolveImNotificationTarget(db, {
-        connectorID: "telegram",
-        conversationID: "conv"
-      })).toBeNull();
-    } finally { db.close(); }
+      event.id, "2026-08-10T00:00:00Z", "2026-08-10T00:00:00Z"
+    ]);
+    expect(resolveImNotificationTarget(db, {
+      connectorID: "telegram",
+      conversationID: "conv"
+    })).toBeNull();
   });
 });
 

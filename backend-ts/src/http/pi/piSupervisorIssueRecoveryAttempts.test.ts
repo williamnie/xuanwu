@@ -28,25 +28,21 @@ describe("PI supervisor issue retry recovery attempts", () => {
 
   test("issue.retry writes progress attempt and ignores attempt_count budget", async () => {
     const db = await fixtureDb();
-    try {
-      insertProject(db, "demo");
-      insertIssueRunSession(db, 309);
-      db.sqlite.run("update issue_runs set provider_session_id='', provider_turn_id='' where issue_id=309");
-      db.sqlite.run(`insert into issue_events (issue_id, type, payload, created_at)
+    insertProject(db, "demo");
+    insertIssueRunSession(db, 309);
+    db.sqlite.run("update issue_runs set provider_session_id='', provider_turn_id='' where issue_id=309");
+    db.sqlite.run(`insert into issue_events (issue_id, type, payload, created_at)
         values (309, 'issue.provider_deferred', '{}', '2026-06-10T07:00:00Z')`);
-      db.sqlite.run("update issues set attempt_count=99 where id=?", [309]);
+    db.sqlite.run("update issues set attempt_count=99 where id=?", [309]);
 
-      await dispatchPiAction({ database: db }, retryAction(db, 309, "retry-action-309"));
+    await dispatchPiAction({ database: db }, retryAction(db, 309, "retry-action-309"));
 
-      expect(listPiRecoveryAttempts(db, { issueId: 309 })).toContainEqual(expect.objectContaining({
-        action_type: "issue.retry",
-        diagnosis_code: "provider_transient_network_error",
-        source_decision_id: "retry-action-309",
-        status: "progress"
-      }));
-    } finally {
-      db.close();
-    }
+    expect(listPiRecoveryAttempts(db, { issueId: 309 })).toContainEqual(expect.objectContaining({
+      action_type: "issue.retry",
+      diagnosis_code: "provider_transient_network_error",
+      source_decision_id: "retry-action-309",
+      status: "progress"
+    }));
   });
 
   test("issue.retry records no_progress when an equivalent new Run request is already pending", async () => {

@@ -20,27 +20,23 @@ describe("issue action repository", () => {
 
   test("deduplicates a terminal retry and materializes one new Run on claim", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueID = insertRunningIssue(db, "demo");
-      insertOpenRun(db, issueID);
-      db.sqlite.run(`update issue_runs set status='failed', ended_at=?, exit_reason='provider_failed', error='failed'
+    insertProject(db, "demo");
+    const issueID = insertRunningIssue(db, "demo");
+    insertOpenRun(db, issueID);
+    db.sqlite.run(`update issue_runs set status='failed', ended_at=?, exit_reason='provider_failed', error='failed'
         where issue_id=?`, ["2026-01-01T00:01:00Z", issueID]);
-      db.sqlite.run("update issues set status='failed', error='failed' where id=?", [issueID]);
+    db.sqlite.run("update issues set status='failed', error='failed' where id=?", [issueID]);
 
-      expect(retryIssue(db, issueID)).toMatchObject({ status: "todo" });
-      expect(retryIssue(db, issueID)).toMatchObject({ status: "todo" });
-      expect(lifecycleEvents(db, issueID, "run.lifecycle.run_requested.v1")).toHaveLength(1);
+    expect(retryIssue(db, issueID)).toMatchObject({ status: "todo" });
+    expect(retryIssue(db, issueID)).toMatchObject({ status: "todo" });
+    expect(lifecycleEvents(db, issueID, "run.lifecycle.run_requested.v1")).toHaveLength(1);
 
-      expect(claimNextIssue(db, "demo")).toMatchObject({ id: issueID, status: "in_progress" });
-      expect(listIssueRuns(db, issueID).map((run) => ({ attempt: run.attempt, status: run.status }))).toEqual([
-        { attempt: 1, status: "failed" },
-        { attempt: 2, status: "in_progress" }
-      ]);
-      expect(lifecycleEvents(db, issueID, "run.lifecycle.run_materialized.v1")).toHaveLength(1);
-    } finally {
-      db.close();
-    }
+    expect(claimNextIssue(db, "demo")).toMatchObject({ id: issueID, status: "in_progress" });
+    expect(listIssueRuns(db, issueID).map((run) => ({ attempt: run.attempt, status: run.status }))).toEqual([
+      { attempt: 1, status: "failed" },
+      { attempt: 2, status: "in_progress" }
+    ]);
+    expect(lifecycleEvents(db, issueID, "run.lifecycle.run_materialized.v1")).toHaveLength(1);
   });
 
   test("batch delete is atomic when any issue still has an open Run", async () => {

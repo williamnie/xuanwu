@@ -199,45 +199,41 @@ describe("IM project selections", () => {
 
   test("backfill migrates legacy feishu rows idempotently with parity", async () => {
     const db = await openFixtureDatabase();
-    try {
-      db.sqlite.run(
-        `insert into feishu_project_selections
+    db.sqlite.run(
+      `insert into feishu_project_selections
            (selection_id, scope_key, conversation_id, chat_id, user_id, user_open_id,
             source_message_id, original_prompt, candidates_json, status,
             selected_project_id, created_at, expires_at, consumed_at)
          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          "legacy-sel-1", "feishu-chat-oc_9", "conv-legacy", "oc_9", "u_9", "ou_9",
-          "om_9", "legacy prompt", '["legacy"]', "pending", "",
-          "2026-07-01T00:00:00.000Z", "2027-01-01T00:00:00.000Z", ""
-        ]
-      );
-      const first = backfillImProjectSelections(db.sqlite);
-      expect(first).toBe(1);
-      const migrated = getImProjectSelection(db, "legacy-sel-1");
-      expect(migrated).toMatchObject({
-        connector_id: "feishu",
-        conversation_id: "conv-legacy",
-        original_prompt: "legacy prompt",
-        scope_key: "feishu-chat-oc_9",
-        status: "pending"
-      });
-      expect(backfillImProjectSelections(db.sqlite)).toBe(0);
+      [
+        "legacy-sel-1", "feishu-chat-oc_9", "conv-legacy", "oc_9", "u_9", "ou_9",
+        "om_9", "legacy prompt", '["legacy"]', "pending", "",
+        "2026-07-01T00:00:00.000Z", "2027-01-01T00:00:00.000Z", ""
+      ]
+    );
+    const first = backfillImProjectSelections(db.sqlite);
+    expect(first).toBe(1);
+    const migrated = getImProjectSelection(db, "legacy-sel-1");
+    expect(migrated).toMatchObject({
+      connector_id: "feishu",
+      conversation_id: "conv-legacy",
+      original_prompt: "legacy prompt",
+      scope_key: "feishu-chat-oc_9",
+      status: "pending"
+    });
+    expect(backfillImProjectSelections(db.sqlite)).toBe(0);
 
-      // A legacy row that was consumed before migration stays consumable-proof.
-      const consumed = consumeImProjectSelection(db, {
-        chatId: "oc_9",
-        connectorId: "feishu",
-        now: new Date("2026-08-07T00:00:00.000Z"),
-        projectId: "legacy",
-        selectionId: "legacy-sel-1",
-        userId: "u_9",
-        userOpenId: "ou_9"
-      });
-      expect(consumed.status).toBe("consumed");
-    } finally {
-      db.close();
-    }
+    // A legacy row that was consumed before migration stays consumable-proof.
+    const consumed = consumeImProjectSelection(db, {
+      chatId: "oc_9",
+      connectorId: "feishu",
+      now: new Date("2026-08-07T00:00:00.000Z"),
+      projectId: "legacy",
+      selectionId: "legacy-sel-1",
+      userId: "u_9",
+      userOpenId: "ou_9"
+    });
+    expect(consumed.status).toBe("consumed");
   });
 });
 

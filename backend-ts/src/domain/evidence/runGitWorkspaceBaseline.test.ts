@@ -81,28 +81,24 @@ describe("Run Git workspace attribution", () => {
 
   test("rejects a baseline whose content-addressed snapshot was altered", async () => {
     const fixture = await repositoryFixture();
-    try {
-      recordBaseline(fixture);
-      const row = fixture.db.sqlite.query<{ id: number; payload: string }, [number, string]>(`
+    recordBaseline(fixture);
+    const row = fixture.db.sqlite.query<{ id: number; payload: string }, [number, string]>(`
         select id, payload from issue_events where issue_id=? and type=? order by id desc limit 1
       `).get(fixture.issueID, ISSUE_RUN_GIT_WORKSPACE_BASELINE_EVENT);
-      if (!row) throw new Error("missing baseline event");
-      const altered = JSON.parse(row.payload);
-      altered.entries.push({ content_oid: "missing", path: "injected.txt", status: "??" });
-      fixture.db.sqlite.run("update issue_events set payload=? where id=?", [JSON.stringify(altered), row.id]);
-      write(fixture.repository, "src/committed.ts", "export const committed = true;\n");
-      git(fixture.repository, ["add", "src/committed.ts"]);
-      commit(fixture.repository, "committed after altered baseline");
+    if (!row) throw new Error("missing baseline event");
+    const altered = JSON.parse(row.payload);
+    altered.entries.push({ content_oid: "missing", path: "injected.txt", status: "??" });
+    fixture.db.sqlite.run("update issue_events set payload=? where id=?", [JSON.stringify(altered), row.id]);
+    write(fixture.repository, "src/committed.ts", "export const committed = true;\n");
+    git(fixture.repository, ["add", "src/committed.ts"]);
+    commit(fixture.repository, "committed after altered baseline");
 
-      expect(scope(fixture)).toMatchObject({
-        pathspecs: ["src/committed.ts"],
-        uncertainty_reasons: [
-          "Run workspace baseline is unavailable; only committed paths are attributed and dirty/untracked paths are excluded"
-        ]
-      });
-    } finally {
-      fixture.db.close();
-    }
+    expect(scope(fixture)).toMatchObject({
+      pathspecs: ["src/committed.ts"],
+      uncertainty_reasons: [
+        "Run workspace baseline is unavailable; only committed paths are attributed and dirty/untracked paths are excluded"
+      ]
+    });
   });
 });
 

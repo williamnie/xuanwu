@@ -144,82 +144,74 @@ describe("Bun frontend API compatibility", () => {
 
   test("covers project loop, profile, cron and reference endpoints", async () => {
     const { cwd, database } = await openFixtureDatabase();
-    try {
-      const router = createDefaultRouter({ database });
-      const project = await requestJSON(router, "/api/projects", "POST", { id: "demo", cwd }, 201);
-      const profile = await requestJSON(router, "/api/agent-profiles", "POST", { id: "Nightly Codex!", name: "Nightly", skill_intents: "[\"test\"]" }, 201);
-      const piProfile = await requestJSON(router, "/api/agent-profiles", "POST", { id: "Pi Review", name: "Pi Review", provider: "pi-coding-agent", model: "" }, 201);
-      const qoderProfile = await requestJSON(router, "/api/agent-profiles", "POST", { id: "Qoder Performance", name: "Qoder Performance", provider: "qoder", model: "performance", reasoning_effort: "high" }, 201);
-      const patchedProfile = await requestJSON(router, "/api/agent-profiles/nightly-codex", "PATCH", { reasoning_effort: "high" });
-      const projectsAfterProfile = await requestJSON(router, "/api/projects/demo", "PATCH", { default_agent_profile_id: "nightly-codex" });
-      const reordered = await requestJSON(router, "/api/projects", "PATCH", { project_ids: ["demo"] });
-      const started = await requestJSON(router, "/api/projects/demo/loop/start", "POST", {});
-      const status = await requestJSON(router, "/api/projects/demo/loop/status", "GET");
-      const stopped = await requestJSON(router, "/api/projects/demo/loop/stop", "POST", {});
-      const references = await requestJSON(router, "/api/projects/demo/references/search?type=file&query=src&limit=10", "GET");
-      insertHold(database, "demo");
-      const resumed = await requestJSON(router, "/api/projects/demo/hold/resume", "POST", {});
-      const removedTemplateRoute = await rawRequest(router, "/api/issue-templates", "POST", {});
-      const cronRedirect = await rawRequest(router, "/api/cron-tasks", "POST", { project_id: "demo" });
-      const capabilities = await requestJSON(router, "/api/capabilities", "GET");
+    const router = createDefaultRouter({ database });
+    const project = await requestJSON(router, "/api/projects", "POST", { id: "demo", cwd }, 201);
+    const profile = await requestJSON(router, "/api/agent-profiles", "POST", { id: "Nightly Codex!", name: "Nightly", skill_intents: "[\"test\"]" }, 201);
+    const piProfile = await requestJSON(router, "/api/agent-profiles", "POST", { id: "Pi Review", name: "Pi Review", provider: "pi-coding-agent", model: "" }, 201);
+    const qoderProfile = await requestJSON(router, "/api/agent-profiles", "POST", { id: "Qoder Performance", name: "Qoder Performance", provider: "qoder", model: "performance", reasoning_effort: "high" }, 201);
+    const patchedProfile = await requestJSON(router, "/api/agent-profiles/nightly-codex", "PATCH", { reasoning_effort: "high" });
+    const projectsAfterProfile = await requestJSON(router, "/api/projects/demo", "PATCH", { default_agent_profile_id: "nightly-codex" });
+    const reordered = await requestJSON(router, "/api/projects", "PATCH", { project_ids: ["demo"] });
+    const started = await requestJSON(router, "/api/projects/demo/loop/start", "POST", {});
+    const status = await requestJSON(router, "/api/projects/demo/loop/status", "GET");
+    const stopped = await requestJSON(router, "/api/projects/demo/loop/stop", "POST", {});
+    const references = await requestJSON(router, "/api/projects/demo/references/search?type=file&query=src&limit=10", "GET");
+    insertHold(database, "demo");
+    const resumed = await requestJSON(router, "/api/projects/demo/hold/resume", "POST", {});
+    const removedTemplateRoute = await rawRequest(router, "/api/issue-templates", "POST", {});
+    const cronRedirect = await rawRequest(router, "/api/cron-tasks", "POST", { project_id: "demo" });
+    const capabilities = await requestJSON(router, "/api/capabilities", "GET");
 
-      expect(project).toMatchObject({ id: "demo", cwd });
-      expect(profile).toMatchObject({ id: "nightly-codex", name: "Nightly", skill_intents: "[\"test\"]" });
-      expect(piProfile).toMatchObject({ id: "pi-review", provider: "pi-coding-agent", model: "" });
-      expect(qoderProfile).toMatchObject({ id: "qoder-performance", provider: "qoder", model: "performance", reasoning_effort: "high" });
-      expect(patchedProfile).toMatchObject({ id: "nightly-codex", reasoning_effort: "high" });
-      expect(projectsAfterProfile).toMatchObject({ id: "demo", default_agent_profile_id: "nightly-codex" });
-      expect((reordered as Array<Record<string, unknown>>).map((item) => item.id)).toEqual(["demo"]);
-      expect(started).toEqual({ status: "running" });
-      expect(status).toEqual({ status: "running" });
-      expect(stopped).toEqual({ status: "stopped" });
-      expect((references.files as Array<Record<string, unknown>>)[0]).toMatchObject({ type: "file", path: "src.txt" });
-      expect(resumed).toMatchObject({ id: "demo" });
-      expect((resumed as Record<string, unknown>).hold).toBeUndefined();
-      expect(removedTemplateRoute.status).toBe(404);
-      expect(cronRedirect.status).toBe(308);
-      expect(cronRedirect.headers.get("location")).toBe("/api/automations");
-      expect(Array.isArray(capabilities.skills)).toBe(true);
-      expect(Array.isArray(capabilities.plugins)).toBe(true);
-      const runnerSkill = (capabilities.skills as Array<Record<string, unknown>>).find((item) => item.id === "xuanwu");
-      expect(runnerSkill).toMatchObject({
-        id: "xuanwu",
-        source_path: "repo:skills/xuanwu/SKILL.md"
-      });
-      expect(JSON.stringify(capabilities)).not.toContain(cwd);
-    } finally {
-      database.close();
-    }
+    expect(project).toMatchObject({ id: "demo", cwd });
+    expect(profile).toMatchObject({ id: "nightly-codex", name: "Nightly", skill_intents: "[\"test\"]" });
+    expect(piProfile).toMatchObject({ id: "pi-review", provider: "pi-coding-agent", model: "" });
+    expect(qoderProfile).toMatchObject({ id: "qoder-performance", provider: "qoder", model: "performance", reasoning_effort: "high" });
+    expect(patchedProfile).toMatchObject({ id: "nightly-codex", reasoning_effort: "high" });
+    expect(projectsAfterProfile).toMatchObject({ id: "demo", default_agent_profile_id: "nightly-codex" });
+    expect((reordered as Array<Record<string, unknown>>).map((item) => item.id)).toEqual(["demo"]);
+    expect(started).toEqual({ status: "running" });
+    expect(status).toEqual({ status: "running" });
+    expect(stopped).toEqual({ status: "stopped" });
+    expect((references.files as Array<Record<string, unknown>>)[0]).toMatchObject({ type: "file", path: "src.txt" });
+    expect(resumed).toMatchObject({ id: "demo" });
+    expect((resumed as Record<string, unknown>).hold).toBeUndefined();
+    expect(removedTemplateRoute.status).toBe(404);
+    expect(cronRedirect.status).toBe(308);
+    expect(cronRedirect.headers.get("location")).toBe("/api/automations");
+    expect(Array.isArray(capabilities.skills)).toBe(true);
+    expect(Array.isArray(capabilities.plugins)).toBe(true);
+    const runnerSkill = (capabilities.skills as Array<Record<string, unknown>>).find((item) => item.id === "xuanwu");
+    expect(runnerSkill).toMatchObject({
+      id: "xuanwu",
+      source_path: "repo:skills/xuanwu/SKILL.md"
+    });
+    expect(JSON.stringify(capabilities)).not.toContain(cwd);
   });
 
   test("covers command, model, usage, upload and advisory issue endpoints", async () => {
     const { cwd, database } = await openFixtureDatabase();
     const sessionsDir = await tempDir("xuanwu-bun-empty-sessions-");
-    try {
-      const router = createDefaultRouter({ database, codexSessionsDir: sessionsDir });
-      await requestJSON(router, "/api/projects", "POST", { id: "demo", cwd }, 201);
-      const issue = await requestJSON(router, "/api/issues", "POST", { project_id: "demo", title: "Review one", status: "triage" }, 201);
-      const commandIssue = await requestJSON(router, "/api/commands", "POST", { command: { name: "issue", args: { project_id: "demo" } }, prompt: "Command issue" });
-      const commandRun = await requestJSON(router, "/api/commands", "POST", { command: { name: "run", args: { issue_id: commandIssue.issue.id, confirmed: true } } });
-      const commandStatus = await requestJSON(router, "/api/commands", "POST", { command: { name: "status", args: { issue_id: commandIssue.issue.id } } });
-      const models = await requestJSON(router, "/api/codex/models", "GET");
-      const usage = await requestJSON(router, "/api/usage/codex?limit=1", "GET");
-      const upload = await uploadPNG(router);
-      const content = await rawRequest(router, `/api/uploads/${upload.id}/content`, "GET");
-      const approval = await requestJSON(router, "/api/codex/approvals/req-1/resolve", "POST", { decision: "approved" });
+    const router = createDefaultRouter({ database, codexSessionsDir: sessionsDir });
+    await requestJSON(router, "/api/projects", "POST", { id: "demo", cwd }, 201);
+    const issue = await requestJSON(router, "/api/issues", "POST", { project_id: "demo", title: "Review one", status: "triage" }, 201);
+    const commandIssue = await requestJSON(router, "/api/commands", "POST", { command: { name: "issue", args: { project_id: "demo" } }, prompt: "Command issue" });
+    const commandRun = await requestJSON(router, "/api/commands", "POST", { command: { name: "run", args: { issue_id: commandIssue.issue.id, confirmed: true } } });
+    const commandStatus = await requestJSON(router, "/api/commands", "POST", { command: { name: "status", args: { issue_id: commandIssue.issue.id } } });
+    const models = await requestJSON(router, "/api/codex/models", "GET");
+    const usage = await requestJSON(router, "/api/usage/codex?limit=1", "GET");
+    const upload = await uploadPNG(router);
+    const content = await rawRequest(router, `/api/uploads/${upload.id}/content`, "GET");
+    const approval = await requestJSON(router, "/api/codex/approvals/req-1/resolve", "POST", { decision: "approved" });
 
-      expect(commandIssue).toMatchObject({ summary: expect.stringContaining("created triage issue"), issue: { title: "Command issue" } });
-      expect(commandRun).toMatchObject({ summary: expect.stringContaining("enqueued issue"), issue: { status: "todo" } });
-      expect(commandStatus).toMatchObject({ summary: expect.stringContaining("issue #"), issue: { id: commandIssue.issue.id } });
-      expect(models).toMatchObject({ data: expect.any(Array) });
-      expect(usage).toMatchObject({ events_scanned: expect.any(Number), summary: expect.any(Object) });
-      expect(upload).toMatchObject({ mime_type: "image/png", url: `/api/uploads/${upload.id}/content` });
-      expect(content.status).toBe(200);
-      expect(content.headers.get("content-type")).toContain("image/png");
-      expect(approval).toEqual({ ok: true });
-    } finally {
-      database.close();
-    }
+    expect(commandIssue).toMatchObject({ summary: expect.stringContaining("created triage issue"), issue: { title: "Command issue" } });
+    expect(commandRun).toMatchObject({ summary: expect.stringContaining("enqueued issue"), issue: { status: "todo" } });
+    expect(commandStatus).toMatchObject({ summary: expect.stringContaining("issue #"), issue: { id: commandIssue.issue.id } });
+    expect(models).toMatchObject({ data: expect.any(Array) });
+    expect(usage).toMatchObject({ events_scanned: expect.any(Number), summary: expect.any(Object) });
+    expect(upload).toMatchObject({ mime_type: "image/png", url: `/api/uploads/${upload.id}/content` });
+    expect(content.status).toBe(200);
+    expect(content.headers.get("content-type")).toContain("image/png");
+    expect(approval).toEqual({ ok: true });
   });
 
   test("serves Codex clipboard session images through a restricted proxy", async () => {
@@ -227,66 +219,54 @@ describe("Bun frontend API compatibility", () => {
     const tempRoot = await tempDir("xuanwu-bun-session-image-");
     const imagePath = join(tempRoot, "codex-clipboard-test.png");
     await writeFile(imagePath, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=", "base64"));
-    try {
-      const router = createDefaultRouter({ database });
-      const image = await rawRequest(router, `/api/session-images?path=${encodeURIComponent(imagePath)}`, "GET");
-      const rejected = await rawRequest(router, `/api/session-images?path=${encodeURIComponent(join(cwd, "src.txt"))}`, "GET");
+    const router = createDefaultRouter({ database });
+    const image = await rawRequest(router, `/api/session-images?path=${encodeURIComponent(imagePath)}`, "GET");
+    const rejected = await rawRequest(router, `/api/session-images?path=${encodeURIComponent(join(cwd, "src.txt"))}`, "GET");
 
-      expect(image.status).toBe(200);
-      expect(image.headers.get("content-type")).toContain("image/png");
-      expect(await image.arrayBuffer()).toHaveProperty("byteLength", 68);
-      expect(rejected.status).toBe(400);
-    } finally {
-      database.close();
-    }
+    expect(image.status).toBe(200);
+    expect(image.headers.get("content-type")).toContain("image/png");
+    expect(await image.arrayBuffer()).toHaveProperty("byteLength", 68);
+    expect(rejected.status).toBe(400);
   });
 
   test("downgrades compatibility approval session resolve to turn scope", async () => {
     const { database } = await openFixtureDatabase();
     const resolutions: Array<{ decision: string; id: string; scope: string }> = [];
-    try {
-      const router = createDefaultRouter({
-        database,
-        providers: { codex: approvalProvider(resolutions) }
-      });
+    const router = createDefaultRouter({
+      database,
+      providers: { codex: approvalProvider(resolutions) }
+    });
 
-      const approval = await requestJSON(router, "/api/codex/approvals/req-session/resolve", "POST", {
-        decision: "approve_session",
-        scope: "session"
-      });
+    const approval = await requestJSON(router, "/api/codex/approvals/req-session/resolve", "POST", {
+      decision: "approve_session",
+      scope: "session"
+    });
 
-      expect(approval).toEqual({ ok: true });
-      expect(resolutions).toEqual([{ decision: "approve", id: "req-session", scope: "turn" }]);
-    } finally {
-      database.close();
-    }
+    expect(approval).toEqual({ ok: true });
+    expect(resolutions).toEqual([{ decision: "approve", id: "req-session", scope: "turn" }]);
   });
 
   test("lists notifications and marks them read", async () => {
     const { cwd, database } = await openFixtureDatabase();
-    try {
-      const router = createDefaultRouter({ database });
-      await requestJSON(router, "/api/projects", "POST", { id: "demo", cwd }, 201);
-      const issue = await requestJSON(router, "/api/issues", "POST", {
-        project_id: "demo",
-        status: "failed",
-        title: "Needs user"
-      }, 201);
-      insertNotification(database, issue.id, "demo");
+    const router = createDefaultRouter({ database });
+    await requestJSON(router, "/api/projects", "POST", { id: "demo", cwd }, 201);
+    const issue = await requestJSON(router, "/api/issues", "POST", {
+      project_id: "demo",
+      status: "failed",
+      title: "Needs user"
+    }, 201);
+    insertNotification(database, issue.id, "demo");
 
-      const notifications = await requestJSON(router, "/api/notifications?project_id=demo&unread=1", "GET");
-      const read = await requestJSON(router, `/api/notifications/${notifications[0].id}/read`, "POST", {});
-      const unread = await requestJSON(router, "/api/notifications?project_id=demo&unread=1", "GET");
+    const notifications = await requestJSON(router, "/api/notifications?project_id=demo&unread=1", "GET");
+    const read = await requestJSON(router, `/api/notifications/${notifications[0].id}/read`, "POST", {});
+    const unread = await requestJSON(router, "/api/notifications?project_id=demo&unread=1", "GET");
 
-      expect(notifications).toMatchObject([
-        { event: "pi.needs_user", issue_id: issue.id, project_id: "demo", read_at: "" }
-      ]);
-      expect(read).toMatchObject({ id: notifications[0].id, read_at: expect.any(String) });
-      expect(read.read_at).not.toBe("");
-      expect(unread).toEqual([]);
-    } finally {
-      database.close();
-    }
+    expect(notifications).toMatchObject([
+      { event: "pi.needs_user", issue_id: issue.id, project_id: "demo", read_at: "" }
+    ]);
+    expect(read).toMatchObject({ id: notifications[0].id, read_at: expect.any(String) });
+    expect(read.read_at).not.toBe("");
+    expect(unread).toEqual([]);
   });
 
   test("reads Codex usage from configured sessions dir", async () => {
@@ -295,53 +275,49 @@ describe("Bun frontend API compatibility", () => {
     const usagePath = await writeUsageJSONL(sessionsDir, "2026/05/31/session.jsonl", [
       `{"timestamp":"2026-05-31T08:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}}}`
     ]);
-    try {
-      const router = createDefaultRouter({
-        database,
-        codexSessionsDir: sessionsDir,
-        providers: { codex: usageProvider("codex"), claude: usageProvider("claude") }
-      });
+    const router = createDefaultRouter({
+      database,
+      codexSessionsDir: sessionsDir,
+      providers: { codex: usageProvider("codex"), claude: usageProvider("claude") }
+    });
 
-      const usage = await requestJSON(router, "/api/usage/codex?refresh=1", "GET");
-      const providerUsage = await requestJSON(router, "/api/usage/providers?compact=1&refresh=1", "GET");
+    const usage = await requestJSON(router, "/api/usage/codex?refresh=1", "GET");
+    const providerUsage = await requestJSON(router, "/api/usage/providers?compact=1&refresh=1", "GET");
 
-      expect(usage).toMatchObject({
-        source: sessionsDir,
-        events_scanned: 1,
-        pi_usage: {
-          completeness: "complete",
-          sessions_scanned: 0,
-          status: "available",
-          summary: { today: { total_tokens: 0 } }
-        },
-        summary: { all_time: { total_tokens: 15 } },
-        latest_usage: { last_token_usage: { total_tokens: 15 } }
-      });
-      expect(providerUsage).toMatchObject({
-        providers: [{
-          compact: true,
-          events_scanned: 1,
-          provider: { id: "codex", scope: "local_sessions" },
-          summary: { all_time: { total_tokens: 15 } }
-        }, {
-          events_scanned: 0,
-          provider: { id: "claude", scope: "runner_attempts" },
-          rate_limits: null
-        }]
-      });
-
-      await appendFile(usagePath,
-        `{"timestamp":"2026-05-31T09:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":4,"output_tokens":3,"total_tokens":7}}}}\n`);
-      const refreshed = await requestJSON(router, "/api/usage/codex?compact=1&refresh=1", "GET");
-      expect(refreshed).toMatchObject({
+    expect(usage).toMatchObject({
+      source: sessionsDir,
+      events_scanned: 1,
+      pi_usage: {
+        completeness: "complete",
+        sessions_scanned: 0,
+        status: "available",
+        summary: { today: { total_tokens: 0 } }
+      },
+      summary: { all_time: { total_tokens: 15 } },
+      latest_usage: { last_token_usage: { total_tokens: 15 } }
+    });
+    expect(providerUsage).toMatchObject({
+      providers: [{
         compact: true,
-        events_scanned: 2,
-        project_usage: [],
-        summary: { all_time: { total_tokens: 22 } }
-      });
-    } finally {
-      database.close();
-    }
+        events_scanned: 1,
+        provider: { id: "codex", scope: "local_sessions" },
+        summary: { all_time: { total_tokens: 15 } }
+      }, {
+        events_scanned: 0,
+        provider: { id: "claude", scope: "runner_attempts" },
+        rate_limits: null
+      }]
+    });
+
+    await appendFile(usagePath,
+      `{"timestamp":"2026-05-31T09:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":4,"output_tokens":3,"total_tokens":7}}}}\n`);
+    const refreshed = await requestJSON(router, "/api/usage/codex?compact=1&refresh=1", "GET");
+    expect(refreshed).toMatchObject({
+      compact: true,
+      events_scanned: 2,
+      project_usage: [],
+      summary: { all_time: { total_tokens: 22 } }
+    });
   });
 });
 

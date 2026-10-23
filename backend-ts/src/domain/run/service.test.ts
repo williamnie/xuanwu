@@ -75,45 +75,41 @@ describe("Run lifecycle command service", () => {
 
   test("scopes Run revision by Issue and uses the existing issue/type index", async () => {
     const fixture = await openFixture("revision-issue-scope");
-    try {
-      const run = activeRun(fixture.db, "thread-scope", "turn-scope");
-      const other = activeRun(fixture.db, "thread-other", "turn-other");
-      const eventType = RUN_LIFECYCLE_EVENT_TYPES.runRequested;
-      fixture.db.sqlite.run(
-        "insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)",
-        [run.issue_id, eventType, JSON.stringify({ after_revision: 2, run_id: run.run_id }), NOW]
-      );
-      fixture.db.sqlite.run(
-        "insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)",
-        [other.issue_id, eventType, JSON.stringify({ after_revision: 999, run_id: run.run_id }), LATER]
-      );
+    const run = activeRun(fixture.db, "thread-scope", "turn-scope");
+    const other = activeRun(fixture.db, "thread-other", "turn-other");
+    const eventType = RUN_LIFECYCLE_EVENT_TYPES.runRequested;
+    fixture.db.sqlite.run(
+      "insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)",
+      [run.issue_id, eventType, JSON.stringify({ after_revision: 2, run_id: run.run_id }), NOW]
+    );
+    fixture.db.sqlite.run(
+      "insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)",
+      [other.issue_id, eventType, JSON.stringify({ after_revision: 999, run_id: run.run_id }), LATER]
+    );
 
-      expect(readRunRevision(fixture.db, run.issue_id, run.run_id)).toBe(2);
-      expect(auditRunRevisionIssueScope(fixture.db)).toEqual([{
-        event_id: expect.any(Number),
-        event_issue_id: other.issue_id,
-        run_id: run.run_id,
-        run_issue_id: run.issue_id
-      }]);
-      const plan = fixture.db.sqlite.query<{ detail: string }, [number, string, string, string, string, string]>(`
+    expect(readRunRevision(fixture.db, run.issue_id, run.run_id)).toBe(2);
+    expect(auditRunRevisionIssueScope(fixture.db)).toEqual([{
+      event_id: expect.any(Number),
+      event_issue_id: other.issue_id,
+      run_id: run.run_id,
+      run_issue_id: run.issue_id
+    }]);
+    const plan = fixture.db.sqlite.query<{ detail: string }, [number, string, string, string, string, string]>(`
         explain query plan
         select max(cast(json_extract(payload, '$.after_revision') as integer)) as revision
         from issue_events
         where issue_id=? and type in (?, ?, ?, ?) and json_valid(payload)
           and json_extract(payload, '$.run_id')=?
       `).all(
-        run.issue_id,
-        RUN_LIFECYCLE_EVENT_TYPES.intent,
-        RUN_LIFECYCLE_EVENT_TYPES.outcome,
-        RUN_LIFECYCLE_EVENT_TYPES.runMaterialized,
-        RUN_LIFECYCLE_EVENT_TYPES.runRequested,
-        run.run_id
-      ).map((row) => row.detail);
-      expect(plan.some((detail) => detail.includes("idx_issue_events_issue_type") &&
-        detail.includes("issue_id=?") && detail.includes("type=?"))).toBe(true);
-    } finally {
-      fixture.db.close();
-    }
+      run.issue_id,
+      RUN_LIFECYCLE_EVENT_TYPES.intent,
+      RUN_LIFECYCLE_EVENT_TYPES.outcome,
+      RUN_LIFECYCLE_EVENT_TYPES.runMaterialized,
+      RUN_LIFECYCLE_EVENT_TYPES.runRequested,
+      run.run_id
+    ).map((row) => row.detail);
+    expect(plan.some((detail) => detail.includes("idx_issue_events_issue_type") &&
+      detail.includes("issue_id=?") && detail.includes("type=?"))).toBe(true);
   });
 
   test("fails closed on a prepared recovery after database restart and preserves provider turn refs", async () => {

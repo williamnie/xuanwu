@@ -39,38 +39,34 @@ describe("PI action engine Guardian action outlet", () => {
 
   test("deduplicates guardian actions by idempotency key and marks legacy bypass actions", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const first = createPendingPiAction(db, guardianContext(), guardianRequest()) as Record<string, unknown>;
-      const second = createPendingPiAction(db, guardianContext(), guardianRequest()) as Record<string, unknown>;
-      const legacy = createPendingPiAction(db, {}, {
-        actionType: "issue.comment",
-        issueID: 7,
-        payload: { body: "legacy", issue_id: 7 },
-        projectID: "demo"
-      }) as Record<string, unknown>;
-      const rows = db.sqlite.query<Record<string, unknown>, []>(
-        `select before_snapshot_json, expected_state_json, guardian_decision_id, idempotency_key,
+    const first = createPendingPiAction(db, guardianContext(), guardianRequest()) as Record<string, unknown>;
+    const second = createPendingPiAction(db, guardianContext(), guardianRequest()) as Record<string, unknown>;
+    const legacy = createPendingPiAction(db, {}, {
+      actionType: "issue.comment",
+      issueID: 7,
+      payload: { body: "legacy", issue_id: 7 },
+      projectID: "demo"
+    }) as Record<string, unknown>;
+    const rows = db.sqlite.query<Record<string, unknown>, []>(
+      `select before_snapshot_json, expected_state_json, guardian_decision_id, idempotency_key,
           legacy_bypass_reason from pi_actions order by created_at asc, id asc`
-      ).all();
+    ).all();
 
-      expect(second.action_id).toBe(first.action_id);
-      expect(first).toMatchObject({
-        decision: "execute",
-        guardian_decision_id: "decision-1",
-        idempotency_key: "decision-1:issue.enqueue:7"
-      });
-      expect(legacy).toMatchObject({ decision: "execute", guardian_decision_id: "", idempotency_key: "" });
-      expect(rows).toContainEqual(expect.objectContaining({
-        before_snapshot_json: "{\"issue\":{\"status\":\"todo\",\"updated_at\":\"2026-06-18T00:00:00Z\"}}",
-        guardian_decision_id: "decision-1",
-        expected_state_json: "{\"issue_status\":\"todo\",\"issue_updated_at\":\"2026-06-18T00:00:00Z\"}",
-        idempotency_key: "decision-1:issue.enqueue:7",
-        legacy_bypass_reason: ""
-      }));
-      expect(rows).toContainEqual(expect.objectContaining({ legacy_bypass_reason: "legacy_direct_action" }));
-    } finally {
-      db.close();
-    }
+    expect(second.action_id).toBe(first.action_id);
+    expect(first).toMatchObject({
+      decision: "execute",
+      guardian_decision_id: "decision-1",
+      idempotency_key: "decision-1:issue.enqueue:7"
+    });
+    expect(legacy).toMatchObject({ decision: "execute", guardian_decision_id: "", idempotency_key: "" });
+    expect(rows).toContainEqual(expect.objectContaining({
+      before_snapshot_json: "{\"issue\":{\"status\":\"todo\",\"updated_at\":\"2026-06-18T00:00:00Z\"}}",
+      guardian_decision_id: "decision-1",
+      expected_state_json: "{\"issue_status\":\"todo\",\"issue_updated_at\":\"2026-06-18T00:00:00Z\"}",
+      idempotency_key: "decision-1:issue.enqueue:7",
+      legacy_bypass_reason: ""
+    }));
+    expect(rows).toContainEqual(expect.objectContaining({ legacy_bypass_reason: "legacy_direct_action" }));
   });
 
   test("reports held guardian lease before duplicate action creation", async () => {

@@ -74,42 +74,34 @@ describe("runtime observability", () => {
 
   test("caches the polling snapshot while explicit report timestamps stay fresh", async () => {
     const db = await fixtureDatabase();
-    try {
-      const initial = buildRuntimeObservability(db);
-      db.sqlite.run(`insert into projects (id, name, cwd, created_at, updated_at)
+    const initial = buildRuntimeObservability(db);
+    db.sqlite.run(`insert into projects (id, name, cwd, created_at, updated_at)
         values ('cached', 'Cached', '/tmp/cached', '2026-07-18T05:00:00Z', '2026-07-18T05:00:00Z')`);
-      db.sqlite.run(`insert into issues (project_id, title, status, created_at, updated_at)
+    db.sqlite.run(`insert into issues (project_id, title, status, created_at, updated_at)
         values ('cached', 'New Work', 'todo', '2026-07-18T05:00:00Z', '2026-07-18T05:00:00Z')`);
 
-      const cached = buildRuntimeObservability(db);
-      const fresh = buildRuntimeObservability(db, new Date("2026-07-18T06:00:00.000Z"));
-      const total = (value: Record<string, unknown>) =>
-        Number(((value.dimensions as Record<string, any>).work as Record<string, unknown>).total);
+    const cached = buildRuntimeObservability(db);
+    const fresh = buildRuntimeObservability(db, new Date("2026-07-18T06:00:00.000Z"));
+    const total = (value: Record<string, unknown>) =>
+      Number(((value.dimensions as Record<string, any>).work as Record<string, unknown>).total);
 
-      expect(total(initial)).toBe(0);
-      expect(total(cached)).toBe(0);
-      expect(total(fresh)).toBe(1);
-    } finally {
-      db.close();
-    }
+    expect(total(initial)).toBe(0);
+    expect(total(cached)).toBe(0);
+    expect(total(fresh)).toBe(1);
   });
 
   test("primes the polling snapshot through the isolated reader worker", async () => {
     const db = await fixtureDatabase();
-    try {
-      await primeRuntimeObservability(db);
-      db.sqlite.run(`insert into projects (id, name, cwd, created_at, updated_at)
+    await primeRuntimeObservability(db);
+    db.sqlite.run(`insert into projects (id, name, cwd, created_at, updated_at)
         values ('after-prime', 'After prime', '/tmp/after-prime', '2026-07-18T05:00:00Z', '2026-07-18T05:00:00Z')`);
-      db.sqlite.run(`insert into issues (project_id, title, status, created_at, updated_at)
+    db.sqlite.run(`insert into issues (project_id, title, status, created_at, updated_at)
         values ('after-prime', 'New Work', 'todo', '2026-07-18T05:00:00Z', '2026-07-18T05:00:00Z')`);
 
-      const cached = buildRuntimeObservability(db);
-      const total = Number(((cached.dimensions as Record<string, any>).work as Record<string, unknown>).total);
+    const cached = buildRuntimeObservability(db);
+    const total = Number(((cached.dimensions as Record<string, any>).work as Record<string, unknown>).total);
 
-      expect(total).toBe(0);
-    } finally {
-      db.close();
-    }
+    expect(total).toBe(0);
   });
 });
 

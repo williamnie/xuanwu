@@ -23,34 +23,30 @@ afterEach(async () => {
 describe("skill intent audit", () => {
   test("records used, missing, and unauthorized skill intent evidence", async () => {
     const { cwd, db } = await openFixture();
-    try {
-      const project = createProject(db, {
-        cwd,
-        default_skill_policy: { allowed: ["xuanwu"] },
-        id: "demo"
-      });
-      const issue = createIssue(db, {
-        project_id: project.id,
-        required_skill_intents: ["xuanwu", "verification-before-completion"],
-        title: "Audit issue"
-      });
-      recordIssueEvent(db, issue.id, "issue.log", { text: "Using xuanwu skill to inspect runner state." });
+    const project = createProject(db, {
+      cwd,
+      default_skill_policy: { allowed: ["xuanwu"] },
+      id: "demo"
+    });
+    const issue = createIssue(db, {
+      project_id: project.id,
+      required_skill_intents: ["xuanwu", "verification-before-completion"],
+      title: "Audit issue"
+    });
+    recordIssueEvent(db, issue.id, "issue.log", { text: "Using xuanwu skill to inspect runner state." });
 
-      const audit = auditIssueSkillIntents(db, issue.id, { issueRunID: "issue-1-attempt-1" });
-      const rows = listSkillIntentAudits(db, { issueID: issue.id });
+    const audit = auditIssueSkillIntents(db, issue.id, { issueRunID: "issue-1-attempt-1" });
+    const rows = listSkillIntentAudits(db, { issueID: issue.id });
 
-      expect(audit).toMatchObject({
-        issue_id: issue.id,
-        issue_run_id: "issue-1-attempt-1",
-        missing_skill_intents: ["verification-before-completion"],
-        status: "mismatch",
-        unauthorized_skill_intents: []
-      });
-      expect(rows).toHaveLength(1);
-      expect(rows[0]).toMatchObject({ issue_id: issue.id, status: "mismatch" });
-    } finally {
-      db.close();
-    }
+    expect(audit).toMatchObject({
+      issue_id: issue.id,
+      issue_run_id: "issue-1-attempt-1",
+      missing_skill_intents: ["verification-before-completion"],
+      status: "mismatch",
+      unauthorized_skill_intents: []
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ issue_id: issue.id, status: "mismatch" });
   });
 });
 

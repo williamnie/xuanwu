@@ -108,90 +108,86 @@ describe("issue-scoped PI acceptance coordinator", () => {
 
   test("regression #827: accepts the original completion after interrupting a mistaken retry without a third Run", async () => {
     const db = await fixture();
-    try {
-      const issue = completedIssue(db, "Provider implementation");
-      const originalRun = listIssueRuns(db, issue.id)[0]!;
-      await runPiAcceptanceCoordinatorOnce({
-        database: db,
-        decideIssueAcceptance: async () => acceptance("needs_user", "acceptance")
-      });
-      const request = readIssueDecisionProjection(db, issue.id).request!;
-      expect(getIssue(db, issue.id)?.status).toBe("needs_user");
-      expect(request.origin_card_fingerprint).toMatch(/^[a-f0-9]{64}$/);
-      expect(request.origin_run_id).toBe(originalRun.id);
-      expect(request.status).toBe("open");
+    const issue = completedIssue(db, "Provider implementation");
+    const originalRun = listIssueRuns(db, issue.id)[0]!;
+    await runPiAcceptanceCoordinatorOnce({
+      database: db,
+      decideIssueAcceptance: async () => acceptance("needs_user", "acceptance")
+    });
+    const request = readIssueDecisionProjection(db, issue.id).request!;
+    expect(getIssue(db, issue.id)?.status).toBe("needs_user");
+    expect(request.origin_card_fingerprint).toMatch(/^[a-f0-9]{64}$/);
+    expect(request.origin_run_id).toBe(originalRun.id);
+    expect(request.status).toBe("open");
 
-      updateIssue(db, issue.id, { status: "in_progress" });
-      const mistakenRun = createIssueRun(db, issue.id);
-      db.sqlite.run(
-        "update issue_runs set status='failed', ended_at=?, exit_reason='provider_reported_failed', error='missing turn payload' where id=?",
-        ["2026-08-01T13:06:18Z", mistakenRun.id]
-      );
-      recordIssueEvent(db, issue.id, "run.lifecycle.outcome.v1", {
-        operation: "interrupt",
-        outcome: "interrupted",
-        run_id: mistakenRun.id
-      });
-      recordIssueEvent(db, issue.id, "issue.pi_acceptance_requested.v1", {
-        issue_run_id: mistakenRun.id,
-        provider_outcome: "failed",
-        provider_reason: "missing turn payload"
-      });
+    updateIssue(db, issue.id, { status: "in_progress" });
+    const mistakenRun = createIssueRun(db, issue.id);
+    db.sqlite.run(
+      "update issue_runs set status='failed', ended_at=?, exit_reason='provider_reported_failed', error='missing turn payload' where id=?",
+      ["2026-08-01T13:06:18Z", mistakenRun.id]
+    );
+    recordIssueEvent(db, issue.id, "run.lifecycle.outcome.v1", {
+      operation: "interrupt",
+      outcome: "interrupted",
+      run_id: mistakenRun.id
+    });
+    recordIssueEvent(db, issue.id, "issue.pi_acceptance_requested.v1", {
+      issue_run_id: mistakenRun.id,
+      provider_outcome: "failed",
+      provider_reason: "missing turn payload"
+    });
 
-      await runPiAcceptanceCoordinatorOnce({
-        database: db,
-        decideIssueAcceptance: async () => acceptance("accept")
-      });
-      expect(getIssue(db, issue.id)?.status).toBe("needs_user");
+    await runPiAcceptanceCoordinatorOnce({
+      database: db,
+      decideIssueAcceptance: async () => acceptance("accept")
+    });
+    expect(getIssue(db, issue.id)?.status).toBe("needs_user");
 
-      await reviewHumanIssue(db, issue.id, {
-        action: "accept",
-        comment: "真实 smoke 后续由用户手动执行；接受原实现。",
-        review_request_id: request.id,
-        review_revision: request.revision
-      });
-      db.sqlite.run(
-        `update issue_events
+    await reviewHumanIssue(db, issue.id, {
+      action: "accept",
+      comment: "真实 smoke 后续由用户手动执行；接受原实现。",
+      review_request_id: request.id,
+      review_revision: request.revision
+    });
+    db.sqlite.run(
+      `update issue_events
          set payload=json_remove(payload, '$.request_snapshot')
          where issue_id=? and type='issue.human_review_answered.v1'`,
-        [issue.id]
-      );
-      let seenCard: CompletionCard | undefined;
-      const result = await runPiAcceptanceCoordinatorOnce({
-        database: db,
-        decideIssueAcceptance: async (card) => {
-          seenCard = structuredClone(card);
-          return acceptance("needs_user");
-        }
-      });
+      [issue.id]
+    );
+    let seenCard: CompletionCard | undefined;
+    const result = await runPiAcceptanceCoordinatorOnce({
+      database: db,
+      decideIssueAcceptance: async (card) => {
+        seenCard = structuredClone(card);
+        return acceptance("needs_user");
+      }
+    });
 
-      expect(result).toMatchObject({ failed: 0, started: 1 });
-      expect(seenCard?.run.id).toBe(mistakenRun.id);
-      expect(seenCard?.human_review?.action).toBe("accept");
-      expect(seenCard?.human_review?.comment).toContain("接受原实现");
-      expect(seenCard?.human_review?.origin_card_fingerprint).toBe(request.origin_card_fingerprint);
-      expect(seenCard?.human_review?.origin_run_id).toBe(originalRun.id);
-      expect(seenCard?.human_review?.origin_completion?.run.id).toBe(originalRun.id);
-      expect(seenCard?.human_review?.origin_completion?.run.status).toBe("succeeded");
-      expect(seenCard?.human_review?.request).toMatchObject({
-        consequences: "",
-        kind: "acceptance",
-        question: "需要用户决定。"
-      });
-      expect(seenCard?.human_review?.intervening_runs.map((run) => [run.id, run.status])).toEqual([
-        [mistakenRun.id, "failed"]
-      ]);
-      expect(seenCard?.human_review?.intervening_runs[0]).toMatchObject({
-        control_operation: "interrupt",
-        control_outcome: "interrupted"
-      });
-      expect(getIssue(db, issue.id)?.status).toBe("done");
-      expect(listIssueRuns(db, issue.id)).toHaveLength(2);
-      expect(eventTypes(db, issue.id)).toContain("issue.pi_human_acceptance_honored.v1");
-      expect(readIssueDecisionProjection(db, issue.id).activity?.decision).toBe("accept");
-    } finally {
-      db.close();
-    }
+    expect(result).toMatchObject({ failed: 0, started: 1 });
+    expect(seenCard?.run.id).toBe(mistakenRun.id);
+    expect(seenCard?.human_review?.action).toBe("accept");
+    expect(seenCard?.human_review?.comment).toContain("接受原实现");
+    expect(seenCard?.human_review?.origin_card_fingerprint).toBe(request.origin_card_fingerprint);
+    expect(seenCard?.human_review?.origin_run_id).toBe(originalRun.id);
+    expect(seenCard?.human_review?.origin_completion?.run.id).toBe(originalRun.id);
+    expect(seenCard?.human_review?.origin_completion?.run.status).toBe("succeeded");
+    expect(seenCard?.human_review?.request).toMatchObject({
+      consequences: "",
+      kind: "acceptance",
+      question: "需要用户决定。"
+    });
+    expect(seenCard?.human_review?.intervening_runs.map((run) => [run.id, run.status])).toEqual([
+      [mistakenRun.id, "failed"]
+    ]);
+    expect(seenCard?.human_review?.intervening_runs[0]).toMatchObject({
+      control_operation: "interrupt",
+      control_outcome: "interrupted"
+    });
+    expect(getIssue(db, issue.id)?.status).toBe("done");
+    expect(listIssueRuns(db, issue.id)).toHaveLength(2);
+    expect(eventTypes(db, issue.id)).toContain("issue.pi_human_acceptance_honored.v1");
+    expect(readIssueDecisionProjection(db, issue.id).activity?.decision).toBe("accept");
   });
 
   test("repairs an existing repeated acceptance request and closes it in the same coordinator cycle", async () => {

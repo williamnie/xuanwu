@@ -23,74 +23,66 @@ afterEach(async () => {
 describe("skill intent persistence", () => {
   test("saves project default policy and issue required/recommended intents", async () => {
     const { cwd, db } = await openFixture();
-    try {
-      const project = createProject(db, {
-        cwd,
-        default_skill_policy: {
-          allowed: ["xuanwu", "verification-before-completion"],
-          recommended: ["verification-before-completion"],
-          required: ["xuanwu"]
-        },
-        id: "demo"
-      });
-      const issue = createIssue(db, {
-        project_id: project.id,
-        recommended_skill_intents: "verification-before-completion",
-        required_skill_intents: ["xuanwu"],
-        title: "Skill issue"
-      });
-      const patched = updateIssue(db, issue.id, {
-        recommended_skill_intents: ["browser:control-in-app-browser"]
-      });
-      const delegation = createPiDelegation(db, {
-        allowed_skill_intents_json: ["xuanwu", "browser:control-in-app-browser"],
-        id: "delegation-a",
-        project_id: project.id
-      });
-      const patchedDelegation = updatePiDelegation(db, "delegation-a", {
-        allowed_skill_intents_json: "verification-before-completion"
-      });
-
-      expect(JSON.parse(project.default_skill_policy)).toEqual({
+    const project = createProject(db, {
+      cwd,
+      default_skill_policy: {
         allowed: ["xuanwu", "verification-before-completion"],
         recommended: ["verification-before-completion"],
         required: ["xuanwu"]
-      });
-      expect(JSON.parse(issue.required_skill_intents)).toEqual(["xuanwu"]);
-      expect(JSON.parse(issue.recommended_skill_intents)).toEqual(["verification-before-completion"]);
-      expect(JSON.parse(patched.recommended_skill_intents)).toEqual(["browser:control-in-app-browser"]);
-      expect(JSON.parse(delegation.allowed_skill_intents_json)).toEqual(["xuanwu", "browser:control-in-app-browser"]);
-      expect(JSON.parse(patchedDelegation.allowed_skill_intents_json)).toEqual(["verification-before-completion"]);
-      expect(getPiDelegation(db, "delegation-a")).toMatchObject(patchedDelegation);
-    } finally {
-      db.close();
-    }
+      },
+      id: "demo"
+    });
+    const issue = createIssue(db, {
+      project_id: project.id,
+      recommended_skill_intents: "verification-before-completion",
+      required_skill_intents: ["xuanwu"],
+      title: "Skill issue"
+    });
+    const patched = updateIssue(db, issue.id, {
+      recommended_skill_intents: ["browser:control-in-app-browser"]
+    });
+    const delegation = createPiDelegation(db, {
+      allowed_skill_intents_json: ["xuanwu", "browser:control-in-app-browser"],
+      id: "delegation-a",
+      project_id: project.id
+    });
+    const patchedDelegation = updatePiDelegation(db, "delegation-a", {
+      allowed_skill_intents_json: "verification-before-completion"
+    });
+
+    expect(JSON.parse(project.default_skill_policy)).toEqual({
+      allowed: ["xuanwu", "verification-before-completion"],
+      recommended: ["verification-before-completion"],
+      required: ["xuanwu"]
+    });
+    expect(JSON.parse(issue.required_skill_intents)).toEqual(["xuanwu"]);
+    expect(JSON.parse(issue.recommended_skill_intents)).toEqual(["verification-before-completion"]);
+    expect(JSON.parse(patched.recommended_skill_intents)).toEqual(["browser:control-in-app-browser"]);
+    expect(JSON.parse(delegation.allowed_skill_intents_json)).toEqual(["xuanwu", "browser:control-in-app-browser"]);
+    expect(JSON.parse(patchedDelegation.allowed_skill_intents_json)).toEqual(["verification-before-completion"]);
+    expect(getPiDelegation(db, "delegation-a")).toMatchObject(patchedDelegation);
   });
 
   test("rejects malformed skill intent ids before persistence", async () => {
     const { cwd, db } = await openFixture();
-    try {
-      const project = createProject(db, { cwd, id: "demo" });
-      const badCwd = join(cwd, "..", "other-project");
-      await mkdir(badCwd, { recursive: true });
-      expect(() => createIssue(db, {
-        project_id: project.id,
-        required_skill_intents: ["not a skill"],
-        title: "Invalid skill"
-      })).toThrow("skill id 不合法: not a skill");
-      expect(() => createProject(db, {
-        cwd: badCwd,
-        default_skill_policy: { allowed: ["bad!skill"] },
-        id: "other"
-      })).toThrow("skill id 不合法: bad!skill");
-      expect(() => createPiDelegation(db, {
-        allowed_skill_intents_json: ["bad skill"],
-        id: "delegation-b",
-        project_id: project.id
-      })).toThrow("skill id 不合法: bad skill");
-    } finally {
-      db.close();
-    }
+    const project = createProject(db, { cwd, id: "demo" });
+    const badCwd = join(cwd, "..", "other-project");
+    await mkdir(badCwd, { recursive: true });
+    expect(() => createIssue(db, {
+      project_id: project.id,
+      required_skill_intents: ["not a skill"],
+      title: "Invalid skill"
+    })).toThrow("skill id 不合法: not a skill");
+    expect(() => createProject(db, {
+      cwd: badCwd,
+      default_skill_policy: { allowed: ["bad!skill"] },
+      id: "other"
+    })).toThrow("skill id 不合法: bad!skill");
+    expect(() => createPiDelegation(db, {
+      allowed_skill_intents_json: ["bad skill"],
+      id: "delegation-b",
+      project_id: project.id
+    })).toThrow("skill id 不合法: bad skill");
   });
 });
 

@@ -36,83 +36,79 @@ describe("completion card", () => {
     git(root, "add", "README.md");
     git(root, "commit", "-m", "base");
     const db = await openDatabase({ stateDir: join(root, ".state") }).then(trackDatabase);
-    try {
-      db.sqlite.run(
-        `insert into projects (id, name, cwd, provider, auto_run, created_at, updated_at)
+    db.sqlite.run(
+      `insert into projects (id, name, cwd, provider, auto_run, created_at, updated_at)
          values ('demo', 'Demo', ?, 'codex', 1, ?, ?)`,
-        [root, "2026-07-31T05:00:00Z", "2026-07-31T05:00:00Z"]
-      );
-      const issue = createIssue(db, { project_id: "demo", status: "in_progress", title: "Node contract" });
-      const prepared = await prepareReservedIssueRun(db, insertIssueRunRecord(db, issue.id));
-      if (prepared.status !== "ready") throw new Error("Run preparation failed");
-      const run = prepared.run;
-      updateIssueRuntime(db, issue.id, {
-        issue_run_id: run.id,
-        provider: "codex",
-        provider_session_id: "thread-card",
-        provider_turn_id: "turn-card"
-      });
-      const domainRunID = makeDomainID("run", "issue_runs", run.id);
-      const correlation = {
-        attempt_id: makeRunAttemptID(domainRunID, run.attempt),
-        contract: RUNTIME_EVIDENCE_CORRELATION_CONTRACT,
-        issue_run_id: run.id,
-        provider: "codex",
-        provider_session_id: "thread-card",
-        provider_turn_id: "turn-card",
-        run_id: domainRunID
-      };
-      recordIssueLogEvent(db, issue.id, commandEvent("early", "node --version; pnpm test", 1, "Node 24 engine mismatch"), correlation);
-      recordIssueLogEvent(db, issue.id, normalizedCommandEvent(
-        "final",
-        "export PATH=/node22/bin:$PATH; pnpm --filter @demo/contract generate && pnpm lint && pnpm typecheck && pnpm test && pnpm build && git diff --check",
-        0,
-        "74 tests passed\nbuild completed"
-      ), correlation);
-      recordIssueLogEvent(db, issue.id, {
-        provider: "codex",
-        session: { provider: "codex", sessionId: "thread-card", turnId: "turn-card" },
-        text: "Node 22 下完整验证通过。\nRUNNER_OUTCOME: completed",
-        type: "raw",
-        raw: {
-          method: "item/completed",
-          payload: JSON.stringify({ item: { id: "final-message", type: "agentMessage", text: "Node 22 下完整验证通过。" } })
-        }
-      }, correlation);
-      await writeFile(join(root, "contract.ts"), "export const node = 22;\n");
-      git(root, "add", "contract.ts");
-      git(root, "commit", "-m", "feat: add contract");
-      const endedAt = new Date(Date.now() + 1_000).toISOString();
-      db.sqlite.run("update issue_runs set status='done', ended_at=? where id=?", [endedAt, run.id]);
-      await writeFile(join(root, "uncommitted.txt"), "terminal workspace change\n");
-      await recordCompletionGitObservation(db, {
-        issue_id: issue.id,
-        observed_at: endedAt,
-        repository: root,
-        run: { ...run, ended_at: endedAt, status: "done" }
-      });
+      [root, "2026-07-31T05:00:00Z", "2026-07-31T05:00:00Z"]
+    );
+    const issue = createIssue(db, { project_id: "demo", status: "in_progress", title: "Node contract" });
+    const prepared = await prepareReservedIssueRun(db, insertIssueRunRecord(db, issue.id));
+    if (prepared.status !== "ready") throw new Error("Run preparation failed");
+    const run = prepared.run;
+    updateIssueRuntime(db, issue.id, {
+      issue_run_id: run.id,
+      provider: "codex",
+      provider_session_id: "thread-card",
+      provider_turn_id: "turn-card"
+    });
+    const domainRunID = makeDomainID("run", "issue_runs", run.id);
+    const correlation = {
+      attempt_id: makeRunAttemptID(domainRunID, run.attempt),
+      contract: RUNTIME_EVIDENCE_CORRELATION_CONTRACT,
+      issue_run_id: run.id,
+      provider: "codex",
+      provider_session_id: "thread-card",
+      provider_turn_id: "turn-card",
+      run_id: domainRunID
+    };
+    recordIssueLogEvent(db, issue.id, commandEvent("early", "node --version; pnpm test", 1, "Node 24 engine mismatch"), correlation);
+    recordIssueLogEvent(db, issue.id, normalizedCommandEvent(
+      "final",
+      "export PATH=/node22/bin:$PATH; pnpm --filter @demo/contract generate && pnpm lint && pnpm typecheck && pnpm test && pnpm build && git diff --check",
+      0,
+      "74 tests passed\nbuild completed"
+    ), correlation);
+    recordIssueLogEvent(db, issue.id, {
+      provider: "codex",
+      session: { provider: "codex", sessionId: "thread-card", turnId: "turn-card" },
+      text: "Node 22 下完整验证通过。\nRUNNER_OUTCOME: completed",
+      type: "raw",
+      raw: {
+        method: "item/completed",
+        payload: JSON.stringify({ item: { id: "final-message", type: "agentMessage", text: "Node 22 下完整验证通过。" } })
+      }
+    }, correlation);
+    await writeFile(join(root, "contract.ts"), "export const node = 22;\n");
+    git(root, "add", "contract.ts");
+    git(root, "commit", "-m", "feat: add contract");
+    const endedAt = new Date(Date.now() + 1_000).toISOString();
+    db.sqlite.run("update issue_runs set status='done', ended_at=? where id=?", [endedAt, run.id]);
+    await writeFile(join(root, "uncommitted.txt"), "terminal workspace change\n");
+    await recordCompletionGitObservation(db, {
+      issue_id: issue.id,
+      observed_at: endedAt,
+      repository: root,
+      run: { ...run, ended_at: endedAt, status: "done" }
+    });
 
-      const card = await buildIssueCompletionCard(db, issue.id);
-      expect(card.commands.items.map((item) => ({ command: item.command, exit: item.exit_code }))).toEqual([
-        { command: "node --version; pnpm test", exit: 1 },
-        {
-          command: "export PATH=/node22/bin:$PATH; pnpm --filter @demo/contract generate && pnpm lint && pnpm typecheck && pnpm test && pnpm build && git diff --check",
-          exit: 0
-        }
-      ]);
-      expect(card.final_message).toContain("RUNNER_OUTCOME: completed");
-      expect(card.git.changed_files).toContain("contract.ts");
-      expect(card.git.changed_files).toContain("uncommitted.txt");
-      expect(card.git.has_diff).toBe(true);
-      expect(card.git).toMatchObject({ source: "terminal_observation", working_tree_dirty: true });
-      expect(card.fingerprint).toMatch(/^[a-f0-9]{64}$/);
-      expect(() => assertCompletionCardIntegrity(card)).not.toThrow();
-      const tampered = structuredClone(card);
-      tampered.commands.items[1]!.exit_code = 1;
-      expect(() => assertCompletionCardIntegrity(tampered)).toThrow("fingerprint does not match");
-    } finally {
-      db.close();
-    }
+    const card = await buildIssueCompletionCard(db, issue.id);
+    expect(card.commands.items.map((item) => ({ command: item.command, exit: item.exit_code }))).toEqual([
+      { command: "node --version; pnpm test", exit: 1 },
+      {
+        command: "export PATH=/node22/bin:$PATH; pnpm --filter @demo/contract generate && pnpm lint && pnpm typecheck && pnpm test && pnpm build && git diff --check",
+        exit: 0
+      }
+    ]);
+    expect(card.final_message).toContain("RUNNER_OUTCOME: completed");
+    expect(card.git.changed_files).toContain("contract.ts");
+    expect(card.git.changed_files).toContain("uncommitted.txt");
+    expect(card.git.has_diff).toBe(true);
+    expect(card.git).toMatchObject({ source: "terminal_observation", working_tree_dirty: true });
+    expect(card.fingerprint).toMatch(/^[a-f0-9]{64}$/);
+    expect(() => assertCompletionCardIntegrity(card)).not.toThrow();
+    const tampered = structuredClone(card);
+    tampered.commands.items[1]!.exit_code = 1;
+    expect(() => assertCompletionCardIntegrity(tampered)).toThrow("fingerprint does not match");
   });
 
   test("falls back to the live workspace instead of reporting a false clean tree", async () => {
@@ -125,29 +121,25 @@ describe("completion card", () => {
     git(root, "add", "README.md");
     git(root, "commit", "-m", "base");
     const db = await openDatabase({ stateDir: join(root, ".state") }).then(trackDatabase);
-    try {
-      db.sqlite.run(
-        `insert into projects (id, name, cwd, provider, auto_run, created_at, updated_at)
+    db.sqlite.run(
+      `insert into projects (id, name, cwd, provider, auto_run, created_at, updated_at)
          values ('demo', 'Demo', ?, 'pi-coding-agent', 1, ?, ?)`,
-        [root, "2026-07-31T05:00:00Z", "2026-07-31T05:00:00Z"]
-      );
-      const issue = createIssue(db, { project_id: "demo", status: "in_progress", title: "Pi fallback" });
-      const run = createIssueRun(db, issue.id);
-      await writeFile(join(root, "pi-change.ts"), "export const changed = true;\n");
-      const endedAt = new Date().toISOString();
-      db.sqlite.run("update issue_runs set status='failed', ended_at=?, error=? where id=?", [endedAt, "idle timeout", run.id]);
+      [root, "2026-07-31T05:00:00Z", "2026-07-31T05:00:00Z"]
+    );
+    const issue = createIssue(db, { project_id: "demo", status: "in_progress", title: "Pi fallback" });
+    const run = createIssueRun(db, issue.id);
+    await writeFile(join(root, "pi-change.ts"), "export const changed = true;\n");
+    const endedAt = new Date().toISOString();
+    db.sqlite.run("update issue_runs set status='failed', ended_at=?, error=? where id=?", [endedAt, "idle timeout", run.id]);
 
-      const card = await buildIssueCompletionCard(db, issue.id);
+    const card = await buildIssueCompletionCard(db, issue.id);
 
-      expect(card.git).toMatchObject({
-        has_diff: true,
-        source: "session_observation",
-        working_tree_dirty: true
-      });
-      expect(card.git.changed_files).toContain("pi-change.ts");
-    } finally {
-      db.close();
-    }
+    expect(card.git).toMatchObject({
+      has_diff: true,
+      source: "session_observation",
+      working_tree_dirty: true
+    });
+    expect(card.git.changed_files).toContain("pi-change.ts");
   });
   test("failed Git inspection cannot persist a false clean terminal observation", async () => {
     const root = await mkdtemp(join(tmpdir(), "completion-card-git-failure-"));
@@ -159,23 +151,21 @@ describe("completion card", () => {
     git(root, "add", "README.md");
     git(root, "commit", "-m", "base");
     const db = await openDatabase({ stateDir: join(root, ".state") }).then(trackDatabase);
-    try {
-      db.sqlite.run(`insert into projects (id, name, cwd, provider, created_at, updated_at)
+    db.sqlite.run(`insert into projects (id, name, cwd, provider, created_at, updated_at)
         values ('demo', 'Demo', ?, 'codex', ?, ?)`, [root, new Date().toISOString(), new Date().toISOString()]);
-      const issue = createIssue(db, { project_id: "demo", status: "in_progress", title: "Failed observation" });
-      const run = createIssueRun(db, issue.id);
-      const endedAt = new Date().toISOString();
-      const missingRevision = "a".repeat(40);
-      db.sqlite.run("update issue_runs set ended_at=?, git_base_revision=? where id=?", [endedAt, missingRevision, run.id]);
-      await recordCompletionGitObservation(db, {
-        issue_id: issue.id, observed_at: endedAt, repository: root,
-        run: { ...run, ended_at: endedAt, git_base_revision: missingRevision }
-      });
-      const types = listIssueEvents(db, issue.id).map((event) => event.type);
-      expect(types).toContain("issue.completion_git_observation_failed.v1");
-      expect(types).not.toContain("issue.completion_git_observation.v1");
-      await expect(buildIssueCompletionCard(db, issue.id)).rejects.toThrow("Git workspace observation failed");
-    } finally { db.close(); }
+    const issue = createIssue(db, { project_id: "demo", status: "in_progress", title: "Failed observation" });
+    const run = createIssueRun(db, issue.id);
+    const endedAt = new Date().toISOString();
+    const missingRevision = "a".repeat(40);
+    db.sqlite.run("update issue_runs set ended_at=?, git_base_revision=? where id=?", [endedAt, missingRevision, run.id]);
+    await recordCompletionGitObservation(db, {
+      issue_id: issue.id, observed_at: endedAt, repository: root,
+      run: { ...run, ended_at: endedAt, git_base_revision: missingRevision }
+    });
+    const types = listIssueEvents(db, issue.id).map((event) => event.type);
+    expect(types).toContain("issue.completion_git_observation_failed.v1");
+    expect(types).not.toContain("issue.completion_git_observation.v1");
+    await expect(buildIssueCompletionCard(db, issue.id)).rejects.toThrow("Git workspace observation failed");
   });
 
 });

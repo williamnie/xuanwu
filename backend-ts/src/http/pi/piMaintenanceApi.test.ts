@@ -20,62 +20,58 @@ afterEach(async () => {
 describe("PI stale pending action maintenance API", () => {
   test("dry-runs and applies stale supervisor and enqueue actions without touching fresh requests", async () => {
     const { db, root } = await openFixture();
-    try {
-      seedHistoricalStaleSupervisorCase(db);
-      const router = createDefaultRouter({ database: db });
+    seedHistoricalStaleSupervisorCase(db);
+    const router = createDefaultRouter({ database: db });
 
-      const dryRun = await router.handle(new Request(`${BASE_URL}/api/pi/maintenance/stale-pending-actions`));
-      const dryRunBody = await dryRun.json() as Record<string, unknown>;
+    const dryRun = await router.handle(new Request(`${BASE_URL}/api/pi/maintenance/stale-pending-actions`));
+    const dryRunBody = await dryRun.json() as Record<string, unknown>;
 
-      expect(dryRun.status).toBe(200);
-      expect(dryRunBody).toMatchObject({ applied: false, dry_run: true, matched_count: 75 });
-      expect(actionIDs(dryRunBody)).toContain("stale-terminal-001");
-      expect(actionIDs(dryRunBody)).toContain("stale-run");
-      expect(actionIDs(dryRunBody)).toContain("stale-expired");
-      expect(actionIDs(dryRunBody)).toContain("real-enqueue");
-      expect(actionIDs(dryRunBody)).toContain("superseded-enqueue");
-      expect(actionIDs(dryRunBody)).not.toContain("fresh-enqueue");
-      expect(actionReasons(dryRunBody, "real-enqueue")).toContain("target_state_changed:done");
-      expect(actionReasons(dryRunBody, "superseded-enqueue")).toContain("superseded_by:completed-enqueue");
-      expect(actionReasons(dryRunBody, "stale-terminal-001")).toContain("terminal_issue:done");
-      expect(actionReasons(dryRunBody, "stale-run")).toContain("terminal_run:done");
-      expect(listPiActions(db, { status: "pending" }).map((action) => action.id).sort()).toEqual([
-        "fresh-enqueue",
-        "fresh-supervisor",
-        "real-enqueue",
-        "stale-expired",
-        "stale-run",
-        ...Array.from({ length: 71 }, (_, index) => `stale-terminal-${String(index + 1).padStart(3, "0")}`),
-        "superseded-enqueue"
-      ]);
+    expect(dryRun.status).toBe(200);
+    expect(dryRunBody).toMatchObject({ applied: false, dry_run: true, matched_count: 75 });
+    expect(actionIDs(dryRunBody)).toContain("stale-terminal-001");
+    expect(actionIDs(dryRunBody)).toContain("stale-run");
+    expect(actionIDs(dryRunBody)).toContain("stale-expired");
+    expect(actionIDs(dryRunBody)).toContain("real-enqueue");
+    expect(actionIDs(dryRunBody)).toContain("superseded-enqueue");
+    expect(actionIDs(dryRunBody)).not.toContain("fresh-enqueue");
+    expect(actionReasons(dryRunBody, "real-enqueue")).toContain("target_state_changed:done");
+    expect(actionReasons(dryRunBody, "superseded-enqueue")).toContain("superseded_by:completed-enqueue");
+    expect(actionReasons(dryRunBody, "stale-terminal-001")).toContain("terminal_issue:done");
+    expect(actionReasons(dryRunBody, "stale-run")).toContain("terminal_run:done");
+    expect(listPiActions(db, { status: "pending" }).map((action) => action.id).sort()).toEqual([
+      "fresh-enqueue",
+      "fresh-supervisor",
+      "real-enqueue",
+      "stale-expired",
+      "stale-run",
+      ...Array.from({ length: 71 }, (_, index) => `stale-terminal-${String(index + 1).padStart(3, "0")}`),
+      "superseded-enqueue"
+    ]);
 
-      const applyUrl = `${BASE_URL}/api/pi/maintenance/stale-pending-actions/apply`;
-      const missingConfirm = await router.handle(new Request(applyUrl, {
-        body: JSON.stringify({ confirm: false }),
-        method: "POST"
-      }));
-      expect(missingConfirm.status).toBe(400);
+    const applyUrl = `${BASE_URL}/api/pi/maintenance/stale-pending-actions/apply`;
+    const missingConfirm = await router.handle(new Request(applyUrl, {
+      body: JSON.stringify({ confirm: false }),
+      method: "POST"
+    }));
+    expect(missingConfirm.status).toBe(400);
 
-      const applied = await router.handle(new Request(applyUrl, {
-        body: JSON.stringify({ backup_dir: join(root, "backups"), confirm: true }),
-        method: "POST"
-      }));
-      const appliedBody = await applied.json() as Record<string, unknown>;
+    const applied = await router.handle(new Request(applyUrl, {
+      body: JSON.stringify({ backup_dir: join(root, "backups"), confirm: true }),
+      method: "POST"
+    }));
+    const appliedBody = await applied.json() as Record<string, unknown>;
 
-      expect(applied.status).toBe(200);
-      expect(appliedBody).toMatchObject({ applied: true, dry_run: false, matched_count: 75 });
-      expect(existsSync(String(appliedBody.backup_path))).toBe(true);
-      expect(getPiAction(db, "stale-terminal-001")).toMatchObject({ status: "rejected", decided_by: "maintenance" });
-      expect(getPiAction(db, "stale-expired")).toMatchObject({ status: "rejected", decided_by: "maintenance" });
-      expect(getPiAction(db, "real-enqueue")).toMatchObject({ status: "rejected", decided_by: "maintenance" });
-      expect(getPiAction(db, "fresh-enqueue")).toMatchObject({ status: "pending" });
-      expect(getPiAction(db, "superseded-enqueue")).toMatchObject({ status: "rejected", decided_by: "maintenance" });
-      expect(getPiAction(db, "fresh-supervisor")).toMatchObject({ status: "pending" });
-      expect(listPiActionEvents(db).filter((event) => event.event_type === "maintenance_stale_cleanup"))
-        .toHaveLength(75);
-    } finally {
-      db.close();
-    }
+    expect(applied.status).toBe(200);
+    expect(appliedBody).toMatchObject({ applied: true, dry_run: false, matched_count: 75 });
+    expect(existsSync(String(appliedBody.backup_path))).toBe(true);
+    expect(getPiAction(db, "stale-terminal-001")).toMatchObject({ status: "rejected", decided_by: "maintenance" });
+    expect(getPiAction(db, "stale-expired")).toMatchObject({ status: "rejected", decided_by: "maintenance" });
+    expect(getPiAction(db, "real-enqueue")).toMatchObject({ status: "rejected", decided_by: "maintenance" });
+    expect(getPiAction(db, "fresh-enqueue")).toMatchObject({ status: "pending" });
+    expect(getPiAction(db, "superseded-enqueue")).toMatchObject({ status: "rejected", decided_by: "maintenance" });
+    expect(getPiAction(db, "fresh-supervisor")).toMatchObject({ status: "pending" });
+    expect(listPiActionEvents(db).filter((event) => event.event_type === "maintenance_stale_cleanup"))
+      .toHaveLength(75);
   });
 });
 

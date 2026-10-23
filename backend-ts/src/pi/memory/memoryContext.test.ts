@@ -334,23 +334,21 @@ describe("task-scoped experience retrieval", () => {
 
   test("bounds scans for large stores and ranks relevant experience ahead of newer noise", async () => {
     const db = await openFixtureDatabase();
-    try {
-      const { experience } = seedMemoryExperience(db);
-      db.transaction(() => {
-        const insert = db.sqlite.prepare(`insert into pi_memory_items
+    const { experience } = seedMemoryExperience(db);
+    db.transaction(() => {
+      const insert = db.sqlite.prepare(`insert into pi_memory_items
           (id, scope, scope_id, kind, content, authority, created_at, updated_at) values (?, 'project', 'demo', 'resolution', ?, 'evidence_backed', ?, ?)`);
-        for (let i = 0; i < 3000; i++) {
-          const at = `2026-09-28T${String(i).padStart(8, "0")}`;
-          insert.run(`noise-${i}`, JSON.stringify({ ...experience, applies_when: "billing invoice", symptom: "invoice missing" }), at, at);
-        }
-        insert.run("relevant", JSON.stringify(experience), "2026-09-28T00002900", "2026-09-28T00002900");
-        insert.run("outside-window", JSON.stringify(experience), "2026-01-01", "2026-01-01");
-      })();
-      const result = retrievePiMemoryContext(db, { projectID: "demo", taskDescription: "async callback timed out", version: "v0.2.13" });
-      expect(result.memory_items.map((item) => item.id)).toEqual(["relevant"]);
-      expect(result.retrieval).toMatchObject({ scanned: MEMORY_SCAN_LIMIT, scan_limited: true });
-      expect(result.truncation_summary.total_candidates).toBe(1);
-    } finally { db.close(); }
+      for (let i = 0; i < 3000; i++) {
+        const at = `2026-09-28T${String(i).padStart(8, "0")}`;
+        insert.run(`noise-${i}`, JSON.stringify({ ...experience, applies_when: "billing invoice", symptom: "invoice missing" }), at, at);
+      }
+      insert.run("relevant", JSON.stringify(experience), "2026-09-28T00002900", "2026-09-28T00002900");
+      insert.run("outside-window", JSON.stringify(experience), "2026-01-01", "2026-01-01");
+    })();
+    const result = retrievePiMemoryContext(db, { projectID: "demo", taskDescription: "async callback timed out", version: "v0.2.13" });
+    expect(result.memory_items.map((item) => item.id)).toEqual(["relevant"]);
+    expect(result.retrieval).toMatchObject({ scanned: MEMORY_SCAN_LIMIT, scan_limited: true });
+    expect(result.truncation_summary.total_candidates).toBe(1);
   });
 
   test("uses the bound issue description without reading a different project's task", async () => {

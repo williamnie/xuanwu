@@ -228,42 +228,38 @@ describe("PI issue supervisor recovery contract", () => {
     await insertLegacyPolicyRow(join(stateDir, "runner.db"));
 
     const migrated = await openDatabase({ stateDir }).then(trackDatabase);
-    try {
-      expect(tableNames(migrated)).toContain("issue_supervisor_events");
-      expect(columnNames(migrated, "issue_supervisor_events")).toEqual(expect.arrayContaining([
-        "action_id",
-        "action_type",
-        "confidence",
-        "decision",
-        "diagnosis_code",
-        "event_type",
-        "provider_error_category",
-        "retry_after_at"
-      ]));
-      expect(columnNames(migrated, "project_pi_policies")).toEqual(expect.arrayContaining([
-        "allowed_supervisor_actions_json",
-        "supervisor_cooldown_seconds",
-        "supervisor_max_recoveries_per_issue",
-        "supervisor_max_recoveries_per_project_per_hour",
-        "supervisor_rate_limit_wait_policy"
-      ]));
-      expect(migrated.sqlite.query("select id from schema_migrations where id='020_issue_supervisor_recovery'").get())
-        .toEqual({ id: "020_issue_supervisor_recovery" });
-      expect(migrated.sqlite.query(`
+    expect(tableNames(migrated)).toContain("issue_supervisor_events");
+    expect(columnNames(migrated, "issue_supervisor_events")).toEqual(expect.arrayContaining([
+      "action_id",
+      "action_type",
+      "confidence",
+      "decision",
+      "diagnosis_code",
+      "event_type",
+      "provider_error_category",
+      "retry_after_at"
+    ]));
+    expect(columnNames(migrated, "project_pi_policies")).toEqual(expect.arrayContaining([
+      "allowed_supervisor_actions_json",
+      "supervisor_cooldown_seconds",
+      "supervisor_max_recoveries_per_issue",
+      "supervisor_max_recoveries_per_project_per_hour",
+      "supervisor_rate_limit_wait_policy"
+    ]));
+    expect(migrated.sqlite.query("select id from schema_migrations where id='020_issue_supervisor_recovery'").get())
+      .toEqual({ id: "020_issue_supervisor_recovery" });
+    expect(migrated.sqlite.query(`
         select allowed_supervisor_actions_json, supervisor_cooldown_seconds,
           supervisor_max_recoveries_per_issue, supervisor_max_recoveries_per_project_per_hour,
           supervisor_rate_limit_wait_policy
         from project_pi_policies where project_id='legacy-demo'
       `).get()).toEqual({
-        allowed_supervisor_actions_json: "[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"issue.state_repair\",\"needs_user.escalate\"]",
-        supervisor_cooldown_seconds: 300,
-        supervisor_max_recoveries_per_issue: 6,
-        supervisor_max_recoveries_per_project_per_hour: 0,
-        supervisor_rate_limit_wait_policy: "respect_retry_after"
-      });
-    } finally {
-      migrated.close();
-    }
+      allowed_supervisor_actions_json: "[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"issue.state_repair\",\"needs_user.escalate\"]",
+      supervisor_cooldown_seconds: 300,
+      supervisor_max_recoveries_per_issue: 6,
+      supervisor_max_recoveries_per_project_per_hour: 0,
+      supervisor_rate_limit_wait_policy: "respect_retry_after"
+    });
   });
 
   test("exports reusable fixtures for stream disconnect, 429 variants, human-only failures, and no-progress loops", () => {

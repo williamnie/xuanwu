@@ -74,38 +74,34 @@ describe("PI project status snapshot", () => {
 
   test("includes active project holds without leaking path secrets", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo", "/Users/secret/work/xuanwu");
-      createProjectHoldsTable(db);
-      db.sqlite.run(
-        `insert into project_holds
+    insertProject(db, "demo", "/Users/secret/work/xuanwu");
+    createProjectHoldsTable(db);
+    db.sqlite.run(
+      `insert into project_holds
           (project_id, reason, message, hold_since, next_check_at, last_check_at, last_check_error, updated_at)
          values (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          "demo",
-          "dirty_worktree",
-          "dirty worktree at /Users/secret/work/xuanwu",
-          "2026-01-04T00:00:00Z",
-          "",
-          "2026-01-04T00:05:00Z",
-          "AUTH_TOKEN=hold-secret in /Users/secret/.env",
-          "2026-01-04T00:05:00Z"
-        ]
-      );
+      [
+        "demo",
+        "dirty_worktree",
+        "dirty worktree at /Users/secret/work/xuanwu",
+        "2026-01-04T00:00:00Z",
+        "",
+        "2026-01-04T00:05:00Z",
+        "AUTH_TOKEN=hold-secret in /Users/secret/.env",
+        "2026-01-04T00:05:00Z"
+      ]
+    );
 
-      const snapshot = createProjectStatusSnapshot(db, "demo");
-      const json = JSON.stringify(snapshot);
+    const snapshot = createProjectStatusSnapshot(db, "demo");
+    const json = JSON.stringify(snapshot);
 
-      expect(snapshot.active_holds).toHaveLength(1);
-      expect(snapshot.active_holds[0]).toMatchObject({ reason: "dirty_worktree" });
-      expect(snapshot.findings[0]).toMatchObject({ issue_id: 0, reason: "project_hold:dirty_worktree" });
-      expect(snapshot.compact_summary).toContain("holds=1");
-      expect(snapshot.compact_summary).toContain("findings=1");
-      expect(json).not.toContain("hold-secret");
-      expect(json).not.toContain("/Users/secret");
-    } finally {
-      db.close();
-    }
+    expect(snapshot.active_holds).toHaveLength(1);
+    expect(snapshot.active_holds[0]).toMatchObject({ reason: "dirty_worktree" });
+    expect(snapshot.findings[0]).toMatchObject({ issue_id: 0, reason: "project_hold:dirty_worktree" });
+    expect(snapshot.compact_summary).toContain("holds=1");
+    expect(snapshot.compact_summary).toContain("findings=1");
+    expect(json).not.toContain("hold-secret");
+    expect(json).not.toContain("/Users/secret");
   });
 
   test("aggregates full status counts while bounding recent project rows", async () => {
@@ -168,32 +164,28 @@ describe("PI project status snapshot", () => {
 
   test("keeps a project hold visible when issue findings fill the bound", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo", "/tmp/demo");
-      for (let index = 1; index <= 10; index += 1) {
-        insertIssue(db, {
-          day: index,
-          error: `failure ${index}`,
-          projectID: "demo",
-          status: "failed",
-          title: `Failed issue ${index}`
-        });
-      }
-      createProjectHoldsTable(db);
-      db.sqlite.run(
-        `insert into project_holds
+    insertProject(db, "demo", "/tmp/demo");
+    for (let index = 1; index <= 10; index += 1) {
+      insertIssue(db, {
+        day: index,
+        error: `failure ${index}`,
+        projectID: "demo",
+        status: "failed",
+        title: `Failed issue ${index}`
+      });
+    }
+    createProjectHoldsTable(db);
+    db.sqlite.run(
+      `insert into project_holds
           (project_id, reason, message, hold_since, next_check_at, last_check_at, last_check_error, updated_at)
          values (?, ?, ?, ?, ?, ?, ?, ?)`,
-        ["demo", "manual_gate", "Waiting", "2026-01-11T00:00:00Z", "", "", "", "2026-01-11T00:00:00Z"]
-      );
+      ["demo", "manual_gate", "Waiting", "2026-01-11T00:00:00Z", "", "", "", "2026-01-11T00:00:00Z"]
+    );
 
-      const snapshot = createProjectStatusSnapshot(db, "demo");
+    const snapshot = createProjectStatusSnapshot(db, "demo");
 
-      expect(snapshot.findings).toHaveLength(8);
-      expect(snapshot.findings.at(-1)).toMatchObject({ issue_id: 0, reason: "project_hold:manual_gate" });
-    } finally {
-      db.close();
-    }
+    expect(snapshot.findings).toHaveLength(8);
+    expect(snapshot.findings.at(-1)).toMatchObject({ issue_id: 0, reason: "project_hold:manual_gate" });
   });
 });
 

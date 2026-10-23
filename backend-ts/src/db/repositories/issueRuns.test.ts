@@ -35,41 +35,37 @@ describe("issue run repository", () => {
     const db = await openFixtureDatabase();
     const repository = await mkdtemp(join(tmpdir(), "xuanwu-run-baseline-"));
     tempRoots.push(repository);
-    try {
-      execFileSync("git", ["init", "-q"], { cwd: repository });
-      writeFileSync(join(repository, "README.md"), "baseline\n");
-      execFileSync("git", ["add", "README.md"], { cwd: repository });
-      execFileSync("git", [
-        "-c", "user.name=Runner Test", "-c", "user.email=runner@example.invalid",
-        "commit", "-qm", "baseline"
-      ], { cwd: repository });
-      const revision = execFileSync("git", ["rev-parse", "HEAD"], {
-        cwd: repository,
-        encoding: "utf8"
-      }).trim();
-      insertProject(db, "demo");
-      db.sqlite.run("update projects set cwd=? where id='demo'", [repository]);
-      const issueId = insertIssue(db, "demo");
+    execFileSync("git", ["init", "-q"], { cwd: repository });
+    writeFileSync(join(repository, "README.md"), "baseline\n");
+    execFileSync("git", ["add", "README.md"], { cwd: repository });
+    execFileSync("git", [
+      "-c", "user.name=Runner Test", "-c", "user.email=runner@example.invalid",
+      "commit", "-qm", "baseline"
+    ], { cwd: repository });
+    const revision = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: repository,
+      encoding: "utf8"
+    }).trim();
+    insertProject(db, "demo");
+    db.sqlite.run("update projects set cwd=? where id='demo'", [repository]);
+    const issueId = insertIssue(db, "demo");
 
-      const prepared = await prepareReservedIssueRun(db, insertIssueRunRecord(db, issueId));
-      expect(prepared.status).toBe("ready");
-      if (prepared.status !== "ready") throw new Error("Run preparation failed");
-      const run = prepared.run;
-      const baseline = db.sqlite.query<{ payload: string }, [number, string]>(`
+    const prepared = await prepareReservedIssueRun(db, insertIssueRunRecord(db, issueId));
+    expect(prepared.status).toBe("ready");
+    if (prepared.status !== "ready") throw new Error("Run preparation failed");
+    const run = prepared.run;
+    const baseline = db.sqlite.query<{ payload: string }, [number, string]>(`
         select payload from issue_events where issue_id=? and type=? order by id desc limit 1
       `).get(issueId, ISSUE_RUN_GIT_WORKSPACE_BASELINE_EVENT);
 
-      expect(run.git_base_revision).toBe(revision);
-      expect(JSON.parse(baseline?.payload ?? "{}")).toMatchObject({
-        base_revision: revision,
-        contract: ISSUE_RUN_GIT_WORKSPACE_BASELINE_CONTRACT,
-        entries: [],
-        run_id: run.id,
-        snapshot_sha256: expect.stringMatching(/^[a-f0-9]{64}$/)
-      });
-    } finally {
-      db.close();
-    }
+    expect(run.git_base_revision).toBe(revision);
+    expect(JSON.parse(baseline?.payload ?? "{}")).toMatchObject({
+      base_revision: revision,
+      contract: ISSUE_RUN_GIT_WORKSPACE_BASELINE_CONTRACT,
+      entries: [],
+      run_id: run.id,
+      snapshot_sha256: expect.stringMatching(/^[a-f0-9]{64}$/)
+    });
   });
 
   test("creates attempts and updates only the open run runtime", async () => {

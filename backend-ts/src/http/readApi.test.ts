@@ -1,232 +1,135 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
 import { basename, join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import type { SQLQueryBindings } from "bun:sqlite";
+import { type RunnerDatabase } from "../db/database.ts";
 import { createAgentProfile } from "../db/repositories/agentProfiles.ts";
 import { createDefaultRouter } from "./server.ts";
 import { isProjectLoopActive } from "../runner/projectLoopManager.ts";
 import { getIssueAsWork, issueIDToWorkID } from "../domain/work/issueAdapter.ts";
-import type { DependencyRelation } from "../domain/work/contracts.ts";
 import { insertWorkRecord, insertWorkRelationRecord } from "../db/repositories/workLedger.ts";
-import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
-import { useDatabaseCleanup } from "../testing/harness.ts";
+import type { ExecutorProvider, ExecutorProviderId, ProviderRunInput } from "../providers/types.ts";
+import { apiClient, FIXTURE_TIME, insertIssue, insertProject, insertRow, useTempDirs, useTestDatabase, waitFor } from "../testing/harness.ts";
 
-const trackDatabase = useDatabaseCleanup();
-
-const BASE_URL = "http://127.0.0.1:3008";
-const tempRoots: string[] = [];
-
-async function openFixtureDatabase(): Promise<RunnerDatabase> {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-bun-read-api-"));
-  tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const openFixtureDatabase = useTestDatabase("xuanwu-bun-read-api-");
+const tempDir = useTempDirs("xuanwu-bun-project-cwd-");
+const CAPABILITIES = ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"];
+const NOT_FOUND = { message: "资源不存在" };
+const RUNNING_DELETE = { message: "运行中的 issue 不能删除，请先取消执行" };
 
 describe("Bun projects/issues read API", () => {
   test("exposes frontend-compatible project and issue read endpoints", async () => {
-    const database = await openFixtureDatabase();
-    insertProject(database, { id: "demo", name: "Demo", sortOrder: 1 });
-    insertProject(database, { id: "other", name: "Other", sortOrder: 2 });
-    const issueId = insertIssue(database, {
-      projectId: "demo",
-      title: "Read API",
-      status: "todo",
-      sourceSessionId: "thread-a"
-    });
-    const blockerId = insertIssue(database, {
-      projectId: "demo",
-      title: "Failed blocker",
-      status: "failed",
-      sourceSessionId: "thread-blocker"
-    });
+    const { database, api } = await readApi();
+    addProject(database, "other", { name: "Other", sort_order: 2 });
+    const issueId = addIssue(database, "Read API", "todo", { source_session_id: "thread-a" });
+    const blockerId = addIssue(database, "Failed blocker", "failed", { source_session_id: "thread-blocker" });
     addDependency(database, issueId, blockerId);
-    insertIssue(database, {
-      projectId: "other",
-      title: "Hidden",
-      status: "triage",
-      sourceSessionId: "thread-b"
-    });
+    addIssue(database, "Hidden", "triage", { project_id: "other", source_session_id: "thread-b" });
 
-    const router = createDefaultRouter({ database });
-    const projects = await router.handle(new Request(`${BASE_URL}/api/projects`));
-    const project = await router.handle(new Request(`${BASE_URL}/api/projects/demo`));
-    const issues = await router.handle(new Request(`${BASE_URL}/api/issues?projectId=demo&sourceSessionId=codex:thread-a`));
-    const issue = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`));
-
+    const projects = await api.get<Array<Record<string, unknown>>>("/api/projects");
+    expect(await api.get("/api/projects/demo")).toMatchObject({ status: 200, body: { id: "demo", cwd: "/tmp/demo" } });
     expect(projects.status).toBe(200);
-    expect(project.status).toBe(200);
-    expect(await project.json()).toMatchObject({ id: "demo", cwd: "/tmp/demo" });
-    const projectBody = await projects.json() as Array<Record<string, unknown>>;
-    expect(projectBody.map((project) => project.id)).toEqual(["demo", "other"]);
-    expect(projectBody[0]).toMatchObject({
-      id: "demo",
-      loop_status: "stopped",
-      provider_capabilities: ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"]
-    });
+    expect(projects.body.map((project) => project.id)).toEqual(["demo", "other"]);
+    expect(projects.body[0]).toMatchObject({ id: "demo", loop_status: "stopped", provider_capabilities: CAPABILITIES });
+    const issues = await api.get<Array<Record<string, unknown>>>("/api/issues?projectId=demo&sourceSessionId=codex:thread-a");
     expect(issues.status).toBe(200);
-    expect((await issues.json() as Array<Record<string, unknown>>).map((item) => item.id)).toEqual([issueId]);
-    expect(issue.status).toBe(200);
-    expect(await issue.json()).toMatchObject({
-      dependency: {
-        compatibility: {
-          relation_authority: "work_relations(kind=depends_on)",
-          status_authority: "issues"
+    expect(issues.body.map((item) => item.id)).toEqual([issueId]);
+    expect(await api.get(`/api/issues/${issueId}`)).toMatchObject({
+      status: 200,
+      body: {
+        dependency: {
+          compatibility: { relation_authority: "work_relations(kind=depends_on)", status_authority: "issues" },
+          direct_dependencies: [{ issue_id: blockerId, status: "failed" }],
+          ready: false,
+          reason: "failed_dependency",
+          root_blockers: [{ issue_id: blockerId, status: "failed" }]
         },
-        direct_dependencies: [{ issue_id: blockerId, status: "failed" }],
-        ready: false,
-        reason: "failed_dependency",
-        root_blockers: [{ issue_id: blockerId, status: "failed" }]
-      },
-      id: issueId,
-      project_id: "demo",
-      title: "Read API",
-      source_session_id: "thread-a",
-      comment_count: 0
+        id: issueId,
+        project_id: "demo",
+        title: "Read API",
+        source_session_id: "thread-a",
+        comment_count: 0
+      }
     });
   });
 
   test("creates and updates projects with backend-compatible responses", async () => {
-    const database = await openFixtureDatabase();
-    const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-project-cwd-"));
-    tempRoots.push(cwd);
-    const router = createDefaultRouter({ database });
+    const { api } = await readApi({ project: false });
+    const cwd = await tempDir();
 
-    const created = await router.handle(new Request(`${BASE_URL}/api/projects`, {
-      method: "POST",
-      body: JSON.stringify({ id: "demo", cwd, default_skill_policy: { allowed: ["xuanwu"] } }),
-      headers: { "content-type": "application/json" }
-    }));
-    expect(created.status).toBe(201);
-    expect(await created.json()).toMatchObject({
-      id: "demo",
-      name: basename(cwd),
-      cwd,
-      provider: "codex",
-      default_skill_policy: "{\"allowed\":[\"xuanwu\"]}",
-      auto_run: 1,
-      pi_managed: 1,
-      model: "codex-default",
-      approval_policy: "never",
-      sandbox: "danger-full-access",
-      execution_policy: {
-        contract: "xw.execution-policy.v1",
-        access: "unrestricted-host",
-        approval: "unattended"
-      },
-      sort_order: 1,
-      loop_status: "stopped",
-      provider_capabilities: ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"]
+    expect(await api.post("/api/projects", { id: "demo", cwd, default_skill_policy: { allowed: ["xuanwu"] } })).toMatchObject({
+      status: 201,
+      body: {
+        id: "demo",
+        name: basename(cwd),
+        cwd,
+        provider: "codex",
+        default_skill_policy: "{\"allowed\":[\"xuanwu\"]}",
+        auto_run: 1,
+        pi_managed: 1,
+        model: "codex-default",
+        approval_policy: "never",
+        sandbox: "danger-full-access",
+        execution_policy: { contract: "xw.execution-policy.v1", access: "unrestricted-host", approval: "unattended" },
+        sort_order: 1,
+        loop_status: "stopped",
+        provider_capabilities: CAPABILITIES
+      }
     });
-
-    const patched = await router.handle(new Request(`${BASE_URL}/api/projects/demo`, {
-      method: "PATCH",
-      body: JSON.stringify({ default_service_tier: "priority", default_skill_policy: { recommended: ["verification-before-completion"] }, name: "Renamed", provider: "CODEX" }),
-      headers: { "content-type": "application/json" }
-    }));
-    expect(patched.status).toBe(200);
-    expect(await patched.json()).toMatchObject({
+    expect(await api.patch("/api/projects/demo", {
       default_service_tier: "priority",
-      default_skill_policy: "{\"recommended\":[\"verification-before-completion\"]}",
-      id: "demo",
+      default_skill_policy: { recommended: ["verification-before-completion"] },
       name: "Renamed",
-      provider: "codex",
-      auto_run: 1,
-      pi_managed: 1
+      provider: "CODEX"
+    })).toMatchObject({
+      status: 200,
+      body: {
+        default_service_tier: "priority",
+        default_skill_policy: "{\"recommended\":[\"verification-before-completion\"]}",
+        id: "demo",
+        name: "Renamed",
+        provider: "codex",
+        auto_run: 1,
+        pi_managed: 1
+      }
     });
-
-    const cannotDisableTakeover = await router.handle(new Request(`${BASE_URL}/api/projects/demo`, {
-      method: "PATCH",
-      body: JSON.stringify({ auto_run: 0 }),
-      headers: { "content-type": "application/json" }
-    }));
-    expect(cannotDisableTakeover.status).toBe(200);
-    expect(await cannotDisableTakeover.json()).toMatchObject({ auto_run: 1, pi_managed: 1 });
-
-    const duplicateCWD = await router.handle(new Request(`${BASE_URL}/api/projects`, {
-      method: "POST",
-      body: JSON.stringify({ id: "demo", name: "Manual", cwd, auto_run: 1, model: "gpt-5.5", sandbox: "danger-full-access" }),
-      headers: { "content-type": "application/json" }
-    }));
-    expect(duplicateCWD.status).toBe(201);
-    expect(await duplicateCWD.json()).toMatchObject({
-      id: "demo",
-      name: "Manual",
-      cwd,
-      auto_run: 1,
-      pi_managed: 1,
-      model: "gpt-5.5",
-      sandbox: "danger-full-access",
-      sort_order: 1
+    expect(await api.patch("/api/projects/demo", { auto_run: 0 })).toMatchObject({ status: 200, body: { auto_run: 1, pi_managed: 1 } });
+    expect(await api.post("/api/projects", {
+      id: "demo", name: "Manual", cwd, auto_run: 1, model: "gpt-5.5", sandbox: "danger-full-access"
+    })).toMatchObject({
+      status: 201,
+      body: { id: "demo", name: "Manual", cwd, auto_run: 1, pi_managed: 1, model: "gpt-5.5", sandbox: "danger-full-access", sort_order: 1 }
     });
-
-    const projects = await router.handle(new Request(`${BASE_URL}/api/projects`));
-    expect((await projects.json() as Array<Record<string, unknown>>).map((item) => item.id)).toEqual(["demo"]);
+    expect((await api.get<Array<Record<string, unknown>>>("/api/projects")).body.map((item) => item.id)).toEqual(["demo"]);
   });
 
   test("matches legacy API failure paths for project writes", async () => {
-    const database = await openFixtureDatabase();
-    const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-project-cwd-"));
-    tempRoots.push(cwd);
-    const router = createDefaultRouter({ database });
-    const withoutID = await router.handle(new Request(`${BASE_URL}/api/projects`, {
-      method: "POST", body: JSON.stringify({ cwd })
-    }));
-    const invalidCWD = await router.handle(new Request(`${BASE_URL}/api/projects`, {
-      method: "POST", body: JSON.stringify({ id: "bad", cwd: join(cwd, "missing") })
-    }));
-    const invalidProfile = await router.handle(new Request(`${BASE_URL}/api/projects`, {
-      method: "POST",
-      body: JSON.stringify({ id: "bad-profile", cwd, default_agent_profile_id: "missing-profile" })
-    }));
-    await router.handle(new Request(`${BASE_URL}/api/projects`, {
-      method: "POST", body: JSON.stringify({ id: "demo", cwd })
-    }));
-    const duplicateCWD = await mkdtemp(join(tmpdir(), "xuanwu-bun-project-cwd-"));
-    tempRoots.push(duplicateCWD);
-    const duplicateID = await router.handle(new Request(`${BASE_URL}/api/projects`, {
-      method: "POST", body: JSON.stringify({ id: "demo", cwd: duplicateCWD })
-    }));
-    const missing = await router.handle(new Request(`${BASE_URL}/api/projects/missing`, {
-      method: "PATCH", body: JSON.stringify({ name: "Missing" })
-    }));
+    const { api } = await readApi({ project: false });
+    const cwd = await tempDir();
+    const withoutID = await api.post("/api/projects", { cwd });
+    const invalidCWD = await api.post("/api/projects", { id: "bad", cwd: join(cwd, "missing") });
+    const invalidProfile = await api.post("/api/projects", { id: "bad-profile", cwd, default_agent_profile_id: "missing-profile" });
+    await api.post("/api/projects", { id: "demo", cwd });
+    const duplicateID = await api.post<{ message: string }>("/api/projects", { id: "demo", cwd: await tempDir() });
 
-    expect(withoutID.status).toBe(400);
-    expect(await withoutID.json()).toEqual({ message: "project id 不能为空" });
-    expect(invalidCWD.status).toBe(400);
-    expect(await invalidCWD.json()).toEqual({ message: "cwd 不存在" });
-    expect(invalidProfile.status).toBe(400);
-    expect(await invalidProfile.json()).toEqual({ message: "Agent Profile \"missing-profile\" was not found" });
+    expect(withoutID).toMatchObject({ status: 400, body: { message: "project id 不能为空" } });
+    expect(invalidCWD).toMatchObject({ status: 400, body: { message: "cwd 不存在" } });
+    expect(invalidProfile).toMatchObject({ status: 400, body: { message: "Agent Profile \"missing-profile\" was not found" } });
     expect(duplicateID.status).toBe(400);
-    expect((await duplicateID.json() as { message: string }).message).toContain("UNIQUE constraint failed: projects.id");
-    expect(missing.status).toBe(404);
-    expect(await missing.json()).toEqual({ message: "资源不存在" });
+    expect(duplicateID.body.message).toContain("UNIQUE constraint failed: projects.id");
+    expect(await api.patch("/api/projects/missing", { name: "Missing" })).toEqual(expect.objectContaining({ status: 404, body: NOT_FOUND }));
   });
 
   test("provides remaining auxiliary endpoints and removes Issue template routes", async () => {
-    const database = await openFixtureDatabase();
-    const router = createDefaultRouter({ database });
-    const templates = await router.handle(new Request(`${BASE_URL}/api/issue-templates`));
-    const cron = await router.handle(new Request(`${BASE_URL}/api/cron-tasks`));
-    const profiles = await router.handle(new Request(`${BASE_URL}/api/agent-profiles`));
+    const { api } = await readApi({ project: false });
+    const cron = await api.get("/api/cron-tasks");
+    const profiles = await api.get<Array<{ id: string; provider: string }>>("/api/agent-profiles");
 
-    expect(templates.status).toBe(404);
+    expect((await api.get("/api/issue-templates")).status).toBe(404);
     expect(cron.status).toBe(308);
     expect(cron.headers.get("location")).toBe("/api/automations");
-    expect(await cron.json()).toMatchObject({
-      contract: "xw.automation-target-primary.v1",
-      deprecated: true,
-      location: "/api/automations"
-    });
+    expect(cron.body).toMatchObject({ contract: "xw.automation-target-primary.v1", deprecated: true, location: "/api/automations" });
     expect(profiles.status).toBe(200);
-    expect((await profiles.json() as Array<{ id: string; provider: string }>).map(({ id, provider }) => ({ id, provider }))).toEqual([
+    expect(profiles.body.map(({ id, provider }) => ({ id, provider }))).toEqual([
       { id: "xuanwu-provider-claude", provider: "claude" },
       { id: "xuanwu-provider-codex", provider: "codex" },
       { id: "xuanwu-provider-pi", provider: "pi-coding-agent" },
@@ -235,173 +138,92 @@ describe("Bun projects/issues read API", () => {
   });
 
   test("persists and reads back Qoder project provider, profile, and model without Codex defaults", async () => {
-    const database = await openFixtureDatabase();
-    const cwd = await mkdtemp(join(tmpdir(), "xuanwu-bun-qoder-project-cwd-"));
-    tempRoots.push(cwd);
-    const router = createDefaultRouter({ database });
-    const created = await router.handle(new Request(`${BASE_URL}/api/projects`, {
-      method: "POST",
-      body: JSON.stringify({
+    const { api } = await readApi({ project: false });
+    const cwd = await tempDir();
+    const created = await api.post("/api/projects", {
+      id: "qoder-demo", cwd, provider: "qoder", model: "performance", default_agent_profile_id: "xuanwu-provider-qoder"
+    });
+
+    expect(created).toMatchObject({
+      status: 201,
+      body: {
         id: "qoder-demo",
-        cwd,
         provider: "qoder",
         model: "performance",
-        default_agent_profile_id: "xuanwu-provider-qoder"
-      }),
-      headers: { "content-type": "application/json" }
-    }));
-    const read = await router.handle(new Request(`${BASE_URL}/api/projects/qoder-demo`));
-
-    expect(created.status).toBe(201);
-    expect(await created.json()).toMatchObject({
-      id: "qoder-demo",
-      provider: "qoder",
-      model: "performance",
-      default_agent_profile_id: "xuanwu-provider-qoder",
-      default_agent_profile: { id: "xuanwu-provider-qoder", provider: "qoder", model: "" }
+        default_agent_profile_id: "xuanwu-provider-qoder",
+        default_agent_profile: { id: "xuanwu-provider-qoder", provider: "qoder", model: "" }
+      }
     });
-    expect(await read.json()).toMatchObject({
-      provider: "qoder",
-      model: "performance",
-      default_agent_profile_id: "xuanwu-provider-qoder"
+    expect((await api.get("/api/projects/qoder-demo")).body).toMatchObject({
+      provider: "qoder", model: "performance", default_agent_profile_id: "xuanwu-provider-qoder"
     });
-    expect(JSON.stringify(await (await router.handle(new Request(`${BASE_URL}/api/agent-profiles`))).json()))
-      .not.toContain('"provider":"qoder","model":"codex-default"');
+    expect(JSON.stringify((await api.get("/api/agent-profiles")).body)).not.toContain('"provider":"qoder","model":"codex-default"');
   });
 
   test("matches legacy API failure status for invalid and missing issue ids", async () => {
-    const database = await openFixtureDatabase();
-    const router = createDefaultRouter({ database });
-    const invalid = await router.handle(new Request(`${BASE_URL}/api/issues/not-a-number`));
-    const missing = await router.handle(new Request(`${BASE_URL}/api/issues/404`));
-    const unsupported = await router.handle(new Request(`${BASE_URL}/api/issues`, { method: "DELETE" }));
+    const { api } = await readApi({ project: false });
 
-    expect(invalid.status).toBe(400);
-    expect(await invalid.json()).toEqual({ message: "issue id 不合法" });
-    expect(missing.status).toBe(404);
-    expect(await missing.json()).toEqual({ message: "资源不存在" });
-    expect(unsupported.status).toBe(405);
-    expect(await unsupported.json()).toEqual({ message: "method not allowed" });
+    expect(await api.get("/api/issues/not-a-number")).toMatchObject({ status: 400, body: { message: "issue id 不合法" } });
+    expect(await api.get("/api/issues/404")).toMatchObject({ status: 404, body: NOT_FOUND });
+    expect(await api.delete("/api/issues")).toMatchObject({ status: 405, body: { message: "method not allowed" } });
   });
 
   test("deletes non-running issues and cascades issue history", async () => {
-    const database = await openFixtureDatabase();
-    try {
-      insertProject(database, { id: "demo", name: "Demo", sortOrder: 1 });
-      const issueId = insertIssue(database, {
-        projectId: "demo",
-        title: "Delete me",
-        status: "cancelled",
-        sourceSessionId: ""
-      });
-      database.sqlite.run(
-        `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
-        [issueId, "issue.comment", '{"body":"old"}', "2026-01-01T00:00:00Z"]
-      );
-      database.sqlite.run(
-        `insert into issue_runs (id, issue_id, attempt, status, started_at, ended_at)
-         values (?, ?, ?, ?, ?, ?)`,
-        [`issue-${issueId}-attempt-1`, issueId, 1, "cancelled", "2026-01-01T00:00:00Z", "2026-01-01T00:01:00Z"]
-      );
-      const router = createDefaultRouter({ database });
+    const { database, api } = await readApi();
+    const issueId = addIssue(database, "Delete me", "cancelled");
+    insertRow(database, "issue_events", { issue_id: issueId, type: "issue.comment", payload: '{"body":"old"}', created_at: FIXTURE_TIME });
+    insertRow(database, "issue_runs", {
+      id: `issue-${issueId}-attempt-1`, issue_id: issueId, attempt: 1, status: "cancelled", started_at: FIXTURE_TIME, ended_at: "2026-01-01T00:01:00Z"
+    });
 
-      const deleted = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`, { method: "DELETE" }));
-      const readBack = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`));
-      const rows = database.sqlite.query<{ count: number }, [number]>(
-        `select count(*) as count from issue_events where issue_id=?
-         union all
-         select count(*) as count from issue_runs where issue_id=?`
-      ).all(issueId, issueId).map(row => row.count);
-
-      expect(deleted.status).toBe(204);
-      expect(readBack.status).toBe(404);
-      expect(rows).toEqual([0, 0]);
-    } finally {
-      database.close();
-    }
+    expect((await api.delete(`/api/issues/${issueId}`)).status).toBe(204);
+    expect((await api.get(`/api/issues/${issueId}`)).status).toBe(404);
+    expect(database.sqlite.query<{ count: number }, [number, number]>(
+      "select count(*) as count from issue_events where issue_id=? union all select count(*) as count from issue_runs where issue_id=?"
+    ).all(issueId, issueId).map((row) => row.count)).toEqual([0, 0]);
   });
 
   test("rejects deleting in-progress issues", async () => {
-    const database = await openFixtureDatabase();
-    insertProject(database, { id: "demo", name: "Demo", sortOrder: 1 });
-    const issueId = insertIssue(database, {
-      projectId: "demo",
-      title: "Running",
-      status: "in_progress",
-      sourceSessionId: ""
-    });
-    const router = createDefaultRouter({ database });
+    const { database, api } = await readApi();
+    const issueId = addIssue(database, "Running", "in_progress");
 
-    const deleted = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`, { method: "DELETE" }));
-    const readBack = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`));
-
-    expect(deleted.status).toBe(400);
-    expect(await deleted.json()).toEqual({ message: "运行中的 issue 不能删除，请先取消执行" });
-    expect(readBack.status).toBe(200);
+    expect(await api.delete(`/api/issues/${issueId}`)).toMatchObject({ status: 400, body: RUNNING_DELETE });
+    expect((await api.get(`/api/issues/${issueId}`)).status).toBe(200);
   });
 
   test("rejects deleting issues with an open run even when issue status drifted", async () => {
-    const database = await openFixtureDatabase();
-    try {
-      insertProject(database, { id: "demo", name: "Demo", sortOrder: 1 });
-      const issueId = insertIssue(database, {
-        projectId: "demo",
-        title: "Open run",
-        status: "todo",
-        sourceSessionId: ""
-      });
-      database.sqlite.run(
-        `insert into issue_runs (id, issue_id, attempt, status, started_at, ended_at)
-         values (?, ?, ?, ?, ?, '')`,
-        [`issue-${issueId}-attempt-1`, issueId, 1, "in_progress", "2026-01-01T00:00:00Z"]
-      );
-      const router = createDefaultRouter({ database });
+    const { database, api } = await readApi();
+    const issueId = addIssue(database, "Open run", "todo");
+    insertRow(database, "issue_runs", {
+      id: `issue-${issueId}-attempt-1`, issue_id: issueId, attempt: 1, status: "in_progress", started_at: FIXTURE_TIME, ended_at: ""
+    });
 
-      const deleted = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`, { method: "DELETE" }));
-      const readBack = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`));
-
-      expect(deleted.status).toBe(400);
-      expect(await deleted.json()).toEqual({ message: "运行中的 issue 不能删除，请先取消执行" });
-      expect(readBack.status).toBe(200);
-    } finally {
-      database.close();
-    }
+    expect(await api.delete(`/api/issues/${issueId}`)).toMatchObject({ status: 400, body: RUNNING_DELETE });
+    expect((await api.get(`/api/issues/${issueId}`)).status).toBe(200);
   });
 
   test("creates issues with default triage status and persists creation history", async () => {
-    const database = await openFixtureDatabase();
-    insertProject(database, { id: "demo", name: "Demo", sortOrder: 1 });
+    const { database, api } = await readApi();
     createAgentProfile(database, { id: "qoder-pro", name: "Qoder Pro", provider: "qoder", model: "performance" });
-    const router = createDefaultRouter({ database });
 
-    const created = await router.handle(new Request(`${BASE_URL}/api/issues`, {
-      method: "POST",
-      body: JSON.stringify({
-        project_id: "demo",
-        title: "Create API",
-        description: "Issue body",
-        required_mcp_capabilities: ["docs:resource:runbook"],
-        recommended_mcp_capabilities: ["docs:tool:search"],
-        required_skill_intents: ["xuanwu"],
-        recommended_skill_intents: ["verification-before-completion"],
-        priority: 4,
-        agent_profile_id: "Qoder Pro!",
-        source_session_id: "codex:thread-source",
-        source_turn_id: "turn-source",
-        source_excerpt: "讨论摘录",
-        workflow_snapshot_json: '{"steps":[]}'
-      }),
-      headers: { "content-type": "application/json" }
-    }));
-    const createdIssue = await created.json() as Record<string, unknown>;
-    const readBack = await router.handle(new Request(`${BASE_URL}/api/issues/${createdIssue.id}`));
-    const list = await router.handle(new Request(`${BASE_URL}/api/issues?projectId=demo&status=triage`));
-    const event = database.sqlite.query<{ type: string; payload: string }, []>(
-      "select type, payload from issue_events order by id asc"
-    ).get();
+    const created = await api.post<Record<string, unknown>>("/api/issues", {
+      project_id: "demo",
+      title: "Create API",
+      description: "Issue body",
+      required_mcp_capabilities: ["docs:resource:runbook"],
+      recommended_mcp_capabilities: ["docs:tool:search"],
+      required_skill_intents: ["xuanwu"],
+      recommended_skill_intents: ["verification-before-completion"],
+      priority: 4,
+      agent_profile_id: "Qoder Pro!",
+      source_session_id: "codex:thread-source",
+      source_turn_id: "turn-source",
+      source_excerpt: "讨论摘录",
+      workflow_snapshot_json: '{"steps":[]}'
+    });
 
     expect(created.status).toBe(201);
-    expect(createdIssue).toMatchObject({
+    expect(created.body).toMatchObject({
       project_id: "demo",
       title: "Create API",
       description: "Issue body",
@@ -417,22 +239,19 @@ describe("Bun projects/issues read API", () => {
       recommended_skill_intents: "[\"verification-before-completion\"]",
       workflow_snapshot_json: '{"steps":[]}'
     });
-    expect(await readBack.json()).toMatchObject(createdIssue);
-    expect((await list.json() as Array<Record<string, unknown>>).map((item) => item.id)).toEqual([createdIssue.id]);
-    expect(event).toEqual({ type: "issue.created", payload: "" });
-
-    const invalidProfile = await router.handle(new Request(`${BASE_URL}/api/issues`, {
-      method: "POST",
-      body: JSON.stringify({ project_id: "demo", title: "Bad profile", agent_profile_id: "missing-profile" }),
-      headers: { "content-type": "application/json" }
-    }));
-    expect(invalidProfile.status).toBe(400);
-    expect(await invalidProfile.json()).toEqual({ message: "Agent Profile \"missing-profile\" was not found" });
+    expect((await api.get(`/api/issues/${created.body.id}`)).body).toMatchObject(created.body);
+    expect((await api.get<Array<Record<string, unknown>>>("/api/issues?projectId=demo&status=triage")).body.map((item) => item.id))
+      .toEqual([created.body.id]);
+    expect(database.sqlite.query("select type, payload from issue_events order by id asc").get()).toEqual({ type: "issue.created", payload: "" });
+    expect(await api.post("/api/issues", { project_id: "demo", title: "Bad profile", agent_profile_id: "missing-profile" })).toMatchObject({
+      status: 400,
+      body: { message: "Agent Profile \"missing-profile\" was not found" }
+    });
   });
 
   test("reads issue MCP requirements with unregistered capability diagnostics", async () => {
     const previousRegistry = Bun.env.XUANWU_MCP_REGISTRY_JSON;
-    const database = await openFixtureDatabase();
+    const { database, api } = await readApi();
     Bun.env.XUANWU_MCP_REGISTRY_JSON = JSON.stringify({ servers: [{
       id: "docs",
       readiness: "ready",
@@ -440,102 +259,50 @@ describe("Bun projects/issues read API", () => {
       status: "enabled"
     }] });
     try {
-      insertProject(database, { id: "demo", name: "Demo", sortOrder: 1 });
-      const issueId = insertIssue(database, {
-        projectId: "demo",
-        sourceSessionId: "",
-        status: "triage",
-        title: "MCP requirements"
+      const issueId = addIssue(database, "MCP requirements", "triage", {
+        required_mcp_capabilities_json: JSON.stringify(["docs:resource:runbook", "ghost:resource:missing"]),
+        recommended_mcp_capabilities_json: JSON.stringify(["docs:tool:missing"])
       });
-      database.sqlite.run(
-        `update issues set required_mcp_capabilities_json=?, recommended_mcp_capabilities_json=? where id=?`,
-        [JSON.stringify(["docs:resource:runbook", "ghost:resource:missing"]), JSON.stringify(["docs:tool:missing"]), issueId]
-      );
 
-      const router = createDefaultRouter({ database });
-      const response = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`));
-      const body = await response.json() as Record<string, unknown>;
-
-      expect(response.status).toBe(200);
-      expect(body).toMatchObject({
-        required_mcp_capabilities: "[\"docs:resource:runbook\",\"ghost:resource:missing\"]",
-        recommended_mcp_capabilities: "[\"docs:tool:missing\"]",
-        mcp_requirements: {
-          required: ["docs:resource:runbook", "ghost:resource:missing"],
-          recommended: ["docs:tool:missing"],
-          diagnostics: expect.arrayContaining([
-            expect.objectContaining({
-              capability_id: "ghost:resource:missing",
-              code: "mcp_capability_unregistered",
-              scope: "issue.required"
-            }),
-            expect.objectContaining({
-              capability_id: "docs:tool:missing",
-              code: "mcp_capability_unregistered",
-              scope: "issue.recommended"
-            })
-          ])
+      expect(await api.get(`/api/issues/${issueId}`)).toMatchObject({
+        status: 200,
+        body: {
+          required_mcp_capabilities: "[\"docs:resource:runbook\",\"ghost:resource:missing\"]",
+          recommended_mcp_capabilities: "[\"docs:tool:missing\"]",
+          mcp_requirements: {
+            required: ["docs:resource:runbook", "ghost:resource:missing"],
+            recommended: ["docs:tool:missing"],
+            diagnostics: expect.arrayContaining([
+              expect.objectContaining({ capability_id: "ghost:resource:missing", code: "mcp_capability_unregistered", scope: "issue.required" }),
+              expect.objectContaining({ capability_id: "docs:tool:missing", code: "mcp_capability_unregistered", scope: "issue.recommended" })
+            ])
+          }
         }
       });
     } finally {
       if (previousRegistry === undefined) delete Bun.env.XUANWU_MCP_REGISTRY_JSON;
       else Bun.env.XUANWU_MCP_REGISTRY_JSON = previousRegistry;
-      database.close();
     }
   });
 
   test("auto-run todo issue create immediately claims and starts provider session", async () => {
-    const database = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(database, { id: "demo", name: "Demo", sortOrder: 1, autoRun: 1, provider: provider.id });
-      const router = createDefaultRouter({ database, providers: { [provider.id]: provider } });
+    const { database, api, provider } = await autoRunApi();
 
-      const created = await router.handle(new Request(`${BASE_URL}/api/issues`, {
-        method: "POST",
-        body: JSON.stringify({ project_id: "demo", title: "Auto todo", status: "todo" }),
-        headers: { "content-type": "application/json" }
-      }));
+    const created = await api.post<Record<string, unknown>>("/api/issues", { project_id: "demo", title: "Auto todo", status: "todo" });
 
-      expect(created.status).toBe(201);
-      const body = await created.json() as Record<string, unknown>;
-      await waitForProviderStart(provider);
-      const row = database.sqlite.query<Record<string, unknown>, [number]>(
-        `select i.status, r.provider_session_id, r.provider_turn_id
-         from issues i join issue_runs r on r.issue_id=i.id where i.id=?`
-      ).get(Number(body.id));
-      expect(row).toMatchObject({
-        status: "in_progress",
-        provider_session_id: `fake-session-${body.id}`,
-        provider_turn_id: `fake-turn-${body.id}`
-      });
-    } finally {
-      database.close();
-    }
+    expect(created.status).toBe(201);
+    await waitForProviderStart(provider);
+    expectClaimed(database, Number(created.body.id));
   });
 
   test("auto-run issue create sends the canonical body plus execution ownership contract", async () => {
-    const database = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    insertProject(database, { id: "demo", name: "Demo", sortOrder: 1, autoRun: 1, provider: provider.id });
-    const router = createDefaultRouter({ database, providers: { [provider.id]: provider } });
+    const { api, provider } = await autoRunApi();
 
-    const created = await router.handle(new Request(`${BASE_URL}/api/issues`, {
-      method: "POST",
-      body: JSON.stringify({
-        project_id: "demo",
-        title: "直接执行",
-        description: "直接发给 runner",
-        priority: 2,
-        status: "todo"
-      }),
-      headers: { "content-type": "application/json" }
-    }));
+    const created = await api.post("/api/issues", { project_id: "demo", title: "直接执行", description: "直接发给 runner", priority: 2, status: "todo" });
 
     expect(created.status).toBe(201);
-    const body = await created.json() as Record<string, unknown>;
-    expect(body).not.toHaveProperty("template_id");
-    expect(body).not.toHaveProperty("prompt_template");
+    expect(created.body).not.toHaveProperty("template_id");
+    expect(created.body).not.toHaveProperty("prompt_template");
     await waitForProviderStart(provider);
     const prompt = provider.inputs[0]?.prompt ?? "";
     expect(prompt).toContain("# 直接执行\n\n直接发给 runner");
@@ -544,199 +311,109 @@ describe("Bun projects/issues read API", () => {
   });
 
   test("auto-run enqueue immediately claims and starts provider session", async () => {
-    const database = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(database, { id: "demo", name: "Demo", sortOrder: 1, autoRun: 1, provider: provider.id });
-      const issueId = insertIssue(database, { projectId: "demo", title: "Queued", status: "triage", sourceSessionId: "" });
-      const router = createDefaultRouter({ database, providers: { [provider.id]: provider } });
+    const { database, api, provider } = await autoRunApi();
+    const issueId = addIssue(database, "Queued", "triage");
 
-      const enqueued = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}/enqueue`, { method: "POST" }));
-
-      expect(enqueued.status).toBe(200);
-      await waitForProviderStart(provider);
-      const row = database.sqlite.query<Record<string, unknown>, [number]>(
-        `select i.status, r.provider_session_id, r.provider_turn_id
-         from issues i join issue_runs r on r.issue_id=i.id where i.id=?`
-      ).get(issueId);
-      expect(row).toMatchObject({
-        status: "in_progress",
-        provider_session_id: `fake-session-${issueId}`,
-        provider_turn_id: `fake-turn-${issueId}`
-      });
-    } finally {
-      database.close();
-    }
+    expect((await api.raw(`/api/issues/${issueId}/enqueue`, { method: "POST" })).status).toBe(200);
+    await waitForProviderStart(provider);
+    expectClaimed(database, issueId);
   });
 
   test("issue actions can set service tier overrides used by the next auto-run", async () => {
-    const database = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    insertProject(database, { id: "demo", name: "Demo", sortOrder: 1, autoRun: 1, provider: provider.id });
-    const issueId = insertIssue(database, { projectId: "demo", title: "Queued fast", status: "triage", sourceSessionId: "" });
-    const router = createDefaultRouter({ database, providers: { [provider.id]: provider } });
+    const { database, api, provider } = await autoRunApi();
+    const issueId = addIssue(database, "Queued fast", "triage");
 
-    const enqueued = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}/enqueue`, {
-      method: "POST",
-      body: JSON.stringify({ service_tier: "priority" }),
-      headers: { "content-type": "application/json" }
-    }));
-
-    expect(enqueued.status).toBe(200);
-    expect(await enqueued.json()).toMatchObject({ id: issueId, service_tier: "priority", status: "todo" });
-    await waitForProviderStart(provider);
-    expect(provider.inputs[0]).toMatchObject({
-      issueId,
-      serviceTier: "priority",
-      serviceTierSource: "issue"
+    expect(await api.post(`/api/issues/${issueId}/enqueue`, { service_tier: "priority" })).toMatchObject({
+      status: 200,
+      body: { id: issueId, service_tier: "priority", status: "todo" }
     });
+    await waitForProviderStart(provider);
+    expect(provider.inputs[0]).toMatchObject({ issueId, serviceTier: "priority", serviceTierSource: "issue" });
   });
 
   test("auto-run patch to todo immediately claims and starts provider session", async () => {
-    const database = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(database, { id: "demo", name: "Demo", sortOrder: 1, autoRun: 1, provider: provider.id });
-      const issueId = insertIssue(database, { projectId: "demo", title: "Patch queued", status: "triage", sourceSessionId: "" });
-      const router = createDefaultRouter({ database, providers: { [provider.id]: provider } });
+    const { database, api, provider } = await autoRunApi();
+    const issueId = addIssue(database, "Patch queued", "triage");
 
-      const patched = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "todo" }),
-        headers: { "content-type": "application/json" }
-      }));
-
-      expect(patched.status).toBe(200);
-      await waitForProviderStart(provider);
-      const row = database.sqlite.query<Record<string, unknown>, [number]>(
-        `select i.status, r.provider_session_id, r.provider_turn_id
-         from issues i join issue_runs r on r.issue_id=i.id where i.id=?`
-      ).get(issueId);
-      expect(row).toMatchObject({
-        status: "in_progress",
-        provider_session_id: `fake-session-${issueId}`,
-        provider_turn_id: `fake-turn-${issueId}`
-      });
-    } finally {
-      database.close();
-    }
+    expect((await api.patch(`/api/issues/${issueId}`, { status: "todo" })).status).toBe(200);
+    await waitForProviderStart(provider);
+    expectClaimed(database, issueId);
   });
 
   test("auto-run patch to in_progress queues and starts provider session", async () => {
-    const database = await openFixtureDatabase();
-    const provider = new FakeExecutionProvider();
-    try {
-      insertProject(database, { id: "demo", name: "Demo", sortOrder: 1, autoRun: 1, provider: provider.id });
-      const issueId = insertIssue(database, { projectId: "demo", title: "Start requested", status: "todo", sourceSessionId: "" });
-      const router = createDefaultRouter({ database, providers: { [provider.id]: provider } });
+    const { database, api, provider } = await autoRunApi();
+    const issueId = addIssue(database, "Start requested", "todo");
 
-      const patched = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "in_progress" }),
-        headers: { "content-type": "application/json" }
-      }));
-
-      expect(patched.status).toBe(200);
-      expect(await patched.json()).toMatchObject({ id: issueId, status: "todo" });
-      await waitForProviderStart(provider);
-      const row = database.sqlite.query<Record<string, unknown>, [number]>(
-        `select i.status, i.attempt_count, r.provider_session_id, r.provider_turn_id
-         from issues i join issue_runs r on r.issue_id=i.id where i.id=?`
-      ).get(issueId);
-      expect(row).toMatchObject({
-        status: "in_progress",
-        attempt_count: 1,
-        provider_session_id: `fake-session-${issueId}`,
-        provider_turn_id: `fake-turn-${issueId}`
-      });
-    } finally {
-      database.close();
-    }
+    expect(await api.patch(`/api/issues/${issueId}`, { status: "in_progress" })).toMatchObject({ status: 200, body: { id: issueId, status: "todo" } });
+    await waitForProviderStart(provider);
+    expectClaimed(database, issueId, { attempt_count: 1 });
   });
 
   test("returns stable errors for invalid issue create payloads", async () => {
-    const database = await openFixtureDatabase();
-    insertProject(database, { id: "demo", name: "Demo", sortOrder: 1 });
-    const router = createDefaultRouter({ database });
-    const missingProject = await router.handle(new Request(`${BASE_URL}/api/issues`, {
-      method: "POST",
-      body: JSON.stringify({ project_id: "missing", title: "bad" })
-    }));
-    const invalidStatus = await router.handle(new Request(`${BASE_URL}/api/issues`, {
-      method: "POST",
-      body: JSON.stringify({ project_id: "demo", title: "bad", status: "bogus" })
-    }));
-    const invalidSkill = await router.handle(new Request(`${BASE_URL}/api/issues`, {
-      method: "POST",
-      body: JSON.stringify({ project_id: "demo", required_skill_intents: ["bad skill"], title: "bad" })
-    }));
-    const invalidMcp = await router.handle(new Request(`${BASE_URL}/api/issues`, {
-      method: "POST",
-      body: JSON.stringify({ project_id: "demo", required_mcp_capabilities: ["bad mcp"], title: "bad" })
-    }));
-    const invalidLogMode = await router.handle(new Request(`${BASE_URL}/api/issues`, {
-      method: "POST",
-      body: JSON.stringify({ project_id: "demo", issue_log_mode: "verbose", title: "bad" })
-    }));
-
-    expect(missingProject.status).toBe(404);
-    expect(await missingProject.json()).toEqual({ message: "资源不存在" });
-    expect(invalidStatus.status).toBe(400);
-    expect(await invalidStatus.json()).toEqual({ message: "status 不合法" });
-    expect(invalidSkill.status).toBe(400);
-    expect(await invalidSkill.json()).toEqual({ message: "skill id 不合法: bad skill" });
-    expect(invalidMcp.status).toBe(400);
-    expect(await invalidMcp.json()).toEqual({ message: "MCP capability id 不合法: bad mcp" });
-    expect(invalidLogMode.status).toBe(400);
-    expect(await invalidLogMode.json()).toEqual({ message: "issue_log_mode 只支持 normal 或 debug" });
+    const { api } = await readApi();
+    for (const [body, status, message] of [
+      [{ project_id: "missing", title: "bad" }, 404, NOT_FOUND.message],
+      [{ project_id: "demo", title: "bad", status: "bogus" }, 400, "status 不合法"],
+      [{ project_id: "demo", required_skill_intents: ["bad skill"], title: "bad" }, 400, "skill id 不合法: bad skill"],
+      [{ project_id: "demo", required_mcp_capabilities: ["bad mcp"], title: "bad" }, 400, "MCP capability id 不合法: bad mcp"],
+      [{ project_id: "demo", issue_log_mode: "verbose", title: "bad" }, 400, "issue_log_mode 只支持 normal 或 debug"]
+    ] as const) {
+      expect(await api.post("/api/issues", body)).toMatchObject({ status, body: { message } });
+    }
   });
 });
 
-type ProjectFixture = { autoRun?: number; id: string; name: string; provider?: string; sortOrder: number };
-type IssueFixture = { projectId: string; sourceSessionId: string; status: string; title: string };
-
-function insertProject(db: RunnerDatabase, project: ProjectFixture): void {
-  db.sqlite.run(
-    `insert into projects (id, name, cwd, provider, auto_run, sort_order, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [project.id, project.name, `/tmp/${project.id}`, project.provider ?? "codex", project.autoRun ?? 0,
-      project.sortOrder, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
-  );
+/** A database (with project "demo" unless disabled) and an in-process client over the default router. */
+async function readApi(options: { autoRun?: boolean; project?: boolean; providers?: Record<string, ExecutorProvider> } = {}) {
+  const database = await openFixtureDatabase();
+  if (options.project !== false) addProject(database, "demo", options.autoRun ? { auto_run: 1, provider: FAKE } : {});
+  return { database, api: apiClient(createDefaultRouter({ database, ...(options.providers ? { providers: options.providers } : {}) })) };
 }
 
-function insertIssue(db: RunnerDatabase, issue: IssueFixture): number {
-  db.sqlite.run(
-    `insert into issues (project_id, title, status, source_session_id, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?)`,
-    [issue.projectId, issue.title, issue.status, issue.sourceSessionId, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
-  );
-  const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
-  if (!row) throw new Error("missing inserted issue id");
-  return row.id;
+async function autoRunApi() {
+  const provider = new FakeExecutionProvider();
+  return { ...(await readApi({ autoRun: true, providers: { [provider.id]: provider } })), provider };
+}
+
+function addProject(db: RunnerDatabase, id: string, values: Record<string, SQLQueryBindings> = {}): void {
+  insertProject(db, id, { name: id === "demo" ? "Demo" : id, provider: "codex", sort_order: 1, ...values });
+}
+
+function addIssue(db: RunnerDatabase, title: string, status: string, values: Record<string, SQLQueryBindings> = {}): number {
+  return insertIssue(db, { title, status, source_session_id: "", ...values });
 }
 
 function addDependency(db: RunnerDatabase, issueID: number, dependencyID: number): void {
-  for (const id of [issueID, dependencyID]) {
-    const work = getIssueAsWork(db, id);
-    if (!work) throw new Error(`missing issue ${id}`);
-    insertWorkRecord(db, work);
-  }
-  const relation: DependencyRelation = {
+  for (const id of [issueID, dependencyID]) insertWorkRecord(db, getIssueAsWork(db, id)!);
+  const key = `${issueID}:${dependencyID}`;
+  insertWorkRelationRecord(db, "demo", {
     actor: { id: "read-api-test", kind: "runner" },
-    audit_event_ref: `read-api-test:${issueID}:${dependencyID}`,
-    correlation_id: `read-api-test:${issueID}:${dependencyID}`,
+    audit_event_ref: `read-api-test:${key}`,
+    correlation_id: `read-api-test:${key}`,
     depends_on_work_id: issueIDToWorkID(dependencyID),
     kind: "depends_on",
-    occurred_at: "2026-01-01T00:00:00Z",
+    occurred_at: FIXTURE_TIME,
     reason: "read API dependency fixture",
-    relation_id: `read-api-dependency:${issueID}:${dependencyID}`,
+    relation_id: `read-api-dependency:${key}`,
     work_id: issueIDToWorkID(issueID)
-  };
-  insertWorkRelationRecord(db, "demo", relation);
+  });
 }
 
+function expectClaimed(db: RunnerDatabase, issueId: number, extra: Record<string, unknown> = {}): void {
+  expect(db.sqlite.query<Record<string, unknown>, [number]>(
+    "select i.status, i.attempt_count, r.provider_session_id, r.provider_turn_id from issues i join issue_runs r on r.issue_id=i.id where i.id=?"
+  ).get(issueId)).toMatchObject({
+    status: "in_progress",
+    provider_session_id: `fake-session-${issueId}`,
+    provider_turn_id: `fake-turn-${issueId}`,
+    ...extra
+  });
+}
+
+const FAKE = "fake-execution-only" as ExecutorProviderId;
+
 class FakeExecutionProvider implements ExecutorProvider {
-  readonly id = "fake-execution-only" as const;
+  readonly id = FAKE;
   readonly capabilities = ["issue_execution"] as const;
   readonly inputs: ProviderRunInput[] = [];
 
@@ -750,15 +427,6 @@ class FakeExecutionProvider implements ExecutorProvider {
 }
 
 async function waitForProviderStart(provider: FakeExecutionProvider): Promise<void> {
-  await waitFor(() => provider.inputs.length === 1);
-  await waitFor(() => !isProjectLoopActive("demo"));
-}
-
-async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (predicate()) return;
-    await Bun.sleep(10);
-  }
-  throw new Error("timed out waiting for condition");
+  await waitFor(() => provider.inputs.length === 1, "timed out waiting for condition");
+  await waitFor(() => !isProjectLoopActive("demo"), "timed out waiting for condition");
 }

@@ -94,36 +94,32 @@ describe("Work timeline projection", () => {
 
   test("benchmarks a 12000-event Work query on the indexed summary projection", async () => {
     const db = await fixtureDatabase();
-    try {
-      const issueID = seedIssue(db);
-      const insertMany = db.transaction(() => {
-        for (let index = 0; index < 12_000; index += 1) {
-          insertIssueEvent(db, issueID, "issue.log", {
-            raw_method: "item/agentMessage/delta",
-            text: `event-${index}`,
-            type: "agent_message_delta"
-          }, new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString());
-        }
-      });
-      insertMany.immediate();
-      projectPendingEventSummaries(db);
+    const issueID = seedIssue(db);
+    const insertMany = db.transaction(() => {
+      for (let index = 0; index < 12_000; index += 1) {
+        insertIssueEvent(db, issueID, "issue.log", {
+          raw_method: "item/agentMessage/delta",
+          text: `event-${index}`,
+          type: "agent_message_delta"
+        }, new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString());
+      }
+    });
+    insertMany.immediate();
+    projectPendingEventSummaries(db);
 
-      const startedAt = performance.now();
-      const result = queryWorkTimeline(db, issueIDToWorkID(issueID), { limit: 100 });
-      const elapsedMs = performance.now() - startedAt;
-      const plan = db.sqlite.query<{ detail: string }, [number]>(`
+    const startedAt = performance.now();
+    const result = queryWorkTimeline(db, issueIDToWorkID(issueID), { limit: 100 });
+    const elapsedMs = performance.now() - startedAt;
+    const plan = db.sqlite.query<{ detail: string }, [number]>(`
         explain query plan select source_event_id from event_summary_projection
         where source='issue_events' and issue_id=? order by source_event_id desc limit 101
       `).all(issueID).map((row) => row.detail).join("\n");
 
-      console.info(`[work-timeline benchmark] 12000 events first page: ${elapsedMs.toFixed(1)}ms`);
-      expect(result.items).toHaveLength(100);
-      expect(result.has_more).toBe(true);
-      expect(plan).toContain("idx_event_summary_projection_issue");
-      expect(elapsedMs).toBeLessThan(5_000);
-    } finally {
-      db.close();
-    }
+    console.info(`[work-timeline benchmark] 12000 events first page: ${elapsedMs.toFixed(1)}ms`);
+    expect(result.items).toHaveLength(100);
+    expect(result.has_more).toBe(true);
+    expect(plan).toContain("idx_event_summary_projection_issue");
+    expect(elapsedMs).toBeLessThan(5_000);
   }, 10_000);
 });
 

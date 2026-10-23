@@ -114,39 +114,35 @@ describe("PI recovery attempts", () => {
 
   test("counts issue, session, and project windows without using issues.attempt_count", async () => {
     const db = await openFixtureDatabase();
-    try {
-      db.sqlite.run(`insert into projects (id, name, cwd, created_at, updated_at)
+    db.sqlite.run(`insert into projects (id, name, cwd, created_at, updated_at)
         values ('demo', 'Demo', ?, '2026-06-18T00:00:00Z', '2026-06-18T00:00:00Z')`, [process.cwd()]);
-      db.sqlite.run(`insert into issues (id, project_id, title, status, attempt_count, created_at, updated_at)
+    db.sqlite.run(`insert into issues (id, project_id, title, status, attempt_count, created_at, updated_at)
         values (201, 'demo', 'Needs recovery', 'failed', 99, '2026-06-18T00:00:00Z', '2026-06-18T00:00:00Z')`);
-      recordPiRecoveryAttempt(db, attemptInput("attempt-old", "issue.retry", "progress", "2026-06-17T00:00:00Z"));
-      recordPiRecoveryAttempt(db, attemptInput("attempt-planned", "issue.retry", "planned", "2026-06-18T10:00:00Z"));
-      recordPiRecoveryAttempt(db, attemptInput("attempt-executing", "session.resume_followup", "executing", "2026-06-18T10:10:00Z"));
-      recordPiRecoveryAttempt(db, attemptInput("attempt-cancelled", "issue.retry", "cancelled", "2026-06-18T10:20:00Z"));
-      recordPiRecoveryAttempt(db, {
-        ...attemptInput("attempt-project", "issue.state_repair", "failed", "2026-06-18T10:30:00Z"),
-        issue_id: 202,
-        session_id: "session-other"
-      });
+    recordPiRecoveryAttempt(db, attemptInput("attempt-old", "issue.retry", "progress", "2026-06-17T00:00:00Z"));
+    recordPiRecoveryAttempt(db, attemptInput("attempt-planned", "issue.retry", "planned", "2026-06-18T10:00:00Z"));
+    recordPiRecoveryAttempt(db, attemptInput("attempt-executing", "session.resume_followup", "executing", "2026-06-18T10:10:00Z"));
+    recordPiRecoveryAttempt(db, attemptInput("attempt-cancelled", "issue.retry", "cancelled", "2026-06-18T10:20:00Z"));
+    recordPiRecoveryAttempt(db, {
+      ...attemptInput("attempt-project", "issue.state_repair", "failed", "2026-06-18T10:30:00Z"),
+      issue_id: 202,
+      session_id: "session-other"
+    });
 
-      expect(countPiRecoveryAttempts(db, {
-        issueId: 201,
-        since: "2026-06-18T00:00:00Z",
-        statuses: ["planned", "executing", "progress", "no_progress", "failed"]
-      })).toBe(2);
-      expect(countPiRecoveryAttempts(db, {
-        actionType: "session.resume_followup",
-        sessionId: "session-1",
-        since: "2026-06-18T00:00:00Z"
-      })).toBe(1);
-      expect(countPiRecoveryAttempts(db, {
-        projectId: "demo",
-        since: "2026-06-18T10:00:00Z",
-        statuses: ["planned", "executing", "progress", "no_progress", "failed"]
-      })).toBe(3);
-    } finally {
-      db.close();
-    }
+    expect(countPiRecoveryAttempts(db, {
+      issueId: 201,
+      since: "2026-06-18T00:00:00Z",
+      statuses: ["planned", "executing", "progress", "no_progress", "failed"]
+    })).toBe(2);
+    expect(countPiRecoveryAttempts(db, {
+      actionType: "session.resume_followup",
+      sessionId: "session-1",
+      since: "2026-06-18T00:00:00Z"
+    })).toBe(1);
+    expect(countPiRecoveryAttempts(db, {
+      projectId: "demo",
+      since: "2026-06-18T10:00:00Z",
+      statuses: ["planned", "executing", "progress", "no_progress", "failed"]
+    })).toBe(3);
   });
 });
 

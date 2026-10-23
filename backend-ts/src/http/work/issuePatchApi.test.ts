@@ -184,44 +184,40 @@ describe("Bun issue patch API", () => {
 
   test("preserves title on a body-only patch and atomically replaces then clears dependencies", async () => {
     const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      const upstream = createIssue(database, { project_id: "demo", status: "todo", title: "upstream" });
-      const issueId = insertIssue(database, "demo");
-      const description = `Updated body\n\n## Dependencies\n\n- Issue #${upstream.id}`;
+    insertProject(database, "demo");
+    const upstream = createIssue(database, { project_id: "demo", status: "todo", title: "upstream" });
+    const issueId = insertIssue(database, "demo");
+    const description = `Updated body\n\n## Dependencies\n\n- Issue #${upstream.id}`;
 
-      const updated = await patchIssue(database, issueId, {
-        depends_on_issue_ids: [upstream.id],
-        description
-      });
-      const replay = await patchIssue(database, issueId, {
-        depends_on_issue_ids: [upstream.id],
-        description
-      });
-      const cleared = await patchIssue(database, issueId, {
-        depends_on_issue_ids: [],
-        description: "Updated body without dependencies"
-      });
+    const updated = await patchIssue(database, issueId, {
+      depends_on_issue_ids: [upstream.id],
+      description
+    });
+    const replay = await patchIssue(database, issueId, {
+      depends_on_issue_ids: [upstream.id],
+      description
+    });
+    const cleared = await patchIssue(database, issueId, {
+      depends_on_issue_ids: [],
+      description: "Updated body without dependencies"
+    });
 
-      expect(updated.status).toBe(200);
-      expect(await updated.json()).toMatchObject({ description, title: "Patch API" });
-      expect(replay.status).toBe(200);
-      expect(await replay.json()).toMatchObject({ description, title: "Patch API" });
-      expect(cleared.status).toBe(200);
-      expect(await cleared.json()).toMatchObject({
-        description: "Updated body without dependencies",
-        title: "Patch API"
-      });
-      expect(database.sqlite.query<{ dependency_issue_ids_json: string }, [number]>(
-        "select dependency_issue_ids_json from issues where id=?"
-      ).get(issueId)).toEqual({ dependency_issue_ids_json: "[]" });
-      expect(database.sqlite.query<{ count: number }, [string]>(`
+    expect(updated.status).toBe(200);
+    expect(await updated.json()).toMatchObject({ description, title: "Patch API" });
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({ description, title: "Patch API" });
+    expect(cleared.status).toBe(200);
+    expect(await cleared.json()).toMatchObject({
+      description: "Updated body without dependencies",
+      title: "Patch API"
+    });
+    expect(database.sqlite.query<{ dependency_issue_ids_json: string }, [number]>(
+      "select dependency_issue_ids_json from issues where id=?"
+    ).get(issueId)).toEqual({ dependency_issue_ids_json: "[]" });
+    expect(database.sqlite.query<{ count: number }, [string]>(`
         select count(*) as count from work_relations where kind='depends_on' and source_work_id=?
       `).get(`xw:work:issues:${issueId}`)).toEqual({ count: 0 });
-      expect(listEvents(database).filter((event) => event.type === "issue.planning_metadata_updated.v1")).toHaveLength(2);
-    } finally {
-      database.close();
-    }
+    expect(listEvents(database).filter((event) => event.type === "issue.planning_metadata_updated.v1")).toHaveLength(2);
   });
 
   test("fails closed for Run history, cycles and inconsistent body declarations without partial writes", async () => {

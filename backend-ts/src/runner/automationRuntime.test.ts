@@ -171,26 +171,22 @@ describe("native Automation scheduler composition", () => {
   test("records a deterministic no-op without manufacturing Work when no context changed", async () => {
     const db = await fixture();
     const provider = new FixtureProvider();
-    try {
-      const automation = createFixture(db, "no-op", "execute_allowed", { commitment: false });
-      const result = await cycle(db, provider, NOW);
-      const run = listAutomationRuns(db, automation.id)[0]!;
+    const automation = createFixture(db, "no-op", "execute_allowed", { commitment: false });
+    const result = await cycle(db, provider, NOW);
+    const run = listAutomationRuns(db, automation.id)[0]!;
 
-      expect(result.automationCore).toMatchObject({ executed: 0, scanned: 1, skipped: 1 });
-      expect(run).toMatchObject({ status: "skipped" });
-      expect(run.summary.detail).toContain("standing order no-op");
-      expect(provider.inputs).toHaveLength(0);
-      expect(getAutomationExecutionLink(db, run.run_id)).toBeNull();
-      expect(db.sqlite.query<{ count: number }, []>("select count(*) as count from issues").get()?.count).toBe(0);
-      expect(db.sqlite.query<{ detail: string; event_type: string }, [string]>(`
+    expect(result.automationCore).toMatchObject({ executed: 0, scanned: 1, skipped: 1 });
+    expect(run).toMatchObject({ status: "skipped" });
+    expect(run.summary.detail).toContain("standing order no-op");
+    expect(provider.inputs).toHaveLength(0);
+    expect(getAutomationExecutionLink(db, run.run_id)).toBeNull();
+    expect(db.sqlite.query<{ count: number }, []>("select count(*) as count from issues").get()?.count).toBe(0);
+    expect(db.sqlite.query<{ detail: string; event_type: string }, [string]>(`
         select event_type, detail from automation_run_events where run_id=? order by rowid desc limit 1
       `).get(run.run_id)).toMatchObject({
-        detail: "standing order no-op: no changed issue signal or active Supervisor commitment",
-        event_type: "automation.run_skipped.v1"
-      });
-    } finally {
-      db.close();
-    }
+      detail: "standing order no-op: no changed issue signal or active Supervisor commitment",
+      event_type: "automation.run_skipped.v1"
+    });
   });
 
   test("honors project quiet hours before selecting context or creating Work", async () => {
@@ -253,27 +249,23 @@ describe("native Automation scheduler composition", () => {
     const automation = createFixture(db, "restart", "execute_allowed");
     insertProject(db, "other", "/tmp/standing-order-other");
     const isolated = createFixture(db, "isolated", "execute_allowed", { commitment: false, projectID: "other" });
-    try {
-      const first = await cycle(db, provider, NOW);
-      expect(first.automationCore).toMatchObject({ executed: 1, scanned: 2, skipped: 1 });
-      expect(provider.inputs).toHaveLength(1);
-      expect(provider.inputs[0]?.projectId).toBe("demo");
-      expect(listAutomationRuns(db, isolated.id)[0]?.summary.detail).toContain("standing order no-op");
+    const first = await cycle(db, provider, NOW);
+    expect(first.automationCore).toMatchObject({ executed: 1, scanned: 2, skipped: 1 });
+    expect(provider.inputs).toHaveLength(1);
+    expect(provider.inputs[0]?.projectId).toBe("demo");
+    expect(listAutomationRuns(db, isolated.id)[0]?.summary.detail).toContain("standing order no-op");
 
-      const stateDir = stateDirFor(db);
-      db.close();
-      db = await openDatabase({ stateDir }).then(trackDatabase);
-      const resumed = await cycle(db, provider, new Date("2026-07-18T10:01:00.000Z"));
+    const stateDir = stateDirFor(db);
+    db.close();
+    db = await openDatabase({ stateDir }).then(trackDatabase);
+    const resumed = await cycle(db, provider, new Date("2026-07-18T10:01:00.000Z"));
 
-      expect(resumed.automationCore).toMatchObject({ executed: 1, scanned: 2, skipped: 1 });
-      expect(provider.inputs).toHaveLength(2);
-      expect(listAutomationRuns(db, automation.id).map((run) => run.status).sort()).toEqual(["succeeded", "succeeded"]);
-      expect(db.sqlite.query<{ count: number }, [string]>(`
+    expect(resumed.automationCore).toMatchObject({ executed: 1, scanned: 2, skipped: 1 });
+    expect(provider.inputs).toHaveLength(2);
+    expect(listAutomationRuns(db, automation.id).map((run) => run.status).sort()).toEqual(["succeeded", "succeeded"]);
+    expect(db.sqlite.query<{ count: number }, [string]>(`
         select count(*) as count from automation_execution_links where automation_id=?
       `).get(automation.id)?.count).toBe(2);
-    } finally {
-      db.close();
-    }
   });
 });
 

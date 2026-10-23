@@ -299,45 +299,41 @@ describe("Work HTTP API", () => {
 
   test("updates Issue dependencies through the same audited Work authority with replay and explicit clear", async () => {
     const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const upstream = createIssue(db, { project_id: "demo", status: "triage", title: "Upstream" });
-      const downstream = createIssue(db, { project_id: "demo", status: "triage", title: "Downstream" });
-      const router = createDefaultRouter({ database: db });
-      const workID = issueIDToWorkID(downstream.id);
-      const detail = await router.handle(new Request(`${BASE_URL}/api/works/${encodeURIComponent(workID)}`));
-      const before = (await body(detail)).work as Record<string, unknown>;
-      const payload = {
-        audit: audit("work-dependencies-set", "user"),
-        depends_on_issue_ids: [upstream.id],
-        expected_revision: before.revision
-      };
+    insertProject(db, "demo");
+    const upstream = createIssue(db, { project_id: "demo", status: "triage", title: "Upstream" });
+    const downstream = createIssue(db, { project_id: "demo", status: "triage", title: "Downstream" });
+    const router = createDefaultRouter({ database: db });
+    const workID = issueIDToWorkID(downstream.id);
+    const detail = await router.handle(new Request(`${BASE_URL}/api/works/${encodeURIComponent(workID)}`));
+    const before = (await body(detail)).work as Record<string, unknown>;
+    const payload = {
+      audit: audit("work-dependencies-set", "user"),
+      depends_on_issue_ids: [upstream.id],
+      expected_revision: before.revision
+    };
 
-      const updated = await router.handle(jsonRequest(`/api/works/${encodeURIComponent(workID)}`, "PATCH", payload));
-      const replay = await router.handle(jsonRequest(`/api/works/${encodeURIComponent(workID)}`, "PATCH", payload));
-      const updatedWork = (await body(updated)).work as Record<string, unknown>;
-      const cleared = await router.handle(jsonRequest(`/api/works/${encodeURIComponent(workID)}`, "PATCH", {
-        audit: audit("work-dependencies-clear", "user"),
-        depends_on_issue_ids: [],
-        expected_revision: updatedWork.revision
-      }));
+    const updated = await router.handle(jsonRequest(`/api/works/${encodeURIComponent(workID)}`, "PATCH", payload));
+    const replay = await router.handle(jsonRequest(`/api/works/${encodeURIComponent(workID)}`, "PATCH", payload));
+    const updatedWork = (await body(updated)).work as Record<string, unknown>;
+    const cleared = await router.handle(jsonRequest(`/api/works/${encodeURIComponent(workID)}`, "PATCH", {
+      audit: audit("work-dependencies-clear", "user"),
+      depends_on_issue_ids: [],
+      expected_revision: updatedWork.revision
+    }));
 
-      expect(updated.status).toBe(200);
-      expect(replay.status).toBe(200);
-      expect(cleared.status).toBe(200);
-      expect(db.sqlite.query<{ dependency_issue_ids_json: string }, [number]>(
-        "select dependency_issue_ids_json from issues where id=?"
-      ).get(downstream.id)).toEqual({ dependency_issue_ids_json: "[]" });
-      expect(db.sqlite.query<{ count: number }, [string]>(`
+    expect(updated.status).toBe(200);
+    expect(replay.status).toBe(200);
+    expect(cleared.status).toBe(200);
+    expect(db.sqlite.query<{ dependency_issue_ids_json: string }, [number]>(
+      "select dependency_issue_ids_json from issues where id=?"
+    ).get(downstream.id)).toEqual({ dependency_issue_ids_json: "[]" });
+    expect(db.sqlite.query<{ count: number }, [string]>(`
         select count(*) as count from work_relations where kind='depends_on' and source_work_id=?
       `).get(workID)).toEqual({ count: 0 });
-      expect(adapterAudits(db).map((item) => item.event_id)).toEqual([
-        "work-dependencies-set",
-        "work-dependencies-clear"
-      ]);
-    } finally {
-      db.close();
-    }
+    expect(adapterAudits(db).map((item) => item.event_id)).toEqual([
+      "work-dependencies-set",
+      "work-dependencies-clear"
+    ]);
   });
 
   test("returns stable errors for illegal state, missing Work and untrusted request gate input", async () => {

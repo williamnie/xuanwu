@@ -20,20 +20,18 @@ describe("Automation model migration", () => {
     const root = await path();
     await createPreAutomationDatabase(join(root, "runner.db"));
     const db = await openDatabase({ stateDir: root }).then(trackDatabase);
-    try {
-      expect(tableNames(db)).toEqual(expect.arrayContaining([
-        "automation_definitions", "automation_trigger_configs", "automation_runs", "automation_events"
-      ]));
-      expect(indexNames(db, "automation_definitions")).toContain("idx_automation_definitions_scope_status_next");
-      expect(indexNames(db, "automation_trigger_configs")).toContain("idx_automation_trigger_configs_lookup");
-      expect(indexNames(db, "automation_runs")).toContain("idx_automation_runs_history");
-      expect(indexNames(db, "automation_events")).toContain("idx_automation_events_history");
-      expect(db.sqlite.query("select id from schema_migrations where id=?").get(MIGRATION_ID)).toEqual({ id: MIGRATION_ID });
-      expect(db.sqlite.query("select title from issues where id=1").get()).toEqual({ title: "legacy issue" });
-      expect(queryPlan(db, `select * from automation_definitions
+    expect(tableNames(db)).toEqual(expect.arrayContaining([
+      "automation_definitions", "automation_trigger_configs", "automation_runs", "automation_events"
+    ]));
+    expect(indexNames(db, "automation_definitions")).toContain("idx_automation_definitions_scope_status_next");
+    expect(indexNames(db, "automation_trigger_configs")).toContain("idx_automation_trigger_configs_lookup");
+    expect(indexNames(db, "automation_runs")).toContain("idx_automation_runs_history");
+    expect(indexNames(db, "automation_events")).toContain("idx_automation_events_history");
+    expect(db.sqlite.query("select id from schema_migrations where id=?").get(MIGRATION_ID)).toEqual({ id: MIGRATION_ID });
+    expect(db.sqlite.query("select title from issues where id=1").get()).toEqual({ title: "legacy issue" });
+    expect(queryPlan(db, `select * from automation_definitions
         where scope_kind='project' and scope_id='demo' and status='active' order by next_run_at, id`))
-        .toContain("idx_automation_definitions_scope_status_next");
-    } finally { db.close(); }
+      .toContain("idx_automation_definitions_scope_status_next");
   });
 });
 

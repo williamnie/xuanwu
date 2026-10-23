@@ -42,21 +42,19 @@ describe("connector diagnostics", () => {
 
   test("an actual delivery failure is visible without a probe and does not revive a disabled connector", async () => {
     const fixture = await databaseFixture();
-    try {
-      fixture.db.sqlite.run(`insert into sync_outbox
+    fixture.db.sqlite.run(`insert into sync_outbox
         (source, content, status, last_error, operation_kind, payload_json, created_at, updated_at)
         values ('github', 'fixture', 'failed', 'fixture delivery failure', 'tracker_update', ?, ?, ?)`, [
-        JSON.stringify({ target: { provider_id: "github" } }), NOW.toISOString(), NOW.toISOString()
-      ]);
-      const config = buildConfig({ githubToken: "fixture-secret", stateDir: fixture.dir });
-      const connector = () => {
-        const bundle = buildConnectorDiagnosticBundle({ config, database: fixture.db, now: () => NOW });
-        return (bundle.connectors as Array<Record<string, unknown>>).find(item => item.id === "github-issues");
-      };
-      expect(connector()).toMatchObject({ health: { checked: false, state: "failed", last_error: { code: "delivery_failed" } } });
-      config.integrations.github.token = "";
-      expect(connector()).toMatchObject({ enabled: false, health: { state: "unconfigured" } });
-    } finally { fixture.db.close(); }
+      JSON.stringify({ target: { provider_id: "github" } }), NOW.toISOString(), NOW.toISOString()
+    ]);
+    const config = buildConfig({ githubToken: "fixture-secret", stateDir: fixture.dir });
+    const connector = () => {
+      const bundle = buildConnectorDiagnosticBundle({ config, database: fixture.db, now: () => NOW });
+      return (bundle.connectors as Array<Record<string, unknown>>).find(item => item.id === "github-issues");
+    };
+    expect(connector()).toMatchObject({ health: { checked: false, state: "failed", last_error: { code: "delivery_failed" } } });
+    config.integrations.github.token = "";
+    expect(connector()).toMatchObject({ enabled: false, health: { state: "unconfigured" } });
   });
 
   test("normalizes expired, rate-limited and offline probes without response bodies", async () => {
@@ -114,48 +112,44 @@ describe("connector diagnostics", () => {
 
   test("derives bounded backoff from audited test results and emits a redacted bundle", async () => {
     const fixture = await databaseFixture();
-    try {
-      const result = {
-        checked_at: NOW.toISOString(),
-        error: { code: "rate_limited", message: "Connector rate limit was reached" },
-        ok: false,
-        rate_limit: { retry_after_seconds: 120, reset_at: "2026-07-18T03:02:00.000Z" },
-        state: "rate_limited"
-      };
-      for (let index = 0; index < 2; index += 1) {
-        createPiActionEvent(fixture.db, {
-          action_id: `connector-test:${index}`,
-          event_type: "connector.tested",
-          payload_json: JSON.stringify({ connector_id: "github-events" }),
-          result_json: JSON.stringify(result)
-        });
-      }
+    const result = {
+      checked_at: NOW.toISOString(),
+      error: { code: "rate_limited", message: "Connector rate limit was reached" },
+      ok: false,
+      rate_limit: { retry_after_seconds: 120, reset_at: "2026-07-18T03:02:00.000Z" },
+      state: "rate_limited"
+    };
+    for (let index = 0; index < 2; index += 1) {
       createPiActionEvent(fixture.db, {
-        action_id: "connector-test:malformed",
+        action_id: `connector-test:${index}`,
         event_type: "connector.tested",
-        payload_json: "not-json",
+        payload_json: JSON.stringify({ connector_id: "github-events" }),
         result_json: JSON.stringify(result)
       });
-      const history = connectorTestHistory(fixture.db, "github-events", new Date("2026-07-18T03:00:30.000Z"));
-      const config = buildConfig({ githubToken: "diagnostic-secret", stateDir: fixture.dir });
-      const bundle = buildConnectorDiagnosticBundle({ config, database: fixture.db, now: () => NOW });
-      const text = JSON.stringify(bundle);
+    }
+    createPiActionEvent(fixture.db, {
+      action_id: "connector-test:malformed",
+      event_type: "connector.tested",
+      payload_json: "not-json",
+      result_json: JSON.stringify(result)
+    });
+    const history = connectorTestHistory(fixture.db, "github-events", new Date("2026-07-18T03:00:30.000Z"));
+    const config = buildConfig({ githubToken: "diagnostic-secret", stateDir: fixture.dir });
+    const bundle = buildConnectorDiagnosticBundle({ config, database: fixture.db, now: () => NOW });
+    const text = JSON.stringify(bundle);
 
-      expect(history).toMatchObject({ attempts: 2, blocked: true, retry_at: "2026-07-18T03:02:00.000Z" });
-      const plan = fixture.db.sqlite.query<{ detail: string }, [string]>(`explain query plan
+    expect(history).toMatchObject({ attempts: 2, blocked: true, retry_at: "2026-07-18T03:02:00.000Z" });
+    const plan = fixture.db.sqlite.query<{ detail: string }, [string]>(`explain query plan
         select payload_json, result_json from pi_action_events
         where event_type='connector.tested' and json_valid(payload_json)
           and json_extract(payload_json, '$.connector_id')=?
         order by id desc limit 20
       `).all("github-events").map((row) => row.detail);
-      expect(plan.some((detail) => detail.includes("idx_pi_action_events_connector_test_history"))).toBe(true);
-      expect(bundle).toMatchObject({ schema_version: "xuanwu.connector-diagnostics.v1" });
-      expect((bundle.connectors as Array<Record<string, unknown>>).find(item => item.id === "github-events"))
-        .toMatchObject({ health: { checked: true, state: "rate_limited" } });
-      expect(text).not.toContain("diagnostic-secret");
-    } finally {
-      fixture.db.close();
-    }
+    expect(plan.some((detail) => detail.includes("idx_pi_action_events_connector_test_history"))).toBe(true);
+    expect(bundle).toMatchObject({ schema_version: "xuanwu.connector-diagnostics.v1" });
+    expect((bundle.connectors as Array<Record<string, unknown>>).find(item => item.id === "github-events"))
+      .toMatchObject({ health: { checked: true, state: "rate_limited" } });
+    expect(text).not.toContain("diagnostic-secret");
   });
 });
 
