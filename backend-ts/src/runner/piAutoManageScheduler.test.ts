@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
@@ -20,7 +18,7 @@ import {
 } from "./piAutoManageScheduler.ts";
 import { runProjectLoopOnce } from "./projectLoop.ts";
 import { isProjectLoopActive } from "./projectLoopManager.ts";
-import { useTestDatabase } from "../testing/harness.ts";
+import { insertRow, useTestDatabase, waitFor } from "../testing/harness.ts";
 
 class FakePiCycleRunner {
   active = 0;
@@ -94,9 +92,7 @@ describe("PI auto-manage scheduler", () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
     const clock = new FakeClock();
-    insertProject(db, "enabled", 1);
-    insertAgent(db, "pi-default");
-    insertSettings(db, "enabled", 1, 4);
+    insertManagedProject(db, "enabled");
     const scheduler = createPiAutoManageScheduler({
       clock,
       database: db,
@@ -164,9 +160,7 @@ describe("PI auto-manage scheduler", () => {
     const clock = new FakeClock();
     const errors: unknown[] = [];
     const runner = new FakePiCycleRunner();
-    insertProject(db, "enabled", 1);
-    insertAgent(db, "pi-default");
-    insertSettings(db, "enabled", 1, 2);
+    insertManagedProject(db, "enabled");
     const scheduler = createPiAutoManageScheduler({
       clock,
       database: wrapped as unknown as RunnerDatabase,
@@ -260,9 +254,7 @@ describe("PI auto-manage scheduler", () => {
     const blocked = new Promise<void>((resolve) => { releaseAgentic = resolve; });
     let agenticActive = false;
     try {
-      insertProject(db, "enabled", 1);
-      insertAgent(db, "pi-default");
-      insertSettings(db, "enabled", 1, 2);
+      insertManagedProject(db, "enabled");
       insertIssueRunSession(db, 519, "enabled");
       const input = {
         database: wrapped as unknown as RunnerDatabase,
@@ -273,11 +265,7 @@ describe("PI auto-manage scheduler", () => {
           agenticActive = true;
           await blocked;
           agenticActive = false;
-          return {
-            decision: resumeDecision(),
-            raw_text: JSON.stringify(resumeDecision()),
-            valid: true
-          };
+          return validDecision(resumeDecision());
         },
         watchdogNow: NOW
       };
@@ -321,9 +309,7 @@ describe("PI auto-manage scheduler", () => {
     const runner = new FakePiCycleRunner();
     insertProject(db, "paused", 1);
     insertProject(db, "missing-agent", 1);
-    insertProject(db, "enabled", 1);
-    insertAgent(db, "pi-default");
-    insertSettings(db, "enabled", 1, 3);
+    insertManagedProject(db, "enabled");
 
     const result = await runPiAutoManageCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
 
@@ -334,9 +320,7 @@ describe("PI auto-manage scheduler", () => {
   test("does not run auto-managed project cycles while heartbeat is paused", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
-    insertProject(db, "paused-heartbeat", 1);
-    insertAgent(db, "pi-default");
-    insertSettings(db, "paused-heartbeat", 1, 7);
+    insertManagedProject(db, "paused-heartbeat");
     pausePiHeartbeat(db, { scopeId: "paused-heartbeat", scopeType: "project" });
 
     const result = await runPiAutoManageCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
@@ -348,9 +332,7 @@ describe("PI auto-manage scheduler", () => {
   test("ignores legacy delegation carriers without launching ambient project cycles", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
-    insertProject(db, "enabled", 1);
-    insertAgent(db, "pi-default");
-    insertSettings(db, "enabled", 1, 5);
+    insertManagedProject(db, "enabled");
     insertDelegation(db, "delegation-bad", "missing-project");
 
     const result = await runScheduleLayerCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
@@ -413,17 +395,13 @@ describe("PI auto-manage scheduler", () => {
     const runner = new FakePiCycleRunner();
     insertProject(db, "demo", 1);
     insertIssueRunSession(db, 519);
-    insertSettings(db, "demo", 0, 5);
+    insertSettings(db, "demo");
 
     const first = await runScheduleLayerCycle({
       database: db,
       providers: { codex: provider },
       runProjectCycle: runner.run.bind(runner),
-      runSupervisorDecision: async () => ({
-        decision: resumeDecision(),
-        raw_text: JSON.stringify(resumeDecision()),
-        valid: true
-      }),
+      runSupervisorDecision: async () => validDecision(resumeDecision()),
       watchdogNow: NOW
     });
 
@@ -449,18 +427,14 @@ describe("PI auto-manage scheduler", () => {
         project_id: "demo",
         allowed_supervisor_actions_json: ["issue.retry", "needs_user.escalate"]
       });
-      insertSettings(db, "demo", 1, 5);
+      insertSettings(db, "demo");
       insertFailedIssueRunSession(db, 520);
 
       const first = await runScheduleLayerCycle({
         bus,
         database: db,
         runProjectCycle: runner.run.bind(runner),
-        runSupervisorDecision: async () => ({
-          decision: needsUserDecision(),
-          raw_text: JSON.stringify(needsUserDecision()),
-          valid: true
-        }),
+        runSupervisorDecision: async () => validDecision(needsUserDecision()),
         watchdogNow: NOW
       });
 
@@ -488,47 +462,44 @@ describe("PI auto-manage scheduler", () => {
   test("executes approved Guardian needs-user escalation during schedule layer cycle", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
-    try {
-      insertProject(db, "demo", 0);
-      db.sqlite.run(`insert into issues (id, project_id, title, status, created_at, updated_at)
-        values (611, 'demo', 'Needs user issue', 'in_progress', ?, ?)`,
-      ["2026-06-22T08:00:00Z", "2026-06-22T08:35:07Z"]);
-      createPiAction(db, {
-        action_type: "needs_user.escalate",
-        gate_decision: "execute",
-        id: "guardian-needs-user",
+    insertProject(db, "demo", 0);
+    insertRow(db, "issues", {
+      id: 611, project_id: "demo", title: "Needs user issue", status: "in_progress",
+      created_at: "2026-06-22T08:00:00Z", updated_at: "2026-06-22T08:35:07Z"
+    });
+    createPiAction(db, {
+      action_type: "needs_user.escalate",
+      gate_decision: "execute",
+      id: "guardian-needs-user",
+      issue_id: 611,
+      payload_json: JSON.stringify({
+        diagnosis_code: "provider_auth_failed",
         issue_id: 611,
-        payload_json: JSON.stringify({
-          diagnosis_code: "provider_auth_failed",
-          issue_id: 611,
-          message: "Provider unavailable",
-          next_step: "Refresh provider credentials.",
-          provider: "codex"
-        }),
-        project_id: "demo",
-        source: "pi_guardian_orchestrator",
-        status: "approved"
-      });
+        message: "Provider unavailable",
+        next_step: "Refresh provider credentials.",
+        provider: "codex"
+      }),
+      project_id: "demo",
+      source: "pi_guardian_orchestrator",
+      status: "approved"
+    });
 
-      const result = await runScheduleLayerCycle({
-        database: db,
-        runProjectCycle: runner.run.bind(runner),
-        runSupervisor: false,
-        watchdogNow: NOW
-      });
+    const result = await runScheduleLayerCycle({
+      database: db,
+      runProjectCycle: runner.run.bind(runner),
+      runSupervisor: false,
+      watchdogNow: NOW
+    });
 
-      expect(result.guardianActionDispatch).toMatchObject({ completed: 1, failed: 0, scanned: 1 });
-      expect(listPiActions(db, { issueId: 611 })[0]).toMatchObject({
-        action_type: "needs_user.escalate",
-        status: "completed"
-      });
-      expect(listNotifications(db, { projectID: "demo", unreadOnly: true })).toMatchObject([
-        expect.objectContaining({ event: "pi.needs_user", issue_id: 611 })
-      ]);
-      expect(listIssueEvents(db, 611).filter((event) => event.type === "issue.comment")).toHaveLength(1);
-    } finally {
-      db.close();
-    }
+    expect(result.guardianActionDispatch).toMatchObject({ completed: 1, failed: 0, scanned: 1 });
+    expect(listPiActions(db, { issueId: 611 })[0]).toMatchObject({
+      action_type: "needs_user.escalate",
+      status: "completed"
+    });
+    expect(listNotifications(db, { projectID: "demo", unreadOnly: true })).toMatchObject([
+      expect.objectContaining({ event: "pi.needs_user", issue_id: 611 })
+    ]);
+    expect(listIssueEvents(db, 611).filter((event) => event.type === "issue.comment")).toHaveLength(1);
   });
 
   test("always-on issue watchdog starts stale todo issues without PI auto-manage settings", async () => {
@@ -561,7 +532,9 @@ describe("PI auto-manage scheduler", () => {
     const runner = new FakePiCycleRunner();
     insertProject(db, "demo", 1);
     insertTodoIssue(db, 802, "Still stale todo", "2026-06-22T08:00:00Z");
-    insertIssueWatchdogKick(db, 802, "2026-06-22T08:10:00Z");
+    insertRow(db, "issue_events", {
+      issue_id: 802, type: "issue.watchdog_kicked", payload: JSON.stringify({ reason: "test" }), created_at: "2026-06-22T08:10:00Z"
+    });
 
     const result = await runScheduleLayerCycle({
       database: db,
@@ -582,7 +555,9 @@ describe("PI auto-manage scheduler", () => {
     const db = await openFixtureDatabase();
     const provider = new InitializeTimeoutProvider();
     const runner = new FakePiCycleRunner();
-    insertProviderOutageRegressionProject(db);
+    insertProject(db, "demo", 1, "claude");
+    insertTodoIssue(db, 701, "Provider outage first", "2026-06-22T08:00:00Z");
+    insertTodoIssue(db, 702, "Ordinary follow-up", "2026-06-22T08:01:00Z");
 
     await runProjectLoopOnce({
       database: db,
@@ -626,9 +601,7 @@ describe("PI auto-manage scheduler", () => {
     const runner = new FakePiCycleRunner();
     let release!: () => void;
     runner.deferred = new Promise<void>((resolve) => { release = resolve; });
-    insertProject(db, "enabled", 1);
-    insertAgent(db, "pi-default");
-    insertSettings(db, "enabled", 1, 2);
+    insertManagedProject(db, "enabled");
 
     const first = runPiAutoManageCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
     await waitUntil(() => runner.active === 1);
@@ -643,52 +616,32 @@ describe("PI auto-manage scheduler", () => {
 
 type DB = RunnerDatabase;
 
-function insertAgent(db: DB, id: string): void {
-  db.sqlite.run(
-    `insert into pi_agents (id, name, enabled, created_at, updated_at) values (?, ?, ?, ?, ?)`,
-    [id, id, 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
-  );
+const CREATED = "2026-01-01T00:00:00Z";
+
+function insertProject(db: DB, id: string, autoRun: number, provider = "codex"): void {
+  insertRow(db, "projects", { id, name: id, cwd: `/tmp/${id}`, provider, auto_run: autoRun, sort_order: autoRun, created_at: CREATED, updated_at: CREATED });
 }
 
-function insertProject(db: DB, id: string, autoRun: number): void {
-  insertProjectFixture(db, { autoRun, id, provider: "codex" });
-}
-
-function insertProjectFixture(db: DB, input: { autoRun: number; id: string; provider: string }): void {
-  db.sqlite.run(
-    `insert into projects (id, name, cwd, provider, auto_run, sort_order, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [input.id, input.id, `/tmp/${input.id}`, input.provider, input.autoRun, input.autoRun,
-      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
-  );
-}
-
-function insertProviderOutageRegressionProject(db: DB): void {
-  insertProjectFixture(db, { autoRun: 1, id: "demo", provider: "claude" });
-  insertTodoIssue(db, 701, "Provider outage first", "2026-06-22T08:00:00Z");
-  insertTodoIssue(db, 702, "Ordinary follow-up", "2026-06-22T08:01:00Z");
+/** An auto-run project with a PI binding and a PI agent available. */
+function insertManagedProject(db: DB, id: string): void {
+  insertProject(db, id, 1);
+  insertRow(db, "pi_agents", { id: "pi-default", name: "pi-default", enabled: 1, created_at: CREATED, updated_at: CREATED });
+  insertSettings(db, id);
 }
 
 function insertTodoIssue(db: DB, id: number, title: string, createdAt: string): void {
-  db.sqlite.run(`insert into issues (id, project_id, title, status, created_at, updated_at)
-    values (?, 'demo', ?, 'todo', ?, ?)`, [id, title, createdAt, createdAt]);
+  insertRow(db, "issues", { id, project_id: "demo", title, status: "todo", created_at: createdAt, updated_at: createdAt });
 }
 
-function insertIssueWatchdogKick(db: DB, issueID: number, createdAt: string): void {
-  db.sqlite.run(
-    `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
-    [issueID, "issue.watchdog_kicked", JSON.stringify({ reason: "test" }), createdAt]
-  );
-}
-
-function insertSettings(db: DB, projectID: string, _autoManage: number, _maxActions: number, _agentID = "pi-default"): void {
-  db.sqlite.run(
-    `insert into project_pi_settings (project_id, created_at, updated_at) values (?, ?, ?)`,
-    [projectID, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
-  );
+function insertSettings(db: DB, projectID: string): void {
+  insertRow(db, "project_pi_settings", { project_id: projectID, created_at: CREATED, updated_at: CREATED });
 }
 
 const NOW = new Date("2026-06-22T08:40:00Z");
+
+function validDecision(decision: PiSupervisorDecisionJson) {
+  return { decision, raw_text: JSON.stringify(decision), valid: true };
+}
 
 function resumeDecision(): PiSupervisorDecisionJson {
   return {
@@ -830,22 +783,16 @@ class WatchdogSessionProvider implements ExecutorProvider {
 }
 
 function insertDelegation(db: DB, id: string, projectID: string): void {
-  db.sqlite.run(
-    `insert into pi_delegations
-     (id, project_id, title, status, intent_json, authorization_json, next_heartbeat_at, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, projectID, "Delegation", "active", "{}", "{}", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
-  );
+  insertRow(db, "pi_delegations", {
+    id, project_id: projectID, title: "Delegation", status: "active", intent_json: "{}", authorization_json: "{}",
+    next_heartbeat_at: CREATED, created_at: CREATED, updated_at: CREATED
+  });
 }
 
 function heartbeatRunCount(db: DB): number {
   return db.sqlite.query<{ count: number }, []>("select count(*) as count from pi_heartbeat_runs").get()?.count ?? 0;
 }
 
-async function waitUntil(predicate: () => boolean): Promise<void> {
-  for (let i = 0; i < 200; i += 1) {
-    if (predicate()) return;
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-  throw new Error("condition was not met");
+function waitUntil(predicate: () => boolean): Promise<unknown> {
+  return waitFor(predicate, "condition was not met", 200, 0);
 }
