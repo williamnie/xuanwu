@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { buildFeishuConnectorConfig, normalizeFeishuMessageEvent } from "./feishu.ts";
 import { createFeishuAgentBridge } from "./feishuAgentBridge.ts";
 import { ingestFeishuMessageEvent } from "./feishuIngest.ts";

@@ -1,4 +1,3 @@
-import { redactedUserVisibleText } from "../../util/redact.ts";
 
 type RemoteGitRateLimit = {
   limit?: number;

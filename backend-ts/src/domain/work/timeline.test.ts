@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { performance } from "node:perf_hooks";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type RunnerDatabase } from "../../db/database.ts";
 import { clearEventSummaryProjection } from "../../db/repositories/eventSummaryProjection.ts";

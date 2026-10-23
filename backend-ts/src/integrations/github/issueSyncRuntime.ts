@@ -1,4 +1,3 @@
-import type { RunnerDatabase } from "../../db/database.ts";
 import { getIssue, listIssueRuns } from "../../db/repositories/issues.ts";
 import { getProject } from "../../db/repositories/projects.ts";
 import { cancelIssue, enqueueIssue } from "../../db/repositories/issueActions.ts";

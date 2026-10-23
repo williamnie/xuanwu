@@ -1,10 +1,3 @@
-import { createHash } from "node:crypto";
-import { spawn } from "node:child_process";
-import { dirname } from "node:path";
-import { redactedUserVisibleText } from "../../util/redact.ts";
-import {
-  type RemoteGitMutationResponse
-} from "./remoteProvider.ts";
 import { cleanString } from "../../util/values.ts";
 
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;

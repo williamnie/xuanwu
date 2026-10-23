@@ -1,7 +1,5 @@
 import { seedMemoryExperience } from "../../pi/memory/memoryExperienceTestFixtures.ts";
 import { describe, expect, test } from "bun:test";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { createPiMemoryItem, listPiMemoryItems, type PiMemoryItem } from "../../db/repositories/pi.ts";
 import { buildPiMemoryPromptContext } from "../../pi/memory/memoryContext.ts";
 import { createDefaultRouter, createRequestHandler } from "../server.ts";

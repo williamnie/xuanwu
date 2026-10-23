@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { createExternalEvent, getExternalEvent, listExternalEvents, upsertExternalEvent } from "./externalEvents.ts";
 import { useTestDatabase } from "../../testing/harness.ts";
 

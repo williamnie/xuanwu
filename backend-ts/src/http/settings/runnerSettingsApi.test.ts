@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { readFile,  } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { tmpdir } from "node:os";
 import { buildConfig } from "../../config/env.ts";
 import { type RunnerDatabase } from "../../db/database.ts";
 import type { ExecutorProvider } from "../../providers/types.ts";

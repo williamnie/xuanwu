@@ -7,7 +7,6 @@ import {
   updatePiRunGroupItem,
   type PiRunGroup
 } from "../../db/repositories/pi.ts";
-import { deriveRunGroupReportView } from "./runGroupReportStatus.ts";
 import { cleanString } from "../../util/values.ts";
 
 type BatchRunGroupInput = {

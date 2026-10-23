@@ -1,5 +1,3 @@
-import { Type } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
 import {
   type WorkflowVerificationPolicy
 } from "../domain/evidence/policy.ts";

@@ -33,7 +33,6 @@ import {
 import { getIssue } from "../../db/repositories/issues.ts";
 import type { WorkStatus } from "../../domain/work/contracts.ts";
 import { readIssueReadiness } from "../../domain/readiness/contracts.ts";
-import { makeDomainID } from "../../xuanwu/coreDomainContracts.ts";
 import { HttpError, json, parseJsonBody } from "../errors.ts";
 import type { ReadApiContext } from "../readApiContext.ts";
 import type { Router } from "../router.ts";

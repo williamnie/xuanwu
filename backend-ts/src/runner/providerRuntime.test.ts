@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { listStoredEvidence } from "../db/repositories/evidence.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";

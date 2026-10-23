@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { createPiReportRecord, listPiReportRecords } from "./pi.ts";
 import { useTestDatabase } from "../../testing/harness.ts";
 

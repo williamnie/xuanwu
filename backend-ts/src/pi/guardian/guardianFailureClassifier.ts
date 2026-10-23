@@ -1,5 +1,4 @@
 import type { ProviderErrorCategory } from "../supervisor/providerErrorParser.ts";
-import type { PiSupervisorDiagnosisCode } from "../supervisor/issueSupervisorRecovery.ts";
 import {
   classifyRecoveryDiagnosis,
   type RecoveryFailureClass

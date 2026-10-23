@@ -1,6 +1,4 @@
 import { expect, test } from "bun:test";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { type RunnerDatabase } from "../../db/database.ts";
 import { ingestPiGuardianEvent } from "./guardianEventIngest.ts";
 import { guardianDecisionCandidate } from "./guardianDecisionMerge.ts";

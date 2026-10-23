@@ -2,8 +2,6 @@ import { seedMemoryExperience } from "../memory/memoryExperienceTestFixtures.ts"
 import { claimMemoryReflection, setMemoryReflectionEnabled, requestMemoryReflection } from "../memory/memoryReflectionQueue.ts";
 import { recordIssueEvent } from "../../db/repositories/issueEvents.ts";
 import { describe, expect, test } from "bun:test";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { listPiActionEvents } from "../../db/repositories/pi.ts";
 import { getProject } from "../../db/repositories/projects.ts";
 import { HTTP_READONLY_PROVIDER_ID, URL_FETCH_TOOL_NAME } from "./httpToolProvider.ts";

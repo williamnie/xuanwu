@@ -6,7 +6,6 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
 import { recordEvidenceRecords } from "../../db/repositories/evidence.ts";
 import { listNotifications } from "../../db/repositories/notifications.ts";
-import { recordIssueEvent } from "../../db/repositories/issueEvents.ts";
 import { listPiNotificationIntents } from "../../db/repositories/pi.ts";
 import { createGitEvidenceCollector } from "../../domain/evidence/gitCollector.ts";
 import type { HandoffRecord } from "../../domain/handoff/contracts.ts";

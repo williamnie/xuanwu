@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { type RunnerDatabase } from "../../db/database.ts";
 import { getIssue, listIssues } from "../../db/repositories/issues.ts";
 import { createPiAction, getPiAction, listPiActions, updatePiAction } from "../../db/repositories/pi.ts";

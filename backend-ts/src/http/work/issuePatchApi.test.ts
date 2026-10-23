@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { type RunnerDatabase } from "../../db/database.ts";
 import { createAgentProfile } from "../../db/repositories/agentProfiles.ts";
 import { createIssue } from "../../db/repositories/issueCreate.ts";
-import { recordIssueEvent } from "../../db/repositories/issueEvents.ts";
 import { createDefaultRouter } from "../server.ts";
 import { useTestDatabase } from "../../testing/harness.ts";
 

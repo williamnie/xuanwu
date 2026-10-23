@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { mkdir, readFile,  } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { tmpdir } from "node:os";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { getModel } from "@earendil-works/pi-ai/compat";
 import { type RunnerDatabase } from "../../db/database.ts";

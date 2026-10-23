@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../db/database.ts";
 import {
   EVENT_SUMMARY_SOURCE,

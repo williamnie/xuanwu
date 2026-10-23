@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
 import { getAgentSession } from "../../db/repositories/agentSessions.ts";
 import { createPiConversation, PI_MANAGER_CYCLE_TITLE } from "../../db/repositories/pi.ts";

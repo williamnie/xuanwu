@@ -1,4 +1,3 @@
-import type { Database as SQLiteDatabase } from "bun:sqlite";
 import type { SqlMigration } from "../migrations.ts";
 
 export const feishuProjectSelectionMigration: SqlMigration = {

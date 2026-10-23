@@ -1,4 +1,3 @@
-import type { FeishuNormalizedMessageEvent } from "./feishu.ts";
 import { recordValue } from "./feishuShared.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
 import { cleanString } from "../../util/values.ts";

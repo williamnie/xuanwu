@@ -12,7 +12,6 @@ import { getIssue, type Issue } from "../../db/repositories/issues.ts";
 import { listProjects, ProjectNotFoundError, type Project } from "../../db/repositories/projects.ts";
 import { getAgentSessionByReference, listAgentSessions } from "../../db/repositories/agentSessions.ts";
 import { createPiMcpActions, type PiMcpActionLayer } from "../mcp/mcpActionTools.ts";
-import type { EventBus } from "../../events/bus.ts";
 import { createPendingPiAction, executeSafePiAction, type PiActionContext } from "../actions/actionEngine.ts";
 import { createProjectStatusSnapshot } from "../reports/projectSnapshot.ts";
 import { observeSessionProgress } from "./sessionObserver.ts";

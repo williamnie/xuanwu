@@ -1,6 +1,5 @@
 import { isExecutionAgentRole, normalizeExecutionAgentRole, type ExecutionAgentRole } from "../../agents/roles.ts";
 import type { RunnerDatabase } from "../../db/database.ts";
-import type { AgentProfile } from "../../db/repositories/agentProfiles.ts";
 import { listAgentProfiles } from "../../db/repositories/agentProfiles.ts";
 import { getIssue, type Issue } from "../../db/repositories/issues.ts";
 import { getProject, ProjectNotFoundError, type Project } from "../../db/repositories/projects.ts";

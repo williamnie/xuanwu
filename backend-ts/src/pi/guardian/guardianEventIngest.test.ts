@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { listPiGuardianEvents } from "../../db/repositories/pi.ts";
 import { ingestPiGuardianEvent } from "./guardianEventIngest.ts";
 import { useTestDatabase } from "../../testing/harness.ts";

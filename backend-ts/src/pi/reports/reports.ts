@@ -1,5 +1,4 @@
 import type { RunnerDatabase } from "../../db/database.ts";
-import { listIssueEvents } from "../../db/repositories/issueEvents.ts";
 import { listIssues, type Issue } from "../../db/repositories/issues.ts";
 import {
   createPiReportRecord,

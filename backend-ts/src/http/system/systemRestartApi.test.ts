@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { ExecutorProvider } from "../../providers/types.ts";
 import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
 import { createDefaultRouter } from "../server.ts";

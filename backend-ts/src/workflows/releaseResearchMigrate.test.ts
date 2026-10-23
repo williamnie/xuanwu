@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { HandoffRecord } from "../domain/handoff/contracts.ts";
 import { listBrowserAssistantTools } from "../pi/tools/browserToolProvider.ts";
 import { listBuiltinAssistantTools } from "../pi/tools/builtinToolRegistry.ts";
 import { listHttpAssistantTools } from "../pi/tools/httpToolProvider.ts";

@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { type RunnerDatabase } from "../../db/database.ts";
 import { recordPiRecoveryAttempt } from "../../db/repositories/pi/recoveryAttempts.ts";
 import type { PiGuardianEvent } from "../../db/repositories/pi.ts";

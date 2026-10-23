@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { makeDomainID } from "../../xuanwu/coreDomainContracts.ts";
 const REPO_ROOT = resolve(import.meta.dir, "../../../..");
 const ADR_PATH = "docs/architecture/xuanwu/0020-run-attempt-lifecycle-contract.md";
 

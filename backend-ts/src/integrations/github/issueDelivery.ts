@@ -1,6 +1,5 @@
 import { readFile, lstat, readlink, realpath } from "node:fs/promises";
 import { resolve, dirname, sep } from "node:path";
-import type { RunnerDatabase } from "../../db/database.ts";
 import { getProject } from "../../db/repositories/projects.ts";
 import { getIssue, listIssueRuns } from "../../db/repositories/issues.ts";
 import { retryIssue } from "../../db/repositories/issueActions.ts";

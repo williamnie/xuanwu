@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { type RunnerDatabase } from "../database.ts";
 import { normalizedRunEvent } from "../../providers/runEvents.ts";
 import { NORMALIZED_RUN_EVENT_CONTRACT } from "../../providers/types.ts";

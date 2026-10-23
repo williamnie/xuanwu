@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { EventBus } from "../../events/bus.ts";
 import { CodexStdioJsonRpcTransport, type CodexJsonRpcProcess } from "../../providers/codex/jsonRpc.ts";
 import { useTestDatabase } from "../../testing/harness.ts";

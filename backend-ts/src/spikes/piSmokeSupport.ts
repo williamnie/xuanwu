@@ -1,4 +1,3 @@
-import { type AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { existsSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 const PI_PACKAGE_DIR_ENV = "PI_PACKAGE_DIR";

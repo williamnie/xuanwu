@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { type RunnerDatabase } from "../../db/database.ts";
 import { getAgentSession } from "../../db/repositories/agentSessions.ts";
 import { listIssueEvents } from "../../db/repositories/issueEvents.ts";

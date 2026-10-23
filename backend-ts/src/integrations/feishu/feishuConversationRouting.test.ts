@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { type RunnerDatabase } from "../../db/database.ts";
 import type { FeishuNormalizedMessageEvent } from "./feishu.ts";
 import { routeFeishuConversation } from "./feishuConversationRouting.ts";

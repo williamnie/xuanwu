@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { tmpdir } from "node:os";
 import { buildConfig, ENV_KEYS, loadConfig } from "../../config/env.ts";
 import { type RunnerDatabase } from "../../db/database.ts";
 import { createDefaultRouter } from "../server.ts";

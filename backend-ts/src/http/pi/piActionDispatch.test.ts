@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { tmpdir } from "node:os";
 import { dirname } from "node:path";
 import { buildConfig } from "../../config/env.ts";
 import { getAgentSession } from "../../db/repositories/agentSessions.ts";

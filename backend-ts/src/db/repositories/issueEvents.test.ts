@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { type RunnerDatabase } from "../database.ts";
 import { listAttentionInboxItems } from "./intakeRuns.ts";

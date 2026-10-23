@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { type RunnerDatabase } from "../../db/database.ts";
 import { runPiHeartbeatOnce } from "./heartbeatOrchestrator.ts";
-import { createPiMemoryItem } from "../../db/repositories/pi.ts";
-import { seedMemoryExperience } from "../memory/memoryExperienceTestFixtures.ts";
 import { useTestDatabase } from "../../testing/harness.ts";
 
 const openFixtureDatabase = useTestDatabase();
