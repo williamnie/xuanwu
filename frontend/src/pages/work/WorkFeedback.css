@@ -9,5 +9,4 @@
 .work-feedback [data-status='needs_input'] { color: var(--warning); }
 .work-feedback [data-status='failed'], .work-feedback [role='alert'] { color: var(--error); }
 .work-feedback [data-status='completed'] { color: var(--success); }
-.work-review-request-ref { overflow-wrap: anywhere; }
 @media (max-width: 760px) { .work-feedback { padding: var(--space-3); } .work-feedback dl { grid-template-columns: minmax(0, 1fr); } }

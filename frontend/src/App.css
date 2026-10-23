@@ -171,7 +171,6 @@
   padding: var(--space-2) var(--space-3);
 }
 
-
 @media (max-width: 760px) {
   .in-sessions-page:not(.sidebar-collapsed) .guardian-alert-stack {
     left: 12px;

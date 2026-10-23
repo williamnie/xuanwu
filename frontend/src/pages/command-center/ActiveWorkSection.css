@@ -168,9 +168,6 @@
 .active-work-state span { font-size: var(--text-md); }
 .active-work-state.empty { flex-direction: column; justify-content: center; text-align: center; }
 .active-work-state.error { background: var(--error-bg); border-color: color-mix(in srgb, var(--error) 35%, var(--border-color)); color: var(--error); }
-.active-work-compatibility { border-top: 1px solid var(--border-light); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); line-height: 1.5; padding-top: var(--space-2); }
-.active-work-compatibility summary { cursor: pointer; width: fit-content; }
-.active-work-compatibility[open] { display: flex; flex-direction: column; gap: var(--space-0-5); }
 
 @media (max-width: 760px) {
   .active-work-header { align-items: stretch; flex-direction: column; }

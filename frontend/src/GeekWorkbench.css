@@ -94,16 +94,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .sidebar-footer { border-top-color: var(--border-light); }
 .sidebar-footer-actions { gap: var(--space-1); }
 .sidebar-footer-actions .nav-item { border-color: transparent; }
-
-.page-intro { border-bottom-color: var(--border-color); gap: var(--space-5); min-height: 98px; padding: var(--space-6) 0 var(--space-4-5); }
 .page-intro h1, .settings-title-row h1 {
   font-family: var(--font-display);
   font-weight: 600;
   letter-spacing: -0.018em;
 }
-.page-intro h1 { font-size: var(--text-page); }
-.page-intro p { line-height: 1.55; }
-.page-intro-status { background: var(--surface-overlay); border-color: var(--border-color); border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
 
 .glass-card, .modal-content {
   background: var(--bg-card);
@@ -157,7 +152,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .modal-overlay { background: color-mix(in srgb, var(--bg-primary) 48%, transparent); backdrop-filter: blur(8px); }
 .modal-content { border-radius: var(--radius-md); }
 .status-badge, .triage-readiness-badge { border-radius: var(--radius-xs); }
-.terminal-view { background: var(--terminal-bg); border: 1px solid var(--terminal-border); border-radius: var(--radius-md); box-shadow: none; color: var(--terminal-text); }
 
 /* E2B 沙盒控制台视窗 (Sandbox Console Windows) */
 .e2b-terminal-window {
@@ -236,6 +230,5 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
     padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
     padding-top: max(var(--space-4), env(safe-area-inset-top));
   }
-  .page-intro { min-height: 0; padding: var(--space-4-5) 0 var(--space-3-5); }
   .grid-cols-2, .grid-cols-3 { grid-template-columns: 1fr; }
 }

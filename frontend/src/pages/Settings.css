@@ -338,20 +338,6 @@
   gap: var(--space-4);
 }
 
-.runtime-status__heading {
-  align-items: center;
-  display: flex;
-  font-size: var(--text-2xl);
-  font-weight: 700;
-  gap: var(--space-2);
-}
-
-.runtime-status__description {
-  color: var(--text-muted);
-  font-size: var(--text-md);
-  margin-top: var(--space-1);
-}
-
 .runtime-status__actions {
   display: flex;
   flex-wrap: wrap;
@@ -375,12 +361,6 @@
   gap: var(--space-3);
 }
 
-.runtime-status__grid {
-  display: grid;
-  gap: var(--space-3);
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-}
-
 .runtime-status__card,
 .runtime-status__warning-card,
 .runtime-status__version {
@@ -388,12 +368,6 @@
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   padding: var(--space-3);
-}
-
-.runtime-status__card-label {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  margin-bottom: var(--space-1-5);
 }
 
 .runtime-status__card-value,
@@ -405,46 +379,6 @@
 .runtime-status__dot {
   height: 7px;
   width: 7px;
-}
-
-.runtime-status__split-row {
-  flex-wrap: wrap;
-  gap: var(--space-3);
-}
-
-.runtime-status__meta {
-  color: var(--text-muted);
-  font-size: var(--text-md);
-}
-
-.runtime-status__meta--spaced {
-  margin-top: var(--space-2);
-}
-
-.runtime-status__meta--compact {
-  margin-top: var(--space-1-5);
-}
-
-.runtime-status__role-list {
-  display: grid;
-  gap: var(--space-2);
-  margin-top: var(--space-2-5);
-}
-
-.runtime-status__role {
-  font-size: var(--text-md);
-}
-
-.runtime-status__process-list {
-  border-top: 1px solid var(--border-light);
-  display: grid;
-  gap: var(--space-1-5);
-  margin-top: var(--space-3);
-  padding-top: var(--space-2-5);
-}
-
-.runtime-status__process {
-  font-size: var(--text-md);
 }
 
 .runtime-status__warning-card,
@@ -1048,7 +982,6 @@
 .settings-advanced-sections .settings-disclosure > summary strong { font-weight: 700; }
 .settings-advanced-body { display: grid; gap: var(--space-4); }
 .settings-preferences { display: grid; gap: var(--space-4); }
-.settings-theme-options { display: inline-flex; }
 .settings-subsection-title { border-top: 1px solid var(--border-color); font-size: var(--text-xl); font-weight: 650; margin: var(--space-6) 0 var(--space-2-5); padding-top: var(--space-4-5); }
 .settings-notifications-page, .settings-ai-page { display: grid; gap: var(--space-4); }
 .settings-notifications-page > .settings-subsection-title { margin-bottom: calc(var(--space-1-5) * -1); }

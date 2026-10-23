@@ -15,7 +15,7 @@ const normalize = text => text.replace(/\s+/g, ' ').trim();
 // neutral terminal indicators (5.0), loading spinners (6), and composer submit (5.2).
 // This is not a blanket exemption for any selector containing "dot" or "button".
 const circles = {
-  'index.css': ['.api-status-dot', '.sub-filter-dot', '.kanban-column-dot', '.status-dot'],
+  'index.css': ['.api-status-dot', '.status-dot'],
   'GeekWorkbench.css': ['.e2b-window-dots .e2b-dot'],
   'GeekWorkbenchPages.css': ['.composer-circle-submit, .session-composer-circle'],
   'components/TurtleLoader.css': ['.turtle-loader-track::after'],
@@ -179,7 +179,6 @@ test('editor menus, attachments and toast own theme-neutral component surfaces',
 test('selected tabs and language controls use neutral surfaces and a thin primary underline', () => {
   const targets = {
     'pages/runs/Runs.css': ".run-detail-section-tabs button[aria-current='page']",
-    'GeekWorkbenchPages.css': '.settings-tab.active',
     'pages/Settings.css': '.settings-language-options button.active',
   };
   for (const [file, selector] of Object.entries(targets)) {

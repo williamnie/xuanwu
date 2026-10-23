@@ -27,50 +27,10 @@
   font-size: var(--text-2xs);
   gap: var(--space-1-5);
 }
-
-.supervisor-scope-note {
-  align-items: center;
-  border-bottom: 1px solid var(--border-color);
-  border-top: 1px solid var(--border-color);
-  display: flex;
-  gap: var(--space-4);
-  justify-content: space-between;
-  padding: var(--space-2-5) 0;
-}
-
-.supervisor-scope-copy {
-  display: grid;
-  gap: var(--space-0-5);
-}
-.supervisor-scope-copy > span {
-  color: var(--primary);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  font-weight: 800;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-}
 .provider-console-label {
   color: var(--primary);
   font-size: var(--text-2xs);
   font-weight: 800;
-}
-
-.supervisor-scope-copy strong {
-  color: var(--text-primary);
-  font-size: var(--text-md);
-}
-
-.supervisor-scope-copy p {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  line-height: 1.45;
-  margin: 0;
-}
-
-.supervisor-code-agents-link {
-  flex: 0 0 auto;
-  white-space: nowrap;
 }
 
 .supervisor-readiness {
@@ -623,11 +583,6 @@
   padding: var(--space-1-5) var(--space-2);
 }
 
-.supervisor-oauth-refresh {
-  min-width: 34px;
-  padding-inline: var(--space-2);
-}
-
 .provider-saved-connections,
 .persona-settings-disclosure,
 .prompt-debug-disclosure {
@@ -766,11 +721,6 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.persona-profile-badge {
-  color: var(--text-muted);
-  font-size: var(--text-2xs);
-}
-
 .persona-conflict-notice {
   border-left: 2px solid var(--warning);
   color: var(--text-secondary);
@@ -798,24 +748,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1-5);
-}
-
-.prompt-debug-heading p {
-  color: var(--text-muted);
-  font-size: var(--text-2xs);
-  margin: var(--space-0-5) 0 0;
-}
-
-.prompt-debug-summary {
-  color: var(--text-secondary);
-  display: grid;
-  font-size: var(--text-xs);
-  gap: var(--space-1);
-}
-
-.prompt-debug-summary code {
-  color: var(--text-muted);
-  white-space: pre-wrap;
 }
 
 .supervisor-save-row {
@@ -917,7 +849,6 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
 
   .provider-model-row {
     grid-template-columns: 1fr;

@@ -84,12 +84,6 @@
     },
     {
       "file": "GeekWorkbench.css",
-      "selector": ".page-intro",
-      "property": "padding",
-      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
-    },
-    {
-      "file": "GeekWorkbench.css",
       "selector": ".e2b-window-header",
       "property": "padding",
       "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
@@ -102,25 +96,7 @@
     },
     {
       "file": "GeekWorkbenchPages.css",
-      "selector": ".dashboard-stat-card",
-      "property": "padding",
-      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
-    },
-    {
-      "file": "GeekWorkbenchPages.css",
-      "selector": ".dashboard-events-card",
-      "property": "padding",
-      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
-    },
-    {
-      "file": "GeekWorkbenchPages.css",
       "selector": ".dashboard-page > .grid-cols-3 > .glass-card",
-      "property": "padding",
-      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
-    },
-    {
-      "file": "GeekWorkbenchPages.css",
-      "selector": ".kanban-column-header",
       "property": "padding",
       "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
     },
@@ -187,12 +163,6 @@
     {
       "file": "index.css",
       "selector": ".sidebar",
-      "property": "padding",
-      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
-    },
-    {
-      "file": "index.css",
-      "selector": ".kanban-column-header",
       "property": "padding",
       "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
     },
@@ -510,18 +480,6 @@
     },
     {
       "file": "pages/command-center/AttentionSection.css",
-      "selector": ".attention-section.e2b-terminal-window .attention-priority-groups",
-      "property": "padding",
-      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
-    },
-    {
-      "file": "pages/command-center/AttentionSection.css",
-      "selector": ".attention-card",
-      "property": "padding",
-      "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
-    },
-    {
-      "file": "pages/command-center/AttentionSection.css",
       "selector": ".approval-detail",
       "property": "padding",
       "reason": "Spec 4: 14 / 18px panel or page inset; no gap / margin exemption."
@@ -778,28 +736,7 @@
     },
     {
       "file": "index.css",
-      "selector": ".kanban-card-status",
-      "property": "padding",
-      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip.",
-      "context": "badge-inset"
-    },
-    {
-      "file": "index.css",
       "selector": ".status-badge",
-      "property": "padding",
-      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip.",
-      "context": "badge-inset"
-    },
-    {
-      "file": "index.css",
-      "selector": ".triage-readiness-badge",
-      "property": "padding",
-      "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip.",
-      "context": "badge-inset"
-    },
-    {
-      "file": "index.css",
-      "selector": ".kanban-card-runtime-pill",
       "property": "padding",
       "reason": "Spec 4.0.1: 2px inset of this badge / status label / reference chip.",
       "context": "badge-inset"
@@ -845,34 +782,6 @@
       "property": "padding",
       "reason": "Spec 4.0.1: severity badge / attached-context chip inset.",
       "context": "badge-inset"
-    },
-    {
-      "file": "GeekWorkbenchPages.css",
-      "selector": ".dashboard-alert h4",
-      "property": "margin",
-      "context": "stacked-text",
-      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
-    },
-    {
-      "file": "GeekWorkbenchPages.css",
-      "selector": ".settings-tabs",
-      "property": "gap",
-      "context": "compact-list",
-      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
-    },
-    {
-      "file": "components/AppSidebar.css",
-      "selector": ".sidebar-new-issue-shortcut",
-      "property": "padding",
-      "context": "badge-inset",
-      "reason": "Spec 4.0.1 / approved micro-spacing correction: badge / compact shortcut label inset."
-    },
-    {
-      "file": "components/AppSidebar.css",
-      "selector": ".sidebar-focus-list",
-      "property": "gap",
-      "context": "compact-list",
-      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
     },
     {
       "file": "components/CodexUsagePanel.css",
@@ -947,13 +856,6 @@
     {
       "file": "index.css",
       "selector": ".sidebar-nav-group",
-      "property": "gap",
-      "context": "compact-list",
-      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
-    },
-    {
-      "file": "index.css",
-      "selector": ".sidebar-project-list",
       "property": "gap",
       "context": "compact-list",
       "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between compact menu / list items."
@@ -1253,20 +1155,6 @@
       "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
     },
     {
-      "file": "pages/command-center/ActiveWorkSection.css",
-      "selector": ".active-work-compatibility[open]",
-      "property": "gap",
-      "context": "stacked-text",
-      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
-    },
-    {
-      "file": "pages/command-center/AttentionSection.css",
-      "selector": ".attention-card-next",
-      "property": "gap",
-      "context": "stacked-text",
-      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
-    },
-    {
       "file": "pages/command-center/AttentionSection.css",
       "selector": ".approval-detail-grid strong",
       "property": "margin-top",
@@ -1297,13 +1185,6 @@
     {
       "file": "pages/command-center/RecentDeliveriesSection.css",
       "selector": ".recent-deliveries-state > div",
-      "property": "gap",
-      "context": "stacked-text",
-      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
-    },
-    {
-      "file": "pages/command-center/RecentDeliveriesSection.css",
-      "selector": ".recent-deliveries-compatibility[open]",
       "property": "gap",
       "context": "stacked-text",
       "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
@@ -1415,13 +1296,6 @@
     },
     {
       "file": "pages/PiAgentSettingsPanel.css",
-      "selector": ".supervisor-scope-copy",
-      "property": "gap",
-      "context": "stacked-text",
-      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
-    },
-    {
-      "file": "pages/PiAgentSettingsPanel.css",
       "selector": ".supervisor-readiness-item > span",
       "property": "gap",
       "context": "stacked-text",
@@ -1487,13 +1361,6 @@
       "file": "pages/PiAgentSettingsPanel.css",
       "selector": ".persona-settings-disclosure > summary span, .prompt-debug-disclosure > summary span",
       "property": "gap",
-      "context": "stacked-text",
-      "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
-    },
-    {
-      "file": "pages/PiAgentSettingsPanel.css",
-      "selector": ".prompt-debug-heading p",
-      "property": "margin",
       "context": "stacked-text",
       "reason": "Spec 4.0.1 / approved micro-spacing correction: spacing between stacked text lines."
     },

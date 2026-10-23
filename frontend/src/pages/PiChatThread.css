@@ -300,7 +300,6 @@
   white-space: nowrap;
 }
 .pi-chat-runtime-pill:first-child { background: var(--primary-glow); color: var(--primary); }
-.pi-chat-runtime-pill.muted { color: var(--text-muted); }
 
 @keyframes pi-chat-running-signal {
   0%, 100% { opacity: .45; }

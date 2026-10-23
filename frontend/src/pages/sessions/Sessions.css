@@ -1,11 +1,4 @@
 /* Session list and transcript primitives. Page composition lives in SessionsClient.css. */
-.session-detail {
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  overflow: hidden;
-}
 
 .session-list-viewport {
   flex: 1;
@@ -611,10 +604,6 @@
   align-items: flex-end;
 }
 
-.chat-bubble-container.user .chat-bubble-sender {
-  text-align: right;
-}
-
 .chat-bubble-container.user .session-markdown {
   text-align: left;
 }
@@ -628,31 +617,6 @@
   width: min(100%, var(--sessions-message-max-width));
 }
 
-.chat-bubble-avatar {
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--text-sm);
-  font-weight: 700;
-  flex: 0 0 auto;
-  box-shadow: none;
-  background: var(--nav-hover);
-  color: var(--text-secondary);
-  height: 26px;
-  width: 26px;
-}
-
-.chat-bubble-container.user .chat-bubble-avatar {
-  background: var(--primary-glow);
-  color: var(--primary);
-}
-
-.chat-bubble-container.agent .chat-bubble-avatar {
-  background: var(--primary-glow);
-  color: var(--primary);
-}
-
 .chat-bubble-content {
   flex: 1;
   min-width: 0;
@@ -660,15 +624,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1-5);
-}
-
-.chat-bubble-sender {
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .chat-bubble-body {

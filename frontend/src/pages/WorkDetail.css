@@ -27,7 +27,6 @@
 .work-state-summary div { display: flex; flex-direction: column; gap: var(--space-1); }
 .work-state-summary strong { font-size: var(--text-md); }
 .work-state-summary span { color: var(--text-secondary); font-size: var(--text-xs); line-height: 1.5; }
-.work-latest-handoff p { color: var(--text-secondary); font-size: var(--text-xs); line-height: 1.45; margin: 0; }
 .work-provider-profile-facts { display: grid; gap: var(--space-1-5); margin: 0; }
 .work-provider-profile-facts div { display: grid; gap: var(--space-2-5); grid-template-columns: minmax(100px, .8fr) minmax(0, 1.2fr); }
 .work-provider-profile-facts dt { color: var(--text-muted); font-size: var(--text-xs); }

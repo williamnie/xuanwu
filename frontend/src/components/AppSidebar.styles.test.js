@@ -14,14 +14,6 @@ function ruleFor(selector, stylesheet = css) {
   return match[1];
 }
 
-test('sidebar project list fills remaining menu height', () => {
-  const rule = ruleFor('.sidebar-project-list');
-
-  assert.match(rule, /flex:\s*1\s+1\s+0/);
-  assert.match(rule, /min-height:\s*0/);
-  assert.doesNotMatch(rule, /max-height:\s*220px/);
-});
-
 test('collapsed sidebar navigation keeps accessible names when labels are visually hidden', () => {
   assert.match(source, /aria-label=\{navLabel\(item\)\}/);
   assert.match(source, /aria-label=\{theme === 'dark' \? t\('sidebar\.lightTheme'\) : t\('sidebar\.darkTheme'\)\}/);

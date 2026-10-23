@@ -66,7 +66,6 @@ body:has(> .modal-overlay .prompt-editor-shell.composer) .global-ask-composer-sh
   width: 28px;
 }
 
-
 .global-ask-composer-brand > span:last-child {
   display: flex;
   flex-direction: column;

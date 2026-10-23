@@ -36,7 +36,6 @@
   color: var(--text-primary);
 }
 
-
 .codex-toast-item:hover {
   box-shadow: var(--shadow-lg);
 }
@@ -77,7 +76,6 @@
   background: var(--nav-hover);
   color: var(--text-secondary);
 }
-
 
 /* 针对不同类型的轻微底部分类色条或细边高亮 */
 .codex-toast-item.success {

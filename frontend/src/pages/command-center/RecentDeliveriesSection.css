@@ -73,9 +73,6 @@
 .recent-deliveries-state span { font-size: var(--text-md); }
 .recent-deliveries-state.empty { flex-direction: column; justify-content: center; text-align: center; }
 .recent-deliveries-state.error { background: var(--error-bg); border-color: color-mix(in srgb, var(--error) 35%, var(--border-color)); color: var(--error); }
-.recent-deliveries-compatibility { border-top: 1px solid var(--border-light); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); line-height: 1.5; padding-top: var(--space-2); }
-.recent-deliveries-compatibility summary { cursor: pointer; width: fit-content; }
-.recent-deliveries-compatibility[open] { display: flex; flex-direction: column; gap: var(--space-0-5); }
 
 @media (max-width: 760px) {
   .recent-deliveries-header { align-items: stretch; flex-direction: column; }

@@ -350,13 +350,6 @@
 }
 
 /* 隐藏聊天卡片边框 */
-.client-chat-area .session-detail {
-  flex: 1;
-  min-height: 0;
-  background: transparent;
-  box-shadow: none;
-  border: none;
-}
 
 .client-chat-area .session-detail-body {
   background: transparent;
@@ -459,16 +452,6 @@
 .session-detail-loading span {
   font-weight: 500;
   color: var(--text-muted);
-}
-
-.skeleton-inline {
-  display: inline-block;
-  height: 14px;
-  width: 100%;
-  border-radius: var(--radius-xs);
-  vertical-align: middle;
-  background: var(--nav-hover);
-  border: 1px solid var(--border-light);
 }
 
 /* ==========================================================================
