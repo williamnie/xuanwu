@@ -102,7 +102,7 @@
 
 ### 6.2 W2 观察窗与 rollback runbook
 
-- 开关：`XUANWU_PROVIDER_LEGACY_PROJECTION_COMPARE=1` 开启 manifest/实例 capabilities parity 对比（`providers/core/parity.ts`）。
+- 2026-10：W2 parity 观察开关与 `providers/core/parity.ts` 已删除；manifest/实例 capabilities 一致性由 `providers/core/fourForms.test.ts` 固定。
 - drift 处理：记录 `provider.legacy_projection_drift` warning（含 drifted providers 与 diffs），不阻断运行。
 - **rollback**：该 flag 只控制只读 parity telemetry，不是执行链切换开关。Registry primary 发布前仍须保留上一可运行 release；发现 drift 时回滚部署版本。对比不写 DB，因此无需 DB 回填或删除事件。
 - parity 范围：refs（thread_id/turn_id ↔ sessionRef/messageRef）、capabilities（manifest detail ↔ 实例 legacy 数组）、status/session 数量由 runtime 快照对比（`compareRefsParity`/`compareCapabilitiesParity`）。
@@ -126,7 +126,7 @@
 | --- | --- | --- |
 | 至少 Codex/Claude/Pi/Qoder 四种形态过 conformance | ⏳ | fixture conformance 存在；Qoder 按当前决策延期到本机安装后验收，不能标记完成 |
 | §20 conformance 矩阵 | ⚠️ | fixture 自动化覆盖存在；生产 adapter 仍需分别附真实调用 acceptance |
-| W2 一个正式 release 无 parity drift | ❌ | 尚未开始正式 release 观察窗；`XUANWU_PROVIDER_LEGACY_PROJECTION_COMPARE` 仅表示 telemetry 就绪 |
+| W2 一个正式 release 无 parity drift | — | 观察窗未启动即退役；一致性改由测试保证 |
 | rollback 演练 | ❌ | 需用上一可运行 release 做部署级演练；关闭 parity flag 不等于执行链回滚 |
 | schema 迁移经 ADR-XW-0070 演练 | ✅（零 schema 迁移） | P0-P12 未新增任何 schema migration（042 列语义不变，空字符串合法） |
 | 物理 schema 删除需单独 superseding ADR | 不适用 | 本重构未删除物理列 |

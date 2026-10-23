@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createProviderRegistry } from "./registry.ts";
 import { checkManifest } from "./conformance.ts";
-import { compareCapabilitiesParity } from "./parity.ts";
+import { legacyCapabilitiesFromDetail } from "./manifest.ts";
 import { codexFactory } from "../codex/factory.ts";
 import { claudeFactory } from "../claude/factory.ts";
 import { piFactory } from "../pi/factory.ts";
@@ -66,11 +66,11 @@ describe("P12: 四种形态 conformance（Codex/Claude/Pi/Qoder）", () => {
     }
   });
 
-  test("四种形态 manifest ↔ 实例 capabilities 无 parity drift", async () => {
+  test("四种形态 manifest ↔ 实例 capabilities 一致", async () => {
     const registry = await fourFormRegistry();
     for (const entry of registry.list()) {
-      const report = compareCapabilitiesParity(entry);
-      expect(report.ok).toBe(true);
+      expect([...(entry.instance?.capabilities ?? [])].sort(), String(entry.id))
+        .toEqual([...legacyCapabilitiesFromDetail(entry.manifest.capabilities)].sort());
     }
   });
 

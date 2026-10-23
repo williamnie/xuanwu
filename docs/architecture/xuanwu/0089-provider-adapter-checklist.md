@@ -42,7 +42,7 @@
 ## 4. Parity 与观察窗
 
 - [ ] `core/parity.ts`：manifest detail ↔ 实例 legacy capabilities 无 drift（`compareCapabilitiesParity`）。
-- [ ] W2 观察窗：`XUANWU_PROVIDER_LEGACY_PROJECTION_COMPARE=1` 运行 parity 对比；drift 记录 telemetry，不阻断。
+- [x] manifest 与实例 capabilities 一致（`providers/core/fourForms.test.ts`）。
 - [ ] rollback：关闭 flag 即回退；不需要 DB 回填或删除事件。
 
 ## 5. 验收与 support level
