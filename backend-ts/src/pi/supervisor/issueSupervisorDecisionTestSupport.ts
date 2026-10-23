@@ -1,29 +1,43 @@
 import type { PiAgent } from "../../db/repositories/pi.ts";
 import type { Project } from "../../db/repositories/projects.ts";
-import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
+import type { RunnerDatabase } from "../../db/database.ts";
 import type { IssueSupervisorRecoveryContext } from "./issueSupervisorContext.ts";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { FIXTURE_TIME, insertProject, insertRow, useTestDatabase } from "../../testing/harness.ts";
+import { useFauxPi, type FauxPi } from "../../testing/fauxPi.ts";
 
-const tempRoots: string[] = [];
+export type DecisionFixture = { agent: PiAgent; db: RunnerDatabase; faux: FauxPi; project: Project };
 
-export async function cleanupDecisionFixtures(): Promise<void> {
-  while (tempRoots.length > 0) await rm(tempRoots.pop() ?? "", { recursive: true, force: true });
-}
+const AGENT: PiAgent = {
+  id: "pi-supervisor", name: "PI Supervisor", provider: "pi-sdk", model_provider: "pi-supervisor", model_id: "faux-1",
+  thinking_level: "off", cwd_policy: "project", tools_json: "[]", instructions: "", enabled: 1,
+  created_at: FIXTURE_TIME, updated_at: FIXTURE_TIME
+};
 
-export async function openDecisionFixture(prefix: string): Promise<{ agent: PiAgent; db: RunnerDatabase; project: Project }> {
-  const root = await mkdtemp(join(tmpdir(), prefix));
-  tempRoots.push(root);
-  const projectCwd = join(root, "project");
-  mkdirSync(projectCwd, { recursive: true });
-  writeFileSync(join(projectCwd, "README.md"), "# Demo\n");
-  const db = await openDatabase({ stateDir: join(root, "state") });
-  insertProject(db, "demo", projectCwd);
-  insertAgent(db);
-  writeFauxModelsConfig(db);
-  return { agent: agentRecord(), db, project: projectRecord(projectCwd) };
+/**
+ * Returns `open()`: project "demo" checked out in a temp dir and a "pi-supervisor" agent whose model is the returned
+ * faux provider. Databases close and providers unregister after each test of the calling file.
+ */
+export function useDecisionFixture(): () => Promise<DecisionFixture> {
+  const openTestDatabase = useTestDatabase("xuanwu-supervisor-decision-");
+  const fauxPi = useFauxPi();
+  return async () => {
+    const db = await openTestDatabase();
+    const projectCwd = join(db.path, "..", "..", "project");
+    mkdirSync(projectCwd, { recursive: true });
+    writeFileSync(join(projectCwd, "README.md"), "# Demo\n");
+    insertProject(db, "demo", { cwd: projectCwd, sort_order: 1 });
+    insertRow(db, "pi_agents", { id: AGENT.id, name: AGENT.name, created_at: FIXTURE_TIME, updated_at: FIXTURE_TIME });
+    const faux = fauxPi(db, { agentId: AGENT.id, provider: AGENT.model_provider });
+    const project: Project = {
+      id: "demo", name: "demo", cwd: projectCwd, provider: "codex", provider_config_json: "{}", auto_run: 1,
+      model: "", approval_policy: "never", sandbox: "workspace-write", default_agent_profile_id: "",
+      sort_order: 1, created_at: FIXTURE_TIME, updated_at: FIXTURE_TIME,
+      default_mcp_policy: "{}", default_skill_policy: "{}", loop_status: "stopped", provider_capabilities: []
+    };
+    return { agent: AGENT, db, faux, project };
+  };
 }
 
 export function streamDisconnectContext(): IssueSupervisorRecoveryContext {
@@ -150,41 +164,4 @@ export function insertIssueFixture(db: RunnerDatabase, input: { issueID: number;
     (session_key, provider, provider_session_id, project_id, issue_id, status, raw_ref, created_at, updated_at)
     values (?, 'codex', ?, ?, ?, 'running', '{}', ?, ?)`,
   [`codex:${input.sessionID}`, input.sessionID, input.projectID, input.issueID, "2026-06-10T07:50:00Z", "2026-06-10T07:59:00Z"]);
-}
-
-function insertProject(db: RunnerDatabase, id: string, cwd: string): void {
-  db.sqlite.run(`insert into projects (id, name, cwd, sort_order, created_at, updated_at)
-    values (?, ?, ?, ?, ?, ?)`, [id, id, cwd, 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]);
-}
-
-function insertAgent(db: RunnerDatabase): void {
-  db.sqlite.run(`insert into pi_agents (id, name, model_provider, model_id, thinking_level, enabled, created_at, updated_at)
-    values (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ["pi-supervisor", "PI Supervisor", "pi-supervisor", "faux-1", "off", 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]);
-}
-
-function agentRecord(): PiAgent {
-  return {
-    id: "pi-supervisor", name: "PI Supervisor", provider: "pi-sdk", model_provider: "pi-supervisor", model_id: "faux-1",
-    thinking_level: "off", cwd_policy: "project", tools_json: "[]", instructions: "", enabled: 1,
-    created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z"
-  };
-}
-
-function projectRecord(cwd: string): Project {
-  return {
-    id: "demo", name: "demo", cwd, provider: "codex", provider_config_json: "{}", auto_run: 1,
-    model: "", approval_policy: "never", sandbox: "workspace-write", default_agent_profile_id: "",
-    sort_order: 1, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
-    default_mcp_policy: "{}", default_skill_policy: "{}", loop_status: "stopped", provider_capabilities: []
-  };
-}
-
-function writeFauxModelsConfig(db: RunnerDatabase): void {
-  const agentDir = join(db.path, "..", "pi-runtime", "agent");
-  mkdirSync(agentDir, { recursive: true });
-  writeFileSync(join(agentDir, "models.json"), JSON.stringify({
-    providers: { "pi-supervisor": { api: "pi-supervisor-api", apiKey: "test", baseUrl: "http://localhost:0", models: [{ id: "faux-1" }] } }
-  }));
-  if (!existsSync(join(agentDir, "models.json"))) throw new Error("models config missing");
 }

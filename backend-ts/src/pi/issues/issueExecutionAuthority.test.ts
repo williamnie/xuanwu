@@ -1,14 +1,14 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { fauxAssistantMessage, registerFauxProvider } from "@earendil-works/pi-ai/compat";
+import { describe, expect, test } from "bun:test";
+import { fauxAssistantMessage } from "@earendil-works/pi-ai/compat";
 import { createIssue } from "../../db/repositories/issueCreate.ts";
 import { recordIssueEvent } from "../../db/repositories/issueEvents.ts";
 import { createIssueRun } from "../../db/repositories/issueRuns.ts";
 import { buildIssueCompletionCard } from "../../domain/acceptance/completionCard.ts";
 import { buildIssuePromptForTest } from "../../runner/projectLoop.ts";
 import { runPiIssueAcceptance } from "./issueAcceptance.ts";
-import { cleanupDecisionFixtures, openDecisionFixture } from "../supervisor/issueSupervisorDecisionTestSupport.ts";
+import { useDecisionFixture } from "../supervisor/issueSupervisorDecisionTestSupport.ts";
 
-afterEach(cleanupDecisionFixtures);
+const openDecisionFixture = useDecisionFixture();
 
 const goal975 = [
   "## 一句话目标",
@@ -34,44 +34,41 @@ describe("Issue execution authority reaches PI acceptance", () => {
       final: "尚未取得付费授权，未修改代码或调用真实模型。RUNNER_OUTCOME: needs_user | 缺少预算和凭据" }
   ]) {
     test(scenario.name, async () => {
-      const f = await openDecisionFixture("issue-execution-authority-");
-      const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
-      try {
-        const issue = createIssue(f.db, { project_id: "demo", status: "in_progress",
-          title: "安全释放等待任务工作目录", description: scenario.goal });
-        const run = createIssueRun(f.db, issue.id);
-        recordIssueEvent(f.db, issue.id, "issue.log", {
-          runtime_evidence_correlation: { issue_run_id: run.id }, text: scenario.final
-        });
-        f.db.sqlite.run("update issue_runs set status='succeeded', ended_at=? where id=?",
-          [new Date().toISOString(), run.id]);
-        const card = await buildIssueCompletionCard(f.db, issue.id);
-        expect(card.issue.goal).toBe(scenario.goal);
-        expect(card.final_message).toBe(scenario.final);
-        let acceptanceInput = "";
-        faux.setResponses([(context) => {
-          acceptanceInput = JSON.stringify(context);
-          return fauxAssistantMessage(JSON.stringify({ decision: "needs_user", confidence: "high",
-            rationale: "仅验证提示传递的离线替身", evidence_refs: [], unmet_requirements: ["fixture"],
-            progress: { made_progress: false, evidence_refs: [], summary: "fixture" } }));
-        }]);
-        expect((await runPiIssueAcceptance({ ...f, database: f.db, card })).valid).toBe(true);
-        const executionInput = buildIssuePromptForTest(f.project, issue, f.db);
-        for (const rule of [
-          "pre-dispatch planning state and is not a reason to undo this active Run",
-          "credentials, budget, external authorization, or user-supplied choices",
-          "PI follow-up instructions do not replace the original Issue goal",
-          "A successful rollback or a clean workspace alone does not satisfy a feature implementation goal",
-          "If substantive authorization is genuinely ambiguous, preserve the workspace and request a human decision"
-        ]) {
-          expect(executionInput).toContain(rule);
-          expect(acceptanceInput).toContain(rule);
-        }
-        // 原始正文及本 Run 事实必须完整传递，不能靠删掉限制消除冲突。
-        for (const fact of [scenario.goal, scenario.final]) {
-          expect(acceptanceInput).toContain(JSON.stringify(fact).slice(1, -1).replaceAll("\\", "\\\\"));
-        }
-      } finally { faux.unregister(); f.db.close(); }
+      const f = await openDecisionFixture();
+      const issue = createIssue(f.db, { project_id: "demo", status: "in_progress",
+        title: "安全释放等待任务工作目录", description: scenario.goal });
+      const run = createIssueRun(f.db, issue.id);
+      recordIssueEvent(f.db, issue.id, "issue.log", {
+        runtime_evidence_correlation: { issue_run_id: run.id }, text: scenario.final
+      });
+      f.db.sqlite.run("update issue_runs set status='succeeded', ended_at=? where id=?",
+        [new Date().toISOString(), run.id]);
+      const card = await buildIssueCompletionCard(f.db, issue.id);
+      expect(card.issue.goal).toBe(scenario.goal);
+      expect(card.final_message).toBe(scenario.final);
+      let acceptanceInput = "";
+      f.faux.setResponses([(context) => {
+        acceptanceInput = JSON.stringify(context);
+        return fauxAssistantMessage(JSON.stringify({ decision: "needs_user", confidence: "high",
+          rationale: "仅验证提示传递的离线替身", evidence_refs: [], unmet_requirements: ["fixture"],
+          progress: { made_progress: false, evidence_refs: [], summary: "fixture" } }));
+      }]);
+      expect((await runPiIssueAcceptance({ ...f, database: f.db, card })).valid).toBe(true);
+      const executionInput = buildIssuePromptForTest(f.project, issue, f.db);
+      for (const rule of [
+        "pre-dispatch planning state and is not a reason to undo this active Run",
+        "credentials, budget, external authorization, or user-supplied choices",
+        "PI follow-up instructions do not replace the original Issue goal",
+        "A successful rollback or a clean workspace alone does not satisfy a feature implementation goal",
+        "If substantive authorization is genuinely ambiguous, preserve the workspace and request a human decision"
+      ]) {
+        expect(executionInput).toContain(rule);
+        expect(acceptanceInput).toContain(rule);
+      }
+      // 原始正文及本 Run 事实必须完整传递，不能靠删掉限制消除冲突。
+      for (const fact of [scenario.goal, scenario.final]) {
+        expect(acceptanceInput).toContain(JSON.stringify(fact).slice(1, -1).replaceAll("\\", "\\\\"));
+      }
     });
   }
 });

@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai/compat";
-import { type RunnerDatabase } from "../../db/database.ts";
+import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/compat";
 import { getAutomationTrigger, listAutomations } from "../../db/repositories/automations.ts";
 import { createExternalEvent } from "../../db/repositories/externalEvents.ts";
 import { createIssue } from "../../db/repositories/issueCreate.ts";
@@ -21,15 +17,19 @@ import { PI_CONTEXT_BUDGET_OBSERVATION_EVENT } from "./piContextBudgetObservatio
 import { finalPiConversationSseData } from "./piConversationSse.testSupport.ts";
 import { runPiConversationPrompt } from "./piConversationApi.ts";
 import { createDefaultRouter } from "../server.ts";
-import { useTestDatabase } from "../../testing/harness.ts";
+import { apiClient, FIXTURE_TIME, insertProject, useTestDatabase } from "../../testing/harness.ts";
+import { configureFauxAgent, useFauxPi, writeFauxModelsConfig } from "../../testing/fauxPi.ts";
 
-const BASE_URL = "http://127.0.0.1:3008";
 const openFixtureDatabase = useTestDatabase();
+const fauxPi = useFauxPi();
+/** piRuntime auto-registers this provider with a fixed reply unless a test scripts it first. */
+const SMOKE_PROVIDER = "pi-smoke-faux";
+const EXECUTABLE = { provider_config_json: '{"capabilities":["issue_execution"]}' };
 
 describe("Bun PI runtime v1 smoke", () => {
   test("keeps Persona final in controlled Chat runtime and strips it plus optional resources from internal profiles", async () => {
     const database = await openFixtureDatabase();
-    writeFauxModelsConfig(database);
+    writeFauxModelsConfig(database, SMOKE_PROVIDER);
     updatePiPersona(database, { expected_revision: 0, enabled: 1 }, {
       actor: "runtime-smoke", reason: "controlled canary", requestedAt: new Date().toISOString()
     });
@@ -107,22 +107,11 @@ describe("Bun PI runtime v1 smoke", () => {
 
   test("auto-registers local faux provider for preview smoke agent", async () => {
     const database = await openFixtureDatabase();
-    insertProject(database, "demo");
-    insertFauxAgent(database);
-    writeFauxModelsConfig(database);
-    const router = createDefaultRouter({ bus: new EventBus(), database });
+    insertProject(database, "demo", EXECUTABLE);
+    configureFauxAgent(database, SMOKE_PROVIDER);
+    const chat = runnerChat(createDefaultRouter({ bus: new EventBus(), database }));
 
-    const created = await post(router, "/api/pi/conversations", {
-      id: "conv-auto-faux",
-      project_id: "demo"
-    });
-    const message = await post(router, "/api/pi/conversations/conv-auto-faux/messages", {
-      prompt: "Reply ok only"
-    });
-
-    expect(created.status).toBe(201);
-    expect(message.status).toBe(201);
-    expect(await finalPiConversationSseData(message)).toMatchObject({
+    expect(await chat.ask("conv-auto-faux", "Reply ok only", { project_id: "demo" })).toMatchObject({
       conversation_id: "conv-auto-faux",
       status: "completed",
       text: "pi-smoke-response-ok"
@@ -131,7 +120,7 @@ describe("Bun PI runtime v1 smoke", () => {
 
   test("runner chat executes issue create and scheduled enqueue through chat tools", async () => {
     const database = await openFixtureDatabase();
-    const faux = registerFauxProvider({ api: "pi-smoke-faux-api", provider: "pi-smoke-faux" });
+    const faux = fauxPi(database, { provider: SMOKE_PROVIDER });
     const bus = new EventBus();
     const events = bus.subscribe();
     try {
@@ -157,22 +146,12 @@ describe("Bun PI runtime v1 smoke", () => {
         ], { stopReason: "toolUse" }),
         fauxAssistantMessage("smoke done")
       ]);
-      insertProject(database, "demo");
-      insertFauxAgent(database);
-      writeFauxModelsConfig(database);
-      const router = createDefaultRouter({ bus, database });
+      insertProject(database, "demo", EXECUTABLE);
+      const chat = runnerChat(createDefaultRouter({ bus, database }));
 
-      const created = await post(router, "/api/pi/conversations", {
-        id: "conv-smoke",
+      expect(await chat.ask("conv-smoke", "Create one action in demo and remember the explicit reusable preference", {
         project_id: "demo"
-      });
-      const message = await post(router, "/api/pi/conversations/conv-smoke/messages", {
-        prompt: "Create one action in demo and remember the explicit reusable preference"
-      });
-
-      expect(created.status).toBe(201);
-      expect(message.status).toBe(201);
-      expect(await finalPiConversationSseData(message)).toMatchObject({
+      })).toMatchObject({
         conversation_id: "conv-smoke",
         status: "completed",
         text: "smoke done"
@@ -204,64 +183,43 @@ describe("Bun PI runtime v1 smoke", () => {
       expect(faux.state.callCount).toBe(2);
     } finally {
       events.close();
-      faux.unregister();
-      database.close();
     }
   });
 
   test("runner chat reads Issue context and executes an authorized status move", async () => {
     const database = await openFixtureDatabase();
-    const faux = registerFauxProvider({ api: "pi-smoke-faux-api", provider: "pi-smoke-faux" });
-    try {
-      insertProject(database, "demo");
-      const issue = createIssue(database, {
-        project_id: "demo",
-        status: "triage",
-        title: "Stop this work"
-      });
-      faux.setResponses([
-        fauxAssistantMessage([
-          fauxToolCall("issue_read", { id: issue.id }, { id: "issue-read" }),
-          fauxToolCall("issue_status_update", {
-            issue_ids: [issue.id],
-            reason: "用户明确要求不再处理",
-            status: "cancelled"
-          }, { id: "issue-status-update" })
-        ], { stopReason: "toolUse" }),
-        fauxAssistantMessage("已移到 cancelled")
-      ]);
-      insertFauxAgent(database);
-      writeFauxModelsConfig(database);
-      const router = createDefaultRouter({ database });
+    const faux = fauxPi(database, { provider: SMOKE_PROVIDER });
+    insertProject(database, "demo", EXECUTABLE);
+    const issue = createIssue(database, { project_id: "demo", status: "triage", title: "Stop this work" });
+    faux.setResponses([
+      fauxAssistantMessage([
+        fauxToolCall("issue_read", { id: issue.id }, { id: "issue-read" }),
+        fauxToolCall("issue_status_update", {
+          issue_ids: [issue.id],
+          reason: "用户明确要求不再处理",
+          status: "cancelled"
+        }, { id: "issue-status-update" })
+      ], { stopReason: "toolUse" }),
+      fauxAssistantMessage("已移到 cancelled")
+    ]);
+    const chat = runnerChat(createDefaultRouter({ database }));
 
-      expect((await post(router, "/api/pi/conversations", {
-        id: "conv-status-move",
-        project_id: "demo"
-      })).status).toBe(201);
-      const message = await post(router, "/api/pi/conversations/conv-status-move/messages", {
-        prompt: `#${issue.id} 不做了，移动到 cancelled`
-      });
-
-      expect(message.status).toBe(201);
-      expect(await finalPiConversationSseData(message)).toMatchObject({
-        conversation_id: "conv-status-move",
-        status: "completed",
-        text: "已移到 cancelled"
-      });
-      expect(listIssues(database, { projectId: "demo" })).toContainEqual(expect.objectContaining({
-        id: issue.id,
-        status: "cancelled"
-      }));
-      expect(listPiActions(database, { status: "completed" }).map((action) => action.action_type))
-        .toEqual(expect.arrayContaining(["issue.read", "issue.status_update"]));
-    } finally {
-      faux.unregister();
-    }
+    expect(await chat.ask("conv-status-move", `#${issue.id} 不做了，移动到 cancelled`, { project_id: "demo" })).toMatchObject({
+      conversation_id: "conv-status-move",
+      status: "completed",
+      text: "已移到 cancelled"
+    });
+    expect(listIssues(database, { projectId: "demo" })).toContainEqual(expect.objectContaining({
+      id: issue.id,
+      status: "cancelled"
+    }));
+    expect(listPiActions(database, { status: "completed" }).map((action) => action.action_type))
+      .toEqual(expect.arrayContaining(["issue.read", "issue.status_update"]));
   });
 
   test("assembles PI runtime tools from registry and audits the source", async () => {
     const database = await openFixtureDatabase();
-    writeFauxModelsConfig(database);
+    writeFauxModelsConfig(database, SMOKE_PROVIDER);
 
     const runtime = await createPiRuntimeSession(database, {
       agent: agentRecord(),
@@ -322,7 +280,7 @@ describe("Bun PI runtime v1 smoke", () => {
         surface: "runner_chat"
       }
     ] as const;
-    writeFauxModelsConfig(database);
+    writeFauxModelsConfig(database, SMOKE_PROVIDER);
     for (const fixture of fixtures) {
       const userPrompt = `budget prompt ${fixture.surface} PRIVATE_PROMPT_SENTINEL`;
       const runtime = await createPiRuntimeSession(database, {
@@ -400,10 +358,8 @@ describe("Bun PI runtime v1 smoke", () => {
 
   test("rolls an over-budget IM conversation to one CAS child with a deterministic minimal capsule", async () => {
     const database = await openFixtureDatabase();
-    insertFauxAgent(database);
-    writeFauxModelsConfig(database);
-    const router = createDefaultRouter({ database });
-    expect((await post(router, "/api/pi/conversations", { id: "feishu-chat-rollover" })).status).toBe(201);
+    configureFauxAgent(database, SMOKE_PROVIDER);
+    await runnerChat(createDefaultRouter({ database })).open("feishu-chat-rollover");
     adoptImConversationState(database, {
       activeConversationId: "feishu-chat-rollover",
       baseConversationId: "feishu-chat-rollover",
@@ -484,10 +440,8 @@ describe("Bun PI runtime v1 smoke", () => {
 
   test("commits an IM event binding and cursor from the SDK agent_start signal", async () => {
     const database = await openFixtureDatabase();
-    insertFauxAgent(database);
-    writeFauxModelsConfig(database);
-    const router = createDefaultRouter({ database });
-    expect((await post(router, "/api/pi/conversations", { id: "feishu-chat-binding" })).status).toBe(201);
+    configureFauxAgent(database, SMOKE_PROVIDER);
+    await runnerChat(createDefaultRouter({ database })).open("feishu-chat-binding");
     adoptImConversationState(database, {
       activeConversationId: "feishu-chat-binding",
       baseConversationId: "feishu-chat-binding",
@@ -538,7 +492,7 @@ describe("Bun PI runtime v1 smoke", () => {
 
   test("can answer URL questions through url_fetch instead of only local SDK tools", async () => {
     const database = await openFixtureDatabase();
-    const faux = registerFauxProvider({ api: "pi-url-faux-api", provider: "pi-url-faux" });
+    const faux = fauxPi(database, { provider: "pi-url-faux" });
     const originalFetch = globalThis.fetch;
     const fetchCalls: string[] = [];
     try {
@@ -551,7 +505,6 @@ describe("Bun PI runtime v1 smoke", () => {
           "</body></html>"
         ].join(""), { headers: { "content-type": "text/html; charset=utf-8" }, status: 200 });
       }) as typeof fetch;
-      writeFauxModelsConfig(database, { api: "pi-url-faux-api", provider: "pi-url-faux" });
       faux.setResponses([
         fauxAssistantMessage([
           fauxToolCall(URL_FETCH_TOOL_NAME, {
@@ -597,16 +550,15 @@ describe("Bun PI runtime v1 smoke", () => {
       });
     } finally {
       (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = originalFetch;
-      faux.unregister();
     }
   });
 
   test("injects only authorized skill metadata into PI runtime prompt and audits the summary", async () => {
     const database = await openFixtureDatabase();
-    insertProject(database, "demo", JSON.stringify({
+    insertProject(database, "demo", { ...EXECUTABLE, default_skill_policy_json: JSON.stringify({
       allowed: ["xuanwu"],
       recommended: ["xuanwu", "verification-before-completion"]
-    }));
+    }) });
     const issue = createIssue(database, {
       project_id: "demo",
       recommended_skill_intents: ["verification-before-completion"],
@@ -636,8 +588,7 @@ describe("Bun PI runtime v1 smoke", () => {
       scope: "issue",
       scope_id: String(issue.id)
     });
-    insertFauxAgent(database);
-    writeFauxModelsConfig(database);
+    configureFauxAgent(database, SMOKE_PROVIDER);
 
     const runtime = await createPiRuntimeSession(database, {
       agent: agentRecord(),
@@ -692,9 +643,8 @@ describe("Bun PI runtime v1 smoke", () => {
 
   test("injects agent-specific instructions into PI runtime system prompt after core constraints", async () => {
     const database = await openFixtureDatabase();
-    insertProject(database, "demo");
-    insertFauxAgent(database);
-    writeFauxModelsConfig(database);
+    insertProject(database, "demo", EXECUTABLE);
+    configureFauxAgent(database, SMOKE_PROVIDER);
 
     const runtime = await createPiRuntimeSession(database, {
       agent: agentRecord({
@@ -718,12 +668,23 @@ describe("Bun PI runtime v1 smoke", () => {
   });
 });
 
-function post(router: ReturnType<typeof createDefaultRouter>, path: string, body: Record<string, unknown>) {
-  return router.handle(new Request(`${BASE_URL}${path}`, {
-    method: "POST",
-    body: JSON.stringify(body),
-    headers: { "content-type": "application/json" }
-  }));
+/** Opens Runner Chat conversations through the HTTP API and returns each turn's final SSE frame. */
+function runnerChat(router: ReturnType<typeof createDefaultRouter>) {
+  const api = apiClient(router);
+  const open = async (id: string, body: Record<string, unknown> = {}) => {
+    expect((await api.post("/api/pi/conversations", { id, ...body })).status).toBe(201);
+  };
+  return {
+    open,
+    ask: async (id: string, prompt: string, conversation: Record<string, unknown> = {}) => {
+      await open(id, conversation);
+      const message = await api.raw(`/api/pi/conversations/${id}/messages`, {
+        body: JSON.stringify({ prompt }), headers: { "content-type": "application/json" }, method: "POST"
+      });
+      expect(message.status).toBe(201);
+      return finalPiConversationSseData(message);
+    }
+  };
 }
 
 async function collectEventTypes(events: ReturnType<EventBus["subscribe"]>, limit: number): Promise<string[]> {
@@ -758,24 +719,14 @@ function toolCallAuditPayloads(events: ReturnType<typeof listPiActionEvents>): A
     .map((event) => JSON.parse(event.payload_json) as Record<string, any>);
 }
 
-function insertFauxAgent(db: RunnerDatabase): void {
-  db.sqlite.run(
-    `update pi_agents set name=?, model_provider=?, model_id=?, thinking_level=?, enabled=?, updated_at=?
-      where id='runner-default'`,
-    ["Xuanwu Supervisor", "pi-smoke-faux", "faux-1", "off", 1, "2026-01-01T00:00:00Z"]
-  );
-}
+const AGENT_RECORD = {
+  id: "runner-default", name: "Xuanwu Supervisor", provider: "pi-sdk", model_provider: SMOKE_PROVIDER, model_id: "faux-1",
+  thinking_level: "off", cwd_policy: "project", tools_json: "[]", instructions: "", enabled: 1,
+  created_at: FIXTURE_TIME, updated_at: FIXTURE_TIME
+};
 
-function agentRecord(patch: Partial<ReturnType<typeof agentRecordBase>> = {}) {
-  return { ...agentRecordBase(), ...patch };
-}
-
-function agentRecordBase() {
-  return {
-    id: "runner-default", name: "Xuanwu Supervisor", provider: "pi-sdk", model_provider: "pi-smoke-faux", model_id: "faux-1",
-    thinking_level: "off", cwd_policy: "project", tools_json: "[]", instructions: "", enabled: 1,
-    created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z"
-  };
+function agentRecord(patch: Partial<typeof AGENT_RECORD> = {}) {
+  return { ...AGENT_RECORD, ...patch };
 }
 
 function projectRecord(id: string) {
@@ -783,41 +734,11 @@ function projectRecord(id: string) {
     id, name: id, cwd: `/tmp/${id}`, provider: "codex", provider_config_json: "{}", auto_run: 0,
     model: "", approval_policy: "never", sandbox: "workspace-write", default_agent_profile_id: "",
     default_service_tier: "",
-    sort_order: 1, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
+    sort_order: 1, created_at: FIXTURE_TIME, updated_at: FIXTURE_TIME,
     default_mcp_policy: "{}", default_skill_policy: JSON.stringify({
       allowed: ["xuanwu"],
       recommended: ["xuanwu", "verification-before-completion"]
     }),
     loop_status: "stopped", provider_capabilities: []
   };
-}
-
-function insertProject(db: RunnerDatabase, id: string, skillPolicy = "{}"): void {
-  db.sqlite.run(
-    `insert into projects
-       (id, name, cwd, provider, provider_config_json, default_skill_policy_json, sort_order, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, id, `/tmp/${id}`, "codex", '{"capabilities":["issue_execution"]}', skillPolicy, 1,
-      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
-  );
-}
-
-function writeFauxModelsConfig(
-  db: RunnerDatabase,
-  overrides: { api?: string; provider?: string } = {}
-): void {
-  const agentDir = join(db.path, "..", "pi-runtime", "agent");
-  const provider = overrides.provider ?? "pi-smoke-faux";
-  mkdirSync(agentDir, { recursive: true });
-  writeFileSync(join(agentDir, "models.json"), JSON.stringify({
-    providers: {
-      [provider]: {
-        api: overrides.api ?? "pi-smoke-faux-api",
-        apiKey: "test",
-        baseUrl: "http://localhost:0",
-        models: [{ id: "faux-1" }]
-      }
-    }
-  }));
-  if (!existsSync(join(agentDir, "models.json"))) throw new Error("models config missing");
 }

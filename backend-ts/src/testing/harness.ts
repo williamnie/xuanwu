@@ -91,11 +91,16 @@ export function apiClient(router: { handle(request: Request): Promise<Response> 
   };
 }
 
-/** Polls until `check` returns a truthy value. */
-export async function waitFor<T>(check: () => T | Promise<T>, message = "condition timed out", attempts = 100, intervalMs = 10): Promise<T> {
+/** Polls until `check` returns a truthy value and resolves to it. */
+export async function waitFor<T>(
+  check: () => T | Promise<T>,
+  message = "condition timed out",
+  attempts = 100,
+  intervalMs = 10
+): Promise<Exclude<T, undefined | null | false | 0 | "">> {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const value = await check();
-    if (value) return value;
+    if (value) return value as Exclude<T, undefined | null | false | 0 | "">;
     await Bun.sleep(intervalMs);
   }
   throw new Error(message);

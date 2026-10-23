@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
-import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai/compat";
+import { mkdtemp, rm } from "node:fs/promises";
+import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/compat";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
@@ -14,9 +14,11 @@ import {
 } from "../pi/memory/memoryReflectionQueue.ts";
 import { runMemoryReflectionOnce } from "./memoryReflectionWorker.ts";
 import { recordReflectionAttempt, unknownReflectionUsage } from "../pi/memory/memoryReflectionTelemetry.ts";
+import { useFauxPi } from "../testing/fauxPi.ts";
 
 const roots: string[] = [];
 const databases: RunnerDatabase[] = [];
+const fauxPi = useFauxPi();
 afterEach(async () => { for (const db of databases.splice(0)) db.close(); for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
 
 async function fixture(enabled = true, status = "done") {
@@ -348,38 +350,29 @@ test("#967 disabled/forgotten source cannot be revived with a new key, including
 
 test("Agentic uses the configured Pi identity and actual SDK with only reflection tools (local faux provider)", async () => {
   const { db, root, input } = await fixture();
-  const faux = registerFauxProvider({ api: "pi-smoke-faux-api", provider: "pi-smoke-faux", tokensPerSecond: 0 });
-  try {
-    db.sqlite.run("update projects set cwd=? where id='demo'", [root]);
-    db.sqlite.run("update pi_agents set model_provider='pi-smoke-faux', model_id='faux-1', thinking_level='off', enabled=1 where id='runner-default'");
-    const agentDir = join(root, "pi-runtime", "agent");
-    await mkdir(agentDir, { recursive: true });
-    await writeFile(join(agentDir, "models.json"), JSON.stringify({ providers: {
-      "pi-smoke-faux": { api: "pi-smoke-faux-api", apiKey: "test", baseUrl: "http://localhost:0", models: [{ id: "faux-1" }] }
-    } }));
-    faux.setResponses([
-      fauxAssistantMessage([fauxToolCall("reflection_evidence_read", {}), fauxToolCall("memory_search", { query: "timeout" })], { stopReason: "toolUse" }),
-      fauxAssistantMessage([fauxToolCall("memory_remember", input)], { stopReason: "toolUse" }),
-      fauxAssistantMessage('{"status":"saved"}')
-    ]);
-    await runMemoryReflectionOnce(db);
-    expect(rows(db)[0]).toMatchObject({ status: "completed", attempts: 1 });
-    expect(listPiMemoryItems(db)).toHaveLength(1);
-    const attempt = db.sqlite.query<{ payload: string }, []>(
-      "select payload from issue_events where type='issue.memory_reflection_attempt.v1' order by id desc limit 1"
-    ).get();
-    const telemetry = JSON.parse(attempt!.payload);
-    expect(telemetry).toMatchObject({ status: "completed", reason_code: "experience_saved",
-      usage: { model_calls: 3, completed_calls: 3, completeness: "reported" } });
-    expect(telemetry.elapsed_ms).toBeGreaterThanOrEqual(0);
-    expect(telemetry.usage.input_tokens).toBeGreaterThanOrEqual(0);
-    const audit = db.sqlite.query<{ payload_json: string }, []>(
-      "select payload_json from pi_action_events where event_type='runtime_tool_registry_snapshot'"
-    ).all().map(row => JSON.parse(row.payload_json));
-    expect(audit[0]?.tool_names.sort()).toEqual(["memory_remember", "memory_search", "reflection_evidence_read"]);
-    const envelope = db.sqlite.query<{ payload_json: string }, []>(
-      "select payload_json from pi_action_events where event_type='runtime_context_projected'"
-    ).all().map(row => JSON.parse(row.payload_json));
-    expect(envelope[0]?.identity.agent_id).toBe("runner-default");
-  } finally { faux.unregister(); }
+  db.sqlite.run("update projects set cwd=? where id='demo'", [root]);
+  fauxPi(db, { provider: "pi-smoke-faux", tokensPerSecond: 0 }).setResponses([
+    fauxAssistantMessage([fauxToolCall("reflection_evidence_read", {}), fauxToolCall("memory_search", { query: "timeout" })], { stopReason: "toolUse" }),
+    fauxAssistantMessage([fauxToolCall("memory_remember", input)], { stopReason: "toolUse" }),
+    fauxAssistantMessage('{"status":"saved"}')
+  ]);
+  await runMemoryReflectionOnce(db);
+  expect(rows(db)[0]).toMatchObject({ status: "completed", attempts: 1 });
+  expect(listPiMemoryItems(db)).toHaveLength(1);
+  const attempt = db.sqlite.query<{ payload: string }, []>(
+    "select payload from issue_events where type='issue.memory_reflection_attempt.v1' order by id desc limit 1"
+  ).get();
+  const telemetry = JSON.parse(attempt!.payload);
+  expect(telemetry).toMatchObject({ status: "completed", reason_code: "experience_saved",
+    usage: { model_calls: 3, completed_calls: 3, completeness: "reported" } });
+  expect(telemetry.elapsed_ms).toBeGreaterThanOrEqual(0);
+  expect(telemetry.usage.input_tokens).toBeGreaterThanOrEqual(0);
+  const audit = db.sqlite.query<{ payload_json: string }, []>(
+    "select payload_json from pi_action_events where event_type='runtime_tool_registry_snapshot'"
+  ).all().map(row => JSON.parse(row.payload_json));
+  expect(audit[0]?.tool_names.sort()).toEqual(["memory_remember", "memory_search", "reflection_evidence_read"]);
+  const envelope = db.sqlite.query<{ payload_json: string }, []>(
+    "select payload_json from pi_action_events where event_type='runtime_context_projected'"
+  ).all().map(row => JSON.parse(row.payload_json));
+  expect(envelope[0]?.identity.agent_id).toBe("runner-default");
 });
