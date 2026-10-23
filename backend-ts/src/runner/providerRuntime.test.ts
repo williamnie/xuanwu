@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
@@ -12,235 +11,78 @@ import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { runIssueWithProvider as runIssueWithProviderRuntime } from "./providerRuntime.ts";
 import { isExecutorProviderId } from "../providers/types.ts";
 import { normalizeCodexEvent } from "../providers/codex/events.ts";
-import type { ExecutorProvider, ProviderEvent, ProviderRunInput } from "../providers/types.ts";
+import type { ExecutorProvider, ExecutorProviderId, ProviderEvent, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
 import type { SDKResultMessage, SDKSystemInitMessage } from "@qoder-ai/qoder-agent-sdk";
 import { buildConfig } from "../config/env.ts";
 import { QoderExecutorProvider } from "../providers/qoder/provider.ts";
 import { createFakeQoderSdkFacade } from "../providers/qoder/sdkFacade.ts";
-import type { QoderRuntimeProbe } from "../providers/qoder/runtime.ts";
 import { claudeManifest } from "../providers/claude/factory.ts";
 import { claudeExecutionPolicyAdapter } from "../providers/claude/executionPolicy.ts";
-import { useTestDatabase } from "../testing/harness.ts";
+import { insertIssue, insertProject, useTestDatabase } from "../testing/harness.ts";
 
 const openFixtureDatabase = useTestDatabase();
+const FAKE_SESSION = { provider: "fake-execution-only" as ExecutorProviderId, sessionId: "fake-session", turnId: "fake-turn" };
 
-function runIssueWithProvider(
-  provider: Parameters<typeof runIssueWithProviderRuntime>[0],
-  input: Parameters<typeof runIssueWithProviderRuntime>[1]
-) {
-  if (!input.database || input.issueRunId) return runIssueWithProviderRuntime(provider, input);
-  const current = listIssueRuns(input.database, input.issueId).filter((run) => run.ended_at === "").at(-1)
-    ?? createIssueRun(input.database, input.issueId);
-  return runIssueWithProviderRuntime(provider, { ...input, issueRunId: current.id });
-}
-
-class FakeExecutionProvider implements ExecutorProvider {
-  readonly id = "fake-execution-only" as const;
-  readonly capabilities = ["issue_execution"] as const;
-  lastInput?: ProviderRunInput;
-
-  async run(input: ProviderRunInput) {
-    this.lastInput = input;
-    input.onEvent?.({
-      provider: this.id,
-      type: "provider.message",
-      session: { provider: this.id, sessionId: "fake-session", turnId: "fake-turn" },
-      text: "fake provider log"
-    });
-    return {
-      runId: "fake-run",
-      session: { provider: this.id, sessionId: "fake-session", turnId: "fake-turn" }
-    };
-  }
-}
-
-class IdleStatusProvider implements ExecutorProvider {
-  readonly id = "codex" as const;
-  readonly capabilities = ["issue_execution"] as const;
-
-  async run(input: ProviderRunInput) {
-    input.onEvent?.({
-      provider: this.id,
-      raw: { method: "turn/started" },
-      session: { provider: this.id, sessionId: "thread-idle", turnId: "turn-idle" },
-      status: "inProgress",
-      type: "text"
-    });
-    input.onEvent?.({
-      provider: this.id,
-      raw: { method: "thread/status/changed" },
-      session: { provider: this.id, sessionId: "thread-idle" },
-      status: "idle",
-      type: "raw"
-    });
-    input.onEvent?.({
-      provider: this.id,
-      raw: { method: "thread/tokenUsage/updated" },
-      session: { provider: this.id, sessionId: "thread-idle", turnId: "turn-idle" },
-      type: "raw"
-    });
-    return {
-      runId: "codex:thread-idle:turn-idle",
-      session: { provider: this.id, sessionId: "thread-idle", turnId: "turn-idle" }
-    };
-  }
-}
-
-class ClosingClaudeProvider implements ExecutorProvider {
-  readonly id = "claude" as const;
-  readonly capabilities = ["issue_execution"] as const;
-
-  constructor(private readonly db: RunnerDatabase) {}
-
-  async run(input: ProviderRunInput) {
-    updateIssue(this.db, input.issueId, { status: "done", error: "" });
-    return {
-      runId: "claude-run",
-      session: { provider: this.id, sessionId: "claude-session", turnId: "claude-turn" }
-    };
-  }
-}
-
-class LongSessionProvider implements ExecutorProvider {
-  readonly id = "codex" as const;
-  readonly capabilities = ["issue_execution"] as const;
-  readonly chunks = Array.from({ length: 513 }, (_, index) => `chunk-${String(index).padStart(3, "0")}\n`);
-
-  async run(input: ProviderRunInput) {
-    const session = { provider: this.id, sessionId: "thread-long", turnId: "turn-long" };
-    for (const text of this.chunks) {
-      input.onEvent?.({
-        provider: this.id,
-        type: "text",
-        session,
-        text,
-        raw: { method: "item/agentMessage/delta", payload: JSON.stringify({ delta: text }) }
-      });
+/** An executor whose run emits through `emit` (provider id filled in) and returns the script's result. */
+function fakeProvider(
+  id: string,
+  script: (input: ProviderRunInput, emit: (event: Omit<ProviderEvent, "provider">) => void) => ProviderRunResult | Promise<ProviderRunResult>,
+  extra: Partial<ExecutorProvider> = {}
+): ExecutorProvider {
+  const provider = id as ExecutorProviderId;
+  return {
+    id: provider,
+    capabilities: ["issue_execution"],
+    ...extra,
+    async run(input) {
+      return script(input, (event) => input.onEvent?.({ ...event, provider }));
     }
-    input.onEvent?.({
-      provider: this.id,
-      type: "done",
-      status: "completed",
-      session,
-      raw: { method: "turn/completed", payload: JSON.stringify({ turn: { id: "turn-long", status: "completed" } }) }
-    });
-    return { runId: "codex:thread-long:turn-long", session };
-  }
+  };
 }
 
-class NormalizedCodexFixtureProvider implements ExecutorProvider {
-  readonly id = "codex" as const;
-  readonly capabilities = ["issue_execution"] as const;
+/** Logs one message on the fixed fake session. */
+const loggingProvider = (inputs: ProviderRunInput[] = []) => fakeProvider("fake-execution-only", (input, emit) => {
+  inputs.push(input);
+  emit({ type: "provider.message", session: FAKE_SESSION, text: "fake provider log" });
+  return { runId: "fake-run", session: FAKE_SESSION };
+});
 
-  async run(input: ProviderRunInput) {
-    const notifications = [
-      { method: "turn/started", params: { threadId: "thread-normalized", turn: { id: "turn-normalized" } } },
-      { method: "future/event", params: { threadId: "thread-normalized", turnId: "turn-normalized", opaque: true } },
-      {
-        method: "thread/tokenUsage/updated",
-        params: {
-          threadId: "thread-normalized",
-          turnId: "turn-normalized",
-          tokenUsage: {
-            last: { cachedInputTokens: 1, inputTokens: 4, outputTokens: 2, reasoningOutputTokens: 1, totalTokens: 6 },
-            total: { cachedInputTokens: 3, inputTokens: 12, outputTokens: 5, reasoningOutputTokens: 2, totalTokens: 17 }
-          }
-        }
-      },
-      { method: "turn/completed", params: { threadId: "thread-normalized", turn: { id: "turn-normalized", status: "completed" } } }
-    ];
-    notifications.forEach((notification) => input.onEvent?.(normalizeCodexEvent(notification)));
-    return {
-      runId: "codex:thread-normalized:turn-normalized",
-      session: { provider: this.id, sessionId: "thread-normalized", turnId: "turn-normalized" }
-    };
+/** Replays Codex app-server notifications through the real normalizer. */
+const codexNotifications = (sessionId: string, turnId: string, notifications: () => Array<{ method: string; params: Record<string, unknown> }>) =>
+  fakeProvider("codex", (input) => {
+    notifications().forEach((notification) => input.onEvent?.(normalizeCodexEvent(notification)));
+    return { runId: `codex:${sessionId}:${turnId}`, session: { provider: "codex", sessionId, turnId } };
+  });
+
+const LONG_CHUNKS = Array.from({ length: 513 }, (_, index) => `chunk-${String(index).padStart(3, "0")}\n`);
+const longSessionProvider = () => fakeProvider("codex", (_input, emit) => {
+  const session = { provider: "codex" as const, sessionId: "thread-long", turnId: "turn-long" };
+  for (const text of LONG_CHUNKS) {
+    emit({ type: "text", session, text, raw: { method: "item/agentMessage/delta", payload: JSON.stringify({ delta: text }) } });
   }
-}
-
-class VerificationCodexFixtureProvider implements ExecutorProvider {
-  readonly id = "codex" as const;
-  readonly capabilities = ["issue_execution"] as const;
-
-  async run(input: ProviderRunInput) {
-    const threadId = "thread-verification";
-    const turnId = "turn-verification";
-    const itemId = "command-verification";
-    const processId = "process-verification";
-    const completedAtMs = Date.now();
-    [
-      { method: "turn/started", params: { threadId, turn: { id: turnId } } },
-      {
-        method: "item/commandExecution/terminalInteraction",
-        params: { itemId, processId, stdin: "", threadId, turnId }
-      },
-      {
-        method: "item/completed",
-        params: {
-          completedAtMs,
-          item: {
-            aggregatedOutput: "1 pass\n".repeat(2_000),
-            command: "bun test src/runner/providerRuntime.test.ts",
-            commandActions: [{ type: "unknown", command: "bun test src/runner/providerRuntime.test.ts" }],
-            cwd: "/tmp/project",
-            durationMs: 10,
-            exitCode: 0,
-            id: itemId,
-            processId,
-            status: "completed",
-            type: "commandExecution"
-          },
-          threadId,
-          turnId
-        }
-      },
-      { method: "turn/completed", params: { threadId, turn: { id: turnId, status: "completed" } } }
-    ].forEach((notification) => input.onEvent?.(normalizeCodexEvent(notification)));
-    return { runId: `codex:${threadId}:${turnId}`, session: { provider: this.id, sessionId: threadId, turnId } };
-  }
-}
-
-class ThrowingProvider implements ExecutorProvider {
-  readonly id = "codex" as const;
-  readonly capabilities = ["issue_execution"] as const;
-
-  async run(): Promise<never> {
-    throw new Error("provider failed CODEX_API_KEY=fixture-secret");
-  }
-}
-
-class SessionThenThrowProvider implements ExecutorProvider {
-  readonly id = "pi-coding-agent" as const;
-  readonly capabilities = ["issue_execution", "sessions"] as const;
-
-  async run(input: ProviderRunInput): Promise<never> {
-    const session = { provider: this.id, sessionId: "pi-durable-session" } as const;
-    input.onEvent?.({ provider: this.id, session, status: "running", type: "provider.session_started" });
-    input.onEvent?.({ provider: this.id, session, status: "failed", error: "idle timeout", type: "error" });
-    throw new Error("idle timeout");
-  }
-}
+  emit({
+    type: "done",
+    status: "completed",
+    session,
+    raw: { method: "turn/completed", payload: JSON.stringify({ turn: { id: "turn-long", status: "completed" } }) }
+  });
+  return { runId: "codex:thread-long:turn-long", session };
+});
 
 describe("executor provider runtime seam", () => {
   test("flushes artifact logs in source order before terminal reconciliation and snapshots mutable inputs", async () => {
-    const db = await openFixtureDatabase();
-    insertProject(db, "demo");
-    const issueId = insertIssue(db, "demo");
-    const source: ProviderEvent = {
-      provider: "codex", type: "raw", text: "original".repeat(12_000), raw: { method: "custom/large" }
-    };
+    const { db, issueId, run } = await runtimeFixture();
+    const source: ProviderEvent = { provider: "codex", type: "raw", text: "original".repeat(12_000), raw: { method: "custom/large" } };
     const original = source.text;
-    const provider = {
-      id: "codex" as const,
-      capabilities: ["issue_execution"] as const,
-      async run(input: ProviderRunInput) {
-        input.onEvent?.(source);
-        source.text = "mutated";
-        input.onEvent?.({ provider: "codex", type: "raw", text: "second", raw: { method: "custom/small" } });
-        input.onEvent?.({ provider: "codex", type: "done", status: "completed", raw: { method: "turn/completed" } });
-        return { runId: "ordered" };
-      }
-    };
-    await runIssueWithProvider(provider, { database: db, issueId, projectId: "demo", cwd: "/tmp/project", prompt: "ordered" });
+
+    await run(fakeProvider("codex", (input, emit) => {
+      input.onEvent?.(source);
+      source.text = "mutated";
+      emit({ type: "raw", text: "second", raw: { method: "custom/small" } });
+      emit({ type: "done", status: "completed", raw: { method: "turn/completed" } });
+      return { runId: "ordered" };
+    }), { prompt: "ordered" });
+
     const events = listIssueEvents(db, issueId);
     const logs = events.filter((event) => event.type === "issue.log");
     expect(logs.map((event) => JSON.parse(event.payload).text)).toEqual([original, "second", undefined]);
@@ -250,26 +92,18 @@ describe("executor provider runtime seam", () => {
   });
 
   test("artifact I/O failure rejects Run flush and prevents success reconciliation", async () => {
-    const db = await openFixtureDatabase();
-    insertProject(db, "demo");
-    const issueId = insertIssue(db, "demo");
+    const { db, issueId, run } = await runtimeFixture();
     const root = join(dirname(db.path), "artifacts");
     await mkdir(root, { recursive: true });
     await writeFile(join(root, "issue-logs"), "not a directory");
     let completed = false;
-    const provider = {
-      id: "codex" as const,
-      capabilities: ["issue_execution"] as const,
-      async run(input: ProviderRunInput) {
-        input.onEvent?.({ provider: "codex", type: "raw", text: "x".repeat(100_000), raw: { method: "custom/large" } });
-        input.onEvent?.({ provider: "codex", type: "done", status: "completed", raw: { method: "turn/completed" } });
-        return { runId: "must-fail-flush" };
-      }
-    };
-    await expect(runIssueWithProvider(provider, {
-      database: db, issueId, projectId: "demo", cwd: "/tmp/project", prompt: "failure",
-      onRunComplete: () => { completed = true; }
-    })).rejects.toThrow();
+
+    await expect(run(fakeProvider("codex", (_input, emit) => {
+      emit({ type: "raw", text: "x".repeat(100_000), raw: { method: "custom/large" } });
+      emit({ type: "done", status: "completed", raw: { method: "turn/completed" } });
+      return { runId: "must-fail-flush" };
+    }), { prompt: "failure", onRunComplete: () => { completed = true; } })).rejects.toThrow();
+
     expect(completed).toBe(false);
     expect(listIssueEvents(db, issueId).filter((event) => event.type === "issue.pi_acceptance_requested.v1")).toHaveLength(0);
     expect(listIssueRuns(db, issueId).at(-1)?.ended_at).toBe("");
@@ -281,10 +115,10 @@ describe("executor provider runtime seam", () => {
   });
 
   test("runner layer can execute a fake provider and observe session refs/events", async () => {
-    const provider = new FakeExecutionProvider();
+    const inputs: ProviderRunInput[] = [];
     const events: ProviderEvent[] = [];
 
-    const result = await runIssueWithProvider(provider, {
+    const result = await runIssueWithProvider(loggingProvider(inputs), {
       issueId: 154,
       projectId: "xuanwu",
       cwd: "/tmp/project",
@@ -296,24 +130,15 @@ describe("executor provider runtime seam", () => {
       onLog: (event) => events.push(event)
     });
 
-    expect(provider.lastInput).toMatchObject({ issueId: 154, projectId: "xuanwu", serviceTier: "priority" });
-    expect(result).toEqual({
-      runId: "fake-run",
-      session: { provider: "fake-execution-only", sessionId: "fake-session", turnId: "fake-turn" }
-    });
-    expect(events).toEqual([{
-      provider: "fake-execution-only",
-      type: "provider.message",
-      text: "fake provider log",
-      session: result.session
-    }]);
+    expect(inputs[0]).toMatchObject({ issueId: 154, projectId: "xuanwu", serviceTier: "priority" });
+    expect(result).toEqual({ runId: "fake-run", session: FAKE_SESSION });
+    expect(events).toEqual([{ provider: "fake-execution-only", type: "provider.message", text: "fake provider log", session: FAKE_SESSION }]);
   });
 
   test("runtime hooks persist start, events, and final provider session refs", async () => {
-    const provider = new FakeExecutionProvider();
     const calls: Array<[string, unknown]> = [];
 
-    const result = await runIssueWithProvider(provider, {
+    const result = await runIssueWithProvider(loggingProvider(), {
       issueId: 159,
       projectId: "demo",
       cwd: "/tmp/project",
@@ -323,29 +148,20 @@ describe("executor provider runtime seam", () => {
       onRunComplete: (output) => calls.push(["complete", output])
     });
 
-    expect(result.session).toEqual({ provider: "fake-execution-only", sessionId: "fake-session", turnId: "fake-turn" });
+    expect(result.session).toEqual(FAKE_SESSION);
     expect(calls).toEqual([
       ["start", { provider: "fake-execution-only", issueId: 159, projectId: "demo", metadata: { cwd: "/tmp/project" } }],
-      ["event", {
-        provider: "fake-execution-only",
-        type: "provider.message",
-        text: "fake provider log",
-        session: result.session
-      }],
-      ["complete", {
-        provider: "fake-execution-only",
-        issueId: 159,
-        projectId: "demo",
-        runId: "fake-run",
-        session: result.session
-      }]
+      ["event", { provider: "fake-execution-only", type: "provider.message", text: "fake provider log", session: FAKE_SESSION }],
+      ["complete", { provider: "fake-execution-only", issueId: 159, projectId: "demo", runId: "fake-run", session: FAKE_SESSION }]
     ]);
   });
 
   test("normalizes thrown provider failures when no wire error was emitted", async () => {
     const events: ProviderEvent[] = [];
 
-    await expect(runIssueWithProvider(new ThrowingProvider(), {
+    await expect(runIssueWithProvider(fakeProvider("codex", () => {
+      throw new Error("provider failed CODEX_API_KEY=fixture-secret");
+    }), {
       issueId: 160,
       projectId: "demo",
       cwd: "/tmp/project",
@@ -365,17 +181,14 @@ describe("executor provider runtime seam", () => {
   });
 
   test("persists an early Pi Session even when the provider later fails", async () => {
-    const db = await openFixtureDatabase();
-    insertProject(db, "demo");
-    const issueId = insertIssue(db, "demo");
+    const { db, issueId, run } = await runtimeFixture();
 
-    await expect(runIssueWithProvider(new SessionThenThrowProvider(), {
-      database: db,
-      issueId,
-      projectId: "demo",
-      cwd: "/tmp/project",
-      prompt: "issue prompt"
-    })).rejects.toThrow("idle timeout");
+    await expect(run(fakeProvider("pi-coding-agent", (_input, emit) => {
+      const session = { provider: "pi-coding-agent" as ExecutorProviderId, sessionId: "pi-durable-session" };
+      emit({ session, status: "running", type: "provider.session_started" });
+      emit({ session, status: "failed", error: "idle timeout", type: "error" });
+      throw new Error("idle timeout");
+    }, { capabilities: ["issue_execution", "sessions"] }))).rejects.toThrow("idle timeout");
 
     expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
       provider: "pi-coding-agent",
@@ -391,20 +204,11 @@ describe("executor provider runtime seam", () => {
   });
 
   test("persists provider session refs into issue_runs and agent_sessions", async () => {
-    const db = await openFixtureDatabase();
-    insertProject(db, "demo");
-    const issueId = insertIssue(db, "demo");
+    const { db, issueId, run } = await runtimeFixture();
 
-    await runIssueWithProvider(new FakeExecutionProvider(), {
-      database: db,
-      issueId,
-      projectId: "demo",
-      cwd: "/tmp/project",
-      prompt: "issue prompt",
-      serviceTier: "priority",
-      serviceTierSource: "issue"
-    });
+    await run(loggingProvider(), { serviceTier: "priority", serviceTierSource: "issue" });
 
+    const metadata = { run_id: "fake-run", ...resolved({ service_tier: "priority", service_tier_source: "issue" }), service_tier: "priority", service_tier_source: "issue" };
     expect(listIssueRuns(db, issueId)).toMatchObject([{
       attempt: 1,
       provider: "fake-execution-only",
@@ -412,20 +216,17 @@ describe("executor provider runtime seam", () => {
       provider_turn_id: "fake-turn",
       codex_thread_id: "",
       codex_turn_id: "",
-      runtime_metadata_json: "{\"run_id\":\"fake-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"},\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"}"
+      runtime_metadata_json: JSON.stringify(metadata)
     }]);
     expect(getAgentSession(db, "fake-execution-only:fake-session")).toMatchObject({
       provider: "fake-execution-only",
       provider_session_id: "fake-session",
       project_id: "demo",
       issue_id: issueId,
-      raw_ref: "{\"provider_turn_id\":\"fake-turn\",\"run_id\":\"fake-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"},\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"}"
+      raw_ref: JSON.stringify({ provider_turn_id: "fake-turn", ...metadata })
     });
     const issueEvents = listIssueEvents(db, issueId, { types: ["issue.log"] });
-    expect(issueEvents).toMatchObject([{
-      issue_id: issueId,
-      type: "issue.log"
-    }]);
+    expect(issueEvents).toMatchObject([{ issue_id: issueId, type: "issue.log" }]);
     expect(JSON.parse(issueEvents[0]!.payload)).toMatchObject({
       provider: "fake-execution-only",
       runtime_evidence_correlation: {
@@ -440,31 +241,12 @@ describe("executor provider runtime seam", () => {
   });
 
   test("Qoder init persists a recoverable Session before an SDK failure", async () => {
-    const db = await openFixtureDatabase();
-    insertProject(db, "demo");
-    const issueId = insertIssue(db, "demo");
+    const { db, issueId, run } = await runtimeFixture();
     const sessionId = "qoder-early-session";
-    const { facade } = createFakeQoderSdkFacade([qoderInit(sessionId), "throw"]);
-    const provider = new QoderExecutorProvider(buildConfig().providers.qoder!, {
-      facade,
-      invocationIdFactory: () => "qoder-inv-early",
-      readiness: qoderReadyProbe(),
-      sessionIdFactory: () => sessionId
-    });
 
-    await expect(runIssueWithProvider(provider, {
-      database: db,
-      issueId,
-      projectId: "demo",
-      cwd: "/tmp/project",
-      prompt: "issue prompt"
-    })).rejects.toThrow("sdk failure");
+    await expect(run(qoderProvider(sessionId, "qoder-inv-early", [qoderInit(sessionId), "throw"]))).rejects.toThrow("sdk failure");
 
-    expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
-      provider: "qoder",
-      provider_session_id: sessionId,
-      provider_turn_id: ""
-    });
+    expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({ provider: "qoder", provider_session_id: sessionId, provider_turn_id: "" });
     expect(getAgentSession(db, `qoder:${sessionId}`)).toMatchObject({
       issue_id: issueId,
       provider: "qoder",
@@ -474,147 +256,118 @@ describe("executor provider runtime seam", () => {
   });
 
   test("Qoder main result persists invocation, Session and message refs through the existing runtime", async () => {
-    const db = await openFixtureDatabase();
-    insertProject(db, "demo");
-    const issueId = insertIssue(db, "demo");
+    const { db, issueId, run } = await runtimeFixture();
     const sessionId = "qoder-terminal-session";
-    const { facade } = createFakeQoderSdkFacade([qoderInit(sessionId), qoderResult(sessionId)]);
-    const provider = new QoderExecutorProvider(buildConfig().providers.qoder!, {
-      facade,
-      invocationIdFactory: () => "qoder-inv-terminal",
-      readiness: qoderReadyProbe(),
-      sessionIdFactory: () => sessionId
-    });
 
-    const result = await runIssueWithProvider(provider, {
-      database: db,
-      issueId,
-      projectId: "demo",
-      cwd: "/tmp/project",
-      prompt: "issue prompt"
-    });
+    const result = await run(qoderProvider(sessionId, "qoder-inv-terminal", [qoderInit(sessionId), qoderResult(sessionId)]));
 
-    expect(result).toEqual({
-      runId: "qoder-inv-terminal",
-      session: { provider: "qoder", sessionId, turnId: "qoder-result-1" }
-    });
+    expect(result).toEqual({ runId: "qoder-inv-terminal", session: { provider: "qoder", sessionId, turnId: "qoder-result-1" } });
     expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
       provider: "qoder",
       provider_session_id: sessionId,
       provider_turn_id: "qoder-result-1",
-      runtime_metadata_json: "{\"run_id\":\"qoder-inv-terminal\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"\",\"service_tier_source\":\"standard\"}}"
+      runtime_metadata_json: JSON.stringify({ run_id: "qoder-inv-terminal", ...resolved() })
     });
     expect(JSON.parse(getAgentSession(db, `qoder:${sessionId}`)?.raw_ref ?? "{}")).toEqual({
       provider_turn_id: "qoder-result-1",
       run_id: "qoder-inv-terminal",
-      resolved_settings: {
-        approval_policy: "",
-        model: "",
-        reasoning_effort: "",
-        sandbox: "",
-        service_tier: "",
-        service_tier_source: "standard"
-      }
+      ...resolved()
     });
   });
 
   test("keeps completed PTY output as an artifact without synthesizing verification Evidence", async () => {
-    const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueId = insertIssue(db, "demo");
+    const { db, issueId, run } = await runtimeFixture();
+    const [threadId, turnId, itemId, processId] = ["thread-verification", "turn-verification", "command-verification", "process-verification"];
 
-      await runIssueWithProvider(new VerificationCodexFixtureProvider(), {
-        database: db,
-        issueId,
-        projectId: "demo",
-        cwd: "/tmp/project",
-        prompt: "run verification"
-      });
+    await run(codexNotifications(threadId, turnId, () => [
+      { method: "turn/started", params: { threadId, turn: { id: turnId } } },
+      { method: "item/commandExecution/terminalInteraction", params: { itemId, processId, stdin: "", threadId, turnId } },
+      {
+        method: "item/completed",
+        params: {
+          completedAtMs: Date.now(),
+          item: {
+            aggregatedOutput: "1 pass\n".repeat(2_000),
+            command: "bun test src/runner/providerRuntime.test.ts",
+            commandActions: [{ type: "unknown", command: "bun test src/runner/providerRuntime.test.ts" }],
+            cwd: "/tmp/project",
+            durationMs: 10,
+            exitCode: 0,
+            id: itemId,
+            processId,
+            status: "completed",
+            type: "commandExecution"
+          },
+          threadId,
+          turnId
+        }
+      },
+      { method: "turn/completed", params: { threadId, turn: { id: turnId, status: "completed" } } }
+    ]), { prompt: "run verification" });
 
-      const records = listStoredEvidence(db, { issue_ids: [issueId], limit: 10 }).items;
-      const completed = db.sqlite.query<{ payload: string }, [number]>(`
-        select payload from issue_events where issue_id=? and type='issue.log'
-          and json_extract(payload, '$.raw_method')='item/completed' limit 1
-      `).get(issueId);
-      expect(records).toHaveLength(0);
-      expect(JSON.parse(completed?.payload ?? "{}")).toMatchObject({
-        issue_log_artifact: { schema_version: "issue-log-payload-artifact.v1" }
-      });
-    } finally {
-      db.close();
-    }
+    const completed = db.sqlite.query<{ payload: string }, [number]>(`
+      select payload from issue_events where issue_id=? and type='issue.log'
+        and json_extract(payload, '$.raw_method')='item/completed' limit 1
+    `).get(issueId);
+    expect(listStoredEvidence(db, { issue_ids: [issueId], limit: 10 }).items).toHaveLength(0);
+    expect(JSON.parse(completed?.payload ?? "{}")).toMatchObject({
+      issue_log_artifact: { schema_version: "issue-log-payload-artifact.v1" }
+    });
   });
 
   test("persists normalized provider evidence and projects audited usage without acting on unknown events", async () => {
-    const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueId = insertIssue(db, "demo");
+    const { db, issueId, run } = await runtimeFixture();
+    const [threadId, turnId] = ["thread-normalized", "turn-normalized"];
 
-      await runIssueWithProvider(new NormalizedCodexFixtureProvider(), {
-        database: db,
-        issueId,
-        projectId: "demo",
-        cwd: "/tmp/project",
-        prompt: "normalized fixture"
-      });
-
-      const events = listIssueEvents(db, issueId);
-      const payloads = events.map((event) => ({
-        event,
-        payload: JSON.parse(event.payload) as Record<string, unknown>
-      }));
-      const unknown = payloads.find(({ payload }) => payload.raw_method === "future/event");
-      const usage = payloads.find(({ payload }) => payload.raw_method === "thread/tokenUsage/updated");
-      const attempt = db.sqlite.query<{ cost_json: string; revision: number; status: string }, [number]>(`
-        select attempt.cost_json, attempt.revision, attempt.status
-        from run_attempts attempt
-        join issue_runs run on run.id=attempt.issue_run_id
-        where run.issue_id=?
-      `).get(issueId);
-      const cost = JSON.parse(attempt?.cost_json ?? "{}") as Record<string, unknown>;
-
-      expect(unknown?.payload.run_event).toMatchObject({
-        kind: "unknown",
-        outcome: "unknown",
-        terminal: false,
-        unknown: { policy: "preserve" }
-      });
-      expect(attempt?.status).toBe("succeeded");
-      expect(attempt?.revision).toBe(1);
-      expect(cost).toMatchObject({
-        money: { amount_micros: null, basis: "unavailable", currency: "" },
-        usage: {
-          cached_input_tokens: 3,
-          completeness: "complete",
-          input_tokens: 12,
-          output_tokens: 5,
-          reasoning_output_tokens: 2,
-          total_tokens: 17
+    await run(codexNotifications(threadId, turnId, () => [
+      { method: "turn/started", params: { threadId, turn: { id: turnId } } },
+      { method: "future/event", params: { threadId, turnId, opaque: true } },
+      {
+        method: "thread/tokenUsage/updated",
+        params: {
+          threadId,
+          turnId,
+          tokenUsage: {
+            last: { cachedInputTokens: 1, inputTokens: 4, outputTokens: 2, reasoningOutputTokens: 1, totalTokens: 6 },
+            total: { cachedInputTokens: 3, inputTokens: 12, outputTokens: 5, reasoningOutputTokens: 2, totalTokens: 17 }
+          }
         }
-      });
-      expect((cost.source_refs as string[])).toEqual(expect.arrayContaining([
-        "provider-event:codex:thread/tokenUsage/updated:thread-normalized:turn-normalized",
-        `issue_events:${usage?.event.id}`
-      ]));
-    } finally {
-      db.close();
-    }
+      },
+      { method: "turn/completed", params: { threadId, turn: { id: turnId, status: "completed" } } }
+    ]), { prompt: "normalized fixture" });
+
+    const payloads = listIssueEvents(db, issueId).map((event) => ({ event, payload: JSON.parse(event.payload) as Record<string, unknown> }));
+    const unknown = payloads.find(({ payload }) => payload.raw_method === "future/event");
+    const usage = payloads.find(({ payload }) => payload.raw_method === "thread/tokenUsage/updated");
+    const attempt = db.sqlite.query<{ cost_json: string; revision: number; status: string }, [number]>(`
+      select attempt.cost_json, attempt.revision, attempt.status
+      from run_attempts attempt join issue_runs run on run.id=attempt.issue_run_id
+      where run.issue_id=?
+    `).get(issueId);
+    const cost = JSON.parse(attempt?.cost_json ?? "{}") as Record<string, unknown>;
+
+    expect(unknown?.payload.run_event).toMatchObject({ kind: "unknown", outcome: "unknown", terminal: false, unknown: { policy: "preserve" } });
+    expect(attempt).toMatchObject({ status: "succeeded", revision: 1 });
+    expect(cost).toMatchObject({
+      money: { amount_micros: null, basis: "unavailable", currency: "" },
+      usage: { cached_input_tokens: 3, completeness: "complete", input_tokens: 12, output_tokens: 5, reasoning_output_tokens: 2, total_tokens: 17 }
+    });
+    expect((cost.source_refs as string[])).toEqual(expect.arrayContaining([
+      "provider-event:codex:thread/tokenUsage/updated:thread-normalized:turn-normalized",
+      `issue_events:${usage?.event.id}`
+    ]));
   });
 
   test("persists Codex thread idle status without raw telemetry flipping it back to running", async () => {
-    const db = await openFixtureDatabase();
-    insertProject(db, "demo");
-    const issueId = insertIssue(db, "demo");
+    const { db, issueId, run } = await runtimeFixture();
 
-    await runIssueWithProvider(new IdleStatusProvider(), {
-      database: db,
-      issueId,
-      projectId: "demo",
-      cwd: "/tmp/project",
-      prompt: "issue prompt"
-    });
+    await run(fakeProvider("codex", (_input, emit) => {
+      const session = { provider: "codex" as const, sessionId: "thread-idle", turnId: "turn-idle" };
+      emit({ raw: { method: "turn/started" }, session, status: "inProgress", type: "text" });
+      emit({ raw: { method: "thread/status/changed" }, session: { provider: "codex", sessionId: "thread-idle" }, status: "idle", type: "raw" });
+      emit({ raw: { method: "thread/tokenUsage/updated" }, session, type: "raw" });
+      return { runId: "codex:thread-idle:turn-idle", session };
+    }));
 
     expect(getAgentSession(db, "codex:thread-idle")).toMatchObject({
       issue_id: issueId,
@@ -622,17 +375,11 @@ describe("executor provider runtime seam", () => {
       provider_session_id: "thread-idle",
       status: "idle"
     });
-    expect(listIssueRuns(db, issueId)).toMatchObject([{
-      provider: "codex",
-      provider_session_id: "thread-idle",
-      provider_turn_id: "turn-idle"
-    }]);
+    expect(listIssueRuns(db, issueId)).toMatchObject([{ provider: "codex", provider_session_id: "thread-idle", provider_turn_id: "turn-idle" }]);
   });
 
   test("keeps a Claude run separate from stale Codex thread fields when status is closed during execution", async () => {
-    const db = await openFixtureDatabase();
-    insertProject(db, "demo");
-    const issueId = insertIssue(db, "demo");
+    const { db, issueId, run } = await runtimeFixture();
     const codexRun = createIssueRun(db, issueId);
     updateIssueRuntime(db, issueId, {
       provider: "codex",
@@ -640,15 +387,12 @@ describe("executor provider runtime seam", () => {
       provider_turn_id: "codex-turn",
       metadata: { run_id: "codex-run" }
     });
-    closeRun(db, codexRun.id);
+    db.sqlite.run("update issue_runs set ended_at=?, status=? where id=?", ["2026-01-01T00:00:00Z", "done", codexRun.id]);
 
-    await runIssueWithProvider(new ClosingClaudeProvider(db), {
-      database: db,
-      issueId,
-      projectId: "demo",
-      cwd: "/tmp/project",
-      prompt: "issue prompt"
-    });
+    await run(fakeProvider("claude", (input) => {
+      updateIssue(db, input.issueId, { status: "done", error: "" });
+      return { runId: "claude-run", session: { provider: "claude", sessionId: "claude-session", turnId: "claude-turn" } };
+    }));
 
     expect(listIssueRuns(db, issueId)).toMatchObject([
       {
@@ -669,117 +413,80 @@ describe("executor provider runtime seam", () => {
         codex_thread_id: "",
         codex_turn_id: "",
         exit_reason: "pi_semantic_decision",
-        runtime_metadata_json: "{\"run_id\":\"claude-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"\",\"service_tier_source\":\"standard\"}}"
+        runtime_metadata_json: JSON.stringify({ run_id: "claude-run", ...resolved() })
       }
     ]);
     expect(getAgentSession(db, "claude:claude-session")).toMatchObject({
       provider: "claude",
       provider_session_id: "claude-session",
       issue_id: issueId,
-      raw_ref: "{\"provider_turn_id\":\"claude-turn\",\"run_id\":\"claude-run\",\"resolved_settings\":{\"approval_policy\":\"\",\"model\":\"\",\"reasoning_effort\":\"\",\"sandbox\":\"\",\"service_tier\":\"\",\"service_tier_source\":\"standard\"}}"
+      raw_ref: JSON.stringify({ provider_turn_id: "claude-turn", run_id: "claude-run", ...resolved() })
     });
   });
 
   test("normal mode keeps live hooks and terminal state without persisting stream deltas", async () => {
-    const db = await openFixtureDatabase();
-    insertProject(db, "demo");
-    const issueId = insertIssue(db, "demo", "normal");
-    const provider = new LongSessionProvider();
+    const { db, issueId, run } = await runtimeFixture("normal");
     const runtimeEvents: ProviderEvent[] = [];
-    const liveEvents: unknown[] = [];
+    const liveEvents: Array<{ type?: string }> = [];
 
-    await runIssueWithProvider(provider, {
-      database: db,
-      issueId,
-      projectId: "demo",
-      cwd: "/tmp/project",
+    await run(longSessionProvider(), {
       prompt: "normal logs",
-      bus: { publish: (event) => liveEvents.push(event) },
+      bus: { publish: (event) => liveEvents.push(event as { type?: string }) },
       onRuntimeEvent: (event) => runtimeEvents.push(event)
     });
 
-    const events = listIssueEvents(db, issueId);
-    const logEvents = events.filter((event) => event.type === "issue.log");
+    const logEvents = listIssueEvents(db, issueId).filter((event) => event.type === "issue.log");
     expect(runtimeEvents).toHaveLength(514);
     expect(logEvents).toHaveLength(1);
-    expect(JSON.parse(logEvents[0]?.payload ?? "{}")).toMatchObject({
-      raw_method: "turn/completed",
-      status: "completed"
-    });
-    expect(liveEvents.filter((event) => (event as { type?: string }).type === "issue.log")).toHaveLength(1);
+    expect(JSON.parse(logEvents[0]?.payload ?? "{}")).toMatchObject({ raw_method: "turn/completed", status: "completed" });
+    expect(liveEvents.filter((event) => event.type === "issue.log")).toHaveLength(1);
     const session = getAgentSession(db, "codex:thread-long");
     expect(session).toMatchObject({ status: "completed" });
     expect(JSON.parse(session?.raw_ref ?? "{}")).toMatchObject({ provider_turn_id: "turn-long" });
   });
 
   test("replays a long Session from aggregated logs with fewer rows and bytes", async () => {
-    const db = await openFixtureDatabase();
-    try {
-      insertProject(db, "demo");
-      const issueId = insertIssue(db, "demo");
-      const provider = new LongSessionProvider();
-      const runtimeEvents: ProviderEvent[] = [];
-      const liveEvents: unknown[] = [];
+    const { db, issueId, run } = await runtimeFixture();
+    const runtimeEvents: ProviderEvent[] = [];
+    const liveEvents: Array<{ type?: string }> = [];
 
-      await runIssueWithProvider(provider, {
-        database: db,
-        issueId,
-        projectId: "demo",
-        cwd: "/tmp/project",
-        prompt: "long session",
-        bus: { publish: (event) => liveEvents.push(event) },
-        onRuntimeEvent: (event) => runtimeEvents.push(event)
-      });
+    await run(longSessionProvider(), {
+      prompt: "long session",
+      bus: { publish: (event) => liveEvents.push(event as { type?: string }) },
+      onRuntimeEvent: (event) => runtimeEvents.push(event)
+    });
 
-      const events = listIssueEvents(db, issueId);
-      const logEvents = events.filter((event) => event.type === "issue.log");
-      const payloads = logEvents.map((event) => JSON.parse(event.payload) as Record<string, unknown>);
-      const replay = payloads
-        .filter((payload) => payload.raw_method === "item/agentMessage/delta")
-        .map((payload) => payload.text)
-        .join("");
-      const storedBytes = db.sqlite.query<{ bytes: number }, [number]>(`
-        select sum(length(cast(payload as blob))) as bytes from issue_events where issue_id=? and type='issue.log'
-      `).get(issueId)?.bytes ?? 0;
-      const baselineBytes = provider.chunks.reduce((total, text) => total + Buffer.byteLength(JSON.stringify({
-        type: "text",
-        provider: "codex",
-        raw_method: "item/agentMessage/delta",
-        raw_payload: JSON.stringify({ delta: text }),
-        text
-      })), 0);
+    const logEvents = listIssueEvents(db, issueId).filter((event) => event.type === "issue.log");
+    const payloads = logEvents.map((event) => JSON.parse(event.payload) as Record<string, unknown>);
+    const replay = payloads.filter((payload) => payload.raw_method === "item/agentMessage/delta").map((payload) => payload.text).join("");
+    const storedBytes = db.sqlite.query<{ bytes: number }, [number]>(
+      "select sum(length(cast(payload as blob))) as bytes from issue_events where issue_id=? and type='issue.log'"
+    ).get(issueId)?.bytes ?? 0;
+    const baselineBytes = LONG_CHUNKS.reduce((total, text) => total + Buffer.byteLength(JSON.stringify({
+      type: "text",
+      provider: "codex",
+      raw_method: "item/agentMessage/delta",
+      raw_payload: JSON.stringify({ delta: text }),
+      text
+    })), 0);
 
-      expect(runtimeEvents).toHaveLength(514);
-      expect(logEvents).toHaveLength(10);
-      expect(liveEvents.filter((event) => (event as { type?: string }).type === "issue.log")).toHaveLength(10);
-      expect(replay).toBe(provider.chunks.join(""));
-      expect(payloads.at(-1)).toMatchObject({
-        type: "done",
-        raw_method: "turn/completed",
-        status: "completed"
-      });
-      expect(getIssue(db, issueId)?.issue_log_mode).toBe("normal");
-      expect(storedBytes).toBeLessThan(baselineBytes * 0.35);
-    } finally {
-      db.close();
-    }
+    expect(runtimeEvents).toHaveLength(514);
+    expect(logEvents).toHaveLength(10);
+    expect(liveEvents.filter((event) => event.type === "issue.log")).toHaveLength(10);
+    expect(replay).toBe(LONG_CHUNKS.join(""));
+    expect(payloads.at(-1)).toMatchObject({ type: "done", raw_method: "turn/completed", status: "completed" });
+    expect(getIssue(db, issueId)?.issue_log_mode).toBe("normal");
+    expect(storedBytes).toBeLessThan(baselineBytes * 0.35);
   });
 
   test("P1: execution-only Provider 完成 Attempt 不写 Session", async () => {
-    const db = await openFixtureDatabase();
-    insertProject(db, "demo");
-    const issueId = insertIssue(db, "demo");
-    const provider = new ExecutionOnlyRuntimeProvider();
+    const { db, issueId, run } = await runtimeFixture();
     const events: ProviderEvent[] = [];
 
-    const result = await runIssueWithProvider(provider, {
-      database: db,
-      issueId,
-      projectId: "demo",
-      cwd: "/tmp/p1-execution-only",
-      prompt: "execute",
-      onLog: (event) => events.push(event)
-    });
+    const result = await run(fakeProvider("fake-execution-only", (input, emit) => {
+      emit({ type: "provider.message", text: "execution only" });
+      return { runId: `p1-execution-${input.issueId}` };
+    }), { cwd: "/tmp/p1-execution-only", prompt: "execute", onLog: (event) => events.push(event) });
 
     expect(result.session).toBeUndefined();
     expect(events.some((event) => event.session !== undefined)).toBe(false);
@@ -787,29 +494,23 @@ describe("executor provider runtime seam", () => {
   });
 
   test("策略组合不受支持时记录配置错误且不启动 Provider Session", async () => {
-    const db = await openFixtureDatabase();
-    insertProject(db, "policy-error");
-    const issueId = insertIssue(db, "policy-error");
-    const provider = new UnsupportedPolicyRuntimeProvider();
+    const { db, issueId, run } = await runtimeFixture();
+    let runCalls = 0;
+    const provider = fakeProvider("claude", () => {
+      runCalls += 1;
+      return { runId: "must-not-run" };
+    }, claudePolicyProvider({ active_sessions: 0, api_key_configured: false, mode: "cli-fallback", ready: true, version: "2.1.221" }));
 
-    await expect(runIssueWithProvider(provider, {
-      database: db,
-      issueId,
-      projectId: "policy-error",
-      cwd: "/tmp/policy-error",
+    await expect(run(provider, {
       prompt: "execute",
-      executionPolicyRequest: {
-        contract: "xw.execution-policy.v1",
-        access: "provider-native-development",
-        approval: "ask-sensitive"
-      },
+      executionPolicyRequest: { contract: "xw.execution-policy.v1", access: "provider-native-development", approval: "ask-sensitive" },
       executionPolicyResolutionSource: "explicit"
     })).rejects.toThrow("cannot provide the required host approval");
 
-    expect(provider.runCalls).toBe(0);
-    const run = listIssueRuns(db, issueId).at(-1);
-    expect(run?.provider_session_id).toBe("");
-    expect(JSON.parse(run?.runtime_metadata_json ?? "{}")).toMatchObject({
+    expect(runCalls).toBe(0);
+    const latest = listIssueRuns(db, issueId).at(-1);
+    expect(latest?.provider_session_id).toBe("");
+    expect(JSON.parse(latest?.runtime_metadata_json ?? "{}")).toMatchObject({
       configuration_error: { code: "policy_combination_unsupported" },
       provider: "claude",
       resolution_source: "explicit",
@@ -819,22 +520,12 @@ describe("executor provider runtime seam", () => {
   });
 
   test("成功解析时记录 Provider policy capability contract 而不是 resolved policy contract", async () => {
-    const db = await openFixtureDatabase();
-    insertProject(db, "policy-metadata");
-    const issueId = insertIssue(db, "policy-metadata");
-    const provider = new SupportedPolicyRuntimeProvider();
+    const { db, issueId, run } = await runtimeFixture();
 
-    await runIssueWithProvider(provider, {
-      database: db,
-      issueId,
-      projectId: "policy-metadata",
-      cwd: "/tmp/policy-metadata",
+    await run(fakeProvider("claude", () => ({ runId: "policy-metadata-run" }),
+      claudePolicyProvider({ active_sessions: 0, api_key_configured: true, mode: "sdk", ready: true, version: "0.3.152" })), {
       prompt: "execute",
-      executionPolicyRequest: {
-        contract: "xw.execution-policy.v1",
-        access: "unrestricted-host",
-        approval: "unattended"
-      },
+      executionPolicyRequest: { contract: "xw.execution-policy.v1", access: "unrestricted-host", approval: "unattended" },
       executionPolicyResolutionSource: "explicit"
     });
 
@@ -845,76 +536,54 @@ describe("executor provider runtime seam", () => {
   });
 });
 
-function insertProject(db: RunnerDatabase, id: string): void {
-  db.sqlite.run(
-    `insert into projects (id, name, cwd, created_at, updated_at) values (?, ?, ?, ?, ?)`,
-    [id, id, `/tmp/${id}`, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
-  );
+/** Runs through the real runtime, attaching the open (or a new) Run like the project loop does. */
+function runIssueWithProvider(
+  provider: Parameters<typeof runIssueWithProviderRuntime>[0],
+  input: Parameters<typeof runIssueWithProviderRuntime>[1]
+) {
+  if (!input.database || input.issueRunId) return runIssueWithProviderRuntime(provider, input);
+  const current = listIssueRuns(input.database, input.issueId).filter((run) => run.ended_at === "").at(-1)
+    ?? createIssueRun(input.database, input.issueId);
+  return runIssueWithProviderRuntime(provider, { ...input, issueRunId: current.id });
 }
 
-function insertIssue(
-  db: RunnerDatabase,
-  projectId: string,
-  issueLogMode: "debug" | "normal" = "debug"
-): number {
-  db.sqlite.run(
-    `insert into issues (project_id, title, status, issue_log_mode, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?)`,
-    [projectId, "Runtime", "in_progress", issueLogMode, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
-  );
-  const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
-  if (!row) throw new Error("missing inserted issue id");
-  return row.id;
+/** An in-progress "demo" Issue and a `run(provider, overrides)` bound to it. */
+async function runtimeFixture(issueLogMode: "debug" | "normal" = "debug") {
+  const db = await openFixtureDatabase();
+  insertProject(db, "demo");
+  const issueId = insertIssue(db, { title: "Runtime", status: "in_progress", issue_log_mode: issueLogMode });
+  const run = (provider: ExecutorProvider, overrides: Partial<Parameters<typeof runIssueWithProviderRuntime>[1]> = {}) =>
+    runIssueWithProvider(provider, { database: db, issueId, projectId: "demo", cwd: "/tmp/project", prompt: "issue prompt", ...overrides });
+  return { db, issueId, run };
 }
 
-function closeRun(db: RunnerDatabase, id: string): void {
-  db.sqlite.run("update issue_runs set ended_at=?, status=? where id=?", ["2026-01-01T00:00:00Z", "done", id]);
+function resolved(overrides: Record<string, string> = {}) {
+  return {
+    resolved_settings: {
+      approval_policy: "", model: "", reasoning_effort: "", sandbox: "", service_tier: "", service_tier_source: "standard", ...overrides
+    }
+  };
 }
 
-class ExecutionOnlyRuntimeProvider implements ExecutorProvider {
-  readonly id = "fake-execution-only" as const;
-  readonly capabilities = ["issue_execution"] as const;
-
-  async run(input: ProviderRunInput) {
-    input.onEvent?.({
-      provider: this.id,
-      type: "provider.message",
-      text: "execution only"
-    });
-    return { runId: `p1-execution-${input.issueId}` };
-  }
+function claudePolicyProvider(status: Record<string, unknown>): Partial<ExecutorProvider> {
+  return {
+    manifest: claudeManifest(),
+    policyAdapter: claudeExecutionPolicyAdapter,
+    runtimeStatus: () => status
+  } as Partial<ExecutorProvider>;
 }
 
-class UnsupportedPolicyRuntimeProvider implements ExecutorProvider {
-  readonly id = "claude" as const;
-  readonly capabilities = ["issue_execution"] as const;
-  readonly manifest = claudeManifest();
-  readonly policyAdapter = claudeExecutionPolicyAdapter;
-  runCalls = 0;
-
-  runtimeStatus() {
-    return { active_sessions: 0, api_key_configured: false, mode: "cli-fallback", ready: true, version: "2.1.221" };
-  }
-
-  async run(_input: ProviderRunInput) {
-    this.runCalls += 1;
-    return { runId: "must-not-run" };
-  }
-}
-
-class SupportedPolicyRuntimeProvider implements ExecutorProvider {
-  readonly id = "claude" as const;
-  readonly capabilities = ["issue_execution"] as const;
-  readonly manifest = claudeManifest();
-  readonly policyAdapter = claudeExecutionPolicyAdapter;
-
-  runtimeStatus() {
-    return { active_sessions: 0, api_key_configured: true, mode: "sdk", ready: true, version: "0.3.152" };
-  }
-
-  async run(_input: ProviderRunInput) {
-    return { runId: "policy-metadata-run" };
-  }
+function qoderProvider(sessionId: string, invocationId: string, script: Parameters<typeof createFakeQoderSdkFacade>[0]): QoderExecutorProvider {
+  return new QoderExecutorProvider(buildConfig().providers.qoder!, {
+    facade: createFakeQoderSdkFacade(script).facade,
+    invocationIdFactory: () => invocationId,
+    readiness: {
+      installed: true,
+      ready: true,
+      status: { active_sessions: 0, api_key_configured: true, mode: "sdk", ready: true, version: "1.0.23" }
+    },
+    sessionIdFactory: () => sessionId
+  });
 }
 
 function qoderInit(sessionId: string): SDKSystemInitMessage {
@@ -965,19 +634,5 @@ function qoderResult(sessionId: string): SDKResultMessage {
     permission_denials: [],
     uuid: "qoder-result-1",
     session_id: sessionId
-  };
-}
-
-function qoderReadyProbe(): QoderRuntimeProbe {
-  return {
-    installed: true,
-    ready: true,
-    status: {
-      active_sessions: 0,
-      api_key_configured: true,
-      mode: "sdk",
-      ready: true,
-      version: "1.0.23"
-    }
   };
 }
