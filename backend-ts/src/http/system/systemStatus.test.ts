@@ -1,6 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { buildConfig } from "../../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
@@ -12,25 +11,13 @@ import {
   projectPendingCompactEventSummaries,
   updateEventSummaryProjectionSwitch
 } from "../../db/repositories/compactEventSummaryProjection.ts";
-import { useDatabaseCleanup } from "../../testing/harness.ts";
+import { FIXTURE_TIME, insertIssue, insertProject, insertRow, useDatabaseCleanup, useTempDirs } from "../../testing/harness.ts";
 
 const trackDatabase = useDatabaseCleanup();
-
+const tempDir = useTempDirs("xuanwu-bun-status-");
 const BASE_URL = "http://127.0.0.1:3008";
-const tempRoots: string[] = [];
-
-async function tempPath(prefix: string): Promise<string> {
-  const path = await mkdtemp(join(tmpdir(), prefix));
-  tempRoots.push(path);
-  return path;
-}
-
-afterEach(async () => {
-  while (tempRoots.length > 0) {
-    const path = tempRoots.pop();
-    if (path) await rm(path, { recursive: true, force: true });
-  }
-});
+const CODEX_CAPABILITIES = ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"];
+const CLAUDE_CAPABILITIES = ["issue_execution", "sessions", "resume_session", "interrupt"];
 
 describe("Bun system status endpoints", () => {
   test("returns public health payload", async () => {
@@ -57,20 +44,11 @@ describe("Bun system status endpoints", () => {
   });
 
   test("returns a compact authenticated Web-shell status without heavy projections", async () => {
-    const { config, database } = await openFixtureRuntime({ claudeMode: "sdk" });
-    const router = createDefaultRouter();
-    registerSystemStatusRoute(router, {
-      authToken: "status-secret",
-      config,
-      database,
-      startedAt: new Date("2026-05-28T00:00:00.000Z")
+    const { body, status } = await systemStatus({ claudeMode: "sdk", secret: "status-secret" }, {
+      path: "/api/system/status?compact=1",
+      route: { startedAt: new Date("2026-05-28T00:00:00.000Z") }
     });
-    const handle = createRequestHandler(router, "status-secret");
-    const response = await handle(new Request(`${BASE_URL}/api/system/status?compact=1`, {
-      headers: { authorization: "Bearer status-secret" }
-    }));
-    const body = await response.json() as Record<string, any>;
-    expect(response.status).toBe(200);
+    expect(status).toBe(200);
     expect(body.service.alive).toBe(true);
     expect(body.db.ok).toBe(true);
     expect(body.codex.command_ok).toBe(true);
@@ -81,22 +59,11 @@ describe("Bun system status endpoints", () => {
   });
 
   test("returns service db auth and config summary", async () => {
-    const { config, database } = await openFixtureRuntime({ claudeMode: "sdk" });
-    const router = createDefaultRouter();
-    registerSystemStatusRoute(router, {
-      authToken: "status-secret",
-      config,
-      database,
-      startedAt: new Date("2026-05-28T00:00:00.000Z")
+    const { body, status } = await systemStatus({ claudeMode: "sdk", secret: "status-secret" }, {
+      route: { startedAt: new Date("2026-05-28T00:00:00.000Z") }
     });
 
-    const handle = createRequestHandler(router, "status-secret");
-    const response = await handle(new Request(`${BASE_URL}/api/system/status`, {
-      headers: { authorization: "Bearer status-secret" }
-    }));
-    const body = await response.json() as SystemStatusBody;
-
-    expect(response.status).toBe(200);
+    expect(status).toBe(200);
     expect(body.service.alive).toBe(true);
     expect(body.service.runtime).toBe("bun");
     expect(body.service.version).not.toBe("0.0.0-dev");
@@ -152,8 +119,8 @@ describe("Bun system status endpoints", () => {
     expect(body.codex).toMatchObject({
       command: "codex app-server --listen stdio://",
       command_ok: true,
-      capability_summary: "issue_execution,sessions,resume_session,interrupt,approvals,model_list",
-      capabilities: ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"],
+      capability_summary: CODEX_CAPABILITIES.join(","),
+      capabilities: CODEX_CAPABILITIES,
       app_server: "not_checked",
       model_list: "not_checked"
     });
@@ -164,7 +131,7 @@ describe("Bun system status endpoints", () => {
       label: "Codex",
       role: "executor",
       enabled: true,
-      capabilities: ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"],
+      capabilities: CODEX_CAPABILITIES,
       command: "codex app-server --listen stdio://",
       cli: { command: "codex app-server --listen stdio://" },
       cwd_configured: false,
@@ -179,7 +146,7 @@ describe("Bun system status endpoints", () => {
       label: "Claude Agent SDK",
       role: "executor",
       enabled: true,
-      capabilities: ["issue_execution", "sessions", "resume_session", "interrupt"],
+      capabilities: CLAUDE_CAPABILITIES,
       command: "bundled:@anthropic-ai/claude-agent-sdk",
       cli: { available: false, mode: "not_used" },
       cwd_configured: false,
@@ -240,60 +207,37 @@ describe("Bun system status endpoints", () => {
   });
 
   test("reports projection health from the active V2 reader", async () => {
-    const { config, database } = await openFixtureRuntime({ claudeMode: "sdk" });
-    try {
-      database.sqlite.run(`insert into projects (id, name, cwd, created_at, updated_at)
-        values ('projection-status', 'Projection status', '/tmp/projection-status', ?, ?)`, [
-        "2026-05-28T00:00:00.000Z",
-        "2026-05-28T00:00:00.000Z"
-      ]);
-      createIssue(database, {
-        description: "Verify V2 projection status",
-        project_id: "projection-status",
-        title: "V2 status"
-      });
-      projectPendingCompactEventSummaries(database);
-      updateEventSummaryProjectionSwitch(database, {
-        cutover_at: "2026-05-28T00:00:01.000Z",
-        expectedRevision: 0,
-        observation_expires_at: "2026-05-28T00:00:01.000Z",
-        observation_started_at: "2026-05-27T00:00:00.000Z",
-        read_version: "v2",
-        updatedAt: "2026-05-28T00:00:01.000Z"
-      });
-      const router = createDefaultRouter();
-      registerSystemStatusRoute(router, {
-        authToken: "",
-        config,
-        database,
-        startedAt: new Date("2026-05-28T00:00:00.000Z")
-      });
+    const { body, status } = await systemStatus({ claudeMode: "sdk" }, {
+      route: { startedAt: new Date("2026-05-28T00:00:00.000Z") },
+      seed: ({ database }) => {
+        insertProject(database, "projection-status", { name: "Projection status", created_at: "2026-05-28T00:00:00.000Z", updated_at: "2026-05-28T00:00:00.000Z" });
+        createIssue(database, { description: "Verify V2 projection status", project_id: "projection-status", title: "V2 status" });
+        projectPendingCompactEventSummaries(database);
+        updateEventSummaryProjectionSwitch(database, {
+          cutover_at: "2026-05-28T00:00:01.000Z",
+          expectedRevision: 0,
+          observation_expires_at: "2026-05-28T00:00:01.000Z",
+          observation_started_at: "2026-05-27T00:00:00.000Z",
+          read_version: "v2",
+          updatedAt: "2026-05-28T00:00:01.000Z"
+        });
+      }
+    });
 
-      const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
-      const body = await response.json() as SystemStatusBody;
-
-      expect(response.status).toBe(200);
-      expect(body.event_projection).toMatchObject({
-        projection_id: "issue_events_summary_v2",
-        last_event_id: 1,
-        lag_rows: 0,
-        projected_row_count: 1,
-        status: "ready"
-      });
-    } finally {
-      database.close();
-    }
+    expect(status).toBe(200);
+    expect(body.event_projection).toMatchObject({
+      projection_id: "issue_events_summary_v2",
+      last_event_id: 1,
+      lag_rows: 0,
+      projected_row_count: 1,
+      status: "ready"
+    });
   });
 
   test("reports partially configured Feishu connector as error summary", async () => {
-    const { config, database } = await openFixtureRuntime({ feishuAppId: "cli_app_id" });
-    const router = createDefaultRouter();
-    registerSystemStatusRoute(router, { authToken: "", config, database });
+    const { body, status } = await systemStatus({ feishuAppId: "cli_app_id" });
 
-    const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
-    const body = await response.json() as SystemStatusBody;
-
-    expect(response.status).toBe(200);
+    expect(status).toBe(200);
     expect(body.connectors[0]).toMatchObject({
       enabled: false,
       id: "feishu",
@@ -311,13 +255,12 @@ describe("Bun system status endpoints", () => {
   });
 
   test("an unprobed Telegram connector does not report a service outage", async () => {
-    const { config, database } = await openFixtureRuntime({ telegramBotToken: "123456:fixture-token" });
-    config.integrations.telegram.allowedChatIds = ["1"];
-    config.integrations.telegram.allowedUserIds = ["2"];
-    const router = createDefaultRouter();
-    registerSystemStatusRoute(router, { authToken: "", config, database });
-    const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
-    const body = await response.json() as SystemStatusBody;
+    const { body } = await systemStatus({ telegramBotToken: "123456:fixture-token" }, {
+      seed: ({ config }) => {
+        config.integrations.telegram.allowedChatIds = ["1"];
+        config.integrations.telegram.allowedUserIds = ["2"];
+      }
+    });
     expect(body.connector_health.find(connector => connector.id === "telegram"))
       .toMatchObject({ enabled: true, health: { checked: false, state: "unknown" } });
     expect((body.health as { reasons?: Array<{ source_ref?: string }> }).reasons ?? [])
@@ -325,30 +268,21 @@ describe("Bun system status endpoints", () => {
   });
 
   test("uses the live Feishu websocket receiver as connector health authority", async () => {
-    const { config, database } = await openFixtureRuntime({
-      feishuAppId: "cli_app_id",
-      feishuAppSecret: "cli_app_secret"
+    const { body, status } = await systemStatus({ feishuAppId: "cli_app_id", feishuAppSecret: "cli_app_secret" }, {
+      route: {
+        feishuReceiverStatus: () => ({
+          connected: true,
+          last_error: "",
+          last_event_at: "2026-07-23T12:00:00Z",
+          receive_mode: "websocket",
+          reconnect_attempts: 0,
+          state: "connected"
+        })
+      }
     });
-    const router = createDefaultRouter();
-    registerSystemStatusRoute(router, {
-      authToken: "",
-      config,
-      database,
-      feishuReceiverStatus: () => ({
-        connected: true,
-        last_error: "",
-        last_event_at: "2026-07-23T12:00:00Z",
-        receive_mode: "websocket",
-        reconnect_attempts: 0,
-        state: "connected"
-      })
-    });
-
-    const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
-    const body = await response.json() as SystemStatusBody;
     const feishu = body.connector_health.find((connector) => connector.id === "feishu");
 
-    expect(response.status).toBe(200);
+    expect(status).toBe(200);
     expect(feishu).toMatchObject({
       health: {
         checked: true,
@@ -362,15 +296,9 @@ describe("Bun system status endpoints", () => {
   });
 
   test("reports runner counts from database state", async () => {
-    const { config, database } = await openFixtureRuntime();
-    insertRunnerStatusFixture(database);
-    const router = createDefaultRouter();
-    registerSystemStatusRoute(router, { authToken: "", config, database });
+    const { body, status } = await systemStatus({}, { seed: ({ database }) => insertRunnerStatusFixture(database) });
 
-    const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
-    const body = await response.json() as SystemStatusBody;
-
-    expect(response.status).toBe(200);
+    expect(status).toBe(200);
     expect(body.runner).toMatchObject({
       auto_run_projects: 1,
       held_projects: 1,
@@ -382,30 +310,24 @@ describe("Bun system status endpoints", () => {
 
 
   test("reports configured Claude SDK metadata without leaking env secrets", async () => {
-    const binDir = await tempPath("xuanwu-bun-claude-bin-");
+    const binDir = await tempDir();
     await writeFakeExecutable(binDir, "claude", "claude 2.1.114 (Claude Code)");
     const secret = "anthropic-status-secret";
-    const { config, database } = await openFixtureRuntime({
+    const { body, status, text } = await systemStatus({
       claudeCommand: "claude",
       claudeEnv: `PATH=${binDir},ANTHROPIC_API_KEY=${secret},SAFE_CLAUDE=ok`,
       claudeApiBaseUrl: "https://gateway.example/private/tenant",
       claudeModel: "claude-sonnet-4-5"
     });
-    const router = createDefaultRouter();
-    registerSystemStatusRoute(router, { authToken: "", config, database });
-
-    const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
-    const text = await response.text();
-    const body = JSON.parse(text) as SystemStatusBody;
     const claude = body.providers.find((provider) => provider.id === "claude");
     const codex = body.providers.find((provider) => provider.id === "codex");
 
-    expect(response.status).toBe(200);
+    expect(status).toBe(200);
     expect(claude).toMatchObject({
       id: "claude",
       status: "available",
       available: true,
-      capabilities: ["issue_execution", "sessions", "resume_session", "interrupt"],
+      capabilities: CLAUDE_CAPABILITIES,
       command: "bundled:@anthropic-ai/claude-agent-sdk",
       cli: { available: false, mode: "not_used" },
       default_model: "claude-sonnet-4-5",
@@ -416,14 +338,14 @@ describe("Bun system status endpoints", () => {
       sdk: { executable_ready: true, installed: true, ready: true, version: "0.3.152" },
       secrets: { api_key: { configured: true } }
     });
-    expect(codex?.capabilities).toEqual(["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"]);
+    expect(codex?.capabilities).toEqual(CODEX_CAPABILITIES);
     expect(text).not.toContain(secret);
     expect(text).not.toContain("ANTHROPIC_API_KEY");
     expect(text).not.toContain("/private/tenant");
   });
 
   test("reports an Anthropic platform OAuth profile without exposing its credential contents", async () => {
-    const profileRoot = await tempPath("xuanwu-anthropic-status-");
+    const profileRoot = await tempDir();
     await mkdir(join(profileRoot, "configs"), { recursive: true });
     await mkdir(join(profileRoot, "credentials"), { recursive: true });
     await writeFile(join(profileRoot, "configs", "runner.json"), JSON.stringify({
@@ -433,16 +355,11 @@ describe("Bun system status endpoints", () => {
     const credentialPath = join(profileRoot, "credentials", "runner.json");
     await writeFile(credentialPath, JSON.stringify({ refresh_token: "profile-refresh-secret", version: "1.0" }));
     await chmod(credentialPath, 0o600);
-    const { config, database } = await openFixtureRuntime({
+    const { body, text } = await systemStatus({
       claudeAuthMode: "platform-profile",
       claudePlatformConfigDir: profileRoot,
       claudePlatformProfile: "runner"
     });
-    const router = createDefaultRouter();
-    registerSystemStatusRoute(router, { authToken: "", config, database });
-    const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
-    const text = await response.text();
-    const body = JSON.parse(text) as SystemStatusBody;
     const claude = body.providers.find((provider) => provider.id === "claude");
 
     expect(claude).toMatchObject({
@@ -463,17 +380,13 @@ describe("Bun system status endpoints", () => {
   });
 
   test("reports local Claude CLI login as an explicit fallback auth source", async () => {
-    const binDir = await tempPath("xuanwu-local-claude-bin-");
+    const binDir = await tempDir();
     await writeFakeExecutable(binDir, "claude", "claude 2.1.170", true);
-    const { config, database } = await openFixtureRuntime({
+    const { body } = await systemStatus({
       claudeAuthMode: "local-cli",
       claudeCommand: join(binDir, "claude"),
       claudeMode: "cli-fallback"
     });
-    const router = createDefaultRouter();
-    registerSystemStatusRoute(router, { authToken: "", config, database });
-    const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
-    const body = await response.json() as SystemStatusBody;
     const claude = body.providers.find((provider) => provider.id === "claude");
 
     expect(claude).toMatchObject({
@@ -481,7 +394,7 @@ describe("Bun system status endpoints", () => {
       auth_mode: "local-cli",
       auth_source: "local_cli",
       available: true,
-      capabilities: ["issue_execution", "sessions", "resume_session", "interrupt"],
+      capabilities: CLAUDE_CAPABILITIES,
       local_cli: { checked: true, logged_in: true },
       mode: "cli-fallback",
       ready: true,
@@ -491,24 +404,15 @@ describe("Bun system status endpoints", () => {
 
   test("returns doctor provider metadata for missing Claude without leaking secrets", async () => {
     const secret = "fixture-doctor-secret";
-    const { config, database } = await openFixtureRuntime({
+    const { body, status, text } = await systemStatus({
       secret,
       claudeCommand: "missing-claude-for-test",
       claudeEnv: "ANTHROPIC_API_KEY=doctor-secret",
       claudeMode: "cli-fallback"
-    });
-    const router = createDefaultRouter();
-    registerSystemStatusRoute(router, { authToken: secret, config, database });
-
-    const handle = createRequestHandler(router, secret);
-    const response = await handle(new Request(`${BASE_URL}/api/system/doctor`, {
-      headers: { authorization: `Bearer ${secret}` }
-    }));
-    const text = await response.text();
-    const body = JSON.parse(text) as RuntimeDoctorBody;
+    }, { path: "/api/system/doctor" });
     const claude = body.providers.find((provider) => provider.id === "claude");
 
-    expect(response.status).toBe(200);
+    expect(status).toBe(200);
     expect(body.listen.addr).toBe("127.0.0.1:3008");
     expect(body.db.path).toBe("<stateDir>/runner.db");
     expect(body.observability).toMatchObject({
@@ -531,24 +435,15 @@ describe("Bun system status endpoints", () => {
 
   test("reports configured Feishu connector without leaking secrets", async () => {
     const secret = "fixture-status-secret";
-    const { config, database } = await openFixtureRuntime({
+    const { body, status, text } = await systemStatus({
       feishuAppId: "cli_app_id",
       feishuAppSecret: "app-secret-value",
       feishuEncryptKey: "encrypt-secret-value",
       feishuVerificationToken: "verify-secret-value",
       secret
     });
-    const router = createDefaultRouter();
-    registerSystemStatusRoute(router, { authToken: secret, config, database });
 
-    const handle = createRequestHandler(router, secret);
-    const response = await handle(new Request(`${BASE_URL}/api/system/status`, {
-      headers: { authorization: `Bearer ${secret}` }
-    }));
-    const text = await response.text();
-    const body = JSON.parse(text) as SystemStatusBody;
-
-    expect(response.status).toBe(200);
+    expect(status).toBe(200);
     expect(body.connectors[0]).toMatchObject({
       id: "feishu",
       enabled: true,
@@ -580,22 +475,14 @@ describe("Bun system status endpoints", () => {
 
   test("does not leak token or raw paths in status JSON", async () => {
     const secret = "fixture-status-secret";
-    const { config, database } = await openFixtureRuntime({
+    const { config, status, text } = await systemStatus({
       secret,
       claudeMode: "sdk",
       codexCommand: "codex --token=runtime-secret app-server --listen stdio://",
       codexEnv: "CODEX_API_KEY=runtime-secret,SAFE_VALUE=ok"
     });
-    const router = createDefaultRouter();
-    registerSystemStatusRoute(router, { authToken: secret, config, database });
 
-    const handle = createRequestHandler(router, secret);
-    const response = await handle(new Request(`${BASE_URL}/api/system/status`, {
-      headers: { authorization: `Bearer ${secret}` }
-    }));
-    const text = await response.text();
-
-    expect(response.status).toBe(200);
+    expect(status).toBe(200);
     expect(text).not.toContain(secret);
     expect(text).not.toContain(config.stateDir);
     expect(text).not.toContain(config.dbPath);
@@ -607,50 +494,41 @@ describe("Bun system status endpoints", () => {
   });
 });
 
-async function openFixtureRuntime(options: {
-  claudeAuthMode?: string;
-  claudeApiBaseUrl?: string;
-  claudeCommand?: string;
-  claudeEnv?: string;
-  claudeMode?: string;
-  claudeModel?: string;
-  claudePlatformConfigDir?: string;
-  claudePlatformProfile?: string;
-  codexCommand?: string;
-  codexEnv?: string;
-  feishuAppId?: string;
-  feishuAppSecret?: string;
-  feishuEncryptKey?: string;
-  feishuVerificationToken?: string;
-  telegramBotToken?: string;
-  secret?: string;
-} = {}): Promise<{
-  config: ReturnType<typeof buildConfig>;
-  database: RunnerDatabase;
-}> {
-  const root = await tempPath("xuanwu-bun-status-");
-  const stateDir = join(root, "state");
-  const config = buildConfig({
-    authToken: options.secret,
-    claudeAuthMode: options.claudeAuthMode,
-    claudeApiBaseUrl: options.claudeApiBaseUrl,
-    claudeCommand: options.claudeCommand,
-    claudeEnv: options.claudeEnv,
-    claudeMode: options.claudeMode,
-    claudeModel: options.claudeModel,
-    claudePlatformConfigDir: options.claudePlatformConfigDir,
-    claudePlatformProfile: options.claudePlatformProfile,
-    codexCommand: options.codexCommand,
-    codexEnv: options.codexEnv,
-    feishuAppId: options.feishuAppId,
-    feishuAppSecret: options.feishuAppSecret,
-    feishuEncryptKey: options.feishuEncryptKey,
-    feishuVerificationToken: options.feishuVerificationToken,
-    telegramBotToken: options.telegramBotToken,
-    stateDir
-  });
+type StatusBody = Record<string, any> & { connector_health: Array<Record<string, any>>; providers: Array<Record<string, any>> };
+type RuntimeOptions = Omit<NonNullable<Parameters<typeof buildConfig>[0]>, "authToken" | "stateDir"> & { secret?: string };
+
+async function openFixtureRuntime({ secret, ...options }: RuntimeOptions = {}) {
+  const config = buildConfig({ ...options, authToken: secret, stateDir: join(await tempDir(), "state") });
   const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir }).then(trackDatabase);
   return { config, database };
+}
+
+/**
+ * Serves one status request through a router with the system status route registered; with a `secret`
+ * the request goes through the bearer-token handler.
+ */
+async function systemStatus(
+  options: RuntimeOptions = {},
+  {
+    path = "/api/system/status",
+    route = {},
+    seed = () => {}
+  }: {
+    path?: string;
+    route?: Partial<Parameters<typeof registerSystemStatusRoute>[1]>;
+    seed?: (runtime: Awaited<ReturnType<typeof openFixtureRuntime>>) => void;
+  } = {}
+) {
+  const runtime = await openFixtureRuntime(options);
+  seed(runtime);
+  const router = createDefaultRouter();
+  const secret = options.secret ?? "";
+  registerSystemStatusRoute(router, { authToken: secret, config: runtime.config, database: runtime.database, ...route });
+  const response = secret
+    ? await createRequestHandler(router, secret)(new Request(`${BASE_URL}${path}`, { headers: { authorization: `Bearer ${secret}` } }))
+    : await router.handle(new Request(`${BASE_URL}${path}`));
+  const text = await response.text();
+  return { ...runtime, status: response.status, text, body: JSON.parse(text) as StatusBody, router };
 }
 
 async function writeFakeExecutable(dir: string, name: string, version: string, loggedIn = false): Promise<void> {
@@ -663,49 +541,15 @@ exit 1
 }
 
 function insertRunnerStatusFixture(database: RunnerDatabase): void {
-  database.sqlite.run(`insert into projects (id, name, cwd, auto_run, created_at, updated_at)
-    values ('demo', 'Demo', '/tmp/demo', 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`);
-  database.sqlite.run(`insert into issues (project_id, title, status, created_at, updated_at)
-    values ('demo', 'Running', 'in_progress', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`);
-  database.sqlite.run(`insert into issue_runs (id, issue_id, attempt, status, started_at)
-    values ('issue-1-attempt-1', 1, 1, 'in_progress', '2026-01-01T00:00:00Z')`);
-  database.sqlite.run(`insert into project_holds (project_id, reason, message, hold_since, updated_at)
-    values ('demo', 'manual', 'waiting', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`);
-  database.sqlite.run(`insert into agent_sessions
-    (session_key, provider, provider_session_id, project_id, issue_id, status, created_at, updated_at)
-    values ('codex:thread-1', 'codex', 'thread-1', 'demo', 1, 'running', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`);
+  const at = { created_at: FIXTURE_TIME, updated_at: FIXTURE_TIME };
+  insertProject(database, "demo", { name: "Demo", auto_run: 1 });
+  insertIssue(database, { title: "Running", status: "in_progress" });
+  insertRow(database, "issue_runs", { id: "issue-1-attempt-1", issue_id: 1, attempt: 1, status: "in_progress", started_at: FIXTURE_TIME });
+  insertRow(database, "project_holds", { project_id: "demo", reason: "manual", message: "waiting", hold_since: FIXTURE_TIME, updated_at: FIXTURE_TIME });
+  insertRow(database, "agent_sessions", {
+    session_key: "codex:thread-1", provider: "codex", provider_session_id: "thread-1", project_id: "demo", issue_id: 1, status: "running", ...at
+  });
 }
-
-type SystemStatusBody = {
-  auth: { enabled: boolean };
-  config: { addr: string; auth_enabled: boolean; db_path: string };
-  db: { ok: boolean };
-  codex: Record<string, unknown>;
-  connectors: Array<{ id: string } & Record<string, unknown>>;
-  connector_health: Array<{ id: string } & Record<string, unknown>>;
-  event_projection: Record<string, unknown>;
-  health: Record<string, unknown>;
-  observability: Record<string, unknown>;
-  process_group_memory: Record<string, unknown>;
-  run_progress_projection: Record<string, unknown>;
-  providers: Array<{ id: string } & Record<string, unknown>>;
-  runner: Record<string, number>;
-  service: {
-    alive: boolean;
-    build: Record<string, unknown>;
-    runtime: string;
-    memory: Record<string, number>;
-    version: string;
-  };
-};
-
-type RuntimeDoctorBody = {
-  db: { path: string };
-  health: Record<string, unknown>;
-  listen: { addr: string };
-  observability: Record<string, unknown>;
-  providers: Array<{ id: string } & Record<string, unknown>>;
-};
 
 describe("P4: registry 投影接入 system status", () => {
   test("registry 注册的测试 Provider 出现在 API status，无需修改 status builder switch", async () => {
@@ -733,7 +577,7 @@ describe("P4: registry 投影接入 system status", () => {
     });
     const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
     expect(response.status).toBe(200);
-    const body = (await response.json()) as SystemStatusBody;
+    const body = (await response.json()) as StatusBody;
     const fake = body.providers.find((p) => p.id === "fake-execution-only");
     expect(fake).toBeDefined();
     expect(fake?.registry_state).toBe("ready");
@@ -743,7 +587,7 @@ describe("P4: registry 投影接入 system status", () => {
 
     const compactResponse = await router.handle(new Request(`${BASE_URL}/api/system/status?compact=1`));
     expect(compactResponse.status).toBe(200);
-    const compactBody = (await compactResponse.json()) as SystemStatusBody;
+    const compactBody = (await compactResponse.json()) as StatusBody;
     expect(compactBody.providers.map((provider) => provider.id)).toEqual(["fake-execution-only"]);
   });
 });
