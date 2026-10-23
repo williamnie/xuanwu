@@ -29,6 +29,7 @@ import {
   attentionFromPiAction
 } from "./legacyAdapters.ts";
 import { parseDomainID } from "../../xuanwu/coreDomainContracts.ts";
+import { cleanString } from "../../util/values.ts";
 
 type AttentionCommandEvent = {
   action: AttentionCommand["action"];
@@ -161,10 +162,6 @@ function parseObject(value: string): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function replayCommands(db: RunnerDatabase, initial: AttentionRecord): AttentionRecord {

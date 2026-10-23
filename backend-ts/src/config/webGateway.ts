@@ -1,4 +1,5 @@
 import { DEFAULT_ADDR } from "./paths.ts";
+import { cleanString } from "../util/values.ts";
 
 export const DEFAULT_CORE_ADDR = "127.0.0.1:3009";
 export const DEFAULT_PROXY_TIMEOUT_MS = 30_000;
@@ -22,10 +23,10 @@ const FLAGS: Record<string, WebConfigKey> = {
 
 export function loadWebGatewayConfig(args: string[], env: Env = Bun.env): WebGatewayConfig {
   const values: Record<WebConfigKey, string> = {
-    addr: clean(env.XUANWU_ADDR) || DEFAULT_ADDR,
-    coreAddr: clean(env.XUANWU_CORE_ADDR) || DEFAULT_CORE_ADDR,
-    proxyTimeoutMs: clean(env.XUANWU_PROXY_TIMEOUT_MS) || String(DEFAULT_PROXY_TIMEOUT_MS),
-    webDir: clean(env.XUANWU_WEB_DIR)
+    addr: cleanString(env.XUANWU_ADDR) || DEFAULT_ADDR,
+    coreAddr: cleanString(env.XUANWU_CORE_ADDR) || DEFAULT_CORE_ADDR,
+    proxyTimeoutMs: cleanString(env.XUANWU_PROXY_TIMEOUT_MS) || String(DEFAULT_PROXY_TIMEOUT_MS),
+    webDir: cleanString(env.XUANWU_WEB_DIR)
   };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? "";
@@ -34,8 +35,8 @@ export function loadWebGatewayConfig(args: string[], env: Env = Bun.env): WebGat
     const key = FLAGS[flag];
     if (!key) throw new Error(`Unknown Web Gateway argument: ${arg}`);
     const value = separator > 0 ? arg.slice(separator + 1) : args[index + 1];
-    if (clean(value) === "") throw new Error(`Missing value for ${flag}`);
-    values[key] = clean(value);
+    if (cleanString(value) === "") throw new Error(`Missing value for ${flag}`);
+    values[key] = cleanString(value);
     if (separator <= 0) index += 1;
   }
   return {
@@ -47,7 +48,7 @@ export function loadWebGatewayConfig(args: string[], env: Env = Bun.env): WebGat
 }
 
 function normalizeCoreAddr(value: string): string {
-  const cleanValue = clean(value);
+  const cleanValue = cleanString(value);
   if (/^https?:\/\//i.test(cleanValue)) return cleanValue.replace(/\/+$/, "");
   return `http://${cleanValue.replace(/\/+$/, "")}`;
 }
@@ -55,8 +56,4 @@ function normalizeCoreAddr(value: string): string {
 function positiveInteger(value: string, fallback: number): number {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function clean(value: string | undefined): string {
-  return value?.trim() ?? "";
 }

@@ -25,6 +25,7 @@ import {
   recordPiAcceptanceActivity,
   type PiAcceptanceActivity
 } from "./piAcceptanceActivity.ts";
+import { cleanString, errorMessage, objectValue, stringList } from "../../util/values.ts";
 
 export const HUMAN_REVIEW_EVENT_TYPES = {
   requested: "issue.human_review_requested.v1",
@@ -535,16 +536,16 @@ async function resumeRevisionInSameSession(
     const now = new Date().toISOString();
     db.sqlite.run(
       "update issue_runs set status='failed', ended_at=?, exit_reason='human_revision_resume_failed', error=? where id=?",
-      [now, safeError(error), run.id]
+      [now, errorMessage(error), run.id]
     );
     recordIssueEvent(db, issue.id, HUMAN_REVIEW_EVENT_TYPES.revisionResumeFailed, {
-      error: safeError(error),
+      error: errorMessage(error),
       request_id: request.id,
       revision: request.revision,
       run_id: run.id
     });
     requestIssuePiAcceptance(db, issue.id, {
-      reason: `human revision resume failed: ${safeError(error)}`,
+      reason: `human revision resume failed: ${errorMessage(error)}`,
       source: "human_review_resume"
     });
     throw error;
@@ -647,12 +648,6 @@ function completionCardFingerprint(evidenceRefs: string[]): string {
     .find(Boolean) ?? "";
 }
 
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-}
-
 function objectPayload(value: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(value);
@@ -675,10 +670,6 @@ function normalizeAction(value: unknown): "accept" | "reject" | "request_changes
   throw new Error("human review action 必须是 accept、reject 或 request_changes");
 }
 
-function stringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(cleanString).filter(Boolean) : [];
-}
-
 function positiveInteger(value: unknown, label: string): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${label} 必须是正整数`);
@@ -694,14 +685,6 @@ function requiredText(value: unknown, label: string): string {
   const text = cleanString(value);
   if (text === "") throw new Error(`${label} 不能为空`);
   return text;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function safeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function mustGetIssue(db: RunnerDatabase, issueID: number): Issue {

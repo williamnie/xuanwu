@@ -1,3 +1,5 @@
+import { cleanString } from "../util/values.ts";
+
 type JsonObject = Record<string, unknown>;
 
 type AssistantSourceProfile =
@@ -222,8 +224,4 @@ function positiveID(value: unknown): number {
 function stringList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map(cleanString).filter(Boolean))];
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

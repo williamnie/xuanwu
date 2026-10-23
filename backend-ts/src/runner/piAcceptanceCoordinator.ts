@@ -24,6 +24,7 @@ import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts
 import { redactSensitiveText } from "../util/redact.ts";
 import { applyPiAcceptanceDecision } from "./piAcceptanceApplication.ts";
 import { startProjectLoop } from "./projectLoopManager.ts";
+import { cleanString } from "../util/values.ts";
 
 export type PiIssueAcceptanceRunner = (card: CompletionCard) => Promise<PiAcceptanceRuntimeResult>;
 
@@ -281,8 +282,4 @@ function ageMs(value: string, now: Date): number {
 
 function safeError(error: unknown): string {
   return redactSensitiveText(error instanceof Error ? error.message : String(error));
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

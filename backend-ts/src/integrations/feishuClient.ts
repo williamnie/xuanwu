@@ -1,5 +1,6 @@
 import type { FeishuConnectorConfig } from "./feishu.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { cleanString } from "../util/values.ts";
 
 type FeishuReceiveIdType = "chat_id" | "email" | "open_id" | "union_id" | "user_id";
 export type FeishuTextMessageInput = { receiveId: string; receiveIdType: FeishuReceiveIdType | string; text: string };
@@ -201,10 +202,6 @@ function requireText(value: unknown, name: string): string {
   const text = cleanString(value);
   if (text === "") throw new FeishuClientError(`${name} is required`, { kind: "permanent" });
   return text;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function safeError(error: unknown, config: FeishuConnectorConfig): string {

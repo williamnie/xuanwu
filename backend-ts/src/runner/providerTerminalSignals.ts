@@ -10,6 +10,7 @@ import {
   parseProviderEventError,
   type ProviderErrorSignal
 } from "../pi/providerErrorParser.ts";
+import { cleanString, positiveInteger } from "../util/values.ts";
 
 type ProviderTerminalSignalInput = {
   activeRunID: string;
@@ -30,13 +31,13 @@ export function signalProviderTerminalEvent(input: ProviderTerminalSignalInput):
   if (!terminalProviderEvent(input.event)) return;
   const now = input.now ?? new Date();
   const signal = parseProviderEventError(input.event, { now });
-  const diagnosis = clean(signal.diagnosis_code);
+  const diagnosis = cleanString(signal.diagnosis_code);
   if (diagnosis === "") return;
   const issue = getIssue(input.database, input.issueID);
   if (!issue) return;
   const run = latestRun(input.database, input.issueID, input.activeRunID);
-  const provider = clean(input.event.provider || signal.provider || run?.provider) || "codex";
-  const sessionID = clean(input.event.session?.sessionId || run?.provider_session_id || issue.codex_thread_id);
+  const provider = cleanString(input.event.provider || signal.provider || run?.provider) || "codex";
+  const sessionID = cleanString(input.event.session?.sessionId || run?.provider_session_id || issue.codex_thread_id);
   const session = sessionID === "" ? null : getAgentSession(input.database, `${provider}:${sessionID}`);
   writeProviderTerminalSignal(input.database, {
     diagnosis,
@@ -46,11 +47,11 @@ export function signalProviderTerminalEvent(input: ProviderTerminalSignalInput):
     reason: signal.raw_summary,
     run,
     sessionID,
-    sessionStatus: clean(session?.status || input.event.status),
-    sessionUpdatedAt: clean(session?.updated_at),
+    sessionStatus: cleanString(session?.status || input.event.status),
+    sessionUpdatedAt: cleanString(session?.updated_at),
     sourceID: signalSourceID(input, diagnosis, sessionID),
     signal,
-    turnID: clean(input.event.session?.turnId || run?.provider_turn_id || issue.codex_turn_id)
+    turnID: cleanString(input.event.session?.turnId || run?.provider_turn_id || issue.codex_turn_id)
   }, now);
 }
 
@@ -70,7 +71,7 @@ export function signalOpenRunTerminalProviderErrors(
     const sourceID = logSignalSourceID(
       { issueID: row.issue_id, projectID: row.project_id },
       backfill.eventID,
-      clean(backfill.signal.diagnosis_code)
+      cleanString(backfill.signal.diagnosis_code)
     );
     if (guardianSignalExists(db, sourceID)) {
       summary.skipped += 1;
@@ -118,14 +119,14 @@ function writeProviderTerminalSignal(
     provider_turn_id: snapshot.turnID,
     ready: true,
     reason: snapshot.reason,
-    run_ended_at: clean(snapshot.run?.ended_at),
-    run_id: clean(snapshot.run?.id),
-    run_status: clean(snapshot.run?.status),
+    run_ended_at: cleanString(snapshot.run?.ended_at),
+    run_id: cleanString(snapshot.run?.id),
+    run_status: cleanString(snapshot.run?.status),
     session_status: snapshot.sessionStatus,
     session_turn_id: snapshot.turnID,
     session_updated_at: snapshot.sessionUpdatedAt,
     stale_gap_seconds: 0,
-    wait_until: clean(snapshot.signal.retry_after_at)
+    wait_until: cleanString(snapshot.signal.retry_after_at)
   } satisfies HeartbeatSupervisorCandidateSignal], {
     heartbeatID: snapshot.sourceID,
     now,
@@ -134,8 +135,8 @@ function writeProviderTerminalSignal(
 }
 
 function terminalProviderEvent(event: ProviderEvent): boolean {
-  const method = clean(event.raw?.method);
-  const status = clean(event.status).toLowerCase();
+  const method = cleanString(event.raw?.method);
+  const status = cleanString(event.status).toLowerCase();
   if (event.type === "error") return true;
   if (method === "turn/completed" && status !== "" && status !== "completed") return true;
   return method === "thread/status/changed" && ["systemerror", "failed", "error"].includes(status);
@@ -186,7 +187,7 @@ function latestTerminalSignal(db: RunnerDatabase, issueID: number, runStartedAt:
     const payload = parseJsonRecord(hydrateStoredIssueLogPayload(db, row.payload));
     if (!terminalIssueLog(payload)) continue;
     const signal = parseIssueEventProviderError(payload, { now });
-    if (clean(signal.diagnosis_code) !== "") return { eventID: row.id, signal };
+    if (cleanString(signal.diagnosis_code) !== "") return { eventID: row.id, signal };
   }
   return null;
 }
@@ -197,19 +198,19 @@ function snapshotFromOpenRun(
   sourceID: string
 ): TerminalSignalSnapshot {
   const issue = issueFromOpenRun(row);
-  const provider = clean(signal.provider || row.provider) || "codex";
-  const sessionID = clean(row.provider_session_id || row.codex_thread_id);
-  const turnID = clean(row.provider_turn_id || row.codex_turn_id);
+  const provider = cleanString(signal.provider || row.provider) || "codex";
+  const sessionID = cleanString(row.provider_session_id || row.codex_thread_id);
+  const turnID = cleanString(row.provider_turn_id || row.codex_turn_id);
   return {
-    diagnosis: clean(signal.diagnosis_code),
+    diagnosis: cleanString(signal.diagnosis_code),
     issue,
     projectID: row.project_id,
     provider,
     reason: signal.raw_summary,
     run: runFromOpenRun(row),
     sessionID,
-    sessionStatus: clean(row.session_status),
-    sessionUpdatedAt: clean(row.session_updated_at),
+    sessionStatus: cleanString(row.session_status),
+    sessionUpdatedAt: cleanString(row.session_updated_at),
     signal,
     sourceID,
     turnID
@@ -238,9 +239,9 @@ function runFromOpenRun(row: OpenRunRow): IssueRun {
 }
 
 function terminalIssueLog(payload: Record<string, unknown>): boolean {
-  const method = clean(payload.raw_method);
-  const status = clean(payload.status).toLowerCase();
-  if (clean(payload.type).toLowerCase() === "error") return true;
+  const method = cleanString(payload.raw_method);
+  const status = cleanString(payload.status).toLowerCase();
+  if (cleanString(payload.type).toLowerCase() === "error") return true;
   if (method === "turn/completed" && status !== "" && status !== "completed") return true;
   return method === "thread/status/changed" && ["systemerror", "failed", "error"].includes(status);
 }
@@ -258,9 +259,9 @@ function signalSourceID(input: ProviderTerminalSignalInput, diagnosis: string, s
     "provider-terminal",
     input.projectID,
     input.issueID,
-    clean(input.event.raw?.method || input.event.type) || "event",
+    cleanString(input.event.raw?.method || input.event.type) || "event",
     sessionID || "no-session",
-    clean(input.event.session?.turnId) || "no-turn",
+    cleanString(input.event.session?.turnId) || "no-turn",
     diagnosis
   ].join(":");
 }
@@ -282,14 +283,6 @@ function parseJsonRecord(value: string): Record<string, unknown> {
   }
 }
 
-function positiveInteger(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
-}
-
 function boundedLimit(value: number): number {
   return Math.min(Math.max(Number.isFinite(value) ? Math.round(value) : DEFAULT_BACKFILL_LIMIT, 1), DEFAULT_BACKFILL_LIMIT);
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

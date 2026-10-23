@@ -13,6 +13,7 @@ import { flushRunGroupDigest, runDigestFlushSchedulerOnce } from "../pi/digestFl
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { registerPiGuardianPreferenceRoutes } from "./piGuardianPreferencesApi.ts";
 import type { Router } from "./router.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 type PiGuardianContext = { database: RunnerDatabase };
 type BucketCounts = Record<string, number>;
@@ -34,8 +35,8 @@ export function registerPiGuardianRoutes(router: Router, context: PiGuardianCont
 function runGroupsResponse(db: RunnerDatabase, request: Request): unknown[] {
   const params = new URL(request.url).searchParams;
   return listPiRunGroups(db, {
-    projectId: clean(params.get("project_id") ?? params.get("projectId")),
-    status: clean(params.get("status"))
+    projectId: cleanString(params.get("project_id") ?? params.get("projectId")),
+    status: cleanString(params.get("status"))
   }).map((group) => runGroupSummary(db, group, undefined, false));
 }
 
@@ -53,10 +54,10 @@ function notificationIntentsResponse(db: RunnerDatabase, request: Request): unkn
   const params = new URL(request.url).searchParams;
   return listPiNotificationIntents(db, {
     issueId: positiveID(params.get("issue_id") ?? params.get("issueId")),
-    kind: clean(params.get("kind")),
-    projectId: clean(params.get("project_id") ?? params.get("projectId")),
-    runGroupId: clean(params.get("run_group_id") ?? params.get("runGroupId")),
-    state: clean(params.get("state"))
+    kind: cleanString(params.get("kind")),
+    projectId: cleanString(params.get("project_id") ?? params.get("projectId")),
+    runGroupId: cleanString(params.get("run_group_id") ?? params.get("runGroupId")),
+    state: cleanString(params.get("state"))
   }).map(intentSummary);
 }
 
@@ -154,7 +155,7 @@ function lastDigestSummary(intents: PiNotificationIntent[]): Record<string, unkn
   if (!digest) return null;
   const payload = payloadSummary(digest);
   return {
-    counts: record(payload.counts),
+    counts: objectValue(payload.counts),
     flush_reason: digest.flush_reason,
     flush_sequence: digest.flush_sequence,
     id: digest.id,
@@ -200,28 +201,28 @@ function digestCounts(payload: Record<string, unknown>): DigestCounts {
 function safeIssueBuckets(value: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(value)) return [];
   return value.slice(0, 20).map((item) => {
-    const row = record(item);
+    const row = objectValue(item);
     return {
-      bucket: safeText(text(row.bucket)),
+      bucket: safeText(cleanString(row.bucket)),
       issue_id: positiveNumber(row.issue_id),
-      reason: safeText(text(row.reason)),
-      status: safeText(text(row.status)),
-      title: safeText(text(row.title))
+      reason: safeText(cleanString(row.reason)),
+      status: safeText(cleanString(row.status)),
+      title: safeText(cleanString(row.title))
     };
   }).filter((item) => item.issue_id > 0);
 }
 
 async function digestFlushResponse(db: RunnerDatabase, request: Request): Promise<unknown> {
   const body = await optionalObjectBody(request);
-  const runGroupID = clean(body.run_group_id) || clean(body.runGroupId);
-  if (runGroupID !== "") return flushRunGroupDigest(db, { now: clean(body.now), runGroupID });
+  const runGroupID = cleanString(body.run_group_id) || cleanString(body.runGroupId);
+  if (runGroupID !== "") return flushRunGroupDigest(db, { now: cleanString(body.now), runGroupID });
   return runDigestFlushSchedulerOnce(db, digestFlushInput(body));
 }
 
 function digestFlushInput(body: Record<string, unknown>): { limit?: number; now?: string } {
   const input: { limit?: number; now?: string } = {};
   const limit = positiveNumber(body.limit);
-  const now = clean(body.now);
+  const now = cleanString(body.now);
   if (limit > 0) input.limit = limit;
   if (now !== "") input.now = now;
   return input;
@@ -230,7 +231,7 @@ function digestFlushInput(body: Record<string, unknown>): { limit?: number; now?
 async function optionalObjectBody(request: Request): Promise<Record<string, unknown>> {
   try {
     const body = await parseJsonBody(request);
-    return record(body);
+    return objectValue(body);
   } catch (error) {
     if (error instanceof HttpError) return {};
     throw error;
@@ -239,14 +240,10 @@ async function optionalObjectBody(request: Request): Promise<Record<string, unkn
 
 function parseRecord(value: string): Record<string, unknown> {
   try {
-    return record(JSON.parse(value || "{}") as unknown);
+    return objectValue(JSON.parse(value || "{}") as unknown);
   } catch {
     return {};
   }
-}
-
-function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function digestSortKey(intent: PiNotificationIntent): string {
@@ -273,7 +270,7 @@ function positiveID(value: string | null): number | undefined {
 }
 
 function positiveNumber(value: unknown): number {
-  const number = typeof value === "number" ? value : Number(clean(value));
+  const number = typeof value === "number" ? value : Number(cleanString(value));
   return Number.isSafeInteger(number) && number > 0 ? number : 0;
 }
 
@@ -286,12 +283,4 @@ function runGroupID(request: Request): string {
 
 function safeText(value: string): string {
   return redactAuditText(value);
-}
-
-function text(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

@@ -29,6 +29,7 @@ import {
   notificationPresentationPrompt,
   type NotificationPresentation
 } from "./notificationPresentation.ts";
+import { cleanString, objectValue, positiveInteger } from "../util/values.ts";
 
 export type AgentCommunicationDecision = {
   decision: "send" | "suppress";
@@ -455,10 +456,6 @@ function communicationEnvelope(intent: PiNotificationIntent): CommunicationEnvel
   };
 }
 
-function positiveInteger(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
-}
-
 function markSent(db: RunnerDatabase, intent: PiNotificationIntent, outboxID: number, now: Date): void {
   updatePiNotificationIntent(db, intent.id, {
     error: "",
@@ -543,10 +540,6 @@ function safePayload(value: string): Record<string, unknown> {
   }
 }
 
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 function boundedLimit(value: number | undefined): number {
   return Number.isInteger(value) && (value ?? 0) > 0 ? Math.min(value!, DEFAULT_LIMIT) : DEFAULT_LIMIT;
 }
@@ -558,8 +551,4 @@ function emptyResult(intents: number, groups: number): AgentCommunicationGateway
 function safeError(error: unknown): string {
   const message = redactSensitiveText(error instanceof Error ? error.message : String(error));
   return message.split("\n", 1)[0]!.slice(0, 240);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import type { RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent, getPiAction, updatePiAction } from "../db/repositories/pi.ts";
 import { evaluatePiActionFreshness } from "./actionFreshness.ts";
+import { cleanString } from "../util/values.ts";
 
 type PendingActionRow = {
   action_type: string;
@@ -172,7 +173,7 @@ function rejectStaleAction(db: RunnerDatabase, action: StalePendingAction, backu
 }
 
 function backupDatabase(db: RunnerDatabase, backupDir: string | undefined, now: Date): string {
-  const dir = clean(backupDir) || join(dirname(db.path), "backups");
+  const dir = cleanString(backupDir) || join(dirname(db.path), "backups");
   mkdirSync(dir, { recursive: true });
   const backupPath = join(dir, `pi-actions-stale-pending-${stamp(now)}-${crypto.randomUUID().slice(0, 8)}.db`);
   db.sqlite.run("vacuum main into ?", [backupPath]);
@@ -197,8 +198,4 @@ function cleanupResult(
 
 function stamp(now: Date): string {
   return now.toISOString().replaceAll(/[:.]/g, "-");
-}
-
-function clean(value: string | undefined): string {
-  return value?.trim() ?? "";
 }

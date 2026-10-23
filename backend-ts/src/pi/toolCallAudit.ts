@@ -3,6 +3,7 @@ import { createPiActionEvent } from "../db/repositories/pi.ts";
 import { redactAuditJsonText, redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import { RUNNER_BUILTIN_PROVIDER_ID } from "./builtinToolRegistry.ts";
 import type { ToolPermission, ToolResultStatus } from "./toolProviderEnvelope.ts";
+import { cleanString } from "../util/values.ts";
 
 export type ToolCallAuditContext = {
   conversationID: string;
@@ -105,8 +106,4 @@ function valueType(value: unknown): string {
   if (Array.isArray(value)) return "array";
   if (value === null) return "null";
   return typeof value;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

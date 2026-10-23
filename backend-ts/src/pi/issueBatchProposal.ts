@@ -3,6 +3,7 @@ import { createIssue } from "../db/repositories/issueCreate.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { withIssueBodyDependencies } from "./issuePlanningBody.ts";
+import { cleanString, objectValue, stringList } from "../util/values.ts";
 
 const ISSUE_BATCH_MAX_ITEMS = 40;
 
@@ -153,18 +154,4 @@ function requiredCreatedItem(items: Map<string, IssueBatchMaterializedItem>, ref
   const item = items.get(ref);
   if (!item) throw new Error(`batch dependency was not materialized: ${ref}`);
   return item;
-}
-
-function objectValue(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-}
-
-function stringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(cleanString).filter(Boolean) : [];
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

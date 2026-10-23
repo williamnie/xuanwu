@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { EnvReader } from "./types.ts";
+import { cleanString } from "../util/values.ts";
 
 export type CommonFlags = {
   addr: string;
@@ -87,15 +88,15 @@ function parseSpecificFlags(args: string[], specs: FlagSpec[]): Record<string, s
     }
   }
   for (const spec of specs) {
-    if (spec.required && clean(values[spec.name]) === "") throw new Error(`--${spec.name} is required`);
+    if (spec.required && cleanString(values[spec.name]) === "") throw new Error(`--${spec.name} is required`);
   }
   return values;
 }
 
 function envToken(env: EnvReader): string {
-  const direct = clean(env(TOKEN_ENV));
+  const direct = cleanString(env(TOKEN_ENV));
   if (direct) return direct;
-  return readTokenFile(clean(env(TOKEN_FILE_ENV)));
+  return readTokenFile(cleanString(env(TOKEN_FILE_ENV)));
 }
 
 function readTokenFile(path: string): string {
@@ -114,7 +115,7 @@ function readFlagValue(
   inlineValue: string | undefined
 ): { value: string; index: number } {
   const value = inlineValue ?? args[index + 1];
-  if (clean(value) === "") throw new Error(`Missing value for ${flag}`);
+  if (cleanString(value) === "") throw new Error(`Missing value for ${flag}`);
   return { value, index: inlineValue === undefined ? index + 1 : index };
 }
 
@@ -122,10 +123,6 @@ function splitFlag(arg: string): { flag: string; inlineValue?: string } {
   const separator = arg.indexOf("=");
   if (separator < 0) return { flag: arg };
   return { flag: arg.slice(0, separator), inlineValue: arg.slice(separator + 1) };
-}
-
-function clean(value: string | undefined): string {
-  return value?.trim() ?? "";
 }
 
 export function sanitizeError(error: unknown): string {

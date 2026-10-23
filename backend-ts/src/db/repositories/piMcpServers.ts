@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../database.ts";
+import { cleanString } from "../../util/values.ts";
 
 type PiMcpTransportType = "stdio" | "http" | "sse" | "streamable_http";
 const PI_MCP_APPROVAL_MODES = ["dangerous_only", "every_write", "read_only"] as const;
@@ -101,18 +102,18 @@ function normalizedServer(input: PiMcpServerInput, existing?: PiMcpServer): PiMc
   const env = stringRecord(input.env ?? existing?.env ?? {});
   const headers = stringRecord(input.headers ?? existing?.headers ?? {});
   return {
-    approval_granted_at: clean(input.approval_granted_at ?? existing?.approval_granted_at),
+    approval_granted_at: cleanString(input.approval_granted_at ?? existing?.approval_granted_at),
     approval_mode: approvalMode(input.approval_mode ?? existing?.approval_mode),
-    args: stringList(input.args ?? existing?.args ?? []), command: clean(input.command ?? existing?.command),
-    cwd: clean(input.cwd ?? existing?.cwd), description: clean(input.description ?? existing?.description),
+    args: stringList(input.args ?? existing?.args ?? []), command: cleanString(input.command ?? existing?.command),
+    cwd: cleanString(input.cwd ?? existing?.cwd), description: cleanString(input.description ?? existing?.description),
     diagnostics: input.diagnostics ?? existing?.diagnostics ?? [], enabled: input.enabled ?? existing?.enabled ?? false,
-    env, headers, id, last_introspected_at: clean(input.last_introspected_at ?? existing?.last_introspected_at),
-    last_scan_at: clean(input.last_scan_at ?? existing?.last_scan_at), metadata: input.metadata ?? existing?.metadata ?? {},
-    name: clean(input.name) || id, readiness: clean(input.readiness ?? existing?.readiness) || "not_introspected",
+    env, headers, id, last_introspected_at: cleanString(input.last_introspected_at ?? existing?.last_introspected_at),
+    last_scan_at: cleanString(input.last_scan_at ?? existing?.last_scan_at), metadata: input.metadata ?? existing?.metadata ?? {},
+    name: cleanString(input.name) || id, readiness: cleanString(input.readiness ?? existing?.readiness) || "not_introspected",
     redaction: input.redaction ?? existing?.redaction ?? redactionFor(env, headers),
-    risk_level: clean(input.risk_level ?? existing?.risk_level) || "medium", source: clean(input.source ?? existing?.source) || "manual",
-    source_path: clean(input.source_path ?? existing?.source_path), status: clean(input.status ?? existing?.status) || "discovered",
-    transport_type: input.transport_type ?? existing?.transport_type ?? "stdio", url: clean(input.url ?? existing?.url)
+    risk_level: cleanString(input.risk_level ?? existing?.risk_level) || "medium", source: cleanString(input.source ?? existing?.source) || "manual",
+    source_path: cleanString(input.source_path ?? existing?.source_path), status: cleanString(input.status ?? existing?.status) || "discovered",
+    transport_type: input.transport_type ?? existing?.transport_type ?? "stdio", url: cleanString(input.url ?? existing?.url)
   };
 }
 
@@ -138,14 +139,14 @@ function serverFromRow(row: ServerRow): PiMcpServer {
 }
 
 function approvalMode(value: unknown): PiMcpApprovalMode {
-  const mode = clean(value);
+  const mode = cleanString(value);
   return (PI_MCP_APPROVAL_MODES as readonly string[]).includes(mode)
     ? mode as PiMcpApprovalMode
     : "dangerous_only";
 }
 
 export function normalizeID(value: unknown): string {
-  return clean(value).toLowerCase().replace(/[^a-z0-9_:-]+/g, "-").replace(/^-+|-+$/g, "");
+  return cleanString(value).toLowerCase().replace(/[^a-z0-9_:-]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
 export function redactionFor(env: Record<string, string>, headers: Record<string, string>): Record<string, string[]> {
@@ -158,13 +159,9 @@ function json<T>(raw: string, fallback: T): T {
 
 function stringRecord(value: unknown): Record<string, string> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return Object.fromEntries(Object.entries(value).map(([k, v]) => [clean(k), clean(v)]).filter(([k]) => k !== ""));
+  return Object.fromEntries(Object.entries(value).map(([k, v]) => [cleanString(k), cleanString(v)]).filter(([k]) => k !== ""));
 }
 
 function stringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(clean).filter((item) => item !== "") : [];
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return Array.isArray(value) ? value.map(cleanString).filter((item) => item !== "") : [];
 }

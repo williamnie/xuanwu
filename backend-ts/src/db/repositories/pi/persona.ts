@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../../database.ts";
 import { DEFAULT_PI_AGENT_ID } from "../../defaultPiAgent.ts";
 import { createPiActionEvent } from "./actions.ts";
+import { cleanString } from "../../../util/values.ts";
 
 export const PI_PERSONA_VERBOSITY = ["adaptive", "concise", "detailed"] as const;
 export const PI_PERSONA_LANGUAGE_MODES = ["system", "follow_user"] as const;
@@ -171,8 +172,4 @@ function flag(value: unknown): number {
 function integer(value: unknown, field: string): number {
   if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return value;
   throw new Error(`${field} must be a non-negative integer`);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

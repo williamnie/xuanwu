@@ -5,6 +5,7 @@ import {
 } from "../db/repositories/externalLinks.ts";
 import type { ImTargetV1 } from "./imChannelContracts.ts";
 import { findImConversationStateByConversationID } from "../db/repositories/imConversationState.ts";
+import { cleanString, positiveInteger } from "../util/values.ts";
 
 export type ResolvedImNotificationTarget = ImTargetV1 & { external_event_id: number };
 type ResolveImNotificationTargetInput = {
@@ -26,9 +27,9 @@ export function resolveImNotificationTarget(
   const connectorID = required(input.connectorID, "connectorID");
   const links = candidateLinks(db, {
     connectorID,
-    conversationID: clean(input.conversationID),
+    conversationID: cleanString(input.conversationID),
     issueID: positiveInteger(input.issueID),
-    projectID: clean(input.projectID)
+    projectID: cleanString(input.projectID)
   });
   for (const link of links) {
     const target = targetFromLink(db, connectorID, link);
@@ -43,11 +44,11 @@ export function resolveImNotificationConnectorID(db: RunnerDatabase, input: {
   issueID?: number;
   projectID?: string;
 }): string {
-  const conversationID = clean(input.conversationID);
+  const conversationID = cleanString(input.conversationID);
   const persisted = findImConversationStateByConversationID(db, conversationID);
   if (persisted) return persisted.connector_id;
   const issueID = positiveInteger(input.issueID);
-  const projectID = clean(input.projectID);
+  const projectID = cleanString(input.projectID);
   const rows = db.sqlite.query<{ source: string }, Array<number | string>>(
     `select distinct l.source from external_links l
      join external_events e on e.id=l.external_event_id
@@ -59,7 +60,7 @@ export function resolveImNotificationConnectorID(db: RunnerDatabase, input: {
          or json_extract(e.normalized_message_json, '$.chat_id')<>'')
      order by l.source`,
   ).all(conversationID, conversationID, issueID, issueID, projectID, projectID)
-    .map((row) => clean(row.source)).filter(Boolean);
+    .map((row) => cleanString(row.source)).filter(Boolean);
   return rows.length === 1 ? rows[0]! : "";
 }
 
@@ -117,9 +118,9 @@ function targetFromLink(
   const normalized = object(event.normalized_message_json);
   const conversation = object(normalized.conversation);
   const thread = object(normalized.thread);
-  const conversationID = clean(conversation.id) || clean(normalized.chat_id);
-  const replyToMessageID = clean(normalized.message_id) || clean(link.external_id);
-  const threadID = clean(thread.id) || clean(normalized.thread_id) || clean(normalized.root_id);
+  const conversationID = cleanString(conversation.id) || cleanString(normalized.chat_id);
+  const replyToMessageID = cleanString(normalized.message_id) || cleanString(link.external_id);
+  const threadID = cleanString(thread.id) || cleanString(normalized.thread_id) || cleanString(normalized.root_id);
   if (conversationID === "" && replyToMessageID === "" && threadID === "") return null;
   return {
     connector_id: connectorID,
@@ -141,16 +142,8 @@ function object(value: unknown): Record<string, unknown> {
   }
 }
 
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function required(value: unknown, label: string): string {
-  const text = clean(value);
+  const text = cleanString(value);
   if (text === "") throw new Error(`${label} is required`);
   return text;
-}
-
-function positiveInteger(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
 }

@@ -21,6 +21,7 @@ import {
   projectLoopMaxParallelProjects,
   startProjectLoop
 } from "./projectLoopManager.ts";
+import { cleanString } from "../util/values.ts";
 
 export type IssueWatchdogSummary = {
   attentioned: number;
@@ -697,8 +698,4 @@ function positiveInteger(value: number | undefined, fallback: number): number {
 
 function boundedLimit(value: number): number {
   return Math.min(Math.max(Number.isFinite(value) ? Math.round(value) : DEFAULT_LIMIT, 1), DEFAULT_LIMIT);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

@@ -17,6 +17,7 @@ import { mcpCapabilityFingerprint } from "../mcp/approvalPolicy.ts";
 import { getPiMcpCapability } from "../db/repositories/piMcpCapabilities.ts";
 import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
 import { evaluatePiActionFreshness } from "../pi/actionFreshness.ts";
+import { cleanString } from "../util/values.ts";
 
 export type PiActionDecisionContext = {
   auditSystemRestart?: (event: SystemRestartAuditEvent) => void;
@@ -347,10 +348,6 @@ function isExecuted(action: PiAction): boolean {
 
 function actor(value: unknown): string {
   return cleanString(value) || "user";
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function safeError(error: unknown): string {

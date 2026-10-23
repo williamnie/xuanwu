@@ -16,6 +16,7 @@ import {
   isAutomaticRecoveryBlockedDiagnosis,
   isTransientRecoveryDiagnosis
 } from "./recoveryDiagnosis.ts";
+import { cleanString } from "../util/values.ts";
 
 type SupervisorSignalCollectorOptions = {
   issueIDs?: number[];
@@ -51,7 +52,7 @@ export function supervisorCandidateReady(
   if (candidate.diagnosis_code === "provider_retry_after_waiting") return false;
   if (candidate.diagnosis_code === "provider_retry_after_ready") return true;
   if (candidate.exhausted || isAutomaticRecoveryBlockedDiagnosis(candidate.diagnosis_code)) return true;
-  if (clean(context.issue.status) === "failed" && isTransientRecoveryDiagnosis(candidate.diagnosis_code)) return true;
+  if (cleanString(context.issue.status) === "failed" && isTransientRecoveryDiagnosis(candidate.diagnosis_code)) return true;
   if (candidate.diagnosis_code === "session_no_recent_progress" && stoppedContextSession(context)) return true;
   if (isTransientRecoveryDiagnosis(candidate.diagnosis_code)) return staleGapSeconds(context) >= staleAfterSeconds(options);
   return false;
@@ -101,37 +102,37 @@ function candidateSignals(
     cooldown_until: cooldownUntil(context, now),
     diagnosis_code: candidate.diagnosis_code,
     evidence_refs: candidate.evidence_refs ?? [],
-    issue_status: clean(context.issue.status),
-    issue_updated_at: clean(context.issue.updated_at),
+    issue_status: cleanString(context.issue.status),
+    issue_updated_at: cleanString(context.issue.updated_at),
     issue_id: issueID(context),
     project_id: projectID(context),
     project_budget_remaining: numberValue(context.policy.project_budget_remaining),
     project_budget_unlimited: context.policy.project_budget_unlimited === true,
-    provider: clean(context.session.provider) || clean(context.provider_error?.provider),
-    provider_error_category: clean(context.provider_error?.category),
-    provider_session_id: clean(context.session.provider_session_id),
-    provider_turn_id: clean(context.session.provider_turn_id),
+    provider: cleanString(context.session.provider) || cleanString(context.provider_error?.provider),
+    provider_error_category: cleanString(context.provider_error?.category),
+    provider_session_id: cleanString(context.session.provider_session_id),
+    provider_turn_id: cleanString(context.session.provider_turn_id),
     ready: supervisorCandidateReady(context, candidate, now, options),
     reason: candidate.reason,
-    run_ended_at: clean(context.latest_run?.ended_at),
-    run_id: clean(context.latest_run?.id),
-    run_status: clean(context.latest_run?.status),
-    session_status: clean(context.session.raw_status),
-    session_turn_id: clean(context.session.provider_turn_id),
-    session_updated_at: clean(context.session.updated_at),
+    run_ended_at: cleanString(context.latest_run?.ended_at),
+    run_id: cleanString(context.latest_run?.id),
+    run_status: cleanString(context.latest_run?.status),
+    session_status: cleanString(context.session.raw_status),
+    session_turn_id: cleanString(context.session.provider_turn_id),
+    session_updated_at: cleanString(context.session.updated_at),
     stale_gap_seconds: staleGapSeconds(context),
-    wait_until: clean(candidate.wait_until)
+    wait_until: cleanString(candidate.wait_until)
   }));
 }
 
 function retryWindowSignals(context: IssueSupervisorRecoveryContext): HeartbeatSupervisorRetryWindowSignal[] {
-  return context.candidates.filter((candidate) => clean(candidate.wait_until) !== "").map((candidate) => ({
+  return context.candidates.filter((candidate) => cleanString(candidate.wait_until) !== "").map((candidate) => ({
     diagnosis_code: candidate.diagnosis_code,
     issue_id: issueID(context),
     project_id: projectID(context),
-    provider_error_category: clean(context.provider_error?.category),
+    provider_error_category: cleanString(context.provider_error?.category),
     reason: candidate.reason,
-    retry_after_at: clean(candidate.wait_until)
+    retry_after_at: cleanString(candidate.wait_until)
   }));
 }
 
@@ -152,17 +153,17 @@ function staleDiagnosticSignal(context: IssueSupervisorRecoveryContext): Heartbe
   return {
     issue_id: issueID(context),
     project_id: projectID(context),
-    provider_session_id: clean(context.session.provider_session_id),
-    run_id: clean(context.latest_run?.id),
-    run_state: clean(context.session.run_state),
+    provider_session_id: cleanString(context.session.provider_session_id),
+    run_id: cleanString(context.latest_run?.id),
+    run_state: cleanString(context.session.run_state),
     stale_gap_seconds: staleGapSeconds(context),
-    status: clean(context.session.status),
-    updated_at: clean(context.session.updated_at)
+    status: cleanString(context.session.status),
+    updated_at: cleanString(context.session.updated_at)
   };
 }
 
 function stoppedContextSession(context: IssueSupervisorRecoveryContext): boolean {
-  const statuses = [clean(context.session.raw_status), clean(context.session.status)];
+  const statuses = [cleanString(context.session.raw_status), cleanString(context.session.status)];
   return statuses.some((status) => ["idle", "stopped", "completed", "done", "failed", "error"].includes(status.toLowerCase()));
 }
 
@@ -179,7 +180,7 @@ function limit(options: SupervisorSignalCollectorOptions): number {
 }
 
 function futureTime(value: string | undefined, now: Date): boolean {
-  const ms = Date.parse(clean(value));
+  const ms = Date.parse(cleanString(value));
   return Number.isFinite(ms) && ms > now.getTime();
 }
 
@@ -188,11 +189,11 @@ function issueID(context: IssueSupervisorRecoveryContext): number {
 }
 
 function projectID(context: IssueSupervisorRecoveryContext): string {
-  return clean(context.project.id);
+  return cleanString(context.project.id);
 }
 
 function cooldownUntil(context: IssueSupervisorRecoveryContext, now: Date): string {
-  const last = Date.parse(clean(context.recovery_history.last_action_at));
+  const last = Date.parse(cleanString(context.recovery_history.last_action_at));
   const seconds = numberValue(context.policy.cooldown_seconds);
   if (!Number.isFinite(last) || seconds <= 0) return "";
   const until = new Date(last + seconds * 1_000);
@@ -200,7 +201,7 @@ function cooldownUntil(context: IssueSupervisorRecoveryContext, now: Date): stri
 }
 
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(clean).filter(Boolean) : [];
+  return Array.isArray(value) ? value.map(cleanString).filter(Boolean) : [];
 }
 
 function positiveNumber(value: unknown, fallback: number): number {
@@ -209,8 +210,4 @@ function positiveNumber(value: unknown, fallback: number): number {
 
 function numberValue(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : Number(value) || 0;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

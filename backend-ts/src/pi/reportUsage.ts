@@ -5,6 +5,7 @@ import { listProjects } from "../db/repositories/projects.ts";
 import { readCodexUsage } from "../usage/codex.ts";
 import type { UsageIssueRef, UsageProjectRef } from "../usage/types.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { cleanString, numberValue, objectValue } from "../util/values.ts";
 
 type UsageCostInput = { codexSessionsDir?: string; database: RunnerDatabase; projectID: string };
 
@@ -12,7 +13,7 @@ const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*
 
 export async function buildUsageCostSummary(input: UsageCostInput): Promise<Record<string, unknown>> {
   try {
-    const root = clean(input.codexSessionsDir);
+    const root = cleanString(input.codexSessionsDir);
     if (root === "") throw new Error("codex sessions dir 未配置");
     const report = await readCodexUsage({
       backgroundRefresh: true,
@@ -69,18 +70,6 @@ function totalTokens(value: Record<string, unknown> | undefined): number {
   return numberValue(usage?.total_tokens) || numberValue(allTime?.total_tokens);
 }
 
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function numberValue(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
 function safeText(value: string): string {
   return redactSensitiveText(value).replace(ABSOLUTE_PATH_PATTERN, "[redacted-path]");
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

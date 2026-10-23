@@ -3,6 +3,7 @@ import { recordToolCallAuditEvent, type ToolCallAuditContext } from "./toolCallA
 import { loadCliConnectorRegistry, findCliConnectorToolRef } from "./cliConnectorProvider.ts";
 import { runCliTool } from "./cliToolRunner.ts";
 import type { ToolPermission, ToolResult } from "./toolProviderEnvelope.ts";
+import { cleanString } from "../util/values.ts";
 
 type CliConnectorToolCallInput = {
   auditContext?: Partial<ToolCallAuditContext>;
@@ -90,8 +91,4 @@ function permissionAllows(max: ToolPermission, required: ToolPermission): boolea
 
 function redactInputFields(paths: string[]): string[] {
   return paths.flatMap((path) => path.startsWith("input.") ? [path.slice("input.".length)] : []);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

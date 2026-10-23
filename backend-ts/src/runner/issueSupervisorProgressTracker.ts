@@ -12,6 +12,7 @@ import {
 import type { RunnerDatabase } from "../db/database.ts";
 import type { IssueSupervisorRecoveryContext } from "../pi/issueSupervisorContext.ts";
 import { detectMeaningfulProgress, type ProgressSnapshot } from "../pi/meaningfulProgress.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 const DEFAULT_STALE_SECONDS = 5 * 60;
 const FINAL_OUTCOMES = new Set(["failed", "no_progress", "progress", "queued", "recorded", "scheduled"]);
@@ -68,10 +69,10 @@ export function refreshSupervisorProgressResult(input: {
       since_action_at: action.created_at
     },
     project_id: input.projectID,
-    provider: action.provider || clean(input.context.session.provider),
-    provider_session_id: action.provider_session_id || clean(input.context.session.provider_session_id),
-    provider_turn_id: action.provider_turn_id || clean(input.context.session.provider_turn_id),
-    run_id: action.run_id || clean(input.context.latest_run?.id)
+    provider: action.provider || cleanString(input.context.session.provider),
+    provider_session_id: action.provider_session_id || cleanString(input.context.session.provider_session_id),
+    provider_turn_id: action.provider_turn_id || cleanString(input.context.session.provider_turn_id),
+    run_id: action.run_id || cleanString(input.context.latest_run?.id)
   });
   return outcome;
 }
@@ -79,7 +80,7 @@ export function refreshSupervisorProgressResult(input: {
 export function supervisorResultOutcome(event: IssueSupervisorEvent): string {
   try {
     const payload = JSON.parse(event.payload_json || "{}") as Record<string, unknown>;
-    return clean(payload.outcome) || clean(payload.status);
+    return cleanString(payload.outcome) || cleanString(payload.status);
   } catch {
     return "";
   }
@@ -116,7 +117,7 @@ function staleEnough(createdAt: string, now: Date, staleAfterSeconds: number | u
 }
 
 function primaryDiagnosis(context: IssueSupervisorRecoveryContext): string {
-  return clean(context.candidates[0]?.diagnosis_code) || clean(context.provider_error?.diagnosis_code);
+  return cleanString(context.candidates[0]?.diagnosis_code) || cleanString(context.provider_error?.diagnosis_code);
 }
 
 function baselineSnapshot(action: IssueSupervisorEvent, attempt: PiRecoveryAttempt | null): ProgressSnapshot {
@@ -130,18 +131,18 @@ function snapshotFromAction(action: IssueSupervisorEvent): ProgressSnapshot {
 
 function snapshotFromContext(context: IssueSupervisorRecoveryContext): ProgressSnapshot {
   return {
-    git_diff_hash: clean(context.workspace_snapshot.git_diff_hash),
+    git_diff_hash: cleanString(context.workspace_snapshot.git_diff_hash),
     issue: {
-      status: clean(context.issue.status),
-      updated_at: clean(context.issue.updated_at)
+      status: cleanString(context.issue.status),
+      updated_at: cleanString(context.issue.updated_at)
     },
     run: {
-      status: clean(context.latest_run?.status),
-      updated_at: clean(context.latest_run?.ended_at) || clean(context.latest_run?.started_at)
+      status: cleanString(context.latest_run?.status),
+      updated_at: cleanString(context.latest_run?.ended_at) || cleanString(context.latest_run?.started_at)
     },
     session: {
-      status: clean(context.session.raw_status) || clean(context.session.status),
-      updated_at: clean(context.session.updated_at)
+      status: cleanString(context.session.raw_status) || cleanString(context.session.status),
+      updated_at: cleanString(context.session.updated_at)
     }
   };
 }
@@ -150,7 +151,7 @@ function snapshotFromJson(value: unknown): ProgressSnapshot | null {
   const snapshot = objectValue(parseJson(value));
   if (Object.keys(snapshot).length === 0) return null;
   return {
-    git_diff_hash: clean(snapshot.git_diff_hash),
+    git_diff_hash: cleanString(snapshot.git_diff_hash),
     issue: statePoint(snapshot.issue),
     run: statePoint(snapshot.run),
     session: statePoint(snapshot.session)
@@ -159,18 +160,10 @@ function snapshotFromJson(value: unknown): ProgressSnapshot | null {
 
 function statePoint(value: unknown): { status?: string; updated_at?: string } {
   const point = objectValue(value);
-  return { status: clean(point.status), updated_at: clean(point.updated_at) };
+  return { status: cleanString(point.status), updated_at: cleanString(point.updated_at) };
 }
 
 function parseJson(value: unknown): unknown {
   if (typeof value !== "string") return value;
   try { return JSON.parse(value) as unknown; } catch { return {}; }
-}
-
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

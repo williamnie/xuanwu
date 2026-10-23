@@ -19,6 +19,7 @@ import { libraryRegistryOptions } from "../skills/libraryContext.ts";
 import { resolveSkillFile } from "../skills/registry.ts";
 import { visibleManagedSkills } from "../skills/managedStore.ts";
 import { verifyLibrarySkill } from "../skills/libraryService.ts";
+import { cleanString, unique } from "../util/values.ts";
 
 type PiRuntimeResourceDiagnostic = {
   code: string;
@@ -325,7 +326,7 @@ function discoverResources(options: ControlledPiResourceOptions): Discovery {
     packageCandidate("builtin", options.runtimeRoot, diagnostics),
     packageCandidate("project", join(options.cwd, PI_RESOURCE_DIR), diagnostics, options.cwd),
     packageCandidate("runtime", options.agentDir, diagnostics),
-    packageCandidate("pi-package", clean(options.piPackageDir), diagnostics),
+    packageCandidate("pi-package", cleanString(options.piPackageDir), diagnostics),
     ...pluginCandidates(options, diagnostics)
   ].filter((item): item is ResourcePackage => item.path !== "");
   const packages = dedupePackages(candidates).filter(hasResources);
@@ -371,7 +372,7 @@ function packageCandidate(
   diagnostics: PiRuntimeResourceDiagnostic[],
   allowedParent?: string
 ): ResourcePackage {
-  const candidate = clean(path);
+  const candidate = cleanString(path);
   if (candidate === "" || !existsSync(candidate) || !safeDirectory(candidate)) return { label, path: "", wholeRootAllowed: false };
   if (allowedParent && !within(canonical(candidate), canonical(allowedParent))) {
     diagnostics.push(notAllowedDiagnostic("loader", candidate, [{ label, path: allowedParent, resourceType: "loader" }]));
@@ -387,7 +388,7 @@ function pluginCandidates(options: ControlledPiResourceOptions, diagnostics: PiR
     join(options.runtimeRoot, "plugins"),
     join(options.cwd, PI_RESOURCE_DIR, "plugins"),
     join(options.agentDir, "plugins"),
-    clean(options.piPackageDir) === "" ? "" : join(clean(options.piPackageDir), "plugins")
+    cleanString(options.piPackageDir) === "" ? "" : join(cleanString(options.piPackageDir), "plugins")
   ]).filter(Boolean);
   const packages: ResourcePackage[] = [];
   for (const root of roots) {
@@ -733,7 +734,7 @@ function pathAllowed(path: string, resourceType: ResourceType, roots: AllowedRoo
 }
 
 function publicPath(path: string, roots: AllowedRoot[]): string {
-  const target = clean(path);
+  const target = cleanString(path);
   if (target === "") return "runtime:unknown";
   const resolved = canonical(target);
   const matches = roots
@@ -758,7 +759,7 @@ function namedPaths(paths: string[], roots: AllowedRoot[]): string[] {
 }
 
 function sortedNames(values: string[]): string[] {
-  return unique(values.map(clean).filter(Boolean)).sort();
+  return unique(values.map(cleanString).filter(Boolean)).sort();
 }
 
 function sortedDiagnostics(values: PiRuntimeResourceDiagnostic[]): PiRuntimeResourceDiagnostic[] {
@@ -773,7 +774,7 @@ function manifestEntries(value: unknown): string[] {
   if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
     throw new Error("PI package resource entries must be string arrays");
   }
-  return unique(value.map(clean).filter(Boolean));
+  return unique(value.map(cleanString).filter(Boolean));
 }
 
 function unsafeManifestEntry(value: string): boolean {
@@ -792,7 +793,7 @@ function dedupePackages(values: ResourcePackage[]): ResourcePackage[] {
 }
 
 function normalizeID(value: string): string {
-  return clean(value).toLowerCase().replace(/[^a-z0-9_:-]+/g, "-").replace(/^-+|-+$/g, "");
+  return cleanString(value).toLowerCase().replace(/[^a-z0-9_:-]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
 function canonical(path: string): string {
@@ -807,12 +808,4 @@ function within(path: string, root: string): boolean {
 
 function safeDirectory(path: string): boolean {
   try { return statSync(path).isDirectory(); } catch { return false; }
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function unique(values: string[]): string[] {
-  return [...new Set(values)];
 }

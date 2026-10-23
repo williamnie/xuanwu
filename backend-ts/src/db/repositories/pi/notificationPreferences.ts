@@ -11,6 +11,7 @@ import {
   requiredString,
   type PatchInput
 } from "./common.ts";
+import { placeholders } from "../../sql.ts";
 
 export type PiNotificationPreference = {
   confirmation_text: string; conversation_id: string; created_at: string;
@@ -263,8 +264,4 @@ function preferenceOrder(): string {
 function jsonPayload(value: unknown, fallback: string): string {
   if (typeof value === "string") return jsonText(value, fallback);
   return JSON.stringify(value ?? JSON.parse(fallback));
-}
-
-function placeholders(count: number): string {
-  return Array.from({ length: count }, () => "?").join(", ");
 }

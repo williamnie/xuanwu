@@ -1,6 +1,7 @@
 import type { FeishuNormalizedMessageEvent } from "./feishu.ts";
 import { recordValue } from "./feishuShared.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { cleanString } from "../util/values.ts";
 
 type FeishuProjectSelectionProject = { id: string; name?: string };
 export type FeishuProjectSelectionAction = {
@@ -105,8 +106,4 @@ function promptPreview(value: string): string {
   return safe.length > MAX_PROMPT_PREVIEW_LENGTH
     ? `${safe.slice(0, MAX_PROMPT_PREVIEW_LENGTH - 1)}…`
     : safe;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

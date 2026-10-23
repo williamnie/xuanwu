@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent, type PiAction } from "../db/repositories/pi.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
 import type { PiActionDecision } from "./actionGate.ts";
+import { cleanString } from "../util/values.ts";
 
 type AuditInput = {
   actor?: string;
@@ -60,8 +61,4 @@ function piActionEvent(type: string, action: PiAction): AppEvent {
     }),
     created_at: action.updated_at
   };
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

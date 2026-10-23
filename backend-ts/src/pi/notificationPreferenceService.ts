@@ -3,6 +3,7 @@ import {
   createPiNotificationPreference,
   type PiNotificationPreference
 } from "../db/repositories/pi.ts";
+import { cleanString } from "../util/values.ts";
 
 export class PiNotificationPreferenceValidationError extends Error {
   constructor(message: string) {
@@ -63,20 +64,20 @@ function normalizeCandidate(input: PiNotificationPreferenceCandidate): Normalize
   const scope = enumValue(input.scope, SCOPES, "scope");
   const expiry = normalizeExpiry(input, mode);
   const base = {
-    conversationID: clean(input.conversation_id ?? input.conversationID),
+    conversationID: cleanString(input.conversation_id ?? input.conversationID),
     digestPolicy: digestPolicy(input.digest_policy ?? input.digestPolicy ?? input.digest_policy_json),
     effectiveAfterTime: canonicalTime(input.effective_after_time) || now(input.now),
     expiresAt: expiry.expiresAt,
-    id: clean(input.id) || crypto.randomUUID(),
+    id: cleanString(input.id) || crypto.randomUUID(),
     mode,
     notifyOn: normalizeNotifyOn(input.notify_on ?? input.notifyOn ?? input.notify_on_json, mode),
-    policyKind: clean(input.policy_kind) || "user_preference",
-    projectID: clean(input.project_id ?? input.projectID),
-    runGroupID: clean(input.run_group_id ?? input.runGroupID),
+    policyKind: cleanString(input.policy_kind) || "user_preference",
+    projectID: cleanString(input.project_id ?? input.projectID),
+    runGroupID: cleanString(input.run_group_id ?? input.runGroupID),
     scope,
-    sourceEventID: clean(input.source_event_id ?? input.sourceEventID),
+    sourceEventID: cleanString(input.source_event_id ?? input.sourceEventID),
     sourceEventSequenceID: integer(input.source_event_sequence_id ?? input.sourceEventSequenceID),
-    sourceMessageID: clean(input.source_message_id ?? input.sourceMessageID)
+    sourceMessageID: cleanString(input.source_message_id ?? input.sourceMessageID)
   };
   validatePolicyKind(base.policyKind);
   validateScopeIDs(base);
@@ -86,7 +87,7 @@ function normalizeCandidate(input: PiNotificationPreferenceCandidate): Normalize
 function normalizeExpiry(input: PiNotificationPreferenceCandidate, mode: string): ExpiryResult {
   const expiresAt = canonicalTime(input.expires_at ?? input.expiresAt);
   const ttl = optionalInteger(input.ttl_minutes ?? input.ttlMinutes);
-  const temporary = booleanValue(input.temporary) || clean(input.duration) === "temporary";
+  const temporary = booleanValue(input.temporary) || cleanString(input.duration) === "temporary";
   if (expiresAt !== "") return validateExpiry(expiresAt, input.now, "expires_at");
   if (ttl !== undefined) return ttlExpiry(ttl, input.now, false);
   if (temporary && ["quiet", "digest"].includes(mode)) {
@@ -142,17 +143,17 @@ function defaultNotifyOn(mode: string): string[] {
 }
 
 function stringList(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(clean).filter(Boolean);
-  const text = clean(value);
+  if (Array.isArray(value)) return value.map(cleanString).filter(Boolean);
+  const text = cleanString(value);
   if (text === "") return [];
   if (text.startsWith("[")) return parseJsonArray(text);
-  return text.split(",").map(clean).filter(Boolean);
+  return text.split(",").map(cleanString).filter(Boolean);
 }
 
 function parseJsonArray(text: string): string[] {
   try {
     const parsed = JSON.parse(text) as unknown;
-    return Array.isArray(parsed) ? parsed.map(clean).filter(Boolean) : [];
+    return Array.isArray(parsed) ? parsed.map(cleanString).filter(Boolean) : [];
   } catch {
     fail("notify_on_json must be a JSON string array");
   }
@@ -177,7 +178,7 @@ function digestPolicyObject(value: unknown): Record<string, unknown> {
 }
 
 function enumValue(value: unknown, allowed: Set<string>, label: string): string {
-  const text = clean(value);
+  const text = cleanString(value);
   if (!allowed.has(text)) fail(`${label} must be one of ${[...allowed].join(",")}`);
   return text;
 }
@@ -193,7 +194,7 @@ function validatePolicyKind(value: string): void {
 }
 
 function canonicalTime(value: unknown): string {
-  const text = clean(value);
+  const text = cleanString(value);
   if (text === "") return "";
   if (!rfc3339Time(text)) fail("time value must be RFC3339");
   const ms = Date.parse(text);
@@ -227,16 +228,12 @@ function integer(value: unknown): number {
 
 function optionalInteger(value: unknown): number | undefined {
   if (value === undefined || value === null || value === "") return undefined;
-  const number = typeof value === "number" ? value : Number(clean(value));
+  const number = typeof value === "number" ? value : Number(cleanString(value));
   return Number.isInteger(number) ? number : Number.NaN;
 }
 
 function booleanValue(value: unknown): boolean {
-  return value === true || clean(value).toLowerCase() === "true";
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return value === true || cleanString(value).toLowerCase() === "true";
 }
 
 function fail(message: string): never {

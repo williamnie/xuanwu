@@ -7,6 +7,7 @@ import { formatModelVisibleToolOutput } from "../security/promptInjectionDefense
 import type { AssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
 import { assistantToolRuntimePolicy, type AssistantTool } from "./toolProviderEnvelope.ts";
 import { recordToolCallAuditEvent, type ToolCallAuditContext } from "./toolCallAudit.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 export const PI_CAPABILITY_TOOL_NAMES = ["capability_search", "capability_invoke", "context_status"] as const;
 
@@ -48,7 +49,7 @@ export function createPiCapabilityTools(
           .map(({ score, tool }) => ({
             description: bounded(tool.description, 240),
             family: assistantToolRuntimePolicy(tool).family,
-            label: clean(tool.metadata?.label) || tool.name,
+            label: cleanString(tool.metadata?.label) || tool.name,
             name: tool.name,
             parameter_summary: parameterSummary(tool.input_schema),
             permission: tool.permission,
@@ -117,13 +118,13 @@ export function createPiCapabilityTools(
           where conversation_id=? and event_type='runtime_context_budget_observed'
             and json_valid(payload_json) and json_extract(payload_json, '$.phase')='preflight'
           order by id desc limit 1
-        `).get(clean(context.conversationID))?.payload_json ?? "{}");
+        `).get(cleanString(context.conversationID))?.payload_json ?? "{}");
         return toolResult({
-          breakdown: record(latest.breakdown),
-          context: record(latest.context),
-          counts: record(latest.counts),
+          breakdown: objectValue(latest.breakdown),
+          context: objectValue(latest.context),
+          counts: objectValue(latest.counts),
           observe_only: true,
-          surface: clean(latest.surface)
+          surface: cleanString(latest.surface)
         });
       }
     })
@@ -165,7 +166,7 @@ function capabilityScore(tool: AssistantTool, query: string): number {
   const fields = normalizeSearchText([
     tool.provider_id,
     tool.name,
-    clean(tool.metadata?.label),
+    cleanString(tool.metadata?.label),
     tool.description,
     policy.family,
     ...policy.aliases
@@ -207,21 +208,21 @@ function stemEnglishToken(value: string): string {
 
 function requiredParameters(schema: Record<string, unknown>): string[] {
   return Array.isArray(schema.required)
-    ? schema.required.map(clean).filter(Boolean).slice(0, 16)
+    ? schema.required.map(cleanString).filter(Boolean).slice(0, 16)
     : [];
 }
 
 function parameterSummary(schema: Record<string, unknown>): Record<string, string> {
-  const properties = record(schema.properties);
+  const properties = objectValue(schema.properties);
   return Object.fromEntries(Object.entries(properties).slice(0, 16)
-    .map(([name, value]) => [name, schemaType(record(value))]));
+    .map(([name, value]) => [name, schemaType(objectValue(value))]));
 }
 
 function schemaType(schema: Record<string, unknown>): string {
   const enumValues = Array.isArray(schema.enum) ? schema.enum.map(String).slice(0, 8) : [];
   if (enumValues.length > 0) return `enum(${enumValues.join("|")})`;
-  const type = clean(schema.type) || (Array.isArray(schema.anyOf) ? "union" : "unknown");
-  if (type === "array") return `array<${schemaType(record(schema.items))}>`;
+  const type = cleanString(schema.type) || (Array.isArray(schema.anyOf) ? "union" : "unknown");
+  if (type === "array") return `array<${schemaType(objectValue(schema.items))}>`;
   return type;
 }
 
@@ -236,12 +237,12 @@ function recordTargetAudit(
   error?: { message: string; type: string }
 ): void {
   recordToolCallAuditEvent(db, {
-    conversationID: clean(context.conversationID),
-    delegationID: clean(context.delegationID),
-    heartbeatID: clean(context.heartbeatID),
+    conversationID: cleanString(context.conversationID),
+    delegationID: cleanString(context.delegationID),
+    heartbeatID: cleanString(context.heartbeatID),
     issueID: context.issueID,
-    projectID: clean(context.projectID),
-    source: clean(context.source) || "capability_invoke"
+    projectID: cleanString(context.projectID),
+    source: cleanString(context.source) || "capability_invoke"
   }, {
     args,
     durationMs: Date.now() - started,
@@ -260,7 +261,7 @@ function toolResultText(result: AgentToolResult<unknown>): string {
 }
 
 function toolResultFailed(result: AgentToolResult<unknown>): boolean {
-  const details = record(result.details);
+  const details = objectValue(result.details);
   return details.status === "failed" || details.status === "denied" || typeof details.error === "string";
 }
 
@@ -286,18 +287,10 @@ function toolResult(details: unknown): AgentToolResult<unknown> {
 function safeJson(value: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(value) as unknown;
-    return record(parsed);
+    return objectValue(parsed);
   } catch {
     return {};
   }
-}
-
-function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function bounded(value: string, max: number): string {

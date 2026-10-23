@@ -17,6 +17,7 @@ import {
   WORK_STATUSES,
   type WorkStatus
 } from "../domain/work/contracts.ts";
+import { cleanString, errorMessage } from "../util/values.ts";
 
 export type IssueStatusUpdateInput = {
   error?: string;
@@ -74,7 +75,7 @@ export async function executeIssueStatusUpdate(
       items.push(await updateOneIssueStatus(db, issue, input, runtime));
     } catch (error) {
       const current = mustGetIssue(db, issue.id);
-      items.push(statusResult(issue, current, input.status, false, safeError(error)));
+      items.push(statusResult(issue, current, input.status, false, errorMessage(error)));
     }
   }
   if (items.some((item) => item.accepted && item.execution_requested)) {
@@ -185,12 +186,4 @@ function mustGetIssue(db: RunnerDatabase, id: number): Issue {
   const issue = getIssue(db, id);
   if (!issue) throw new ProjectNotFoundError();
   return issue;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function safeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

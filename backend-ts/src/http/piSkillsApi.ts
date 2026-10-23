@@ -23,6 +23,7 @@ import { registerSkillLibraryRoutes } from "./skillLibraryApi.ts";
 import { libraryRegistryOptions, managedSkillPolicy } from "../skills/libraryContext.ts";
 import { visibleManagedSkills, validateManagedSkill } from "../skills/managedStore.ts";
 import { dirname } from "node:path";
+import { cleanString, positiveInteger } from "../util/values.ts";
 
 type SkillRouteContext = { config?: RunnerConfig; database: RunnerDatabase };
 type JsonObject = Record<string, unknown>;
@@ -86,7 +87,7 @@ function domainRunsResponse(context: SkillRouteContext | undefined, request: Req
     .filter((run) => skill === "" || run.skill_id === skill)
     .filter((run) => !itemID || run.item_id === itemID)
     .filter((run) => status === "" || run.status === status)
-    .sort((left, right) => positiveNumber(right.id) - positiveNumber(left.id))
+    .sort((left, right) => positiveInteger(right.id) - positiveInteger(left.id))
     .slice(0, queryLimit(params.get("limit")));
 }
 
@@ -133,7 +134,7 @@ function domainRunView(db: RunnerDatabase, event: PiActionEvent): JsonObject {
   const eventPayload = redactedJsonObject(parseJson(event.payload_json));
   const action = getPiAction(db, event.action_id);
   const actionPayload = redactedJsonObject(parseJson(action?.payload_json));
-  const itemID = positiveNumber(eventPayload.item_id || actionPayload.item_id);
+  const itemID = positiveInteger(eventPayload.item_id || actionPayload.item_id);
   const item = itemID ? getAttentionInboxItem(db, itemID) : null;
   const error = event.error;
   return {
@@ -147,7 +148,7 @@ function domainRunView(db: RunnerDatabase, event: PiActionEvent): JsonObject {
     input_id: itemID,
     input_object: "inbox_item",
     primary_intent: cleanString(eventPayload.primary_intent || actionPayload.primary_intent || item?.primary_intent),
-    action_count: positiveNumber(eventPayload.action_count),
+    action_count: positiveInteger(eventPayload.action_count),
     proposal_action_id: event.action_id,
     schema_output: actionPayload,
     error,
@@ -296,7 +297,7 @@ async function objectBody(request: Request): Promise<JsonObject> {
 
 function positiveBodyID(body: JsonObject, field: "bundle_id" | "item_id"): number {
   const camel = field === "bundle_id" ? "bundleId" : "itemId";
-  const id = positiveNumber(body[field] || body[camel]);
+  const id = positiveInteger(body[field] || body[camel]);
   if (!id) throw new HttpError(400, `${field} 必须是正整数`);
   return id;
 }
@@ -333,10 +334,6 @@ function jsonObject(value: unknown): JsonObject {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
 }
 
-function positiveNumber(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
-}
-
 function requireDatabase(context?: SkillRouteContext): RunnerDatabase {
   if (!context?.database) throw new HttpError(503, "database is required");
   return context.database;
@@ -344,10 +341,6 @@ function requireDatabase(context?: SkillRouteContext): RunnerDatabase {
 
 function cleanParam(value: string | null): string {
   return value?.trim() ?? "";
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function normalizeID(value: unknown): string {

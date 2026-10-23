@@ -12,6 +12,7 @@ import {
   requiredString,
   type PatchInput
 } from "./common.ts";
+import { placeholders } from "../../sql.ts";
 
 export type PiGuardianEvent = {
   consumed_at: string; conversation_id: string; created_at: string; error: string;
@@ -249,8 +250,4 @@ function insertColumns(): string {
     issue_id, run_group_id, conversation_id, severity, normalized_payload_json,
     redaction_profile, status, lease_owner, lease_expires_at, consumed_at,
     idempotency_key, error, created_at, updated_at`;
-}
-
-function placeholders(count: number): string {
-  return Array.from({ length: count }, () => "?").join(", ");
 }

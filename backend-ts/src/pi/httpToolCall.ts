@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { HTTP_READONLY_PROVIDER_ID, URL_FETCH_TOOL_NAME } from "./httpToolProvider.ts";
 import type { ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
 import { unsafeUrlEgressReason } from "../security/promptInjectionDefense.ts";
+import { cleanString } from "../util/values.ts";
 
 type HttpToolCallInput = {
   input?: Record<string, unknown>;
@@ -288,7 +289,4 @@ function invocationClock(invocationID: string | undefined): Clock {
 }
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "HTTP fetch failed";
-}
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

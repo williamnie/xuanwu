@@ -9,6 +9,7 @@ import type { TelegramConnectorConfig, TelegramMessage, TelegramUpdate, Telegram
 import { createDatabaseSecretService, type SecretService } from "../security/secrets/service.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { objectValue } from "../util/values.ts";
 
 type Context = {
   config?: RunnerConfig;
@@ -105,8 +106,8 @@ function recentTelegramSources(database: RunnerDatabase): TelegramSourceCandidat
   return uniqueSources(rows.flatMap((row) => {
     try {
       const message = JSON.parse(row.normalized_message_json) as Record<string, unknown>;
-      const conversation = record(message.conversation);
-      const sender = record(message.sender);
+      const conversation = objectValue(message.conversation);
+      const sender = objectValue(message.sender);
       if (text(sender.kind) !== "user") return [];
       const chatId = safeTelegramId(conversation.id, true);
       const userId = safeTelegramId(sender.id, false);
@@ -324,10 +325,6 @@ function boolean(value: unknown, fallback: boolean): boolean {
 
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : typeof value === "number" ? String(value) : "";
-}
-
-function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function hasOwn(value: Record<string, unknown>, key: string): boolean {

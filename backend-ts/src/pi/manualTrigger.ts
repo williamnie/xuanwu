@@ -16,6 +16,7 @@ import {
   type ManualSourcePullOptions,
   type ManualSourcePullResult
 } from "./manualSourcePull.ts";
+import { cleanString } from "../util/values.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -367,8 +368,4 @@ function positiveInteger(value: unknown, fallback: number): number {
 
 function firstText(...values: unknown[]): string {
   return values.map(cleanString).find(Boolean) ?? "";
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

@@ -9,6 +9,7 @@ import {
   type PiRecoveryAttempt
 } from "../db/repositories/pi/recoveryAttempts.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 type ResumeAttemptPreparation =
   | { attempt: PiRecoveryAttempt; skip: false }
@@ -184,7 +185,7 @@ function turnIDFromSession(session: Record<string, unknown>): string {
 function lastTurnID(value: unknown): string {
   if (!Array.isArray(value)) return "";
   for (const turn of [...value].reverse()) {
-    const id = cleanString(objectPayload(turn).id) || cleanString(objectPayload(turn).turn_id);
+    const id = cleanString(objectValue(turn).id) || cleanString(objectValue(turn).turn_id);
     if (id !== "") return id;
   }
   return "";
@@ -229,12 +230,4 @@ function requiredText(value: unknown, key: string): string {
 function rawRefTurnID(rawRef: string | undefined): string {
   if (!rawRef) return "";
   try { return cleanString((JSON.parse(rawRef) as Record<string, unknown>).provider_turn_id); } catch { return ""; }
-}
-
-function objectPayload(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

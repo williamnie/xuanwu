@@ -9,6 +9,7 @@ import {
   type IssueStateRepairOperation
 } from "./issueStateManager.ts";
 import type { PiRunnerActionContext } from "./runnerActions.ts";
+import { cleanString } from "../util/values.ts";
 
 type ProposalInput = {
   actionType: string;
@@ -89,8 +90,4 @@ function mustGetIssue(db: RunnerDatabase, id: number) {
 
 function cleanObject(input: Record<string, string>): Record<string, string> {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== "")) as Record<string, string>;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

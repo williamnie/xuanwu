@@ -1,6 +1,8 @@
 import type { RunnerDatabase } from "../database.ts";
 import { attachmentContent, normalizeAttachments, type ExternalEventAttachment, type ExternalEventAttachmentInput } from "./externalEventAttachments.ts";
 import { redactSecrets } from "./externalEventRedaction.ts";
+import { cleanString } from "../../util/values.ts";
+import { lastInsertID } from "../sql.ts";
 
 type SQLValue = number | string;
 type JsonObject = Record<string, unknown>;
@@ -230,14 +232,6 @@ function findExternalEventByExternalID(
     `select ${COLUMNS} from external_events where source=? and external_id=? order by received_at desc, id desc limit 1`
   ).get(cleanSource, cleanExternalID);
   return row ? mapExternalEvent(row) : null;
-}
-
-function lastInsertID(db: RunnerDatabase): number {
-  return db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get()?.id ?? 0;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function optionalString(value: unknown): string {

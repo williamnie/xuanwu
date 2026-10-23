@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 import type { RunnerDatabase } from "../../db/database.ts";
 import { migrateLegacyCompletionWatches } from "../../db/repositories/automationWatches.ts";
 import { comparePiAutomationShadows } from "../../db/repositories/piAutomationShadow.ts";
+import { sha256 } from "../../util/values.ts";
 
 const AUTOMATION_TABLES = [
   "cron_tasks", "cron_task_schedules", "pi_automations", "pi_delegations",
@@ -318,10 +319,6 @@ function sortValue(value: unknown): unknown {
   return Object.fromEntries(Object.entries(value as Record<string, unknown>)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, item]) => [key, sortValue(item)]));
-}
-
-function sha256(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
 }
 
 function required(value: string, name: string): string {

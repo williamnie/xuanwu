@@ -16,6 +16,7 @@ import {
   type RunID,
   type RunTransitionAudit
 } from "./contracts.ts";
+import { cleanString, unique } from "../../util/values.ts";
 
 export const RUN_LIFECYCLE_EVENT_TYPES = {
   intent: RUN_REVISION_EVENT_TYPES[0],
@@ -195,7 +196,7 @@ export function prepareRunAttempt(
     if (replay) return replay;
     const run = mustGetRun(db, command.issue_run_id, command.run_id);
     const attempt = mustGetLatestAttempt(db, run.legacy_id);
-    try { assertWorkspaceWaitSessionControl(db, command.provider_ref.provider, clean(command.provider_ref.session_ref)); }
+    try { assertWorkspaceWaitSessionControl(db, command.provider_ref.provider, cleanString(command.provider_ref.session_ref)); }
     catch (error) { throw new RunCommandConflictError(error instanceof Error ? error.message : String(error)); }
     const violations = attemptPreparationViolations(db, run, attempt, command);
     if (violations.length > 0) throw new RunCommandValidationError(violations.join("; "));
@@ -213,8 +214,8 @@ export function prepareRunAttempt(
       run.legacy_id,
       sequence,
       command.kind,
-      clean(command.provider_ref.provider),
-      clean(command.provider_ref.session_ref),
+      cleanString(command.provider_ref.provider),
+      cleanString(command.provider_ref.session_ref),
       agentSessionKey(db, command.provider_ref.provider, command.provider_ref.session_ref),
       JSON.stringify(emptyRunCost()),
       command.audit.occurred_at,
@@ -266,9 +267,9 @@ export function completeRunAttemptStart(
     const attempt = mustGetAttempt(db, required(intent.payload.attempt_id, "attempt_id"));
     if (attempt.status !== "created") throw new RunCommandValidationError(`${attempt.attempt_id} is not prepared`);
     const invocation = required(result.invocation_ref, "invocation_ref");
-    const sessionID = clean(result.provider_session_id);
-    const turnID = clean(result.provider_turn_id);
-    const intendedSession = clean(intent.payload.provider_ref?.session_ref);
+    const sessionID = cleanString(result.provider_session_id);
+    const turnID = cleanString(result.provider_turn_id);
+    const intendedSession = cleanString(intent.payload.provider_ref?.session_ref);
     if (intendedSession !== "" && intendedSession !== sessionID) {
       throw new RunCommandValidationError("provider result session does not match prepared Attempt");
     }
@@ -565,9 +566,9 @@ function attemptPreparationViolations(
   if (command.kind === "recovery" && !["failed", "interrupted"].includes(command.previous_attempt_terminal.status)) {
     violations.push("recovery requires a failed or interrupted previous Attempt");
   }
-  if (clean(command.provider_ref.provider) !== run.provider) violations.push("Attempt provider must match its Run");
-  if (clean(command.provider_ref.session_ref) === "") violations.push("resume/recovery requires provider session ref");
-  if (attempt.provider_session_id !== "" && attempt.provider_session_id !== clean(command.provider_ref.session_ref)) {
+  if (cleanString(command.provider_ref.provider) !== run.provider) violations.push("Attempt provider must match its Run");
+  if (cleanString(command.provider_ref.session_ref) === "") violations.push("resume/recovery requires provider session ref");
+  if (attempt.provider_session_id !== "" && attempt.provider_session_id !== cleanString(command.provider_ref.session_ref)) {
     violations.push("resume/recovery must continue the existing provider session");
   }
   return unique(violations);
@@ -586,11 +587,11 @@ function interruptViolations(
   if (attempt.revision !== command.expected_attempt_revision) {
     violations.push(`Attempt revision mismatch: expected ${command.expected_attempt_revision}, actual ${attempt.revision}`);
   }
-  if (attempt.provider !== clean(command.provider_ref.provider)) violations.push("provider ref does not match Attempt");
-  if (attempt.provider_session_id !== "" && attempt.provider_session_id !== clean(command.provider_ref.session_ref)) {
+  if (attempt.provider !== cleanString(command.provider_ref.provider)) violations.push("provider ref does not match Attempt");
+  if (attempt.provider_session_id !== "" && attempt.provider_session_id !== cleanString(command.provider_ref.session_ref)) {
     violations.push("session ref does not match Attempt");
   }
-  if (attempt.provider_turn_id !== "" && attempt.provider_turn_id !== clean(command.provider_ref.turn_ref)) {
+  if (attempt.provider_turn_id !== "" && attempt.provider_turn_id !== cleanString(command.provider_ref.turn_ref)) {
     violations.push("turn ref does not match Attempt");
   }
   return unique(violations);
@@ -672,7 +673,7 @@ function closeSupersededRun(
 
 function queueIssueForRun(db: RunnerDatabase, issueID: number, command: NewRunCommand): void {
   const hasTier = command.service_tier_provided === true;
-  const tier = clean(command.service_tier);
+  const tier = cleanString(command.service_tier);
   db.sqlite.run(`update issues set status='todo', error='', codex_thread_id='', codex_turn_id='',
     service_tier=case when ?=1 then ? else service_tier end,
     auto_retry_next_at='', auto_retry_reason='', updated_at=? where id=?`, [
@@ -945,7 +946,7 @@ function nextRunSequence(db: RunnerDatabase, issueID: number): number {
 }
 
 function agentSessionKey(db: RunnerDatabase, provider: unknown, sessionID: unknown): string | null {
-  const key = `${clean(provider)}:${clean(sessionID)}`;
+  const key = `${cleanString(provider)}:${cleanString(sessionID)}`;
   if (key.endsWith(":")) return null;
   const row = db.sqlite.query<{ session_key: string }, [string]>(
     "select session_key from agent_sessions where session_key=?"
@@ -954,7 +955,7 @@ function agentSessionKey(db: RunnerDatabase, provider: unknown, sessionID: unkno
 }
 
 function required(value: unknown, label: string): string {
-  const text = clean(value);
+  const text = cleanString(value);
   if (text === "") throw new RunCommandValidationError(`${label} is required`);
   return text;
 }
@@ -970,15 +971,7 @@ function assertNonNegative(value: number, label: string): void {
   numeric(value, label);
 }
 
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function safeError(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error);
   return text.trim().slice(0, 2000) || "provider operation failed";
-}
-
-function unique(values: string[]): string[] {
-  return [...new Set(values)];
 }

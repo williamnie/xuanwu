@@ -1,4 +1,5 @@
 import { redactSensitiveText } from "../util/redact.ts";
+import { positiveInteger } from "../util/values.ts";
 
 type RepoContextPackConfidence = "low" | "medium" | "high";
 type RepoContextEvidenceSourceKind = "code" | "doc" | "issue" | "memory" | "message" | "project" | "session" | "tool" | "unknown";
@@ -201,10 +202,6 @@ function redactSecretAssignmentLines(value: string): string {
   return value.split(/\r?\n/).map((line) => {
     return /(?:TOKEN|SECRET|PASSWORD|API[_-]?KEY|ACCESS[_-]?KEY)\s*[:=]/i.test(line) ? "[redacted sensitive line]" : line;
   }).join("\n");
-}
-
-function positiveInteger(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
 }
 
 function generatedAt(now: Date | string | undefined): string {

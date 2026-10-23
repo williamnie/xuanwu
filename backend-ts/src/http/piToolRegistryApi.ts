@@ -6,6 +6,7 @@ import type { AssistantTool, ToolProvider } from "../pi/toolProviderEnvelope.ts"
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 import type { RunnerDatabase } from "../db/database.ts";
+import { isRecord, objectValue } from "../util/values.ts";
 
 type ToolRegistryContext = { config?: RunnerConfig; database: RunnerDatabase };
 
@@ -24,7 +25,7 @@ async function callToolResponse(context: ToolRegistryContext, request: Request):
     auditContext: auditContext(body),
     db: context.database,
     env: process.env,
-    input: objectInput(body.input),
+    input: objectValue(body.input),
     invocationID: stringInput(body.invocation_id),
     manifestDirs: cliConnectorDirs(context),
     projectID: stringInput(body.project_id),
@@ -102,7 +103,7 @@ function providerSummary(provider: ToolProvider): Record<string, unknown> {
 }
 
 function auditContext(body: Record<string, unknown>) {
-  const raw = objectInput(body.audit_context ?? body.context);
+  const raw = objectValue(body.audit_context ?? body.context);
   return {
     conversationID: stringInput(raw.conversation_id ?? raw.conversationID),
     delegationID: stringInput(raw.delegation_id ?? raw.delegationID),
@@ -120,10 +121,6 @@ function cliConnectorDirs(context: ToolRegistryContext): string[] {
 function objectBody(value: unknown): Record<string, unknown> {
   if (!isRecord(value)) throw new HttpError(400, "request body must be an object");
   return value;
-}
-
-function objectInput(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
 }
 
 function stringInput(value: unknown): string | undefined {
@@ -175,8 +172,4 @@ function valueBearingKey(key: string): boolean {
 
 function schemaSafeKey(key: string): boolean {
   return ["type", "description", "title", "required", "properties", "additionalProperties"].includes(key);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

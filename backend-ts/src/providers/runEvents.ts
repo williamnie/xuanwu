@@ -8,6 +8,7 @@ import {
   type ProviderMetadataValue,
   type SessionRef
 } from "./types.ts";
+import { cleanString } from "../util/values.ts";
 
 type RunEventInput = {
   cost?: RunCost;
@@ -29,7 +30,7 @@ type ProviderCostInput = {
 };
 
 export function normalizedRunEvent(input: RunEventInput): NormalizedRunEvent {
-  const method = clean(input.method) || "unknown";
+  const method = cleanString(input.method) || "unknown";
   const metadata = compactMetadata({
     ...input.metadata,
     provider_session_id: input.session?.sessionId,
@@ -62,9 +63,9 @@ export function unknownRunEvent(
 export function providerRunCost(input: ProviderCostInput): RunCost | undefined {
   const usage = normalizedUsage(input.usage);
   const amount = nonNegativeSafeInteger(input.amountMicros);
-  const currency = amount === null ? "" : clean(input.currency).toUpperCase();
+  const currency = amount === null ? "" : cleanString(input.currency).toUpperCase();
   const moneyKnown = amount !== null && currency !== "";
-  const sourceRef = clean(input.sourceRef);
+  const sourceRef = cleanString(input.sourceRef);
   if ((usage.completeness === "unavailable" && !moneyKnown) || sourceRef === "") return undefined;
   return {
     money: moneyKnown
@@ -80,16 +81,16 @@ export function providerEventSourceRef(provider: ExecutorProviderId, method: str
   return [
     "provider-event",
     provider,
-    clean(method) || "unknown",
-    clean(session?.sessionId) || "no-session",
-    clean(session?.turnId) || "no-turn"
+    cleanString(method) || "unknown",
+    cleanString(session?.sessionId) || "no-session",
+    cleanString(session?.turnId) || "no-turn"
   ].join(":");
 }
 
 export function validateNormalizedRunEvent(event: NormalizedRunEvent): string[] {
   const errors: string[] = [];
   if (event.contract !== NORMALIZED_RUN_EVENT_CONTRACT) errors.push("contract version is invalid");
-  if (clean(event.source.method) === "" || clean(event.source.ref) === "") errors.push("source is required");
+  if (cleanString(event.source.method) === "" || cleanString(event.source.ref) === "") errors.push("source is required");
   if (event.kind === "unknown" && event.unknown?.policy !== "preserve") errors.push("unknown events must be preserved");
   if (event.kind !== "unknown" && event.unknown) errors.push("known events cannot carry unknown policy");
   if (event.terminal !== terminalOutcome(event.outcome)) errors.push("terminal flag does not match outcome");
@@ -146,8 +147,4 @@ function tokenCount(value: unknown): number | null {
 
 function nonNegativeSafeInteger(value: unknown): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

@@ -16,6 +16,7 @@ import { assertMemoryContentSafe, reusableMemoryRejection } from "../pi/memoryPo
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 import { readMemoryDiagnostics } from "./piMemoryDiagnostics.ts";
+import { cleanString } from "../util/values.ts";
 
 type PiMemoryContext = { database: RunnerDatabase };
 
@@ -250,10 +251,6 @@ function integerFlag(value: unknown): number {
 
 function positiveInteger(value: unknown): number {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : 1;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function reflectionProjectID(context: PiMemoryContext, request: Request): string {

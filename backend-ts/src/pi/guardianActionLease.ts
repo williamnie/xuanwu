@@ -1,5 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getPiAction, type PiAction } from "../db/repositories/pi.ts";
+import { cleanString, isoSeconds } from "../util/values.ts";
 
 type GuardianActionLeaseInput = {
   actionType: string;
@@ -25,13 +26,13 @@ export function acquireGuardianActionLease(
   const leaseKey = guardianActionLeaseKey(input);
   if (replay) return replayResult(replay, idempotencyKey, leaseKey);
   const now = input.now ?? new Date();
-  const held = activeLeaseHolder(db, leaseKey, iso(now));
+  const held = activeLeaseHolder(db, leaseKey, isoSeconds(now));
   if (held) return heldResult(held, idempotencyKey, leaseKey);
   return {
     idempotency_key: idempotencyKey,
     lease_key: leaseKey,
     status: "acquired",
-    until: iso(new Date(now.getTime() + (input.ttlMs ?? actionLeaseTtlMs(input.actionType))))
+    until: isoSeconds(new Date(now.getTime() + (input.ttlMs ?? actionLeaseTtlMs(input.actionType))))
   };
 }
 
@@ -79,12 +80,4 @@ function requiredClean(value: unknown, label: string): string {
   const text = cleanString(value);
   if (text === "") throw new Error(`${label} is required`);
   return text;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function iso(value: Date): string {
-  return value.toISOString().replace(/\.\d{3}Z$/, "Z");
 }

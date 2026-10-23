@@ -16,6 +16,7 @@ import {
   type PatchInput
 } from "./common.ts";
 import { redactAuditJsonText, redactAuditText } from "./auditRedaction.ts";
+import { placeholders } from "../../sql.ts";
 
 export type PiAction = {
   id: string; project_id: string; issue_id: number; conversation_id: string; action_type: string;
@@ -392,10 +393,6 @@ function mapPiActionEvent(row: Record<string, unknown>): PiActionEvent {
 function eventInsertColumns(): string {
   return `action_id, project_id, issue_id, conversation_id, event_type, actor, decision,
     reason, payload_json, result_json, error, delegation_id, heartbeat_id, created_at`;
-}
-
-function placeholders(count: number): string {
-  return Array.from({ length: count }, () => "?").join(", ");
 }
 
 function validJson(column: "payload_json" | "result_json"): string {

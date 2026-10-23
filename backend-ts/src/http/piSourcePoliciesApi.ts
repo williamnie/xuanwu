@@ -8,6 +8,7 @@ import {
 } from "../pi/eventRouter.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { cleanString } from "../util/values.ts";
 
 type JsonObject = Record<string, unknown>;
 type PiSourcePolicyContext = { database: RunnerDatabase };
@@ -24,7 +25,7 @@ export function registerPiSourcePolicyRoutes(router: Router, context: PiSourcePo
 }
 
 function listResponse(context: PiSourcePolicyContext, request: Request): JsonObject {
-  const projectID = clean(new URL(request.url).searchParams.get("project_id"));
+  const projectID = cleanString(new URL(request.url).searchParams.get("project_id"));
   return {
     automations: [],
     global_policy: resolveSourcePolicy({ profile: "custom" }),
@@ -49,8 +50,4 @@ function projectPolicy(db: RunnerDatabase, projectID: string): JsonObject {
     },
     project_id: projectID
   };
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

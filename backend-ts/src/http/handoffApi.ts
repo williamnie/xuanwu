@@ -19,6 +19,7 @@ import { buildHandoffNotificationSummary } from "../notifications/handoffNotifie
 import { json } from "./errors.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import type { Router } from "./router.ts";
+import { cleanString } from "../util/values.ts";
 
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 100;
@@ -211,9 +212,9 @@ function parsedFilter(db: RunnerDatabase, request: Request): {
   work_id?: string;
 } {
   const params = new URL(request.url).searchParams;
-  const projectID = optionalText(params.get("project_id"));
+  const projectID = cleanString(params.get("project_id"));
   if (projectID && !getProject(db, projectID)) throw handoffError(404, "project_not_found", "Project not found");
-  const workID = optionalText(params.get("work_id"));
+  const workID = cleanString(params.get("work_id"));
   if (workID) {
     const issueID = issueIDFromWorkID(workID);
     if (!issueID) throw handoffError(400, "invalid_work_id", "Work id is invalid");
@@ -227,7 +228,7 @@ function parsedFilter(db: RunnerDatabase, request: Request): {
   if (deliveryModes.some((mode) => !DELIVERY_MODES.includes(mode as typeof DELIVERY_MODES[number]))) {
     throw handoffError(400, "invalid_delivery_mode", "Handoff delivery_mode is invalid");
   }
-  const cursor = optionalText(params.get("cursor"));
+  const cursor = cleanString(params.get("cursor"));
   return {
     ...(cursor ? { before_event_id: decodeCursor(cursor) } : {}),
     ...(deliveryModes.length > 0 ? { delivery_modes: deliveryModes } : {}),
@@ -288,10 +289,6 @@ function decodeCursor(cursor: string): number {
 
 function boundedText(value: string, max: number): string {
   return value.length <= max ? value : `${value.slice(0, max - 1)}…`;
-}
-
-function optionalText(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 class HandoffHttpError extends Error {

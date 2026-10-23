@@ -3,6 +3,7 @@ import { chmodSync, existsSync, readFileSync, renameSync, writeFileSync } from "
 import { join } from "node:path";
 import { isSensitiveFieldName, redactionRegistry } from "../redactionRegistry.ts";
 import type { SecretService } from "./service.ts";
+import { cleanString } from "../../util/values.ts";
 
 type ConfigFinding = { field: string; source: string };
 type ScanFinding = { column: string; matches: number; source: "database"; table: string } |
@@ -91,7 +92,7 @@ function modelsPlan(path: string) {
   const providers = record(document?.providers);
   const findings = Object.entries(providers).flatMap(([id, value]) => {
     const provider = record(value);
-    return stringValue(provider.apiKey) === "" ? [] : [{ field: `providers.${id}.apiKey`, source: publicFilename(path) }];
+    return cleanString(provider.apiKey) === "" ? [] : [{ field: `providers.${id}.apiKey`, source: publicFilename(path) }];
   });
   return {
     findings,
@@ -99,7 +100,7 @@ function modelsPlan(path: string) {
       if (!document) return;
       for (const [id, value] of Object.entries(providers)) {
         const provider = record(value);
-        const apiKey = stringValue(provider.apiKey);
+        const apiKey = cleanString(provider.apiKey);
         if (apiKey === "") continue;
         provider.apiKeyRef = secrets.putOrRotate(`pi/provider/${encodeURIComponent(id)}/api-key`, apiKey, actor, reason).ref;
         delete provider.apiKey;
@@ -122,7 +123,7 @@ function localSettingsPlan(path: string) {
     ["gitlab", "token", "tokenRef", "integrations/gitlab/token"]
   ] as const;
   const findings = mappings.flatMap(([integration, valueKey]) =>
-    stringValue(record(integrations[integration])[valueKey]) === ""
+    cleanString(record(integrations[integration])[valueKey]) === ""
       ? []
       : [{ field: `integrations.${integration}.${valueKey}`, source: publicFilename(path) }]
   );
@@ -132,7 +133,7 @@ function localSettingsPlan(path: string) {
       if (!document) return;
       for (const [integration, valueKey, refKey, name] of mappings) {
         const config = record(integrations[integration]);
-        const value = stringValue(config[valueKey]);
+        const value = cleanString(config[valueKey]);
         if (value === "") continue;
         config[refKey] = secrets.putOrRotate(name, value, actor, reason).ref;
         delete config[valueKey];
@@ -161,10 +162,6 @@ function parseJson(value: string): unknown | null {
 
 function record(value: unknown): Record<string, any> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function writeJson(path: string, value: unknown): void {

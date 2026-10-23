@@ -22,6 +22,7 @@ import {
   syncIssueWorkShadow,
   workIDToIssueID
 } from "./issueAdapter.ts";
+import { errorMessage } from "../../util/values.ts";
 
 const WORK_BACKFILL_CHECKPOINT_SCHEMA_VERSION = "xuanwu.work-backfill-checkpoint.v1" as const;
 const WORK_ROLLBACK_CHECKPOINT_SCHEMA_VERSION = "xuanwu.work-rollback-checkpoint.v1" as const;
@@ -872,8 +873,4 @@ function sortJSON(value: unknown): unknown {
   return Object.fromEntries(Object.entries(value as Record<string, unknown>)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, item]) => [key, sortJSON(item)]));
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

@@ -24,6 +24,7 @@ import type {
 import type { EventBus } from "../events/bus.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { cleanString } from "../util/values.ts";
 
 type AutomationApiContext = { bus?: EventBus; database: RunnerDatabase };
 type JsonObject = Record<string, unknown>;
@@ -73,17 +74,17 @@ async function createResponse(context: AutomationApiContext, request: Request): 
   const id = createID(body.id);
   const trigger = triggerInput(body.trigger);
   const audit = userAudit(id, "create", now);
-  const nextRunAt = optionalText(body.next_run_at) || initialNextRun(trigger, now);
+  const nextRunAt = cleanString(body.next_run_at) || initialNextRun(trigger, now);
   const owner = ownerInput(body.owner, body.project_id);
   return writeResponse(() => {
     const automation = createAutomation(context.database, {
       id,
-      idempotency_namespace: optionalText(body.idempotency_namespace) || id,
+      idempotency_namespace: cleanString(body.idempotency_namespace) || id,
       mode: automationMode(body.mode),
       name: requiredText(body.name, "name"),
       next_run_at: nextRunAt,
       owner,
-      permission_policy_ref: optionalText(body.permission_policy_ref) || ownerPolicy(owner),
+      permission_policy_ref: cleanString(body.permission_policy_ref) || ownerPolicy(owner),
       status: automationStatus(body.status, "active"),
       trigger,
       trigger_created_by: audit.actor_id,
@@ -115,7 +116,7 @@ async function triggerResponse(context: AutomationApiContext, request: Request):
   if (current.revision !== expectedRevision) throw new HttpError(409, "automation revision conflict");
   const trigger = triggerInput(body.trigger);
   const now = new Date();
-  const nextRunAt = optionalText(body.next_run_at) || initialNextRun(trigger, now);
+  const nextRunAt = cleanString(body.next_run_at) || initialNextRun(trigger, now);
   return writeResponse(() => {
     const automation = reviseAutomationTrigger(context.database, id, trigger, userAudit(id, "trigger", now), nextRunAt, expectedRevision);
     publish(context, "automation.updated", automation);
@@ -154,9 +155,9 @@ function listItem(db: RunnerDatabase, automation: AutomationDefinition) {
 }
 
 function automationFilter(params: URLSearchParams): AutomationListFilter {
-  const projectID = optionalText(params.get("project_id"));
-  const statusText = optionalText(params.get("status"));
-  const triggerText = optionalText(params.get("trigger_type"));
+  const projectID = cleanString(params.get("project_id"));
+  const statusText = cleanString(params.get("status"));
+  const triggerText = cleanString(params.get("trigger_type"));
   return {
     ...(projectID ? { project_id: projectID } : {}),
     ...(statusText ? { status: automationStatus(statusText) } : {}),
@@ -170,7 +171,7 @@ function definitionPatch(body: JsonObject): AutomationDefinitionPatch {
   if (body.workflow_ref !== undefined) patch.workflow_ref = requiredText(body.workflow_ref, "workflow_ref");
   if (body.permission_policy_ref !== undefined) patch.permission_policy_ref = requiredText(body.permission_policy_ref, "permission_policy_ref");
   if (body.mode !== undefined) patch.mode = automationMode(body.mode);
-  if (body.next_run_at !== undefined) patch.next_run_at = optionalText(body.next_run_at) || null;
+  if (body.next_run_at !== undefined) patch.next_run_at = cleanString(body.next_run_at) || null;
   if (Object.keys(patch).length === 0) throw new HttpError(400, "没有可更新的 automation 字段");
   return patch;
 }
@@ -181,7 +182,7 @@ function triggerInput(value: unknown): AutomationTriggerConfig {
   const config = objectValue(input.config ?? {}, "trigger.config");
   if (type === "cron") return { type, config: { expression: requiredText(config.expression, "cron expression"), timezone: requiredText(config.timezone, "cron timezone") } };
   if (type === "continuous") return { type, config: { poll_interval_seconds: positiveInteger(config.poll_interval_seconds, "poll_interval_seconds") } };
-  if (type === "webhook") return { type, config: { event_type: requiredText(config.event_type, "event_type"), ...(optionalText(config.secret_ref) ? { secret_ref: optionalText(config.secret_ref) } : {}) } };
+  if (type === "webhook") return { type, config: { event_type: requiredText(config.event_type, "event_type"), ...(cleanString(config.secret_ref) ? { secret_ref: cleanString(config.secret_ref) } : {}) } };
   const targetIssueID = Number(config.target_issue_id);
   return { type: "manual", config: Number.isSafeInteger(targetIssueID) && targetIssueID > 0 ? { target_issue_id: targetIssueID } : {} };
 }
@@ -194,7 +195,7 @@ function initialNextRun(trigger: AutomationTriggerConfig, now: Date): string | n
 
 function ownerInput(value: unknown, projectID: unknown): AutomationDefinition["owner"] {
   const input = value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
-  const project = optionalText(input.project_id) || optionalText(projectID);
+  const project = cleanString(input.project_id) || cleanString(projectID);
   return project ? { kind: "project", project_id: project } : { kind: "control_plane", control_plane_id: "local" };
 }
 
@@ -238,19 +239,19 @@ function createID(value: unknown): AutomationID {
 }
 
 function automationStatus(value: unknown, fallback?: AutomationStatus): AutomationStatus {
-  const text = optionalText(value) || fallback || "";
+  const text = cleanString(value) || fallback || "";
   if (["draft", "active", "paused", "archived"].includes(text)) return text as AutomationStatus;
   throw new HttpError(400, "automation status 不合法");
 }
 
 function automationMode(value: unknown): AutomationMode {
-  const text = optionalText(value) || "propose";
+  const text = cleanString(value) || "propose";
   if (["observe", "propose", "execute_allowed"].includes(text)) return text as AutomationMode;
   throw new HttpError(400, "automation mode 不合法");
 }
 
 function triggerType(value: unknown): AutomationTriggerConfig["type"] {
-  const text = optionalText(value);
+  const text = cleanString(value);
   if (["cron", "manual", "webhook", "continuous"].includes(text)) return text as AutomationTriggerConfig["type"];
   throw new HttpError(400, "automation trigger_type 不合法");
 }
@@ -277,13 +278,9 @@ function objectValue(value: unknown, label: string): JsonObject {
 }
 
 function requiredText(value: unknown, label: string): string {
-  const result = optionalText(value);
+  const result = cleanString(value);
   if (!result) throw new HttpError(400, `${label} 不能为空`);
   return result;
-}
-
-function optionalText(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function writeResponse(write: () => unknown, status = 200): Response {

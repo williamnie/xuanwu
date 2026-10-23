@@ -10,6 +10,7 @@ import { invokeMcpTransport } from "./mcpTransport.ts";
 import { mcpToolProviderID } from "./mcpToolProvider.ts";
 import { recordToolCallAuditEvent, type ToolCallAuditContext } from "./toolCallAudit.ts";
 import type { ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 type McpResourceReadAdapterInput = {
   auditContext?: Partial<ToolCallAuditContext>;
@@ -73,7 +74,7 @@ function legacyResourceOutput(capability: McpCapability | null, result: ToolResu
       status: result.status
     };
   }
-  const output = recordValue(result.output);
+  const output = objectValue(result.output);
   if (Array.isArray(output.contents)) {
     return { capability: publicCapability(capability), content: output.content ?? null, contents: output.contents };
   }
@@ -161,12 +162,4 @@ function auditContext(input: McpResourceReadAdapterInput): ToolCallAuditContext 
     projectID: cleanString(context.projectID),
     source: cleanString(context.source) || "mcp_resource"
   };
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

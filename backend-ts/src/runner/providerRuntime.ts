@@ -35,6 +35,7 @@ import type { ProviderTransport } from "../providers/core/manifest.ts";
 import { translateLegacyExecutionPolicy } from "../providers/core/legacyExecutionPolicy.ts";
 import { resolveExecutionPolicy } from "../providers/core/policyResolution.ts";
 import { appendRunMemoryPrompt, recordExecutorMemoryCitations } from "../pi/runMemoryContext.ts";
+import { cleanString } from "../util/values.ts";
 
 const LIVE_PROVIDER_PAYLOAD_MAX_BYTES = 64 * 1024;
 
@@ -722,10 +723,6 @@ function openIssueRunID(db: RunnerDatabase | undefined, issueID: number): string
   return db.sqlite.query<{ id: string }, [number]>(
     "select id from issue_runs where issue_id=? and ended_at='' order by attempt desc limit 1"
   ).get(issueID)?.id ?? "";
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function providerRunErrorEvent(provider: ExecutorProviderId, error: unknown): ProviderEvent {

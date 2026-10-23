@@ -16,6 +16,7 @@ import {
   type WorkflowProjectOverride,
   type WorkflowValidationIssue
 } from "./manifest.ts";
+import { isRecord } from "../util/values.ts";
 
 export type WorkflowManifestRegistration = { manifest: unknown; source_path: string };
 type WorkflowProjectOverrideRegistration = { override: unknown; source_path: string };
@@ -371,8 +372,4 @@ function isToolPermission(value: unknown): value is ToolPermission {
 
 function permissionRank(permission: ToolPermission): number {
   return TOOL_PERMISSIONS.indexOf(permission);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

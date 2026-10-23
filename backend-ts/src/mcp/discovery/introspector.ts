@@ -1,6 +1,7 @@
 import { runStdioProcess } from "../stdioProcess.ts";
 import type { PiMcpCapabilityInput } from "../../db/repositories/piMcpCapabilities.ts";
 import type { PiMcpServer } from "../../db/repositories/piMcpServers.ts";
+import { arrayValue, cleanString, objectValue } from "../../util/values.ts";
 
 type McpIntrospectionResult = {
   capabilities: PiMcpCapabilityInput[];
@@ -43,32 +44,32 @@ function resultFromStdout(server: PiMcpServer, stdout: string): McpIntrospection
   const initialize = response(parsed.items, 1);
   const tools = response(parsed.items, 2);
   const resources = response(parsed.items, 3);
-  const errors = [initialize, tools, resources].filter((item) => item?.error).map((item) => clean(item?.error?.message));
+  const errors = [initialize, tools, resources].filter((item) => item?.error).map((item) => cleanString(item?.error?.message));
   if (errors.length) return failed("mcp_introspection_rpc_error", errors.join("; "));
   return {
     capabilities: [...toolCapabilities(server, tools?.result), ...resourceCapabilities(server, resources?.result)],
     diagnostics: [],
     readiness: "ready",
-    serverInfo: record(record(initialize?.result).serverInfo),
+    serverInfo: objectValue(objectValue(initialize?.result).serverInfo),
     status: "available"
   };
 }
 
 function toolCapabilities(server: PiMcpServer, result: unknown): PiMcpCapabilityInput[] {
-  return arrayValue(record(result).tools).map((item) => toolCapability(server, record(item))).filter(Boolean) as PiMcpCapabilityInput[];
+  return arrayValue(objectValue(result).tools).map((item) => toolCapability(server, objectValue(item))).filter(Boolean) as PiMcpCapabilityInput[];
 }
 
 function resourceCapabilities(server: PiMcpServer, result: unknown): PiMcpCapabilityInput[] {
-  return arrayValue(record(result).resources).map((item) => resourceCapability(server, record(item))).filter(Boolean) as PiMcpCapabilityInput[];
+  return arrayValue(objectValue(result).resources).map((item) => resourceCapability(server, objectValue(item))).filter(Boolean) as PiMcpCapabilityInput[];
 }
 
 function toolCapability(server: PiMcpServer, raw: Record<string, unknown>): PiMcpCapabilityInput | null {
-  const name = clean(raw.name);
+  const name = cleanString(raw.name);
   if (!name) return null;
-  const annotations = record(raw.annotations);
+  const annotations = objectValue(raw.annotations);
   const readOnly = annotations.readOnlyHint === true;
   const highRisk = annotations.destructiveHint === true || annotations.openWorldHint === true;
-  return { description: clean(raw.description), input_schema: schema(raw.inputSchema ?? raw.input_schema), kind: "tool",
+  return { description: cleanString(raw.description), input_schema: schema(raw.inputSchema ?? raw.input_schema), kind: "tool",
     metadata: { annotations }, name, output_schema: schema(raw.outputSchema ?? raw.output_schema),
     permission: readOnly ? "read" : "write", read_only: readOnly,
     requires_confirmation: highRisk, risk_level: readOnly ? "low" : highRisk ? "high" : "medium",
@@ -77,10 +78,10 @@ function toolCapability(server: PiMcpServer, raw: Record<string, unknown>): PiMc
 }
 
 function resourceCapability(server: PiMcpServer, raw: Record<string, unknown>): PiMcpCapabilityInput | null {
-  const name = clean(raw.name || raw.uri);
-  const uri = clean(raw.uri);
+  const name = cleanString(raw.name || raw.uri);
+  const uri = cleanString(raw.uri);
   if (!name && !uri) return null;
-  return { description: clean(raw.description), kind: "resource", name: name || uri, permission: "read",
+  return { description: cleanString(raw.description), kind: "resource", name: name || uri, permission: "read",
     read_only: true, requires_confirmation: false, risk_level: "low", server_id: server.id,
     source_path: server.source_path, timeout_ms: 10000, uri };
 }
@@ -120,7 +121,7 @@ function transportEnv(env: Record<string, string>): Record<string, string | unde
 }
 
 function schema(value: unknown): Record<string, unknown> {
-  const object = record(value);
+  const object = objectValue(value);
   return Object.keys(object).length ? object : { type: "object" };
 }
 
@@ -133,18 +134,6 @@ function safeMessage(value: unknown): string {
 }
 
 function truncate(value: unknown): string {
-  const text = clean(value);
+  const text = cleanString(value);
   return text.length > 4096 ? `${text.slice(0, 4096)}…` : text;
-}
-
-function arrayValue(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

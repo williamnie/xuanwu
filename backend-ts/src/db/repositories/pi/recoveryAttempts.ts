@@ -12,6 +12,7 @@ import {
   type PatchInput
 } from "./common.ts";
 import { redactAuditJsonText, redactAuditText } from "./auditRedaction.ts";
+import { placeholders } from "../../sql.ts";
 
 export type PiRecoveryAttempt = {
   action_type: string; after_snapshot_json: string; before_snapshot_json: string;
@@ -279,10 +280,6 @@ function jsonPayload(value: unknown, fallback: string): string {
 
 function redactedJsonPayload(value: unknown, fallback: string): string {
   return redactAuditJsonText(jsonPayload(value, fallback));
-}
-
-function placeholders(count: number): string {
-  return Array.from({ length: count }, () => "?").join(", ");
 }
 
 function escapeLike(value: string): string {

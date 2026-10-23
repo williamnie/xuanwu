@@ -23,6 +23,7 @@ import {
   type ImInteractionCallback,
   type ImInteractionHandleResult
 } from "./imInteractionService.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 type FeishuImInteraction = {
   callback: ImInteractionCallback;
@@ -42,20 +43,20 @@ type FeishuImInteractionContext = {
 
 /** Normalize only the post-cutover opaque callback shape. */
 export function normalizeFeishuImInteraction(raw: unknown): FeishuImInteraction | null {
-  const root = recordValue(raw);
-  const nestedEvent = recordValue(root.event);
+  const root = objectValue(raw);
+  const nestedEvent = objectValue(root.event);
   const event = Object.keys(nestedEvent).length > 0 ? nestedEvent : root;
-  if (cleanString(recordValue(root.header).event_type || root.event_type) !== "card.action.trigger") return null;
-  const action = recordValue(event.action);
-  const value = recordValue(action.value);
+  if (cleanString(objectValue(root.header).event_type || root.event_type) !== "card.action.trigger") return null;
+  const action = objectValue(event.action);
+  const value = objectValue(action.value);
   if (cleanString(value.action) !== "xuanwu_im_interaction") return null;
   const interactionID = cleanString(value.interaction_id);
   const actionID = cleanString(value.action_id);
   const revision = positiveInteger(value.revision);
-  const context = recordValue(event.context);
-  const operator = recordValue(event.operator);
-  const operatorID = Object.keys(recordValue(operator.operator_id)).length > 0
-    ? recordValue(operator.operator_id)
+  const context = objectValue(event.context);
+  const operator = objectValue(event.operator);
+  const operatorID = Object.keys(objectValue(operator.operator_id)).length > 0
+    ? objectValue(operator.operator_id)
     : operator;
   const chatID = cleanString(context.open_chat_id || context.chat_id);
   const userID = cleanString(operatorID.user_id || operatorID.userId);
@@ -66,7 +67,7 @@ export function normalizeFeishuImInteraction(raw: unknown): FeishuImInteraction 
       actionId: actionID,
       actor: { ...(userID ? { id: userID } : {}), ...(userOpenID ? { openId: userOpenID } : {}) },
       connectorId: "feishu",
-      eventId: cleanString(recordValue(root.header).event_id || root.event_id),
+      eventId: cleanString(objectValue(root.header).event_id || root.event_id),
       interactionId: interactionID,
       revision,
       scopeKey: chatID
@@ -341,12 +342,4 @@ function refID(value: string, table: string): string {
 function positiveInteger(value: unknown): number {
   const numeric = typeof value === "string" && value.trim() !== "" ? Number(value) : value;
   return typeof numeric === "number" && Number.isSafeInteger(numeric) && numeric > 0 ? numeric : 0;
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

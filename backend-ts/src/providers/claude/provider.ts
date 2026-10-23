@@ -58,6 +58,7 @@ import {
   type SessionRef
 } from "../types.ts";
 import { ClaudePermissionBroker } from "./permissionBroker.ts";
+import { cleanString } from "../../util/values.ts";
 
 export type { ClaudeProcessFactory };
 
@@ -121,7 +122,7 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
 
   async createSession(input: SessionCreateInput): Promise<SessionCreateResult> {
     assertUsableCwd(input.cwd);
-    const prompt = clean(input.prompt);
+    const prompt = cleanString(input.prompt);
     if (prompt === "") throw new Error("Claude SDK session creation requires a prompt");
     const result = await this.execute(prompt, sdkInput(input, this.config), undefined, "", input);
     const session = requiredSession(result);
@@ -136,13 +137,13 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
   }
 
   async sendSessionMessage(input: SessionMessageInput): Promise<SessionMessageResult> {
-    const sessionId = clean(input.sessionId);
+    const sessionId = cleanString(input.sessionId);
     if (sessionId === "") throw new Error("Claude SDK resume requires a session id");
-    if (clean(input.mode) === "steer") throw new Error('provider "claude" does not support live steer; interrupt or resume the session instead');
-    const discovered = clean(input.cwd) ? undefined : await this.sessionFunctions().getSessionInfo(sessionId);
-    const cwd = clean(input.cwd) || clean(discovered?.cwd) || clean(this.config.cwd);
+    if (cleanString(input.mode) === "steer") throw new Error('provider "claude" does not support live steer; interrupt or resume the session instead');
+    const discovered = cleanString(input.cwd) ? undefined : await this.sessionFunctions().getSessionInfo(sessionId);
+    const cwd = cleanString(input.cwd) || cleanString(discovered?.cwd) || cleanString(this.config.cwd);
     assertUsableCwd(cwd);
-    const prompt = clean(input.prompt);
+    const prompt = cleanString(input.prompt);
     if (prompt === "") throw new Error("Claude SDK session message requires a prompt");
     const result = await this.execute(prompt, sdkInput({ ...input, cwd }, this.config, sessionId), undefined, sessionId, { ...input, cwd });
     const session = requiredSession(result);
@@ -160,7 +161,7 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
     const offset = numericCursor(input.cursor);
     const limit = normalizeLimit(input.limit);
     const sessions = await this.sessionFunctions().listSessions({
-      ...(clean(input.cwd) ? { dir: clean(input.cwd) } : {}),
+      ...(cleanString(input.cwd) ? { dir: cleanString(input.cwd) } : {}),
       limit,
       offset
     });
@@ -172,7 +173,7 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
 
   async readSession(sessionId: string, input: SessionReadInput = {}): Promise<Record<string, unknown>> {
     this.assertReady();
-    const id = clean(sessionId);
+    const id = cleanString(sessionId);
     if (id === "") throw new Error("Claude SDK session id is required");
     const functions = this.sessionFunctions();
     const info = await functions.getSessionInfo(id);
@@ -227,7 +228,7 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
       mode: "sdk",
       version: CLAUDE_AGENT_SDK_VERSION,
       active_sessions: new Set(this.active.values()).size,
-      api_key_configured: this.config.authMode === "environment" && clean(this.config.env.ANTHROPIC_API_KEY) !== "",
+      api_key_configured: this.config.authMode === "environment" && cleanString(this.config.env.ANTHROPIC_API_KEY) !== "",
       auth_configured: authConfigured,
       auth_mode: localAuth ? "local-cli" : authentication.mode,
       auth_source: localAuth ? "local_cli" : authentication.source,
@@ -251,8 +252,8 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
     policyInput?: Pick<ProviderRunInput, "cwd" | "policy">
   ): Promise<ProviderRunResult> {
     this.assertReady();
-    const durableSessionID = resumeAlias || clean(options.sessionId) ||
-      clean(this.options.sessionIdFactory?.()) || crypto.randomUUID();
+    const durableSessionID = resumeAlias || cleanString(options.sessionId) ||
+      cleanString(this.options.sessionIdFactory?.()) || crypto.randomUUID();
     if (!resumeAlias) options.sessionId = durableSessionID;
     const state = createClaudeSdkStreamState();
     state.sessionId = durableSessionID;
@@ -351,7 +352,7 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
   }
 
   private trackAlias(active: ActiveQuery, alias: string): void {
-    const id = clean(alias);
+    const id = cleanString(alias);
     if (id === "" || active.aliases.has(id)) return;
     const existing = this.active.get(id);
     if (existing && existing !== active) throw new Error(`Claude SDK session ${id} already has an active query`);
@@ -407,7 +408,7 @@ export class ClaudeExecutorProvider implements ExecutorProvider {
       mode: "cli-fallback",
       version: "",
       active_sessions: 0,
-      api_key_configured: clean(this.config.env.ANTHROPIC_API_KEY) !== ""
+      api_key_configured: cleanString(this.config.env.ANTHROPIC_API_KEY) !== ""
     };
   }
 }
@@ -445,7 +446,7 @@ function sdkInput(
   resume = ""
 ): ClaudeSdkOptions {
   const tools = nativeStringArray(input, "tools") ?? claudeTools(input.sandbox);
-  const model = clean(input.model) || clean(config.model);
+  const model = cleanString(input.model) || cleanString(config.model);
   const effort = claudeEffort(input.reasoningEffort);
   const executable = resolveClaudeSdkExecutable();
   const hostToolGate = input.policy?.nativeSummary.hostToolGate === true;
@@ -484,7 +485,7 @@ function nativeBoolean(input: Pick<ProviderRunInput, "policy">, key: string): bo
 }
 
 export function resolveClaudeSdkExecutable(): string {
-  const configured = clean(Bun.env.XUANWU_CLAUDE_SDK_EXECUTABLE);
+  const configured = cleanString(Bun.env.XUANWU_CLAUDE_SDK_EXECUTABLE);
   if (configured) return isRegularFile(configured) ? configured : "";
   const suffix = process.platform === "win32" ? ".exe" : "";
   const adjacent = `${process.execPath}.claude-agent-sdk${suffix}`;
@@ -520,17 +521,17 @@ function compactAppEvent(event: AppEvent): AppEvent {
 }
 
 function claudeTools(sandbox: string | undefined): string[] {
-  return clean(sandbox).toLowerCase() === "read-only"
+  return cleanString(sandbox).toLowerCase() === "read-only"
     ? ["Read", "Grep", "Glob"]
     : ["Read", "Grep", "Glob", "Edit", "Write", "Bash"];
 }
 
 function claudePermissionMode(policy: string | undefined): "default" | "dontAsk" {
-  return clean(policy).toLowerCase() === "always" ? "default" : "dontAsk";
+  return cleanString(policy).toLowerCase() === "always" ? "default" : "dontAsk";
 }
 
 function claudeEffort(value: string | undefined): "low" | "medium" | "high" | "xhigh" | "max" | undefined {
-  const effort = clean(value);
+  const effort = cleanString(value);
   return ["low", "medium", "high", "xhigh", "max"].includes(effort)
     ? effort as "low" | "medium" | "high" | "xhigh" | "max"
     : undefined;
@@ -547,7 +548,7 @@ function sessionRef(state: ClaudeSdkStreamState): SessionRef | undefined {
 }
 
 function assertUsableCwd(cwd: string): void {
-  const path = clean(cwd);
+  const path = cleanString(cwd);
   if (path === "") throw new Error("Claude SDK issue run blocked: cwd is required");
   try {
     if (statSync(path).isDirectory()) return;
@@ -559,7 +560,7 @@ function assertUsableCwd(cwd: string): void {
 
 function registerClaudeAuthSecrets(env: Record<string, string>): void {
   for (const key of ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"]) {
-    const value = clean(env[key]);
+    const value = cleanString(env[key]);
     if (value) registerSecretForRedaction(value);
   }
 }
@@ -591,7 +592,7 @@ async function boundedClaudeSdkInterrupt(query: ClaudeQuery | undefined, timeout
 }
 
 function numericCursor(value: string | undefined): number {
-  const cursor = clean(value);
+  const cursor = cleanString(value);
   if (cursor === "") return 0;
   const parsed = Number(cursor);
   if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error("Claude session cursor is invalid");
@@ -605,8 +606,4 @@ function normalizeLimit(value: number | undefined): number {
 function requireMethod<T extends (...args: never[]) => unknown>(method: T | undefined, capability: string): T {
   if (!method) throw new Error(`provider "claude" does not support capability "${capability}" in the selected mode`);
   return method;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

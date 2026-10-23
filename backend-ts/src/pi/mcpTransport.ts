@@ -1,6 +1,7 @@
 import { runStdioProcess, type StdioProcessResult } from "../mcp/stdioProcess.ts";
 import type { McpCapability, McpServerRegistry } from "../mcp/registry.ts";
 import type { ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
+import { cleanString, isRecord, objectValue } from "../util/values.ts";
 
 const MCP_TRANSPORT_ERROR_CODES = {
   schemaMismatch: "mcp_schema_mismatch",
@@ -133,7 +134,7 @@ function resultFromRpcResult(
 }
 
 function toolResult(result: unknown, metadata: Record<string, unknown>, started: number): McpTransportInvokeResult {
-  const object = recordValue(result);
+  const object = objectValue(result);
   const content = Array.isArray(object.content) ? object.content : [];
   if (object.isError === true) {
     return failed(started, error("toolError", contentText(content) || "MCP tool call failed"), metadata);
@@ -146,7 +147,7 @@ function toolResult(result: unknown, metadata: Record<string, unknown>, started:
 }
 
 function resourceResult(result: unknown, metadata: Record<string, unknown>, started: number): McpTransportInvokeResult {
-  const object = recordValue(result);
+  const object = objectValue(result);
   const contents = Array.isArray(object.contents) ? object.contents.map(resourceContent) : [];
   if (contents.length === 0) {
     return failed(started, error("schemaMismatch", "MCP resource result contents are missing"), metadata);
@@ -156,13 +157,13 @@ function resourceResult(result: unknown, metadata: Record<string, unknown>, star
 
 function contentOutput(content: unknown[]): unknown {
   if (content.length !== 1) return content;
-  const item = recordValue(content[0]);
+  const item = objectValue(content[0]);
   if (cleanString(item.type) === "text" && typeof item.text === "string") return jsonOrText(item.text);
   return content[0];
 }
 
 function resourceContent(value: unknown): Record<string, unknown> {
-  const item = recordValue(value);
+  const item = objectValue(value);
   return {
     ...(item.blob === undefined ? {} : { blob: item.blob }),
     ...(item.mimeType === undefined ? {} : { mimeType: item.mimeType }),
@@ -177,7 +178,7 @@ function firstResourceText(contents: Record<string, unknown>[]): unknown {
 }
 
 function contentText(content: unknown[]): string {
-  return content.map((item) => cleanString(recordValue(item).text)).filter(Boolean).join("\n");
+  return content.map((item) => cleanString(objectValue(item).text)).filter(Boolean).join("\n");
 }
 
 function succeeded(started: number, output: unknown, metadata: Record<string, unknown>): McpTransportInvokeResult {
@@ -249,16 +250,4 @@ function duration(started: number): number {
 
 function truncate(value: string, limit: number): string {
   return value.length <= limit ? value : `${value.slice(0, limit)}…`;
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

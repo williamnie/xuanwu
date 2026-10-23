@@ -13,6 +13,7 @@ import {
   type NotificationOutboxTarget
 } from "./notificationOutbox.ts";
 import { applyNotificationSpeaker, notificationPresentation } from "./notificationPresentation.ts";
+import { cleanString, positiveInteger } from "../util/values.ts";
 
 export type NotificationRoute = NotificationOutboxTarget & { channel: string };
 type NotificationDecision = "aggregate" | "send_now" | "suppress";
@@ -376,12 +377,4 @@ function requiredText(value: unknown, label: string): string {
   const text = cleanString(value);
   if (text === "") throw new Error(`${label} is required`);
   return text;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function positiveInteger(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
 }

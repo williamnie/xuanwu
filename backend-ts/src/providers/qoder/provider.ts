@@ -36,6 +36,7 @@ import {
   readQoderSessionHistory,
   type QoderSessionFunctions
 } from "./sessionHistory.ts";
+import { cleanString } from "../../util/values.ts";
 
 const SYSTEM_PROMPT = "You are executing a Xuanwu-managed Issue. Follow the Issue prompt and report only verified outcomes.";
 
@@ -75,7 +76,7 @@ export class QoderExecutorProvider implements ExecutorProvider {
   }
 
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
-    const sessionId = clean(this.options.sessionIdFactory?.()) || crypto.randomUUID();
+    const sessionId = cleanString(this.options.sessionIdFactory?.()) || crypto.randomUUID();
     return await this.execute(input, { sessionId });
   }
 
@@ -95,7 +96,7 @@ export class QoderExecutorProvider implements ExecutorProvider {
       policy: input.policy,
       approvalPolicy: input.approvalPolicy,
       sandbox: input.sandbox
-    }, { sessionId: clean(this.options.sessionIdFactory?.()) || crypto.randomUUID() });
+    }, { sessionId: cleanString(this.options.sessionIdFactory?.()) || crypto.randomUUID() });
     const session = requiredSession(result);
     return {
       id: session.sessionId,
@@ -112,7 +113,7 @@ export class QoderExecutorProvider implements ExecutorProvider {
     const offset = numericCursor(input.cursor);
     const limit = normalizeLimit(input.limit);
     const sessions = await this.sessionFunctions().listSessions({
-      ...(clean(input.cwd) ? { dir: clean(input.cwd) } : {}),
+      ...(cleanString(input.cwd) ? { dir: cleanString(input.cwd) } : {}),
       limit,
       offset
     });
@@ -130,7 +131,7 @@ export class QoderExecutorProvider implements ExecutorProvider {
     const info = await functions.getSessionInfo(id);
     const history = input.includeTurns === false
       ? { messages: [], truncated: false }
-      : await readQoderSessionHistory(functions, id, clean(info?.cwd));
+      : await readQoderSessionHistory(functions, id, cleanString(info?.cwd));
     if (!info && history.messages.length === 0) throw new Error(`Qoder session ${id} was not found`);
     assertQoderSessionHistoryIdentity(id, info, history.messages);
     return publicQoderSessionDetail(id, info, history.messages, {
@@ -143,12 +144,12 @@ export class QoderExecutorProvider implements ExecutorProvider {
   async sendSessionMessage(input: SessionMessageInput): Promise<SessionMessageResult> {
     this.assertReady();
     const sessionId = required(input.sessionId, "Qoder resume session id");
-    if (clean(input.mode) === "steer") {
+    if (cleanString(input.mode) === "steer") {
       throw new Error('provider "qoder" does not support live steer; interrupt or resume the session instead');
     }
     const prompt = required(input.prompt, "Qoder session message prompt");
     const functions = this.sessionFunctions();
-    const historyOptions = clean(input.cwd) ? { dir: clean(input.cwd) } : {};
+    const historyOptions = cleanString(input.cwd) ? { dir: cleanString(input.cwd) } : {};
     const info = await functions.getSessionInfo(sessionId, historyOptions);
     if (!info) throw new Error(`Qoder session ${sessionId} was not found; refusing to create an empty replacement`);
     const history = await functions.getSessionMessages(sessionId, {
@@ -161,7 +162,7 @@ export class QoderExecutorProvider implements ExecutorProvider {
       throw new Error(`Qoder session ${sessionId} history is empty; refusing to create an empty replacement`);
     }
     assertQoderSessionHistoryIdentity(sessionId, info, history);
-    const cwd = clean(input.cwd) || clean(info.cwd) || clean(this.config.cwd);
+    const cwd = cleanString(input.cwd) || cleanString(info.cwd) || cleanString(this.config.cwd);
     const result = await this.execute({
       issueId: 0,
       projectId: input.projectId ?? "",
@@ -234,14 +235,14 @@ export class QoderExecutorProvider implements ExecutorProvider {
     sessionOptions: Pick<QoderRunOptions, "resume" | "sessionId">,
     resumeAlias = ""
   ): Promise<ProviderRunResult> {
-    const invocationRef = clean(this.options.invocationIdFactory?.()) || `qoder-inv-${crypto.randomUUID()}`;
+    const invocationRef = cleanString(this.options.invocationIdFactory?.()) || `qoder-inv-${crypto.randomUUID()}`;
     const active: ActiveInvocation = {
       aliases: new Set(),
       interrupted: false,
       invocationRef,
       messageRef: "",
       sessionObserved: false,
-      sessionRef: clean(resumeAlias) || clean(sessionOptions.sessionId),
+      sessionRef: cleanString(resumeAlias) || cleanString(sessionOptions.sessionId),
       terminalProjected: false
     };
     this.track(active, invocationRef);
@@ -273,10 +274,10 @@ export class QoderExecutorProvider implements ExecutorProvider {
         const event = projectQoderMessage(message, {
           interrupted: context.interrupted || active.interrupted,
           invocationRef,
-          resume: clean(sessionOptions.resume) !== "",
+          resume: cleanString(sessionOptions.resume) !== "",
           usage: context.usage
         });
-        const sessionRef = clean(event.session?.sessionId);
+        const sessionRef = cleanString(event.session?.sessionId);
         if (sessionRef) {
           active.sessionObserved = true;
           if (active.sessionRef && active.sessionRef !== sessionRef) {
@@ -285,7 +286,7 @@ export class QoderExecutorProvider implements ExecutorProvider {
           active.sessionRef = sessionRef;
           this.track(active, sessionRef);
         }
-        const messageRef = clean(event.session?.turnId);
+        const messageRef = cleanString(event.session?.turnId);
         if (messageRef) {
           active.messageRef = messageRef;
           this.track(active, messageRef);
@@ -330,7 +331,7 @@ export class QoderExecutorProvider implements ExecutorProvider {
   }
 
   private track(active: ActiveInvocation, alias: string): void {
-    const key = clean(alias);
+    const key = cleanString(alias);
     if (!key || active.aliases.has(key)) return;
     const existing = this.active.get(key);
     if (existing && existing !== active) throw new Error(`Qoder active query alias ${key} is already in use`);
@@ -346,8 +347,8 @@ export class QoderExecutorProvider implements ExecutorProvider {
   }
 
   private lookup(session: SessionRef): ActiveInvocation | undefined {
-    return this.active.get(clean(session.sessionId)) ??
-      (session.turnId ? this.active.get(clean(session.turnId)) : undefined);
+    return this.active.get(cleanString(session.sessionId)) ??
+      (session.turnId ? this.active.get(cleanString(session.turnId)) : undefined);
   }
 
   private assertReady(): void {
@@ -368,9 +369,9 @@ export class QoderExecutorProvider implements ExecutorProvider {
     const platform = status.platform_profile ?? {};
     return {
       provider_version: status.version,
-      sdk_version: clean(platform.sdk_version),
-      cli_version: clean(platform.cli_version),
-      protocol_version: clean(platform.protocol_version)
+      sdk_version: cleanString(platform.sdk_version),
+      cli_version: cleanString(platform.cli_version),
+      protocol_version: cleanString(platform.protocol_version)
     };
   }
 }
@@ -378,17 +379,17 @@ export class QoderExecutorProvider implements ExecutorProvider {
 const QODER_STATIC_MODEL_SUGGESTIONS = ["auto", "ultimate", "performance", "efficient", "lite"] as const;
 
 function qoderModelView(model: import("@qoder-ai/qoder-agent-sdk").ModelInfo): Record<string, unknown> {
-  const id = clean(model.value);
-  const efforts = Array.isArray(model.efforts) ? model.efforts.map(clean).filter(Boolean) : [];
+  const id = cleanString(model.value);
+  const efforts = Array.isArray(model.efforts) ? model.efforts.map(cleanString).filter(Boolean) : [];
   return {
-    displayName: clean(model.displayName) || id,
+    displayName: cleanString(model.displayName) || id,
     id,
     model: id,
     isDefault: model.isDefault === true,
     source: "qoder_account_live",
     verified: true,
     supportedReasoningEfforts: efforts.map((reasoningEffort) => ({ reasoningEffort })),
-    ...(clean(model.defaultEffort) ? { defaultReasoningEffort: clean(model.defaultEffort) } : {}),
+    ...(cleanString(model.defaultEffort) ? { defaultReasoningEffort: cleanString(model.defaultEffort) } : {}),
     ...(model.priceFactor === undefined ? {} : { creditsMultiplier: model.priceFactor })
   };
 }
@@ -413,13 +414,9 @@ function requiredSession(result: ProviderRunResult): SessionRef {
 }
 
 function required(value: unknown, label: string): string {
-  const text = clean(value);
+  const text = cleanString(value);
   if (!text) throw new Error(`${label} is required`);
   return text;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function numericCursor(value: string | undefined): number {

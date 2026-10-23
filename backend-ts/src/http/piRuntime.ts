@@ -33,6 +33,7 @@ import {
   recordPiRuntimeContextEnvelopeAudit
 } from "../pi/runtimeContextEnvelope.ts";
 import type { AppLanguage } from "../i18n/language.ts";
+import { errorMessage } from "../util/values.ts";
 
 export type PiRuntimeResult = { piSessionId: string; sessionFile: string };
 export type PiRuntimeSession = Awaited<ReturnType<typeof createPiRuntimeSession>>;
@@ -227,7 +228,7 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
   } catch (error) {
     recordPiRuntimeToolRegistryAudit(db, toolAuditInput, unavailablePiRuntimeToolRegistryAudit(error));
     cleanupRuntimeProvider();
-    throw new Error(`PI runtime tool registry unavailable: ${runtimeError(error)}`, { cause: error });
+    throw new Error(`PI runtime tool registry unavailable: ${errorMessage(error)}`, { cause: error });
   }
   try {
     const systemPrompt = buildPiRuntimeSystemPrompt(input, db);
@@ -457,8 +458,4 @@ function isThinkingLevel(value: string): value is ThinkingLevel {
 
 function isFileExistsError(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "EEXIST";
-}
-
-function runtimeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

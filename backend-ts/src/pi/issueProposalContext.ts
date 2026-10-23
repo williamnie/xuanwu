@@ -8,6 +8,7 @@ import {
   type RepoContextPackInput,
   type RepoContextRelevantFile
 } from "./repoContextPack.ts";
+import { arrayValue, cleanString } from "../util/values.ts";
 
 export type IssueProposalContextFields = {
   acceptance_criteria?: unknown;
@@ -26,7 +27,7 @@ export function renderIssueCreateProposalDescription(
   input: IssueProposalContextFields & { description?: unknown; title?: unknown },
   context: IssueProposalContextProject
 ): string {
-  const description = textValue(input.description);
+  const description = cleanString(input.description);
   if (!hasRepoContextFields(input)) return description;
   const pack = createIssueProposalContextPack(input, context);
   return renderRepoContextPackIssueMarkdown(pack, { description });
@@ -97,7 +98,7 @@ function contextIntent(
   raw: Record<string, unknown>,
   input: { description?: unknown; title?: unknown }
 ): string {
-  return textValue(raw.intent) || textValue(raw["需求理解"]) || textValue(input.description) || textValue(input.title) || "Issue proposal";
+  return cleanString(raw.intent) || cleanString(raw["需求理解"]) || cleanString(input.description) || cleanString(input.title) || "Issue proposal";
 }
 
 function contextProject(
@@ -106,9 +107,9 @@ function contextProject(
 ): RepoContextPackInput["project"] {
   const raw = objectValue(rawProject);
   return {
-    cwd: context.project?.cwd || textValue(raw.cwd),
-    id: context.projectID || textValue(raw.id),
-    name: context.project?.name || textValue(raw.name)
+    cwd: context.project?.cwd || cleanString(raw.cwd),
+    id: context.projectID || cleanString(raw.id),
+    name: context.project?.name || cleanString(raw.name)
   };
 }
 
@@ -155,10 +156,6 @@ function mergeArrays(...values: unknown[]): unknown[] {
   return values.flatMap(arrayValue);
 }
 
-function arrayValue(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
 function hasArrayItems(value: unknown): boolean {
   return Array.isArray(value) && value.length > 0;
 }
@@ -191,19 +188,15 @@ function normalizeEvidence(items: unknown[]): RepoContextPackInput["evidence"] {
 }
 
 function normalizeTextList(items: unknown[]): string[] {
-  return [...new Set(items.map(textValue).filter(Boolean))];
+  return [...new Set(items.map(cleanString).filter(Boolean))];
 }
 
 function singleLine(value: string): string {
   return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).join(" / ");
 }
 
-function textValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function cleanText(value: unknown): string {
-  return redactSensitiveText(textValue(value)).split(/\r?\n/).map((line) =>
+  return redactSensitiveText(cleanString(value)).split(/\r?\n/).map((line) =>
     /(?:TOKEN|SECRET|PASSWORD|API[_-]?KEY|ACCESS[_-]?KEY)\s*[:=]/i.test(line)
       ? "[redacted sensitive line]" : line
   ).join("\n").trim();

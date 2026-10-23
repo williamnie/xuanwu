@@ -4,6 +4,7 @@ import {
   type IssueSupervisorEvent,
   type PiActionEvent
 } from "../db/repositories/pi.ts";
+import { cleanString } from "../util/values.ts";
 
 type SupervisorReportScope = {
   delegationID: string;
@@ -72,7 +73,7 @@ function scopeMatches(event: IssueSupervisorEvent, scope: SupervisorReportScope,
 
 function eventMatchesHeartbeat(event: IssueSupervisorEvent, heartbeatID: string): boolean {
   const payload = parseObject(event.payload_json);
-  return clean(payload.heartbeat_id) === heartbeatID || clean(payload.heartbeatID) === heartbeatID;
+  return cleanString(payload.heartbeat_id) === heartbeatID || cleanString(payload.heartbeatID) === heartbeatID;
 }
 
 function supervisorRecoveryAction(event: IssueSupervisorEvent): boolean {
@@ -115,8 +116,4 @@ function parseObject(value: string): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

@@ -7,6 +7,7 @@ import {
   type FrontendCompatHandlers
 } from "./frontendCompatHandlers.ts";
 import type { Router } from "./router.ts";
+import { cleanString } from "../util/values.ts";
 
 export const FRONTEND_COMPATIBILITY_POLICY = {
   authority: "existing-domain-repositories",
@@ -183,7 +184,4 @@ function notificationFilter(request: Request): { projectID: string; unreadOnly: 
     projectID: cleanString(params.get("project_id") || params.get("projectId")),
     unreadOnly: params.get("unread") === "1" || params.get("unread") === "true"
   };
-}
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

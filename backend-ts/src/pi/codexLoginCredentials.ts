@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { CredentialStore, OAuthCredential } from "@earendil-works/pi-ai";
+import { cleanString, objectValue } from "../util/values.ts";
 
 export const CODEX_REFRESH_THRESHOLD_MS = 30 * 60_000;
 export const CODEX_REFRESH_INTERVAL_MS = 10 * 60_000;
@@ -20,34 +21,29 @@ type Snapshot = { credential?: OAuthCredential; account?: string; configured: bo
 const flights = new WeakMap<object, Promise<void>>();
 const refreshBackoffs = new WeakMap<object, { home: string; access: string; retryAt: number; error?: string }>();
 const claimKey = "https://api.openai.com/auth";
-
-function object(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-function string(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
 function claims(token: string): Record<string, unknown> {
-  try { return object(JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8"))); }
+  try { return objectValue(JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8"))); }
   catch { return {}; }
 }
 
 /** Pure read. Neither the raw object nor a refresh/id token leaves this function. */
 function readLogin(home: string): Snapshot {
   let raw: Record<string, unknown>;
-  try { raw = object(JSON.parse(readFileSync(join(home, "auth.json"), "utf8"))); }
+  try { raw = objectValue(JSON.parse(readFileSync(join(home, "auth.json"), "utf8"))); }
   catch (error) {
     return { configured: false, auth_mode: "", error: (error as { code?: string }).code === "ENOENT" ? "codex_login_missing" : "invalid_auth_json" };
   }
-  const tokens = object(raw.tokens);
-  const access = string(tokens.access_token);
-  const rawMode = string(raw.auth_mode) || (access ? "chatgpt" : string(raw.OPENAI_API_KEY) ? "apikey" : "");
+  const tokens = objectValue(raw.tokens);
+  const access = cleanString(tokens.access_token);
+  const rawMode = cleanString(raw.auth_mode) || (access ? "chatgpt" : cleanString(raw.OPENAI_API_KEY) ? "apikey" : "");
   const mode = ["chatgpt", "apikey", "chatgptAuthTokens"].includes(rawMode) ? rawMode : "";
-  const base = { configured: Boolean(access || string(raw.OPENAI_API_KEY)), auth_mode: mode };
+  const base = { configured: Boolean(access || cleanString(raw.OPENAI_API_KEY)), auth_mode: mode };
   if (mode !== "chatgpt") return { ...base, error: "codex_login_unsupported" };
   if (!access) return { ...base, error: "codex_login_missing" };
   const payload = claims(access);
-  const account = string(object(payload[claimKey]).chatgpt_account_id);
-  const fileAccount = string(tokens.account_id);
-  const idAccount = string(object(claims(string(tokens.id_token))[claimKey]).chatgpt_account_id);
+  const account = cleanString(objectValue(payload[claimKey]).chatgpt_account_id);
+  const fileAccount = cleanString(tokens.account_id);
+  const idAccount = cleanString(objectValue(claims(cleanString(tokens.id_token))[claimKey]).chatgpt_account_id);
   if (!account) return { ...base, error: "codex_login_invalid_token" };
   if ((fileAccount && account !== fileAccount) || (idAccount && account !== idAccount)) return { ...base, error: "codex_login_account_mismatch" };
   const expires = typeof payload.exp === "number" ? payload.exp * 1000 : NaN;

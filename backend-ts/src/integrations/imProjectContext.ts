@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { listProjects } from "../db/repositories/projects.ts";
+import { cleanString } from "../util/values.ts";
 
 type ImProjectMapping = { chatId?: string; projectId: string; userId?: string };
 type ImProjectContextStatus = "resolved" | "ambiguous" | "missing";
@@ -65,7 +66,7 @@ function issueProject(text: string, issues: ImProjectContextIssue[]): ImProjectC
   const ids = issueRefs(text);
   if (ids.length === 0) return undefined;
   return ids
-    .map((id) => issues.find((issue) => issue.id === id && clean(issue.project_id) !== ""))
+    .map((id) => issues.find((issue) => issue.id === id && cleanString(issue.project_id) !== ""))
     .find((issue): issue is ImProjectContextIssue => issue !== undefined);
 }
 
@@ -81,10 +82,10 @@ function mappedProject(
   message: ImProjectContextMessage,
   projects: ImProjectContextProject[]
 ): ImProjectContextResult {
-  const known = new Set(projects.map((project) => clean(project.id)).filter(Boolean));
+  const known = new Set(projects.map((project) => cleanString(project.id)).filter(Boolean));
   const ids = [...new Set(mappings
     .filter((mapping) => mappingMatches(mapping, message))
-    .map((mapping) => clean(mapping.projectId))
+    .map((mapping) => cleanString(mapping.projectId))
     .filter((projectID) => projectID !== "" && known.has(projectID)))];
   if (ids.length === 0) return missing("no_source_mapping");
   if (ids.length === 1) return resolved(ids[0], "mapping_default", "medium", "source_mapping_project");
@@ -92,17 +93,17 @@ function mappedProject(
 }
 
 function hasUnresolvedProjectHint(text: string): boolean {
-  const value = clean(text);
+  const value = cleanString(text);
   return /@(?:project:)?[A-Za-z0-9][A-Za-z0-9._-]{2,}/i.test(value) ||
     /(?:在|项目|切到|切换到)\s*[A-Za-z0-9][A-Za-z0-9._-]{2,}/i.test(value) ||
     /\b(?:in|project)\s+[A-Za-z0-9][A-Za-z0-9._-]{2,}\b/i.test(value);
 }
 
 function mappingMatches(mapping: ImProjectMapping, message: ImProjectContextMessage): boolean {
-  const chatID = clean(message.chatId);
-  const senderIDs = new Set([clean(message.senderId), clean(message.senderOpenId)].filter(Boolean));
-  return (clean(mapping.chatId) !== "" && clean(mapping.chatId) === chatID) ||
-    (clean(mapping.userId) !== "" && senderIDs.has(clean(mapping.userId)));
+  const chatID = cleanString(message.chatId);
+  const senderIDs = new Set([cleanString(message.senderId), cleanString(message.senderOpenId)].filter(Boolean));
+  return (cleanString(mapping.chatId) !== "" && cleanString(mapping.chatId) === chatID) ||
+    (cleanString(mapping.userId) !== "" && senderIDs.has(cleanString(mapping.userId)));
 }
 
 function bestProjectMatches(text: string, projects: ImProjectContextProject[]): ProjectMatch[] {
@@ -119,7 +120,7 @@ function projectMatches(project: ImProjectContextProject, normalizedText: string
 }
 
 function projectTokens(project: ImProjectContextProject): string[] {
-  const values = [project.id, project.name].map(clean).filter(Boolean);
+  const values = [project.id, project.name].map(cleanString).filter(Boolean);
   return [...new Set(values.map(normalizeForMatch).filter(Boolean))];
 }
 
@@ -131,7 +132,7 @@ function issueRefs(text: string): number[] {
     /(?:工单|问题|任务)\s*[#号]?\s*(\d+)/g,
     /(?:^|[^\d])(\d+)\s*(?:号|中|里|这个\s*issue)/gi
   ]) {
-    for (const match of clean(text).matchAll(pattern)) {
+    for (const match of cleanString(text).matchAll(pattern)) {
       const id = Number.parseInt(match[1] ?? "", 10);
       if (Number.isSafeInteger(id) && id > 0) refs.push(id);
     }
@@ -166,9 +167,5 @@ function missing(reason: string): ImProjectContextResult {
 }
 
 function normalizeForMatch(value: unknown): string {
-  return clean(value).toLowerCase().replace(/[\s_-]+/g, "");
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return cleanString(value).toLowerCase().replace(/[\s_-]+/g, "");
 }

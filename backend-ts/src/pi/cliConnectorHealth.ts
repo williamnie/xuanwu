@@ -2,6 +2,7 @@ import { basename } from "node:path";
 import { loadCliConnectorRegistry, type CliConnectorDiagnostic, type CliConnectorRef } from "./cliConnectorProvider.ts";
 import { runCliTool } from "./cliToolRunner.ts";
 import type { ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
+import { cleanString } from "../util/values.ts";
 
 type CliConnectorHealthState = "configured" | "disabled" | "misconfigured" | "error";
 
@@ -195,8 +196,4 @@ function diagnosticConnectors(diagnostics: CliConnectorDiagnostic[]): Array<Reco
 
 function publicDiagnostic(item: CliConnectorDiagnostic): CliConnectorDiagnostic {
   return { ...item, path: basename(item.path) };
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

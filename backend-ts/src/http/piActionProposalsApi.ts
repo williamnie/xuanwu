@@ -13,6 +13,7 @@ import {
 } from "./attentionDecisionService.ts";
 import type { ProjectLoopStarter } from "./piActionDispatch.ts";
 import type { Router } from "./router.ts";
+import { arrayValue, cleanString } from "../util/values.ts";
 
 type PiActionProposalContext = {
   bus?: EventBus;
@@ -33,15 +34,15 @@ export function registerPiActionProposalRoutes(router: Router, context: PiAction
 async function createProposalResponse(context: PiActionProposalContext, request: Request): Promise<Response> {
   const body = await objectBody(request);
   return writeResponse(() => createActionProposal(context.database, {
-    actions: arrayBody(body.actions),
+    actions: arrayValue(body.actions),
     confidence: numberBody(body.confidence),
-    evidence_refs: arrayBody(body.evidence_refs),
+    evidence_refs: arrayValue(body.evidence_refs),
     id: cleanString(body.id),
     skill_run_id: cleanString(body.skill_run_id),
-    source_item_ids: arrayBody(body.source_item_ids),
+    source_item_ids: arrayValue(body.source_item_ids),
     status: cleanString(body.status),
     summary: cleanString(body.summary),
-    target_hints: arrayBody(body.target_hints)
+    target_hints: arrayValue(body.target_hints)
   }), 201);
 }
 
@@ -109,18 +110,10 @@ function proposalID(request: Request): string {
   return decodeURIComponent(id);
 }
 
-function arrayBody(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
 function numberBody(value: unknown): number | undefined {
   return typeof value === "number" ? value : undefined;
 }
 
 function cleanParam(value: string | null): string {
   return value?.trim() ?? "";
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

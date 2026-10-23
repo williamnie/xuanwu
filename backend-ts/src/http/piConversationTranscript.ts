@@ -3,6 +3,7 @@ import { open } from "node:fs/promises";
 import { PiHistoryLimitError, piJsonlLines } from "../providers/pi/sessionFileReader.ts";
 import type { PiConversation } from "../db/repositories/pi.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 const LEGACY_APP_SUPPORT_SEGMENT = "/codex-issue-runner-bun-live/";
 const XUANWU_APP_SUPPORT_SEGMENT = "/xuanwu-bun-live/";
@@ -69,7 +70,7 @@ function transcriptItemFromLine(
 ): PiConversationTranscriptItem | null {
   const entry = parseJsonLine(line);
   if (entry.type !== "message") return null;
-  const message = recordValue(entry.message);
+  const message = objectValue(entry.message);
   const role = cleanString(message.role);
   if (role !== "user" && role !== "assistant") return null;
   const error = cleanString(message.errorMessage);
@@ -88,7 +89,7 @@ function parseJsonLine(line: string): Record<string, unknown> {
   const text = line.trim();
   if (text === "") return {};
   try {
-    return recordValue(JSON.parse(text));
+    return objectValue(JSON.parse(text));
   } catch {
     return {};
   }
@@ -107,15 +108,5 @@ function collectMessageText(content: unknown): string {
 }
 
 function contentBlockText(block: unknown): string {
-  return cleanString(recordValue(block).text);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
+  return cleanString(objectValue(block).text);
 }

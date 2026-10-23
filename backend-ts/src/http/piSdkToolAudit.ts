@@ -8,6 +8,7 @@ import { normalizePiActionEnvelope } from "../pi/actionEnvelope.ts";
 import { publishPiActionEvent, recordPiActionAuditEvent } from "../pi/actionEngine.ts";
 import { recordToolCallAuditEvent } from "../pi/toolCallAudit.ts";
 import type { PiRuntimeToolAuditTarget } from "../pi/piRuntimeTools.ts";
+import { cleanString } from "../util/values.ts";
 
 type SdkAuditContext = {
   authorization?: PiGatePolicy;
@@ -277,8 +278,4 @@ function collectText(value: unknown): string {
 
 function errorType(error: unknown): string {
   return error instanceof Error && error.name !== "" ? error.name : "tool_error";
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

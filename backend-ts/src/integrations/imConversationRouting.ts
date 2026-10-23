@@ -6,6 +6,7 @@ import {
   type ImConversationState
 } from "../db/repositories/imConversationState.ts";
 import type { ImInboundMessageV1 } from "./imChannelContracts.ts";
+import { cleanString } from "../util/values.ts";
 
 export type ImConversationRoute = {
   baseConversationId: string;
@@ -99,8 +100,4 @@ function routeView(
 
 function sanitize(value: string): string {
   return cleanString(value).replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "unknown";
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

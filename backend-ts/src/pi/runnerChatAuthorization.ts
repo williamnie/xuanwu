@@ -1,5 +1,6 @@
 import type { PiActionContext } from "./actionEngine.ts";
 import { runnerChatMutationActionTypes } from "./actionContracts.ts";
+import { cleanString, isRecord } from "../util/values.ts";
 
 const RUNNER_CHAT_MUTATION_ACTIONS = new Set(runnerChatMutationActionTypes());
 
@@ -50,10 +51,6 @@ export function isRunnerChatSource(source: unknown): boolean {
   return value === "runner_chat" || value.endsWith("_runner_chat");
 }
 
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function authorizedAction(actionType: string, projectID: string, issueID: number, issueIDs: number[]) {
   if (issueID > 0) return { action_type: actionType, issue_id: issueID };
   if (issueIDs.length > 0) return { action_type: actionType, payload: { issue_ids: issueIDs } };
@@ -69,10 +66,6 @@ function authorizationScope(projectID: string, issueID: number, issueIDs: number
 function authorizationScopes(value: unknown): Array<Record<string, unknown>> {
   if (Array.isArray(value)) return value.filter(isRecord);
   return isRecord(value) ? [value] : [];
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function positiveIssueID(value: unknown): number {

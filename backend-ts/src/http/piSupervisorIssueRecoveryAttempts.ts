@@ -9,6 +9,7 @@ import {
 } from "../db/repositories/pi/recoveryAttempts.ts";
 import { readPiRecoveryBudget } from "../pi/recoveryBudget.ts";
 import { readProjectPiPolicy } from "../db/repositories/pi.ts";
+import { cleanString } from "../util/values.ts";
 
 export function prepareIssueRecoveryAttempt(
   db: RunnerDatabase,
@@ -24,16 +25,16 @@ export function prepareIssueRecoveryAttempt(
     budget_window_started_at: timestamp,
     diagnosis_code: diagnosisCode(payload, input.actionType),
     executing_started_at: input.status === "executing" ? timestamp : "",
-    hard_timeout_at: clean(input.hardTimeoutAt),
+    hard_timeout_at: cleanString(input.hardTimeoutAt),
     id: `recovery-${action.id}`,
     idempotency_key: recoveryAttemptKey(action, payload, input.actionType),
     issue_id: input.issueID,
     project_id: action.project_id,
-    provider_session_id: clean(payload.provider_session_id) || latestRun(db, input.issueID)?.provider_session_id,
-    provider_turn_id: clean(payload.provider_turn_id) || latestRun(db, input.issueID)?.provider_turn_id,
-    run_id: clean(payload.expected_run_id) || latestRun(db, input.issueID)?.id,
+    provider_session_id: cleanString(payload.provider_session_id) || latestRun(db, input.issueID)?.provider_session_id,
+    provider_turn_id: cleanString(payload.provider_turn_id) || latestRun(db, input.issueID)?.provider_turn_id,
+    run_id: cleanString(payload.expected_run_id) || latestRun(db, input.issueID)?.id,
     session_id: sessionKey(payload, latestRun(db, input.issueID)),
-    source_decision_id: clean(payload.decision_id) || action.guardian_decision_id || action.id,
+    source_decision_id: cleanString(payload.decision_id) || action.guardian_decision_id || action.id,
     status: input.status
   });
 }
@@ -48,9 +49,9 @@ export function issueRecoverySnapshot(
   ).get(issueID);
   const run = latestRun(db, issueID);
   return {
-    issue: { status: row?.status ?? "", updated_at: row?.updated_at ?? clean(payload.expected_issue_updated_at) },
+    issue: { status: row?.status ?? "", updated_at: row?.updated_at ?? cleanString(payload.expected_issue_updated_at) },
     run: { status: run?.status ?? "", updated_at: run?.ended_at || run?.started_at || "" },
-    session: { status: clean(payload.expected_session_status), updated_at: clean(payload.expected_session_updated_at) }
+    session: { status: cleanString(payload.expected_session_status), updated_at: cleanString(payload.expected_session_updated_at) }
   };
 }
 
@@ -84,26 +85,22 @@ function recoveryAttemptKey(action: PiAction, payload: Record<string, unknown>, 
     "recovery",
     actionType,
     positiveID(payload.issue_id) || action.issue_id,
-    clean(payload.decision_id) || action.guardian_decision_id || action.id
+    cleanString(payload.decision_id) || action.guardian_decision_id || action.id
   ].join(":");
 }
 
 function sessionKey(payload: Record<string, unknown>, run: IssueRun | undefined): string {
-  const provider = clean(payload.provider) || run?.provider || "codex";
-  const sessionID = clean(payload.provider_session_id) || run?.provider_session_id || "";
+  const provider = cleanString(payload.provider) || run?.provider || "codex";
+  const sessionID = cleanString(payload.provider_session_id) || run?.provider_session_id || "";
   return sessionID === "" ? "" : `${provider}:${sessionID}`;
 }
 
 function diagnosisCode(payload: Record<string, unknown>, fallback: string): string {
-  return clean(payload.diagnosis_code) || clean(payload.reason) || fallback;
+  return cleanString(payload.diagnosis_code) || cleanString(payload.reason) || fallback;
 }
 
 function positiveID(value: unknown): number {
   if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return value;
-  const parsed = Number.parseInt(clean(value), 10);
+  const parsed = Number.parseInt(cleanString(value), 10);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

@@ -16,6 +16,7 @@ import {
   SENSITIVE_KEY_PATTERN,
   statusCodeFromText
 } from "./providerErrorParserSupport.ts";
+import { cleanString } from "../util/values.ts";
 
 const PROVIDER_ERROR_CATEGORIES = [
   "stream_disconnect",
@@ -159,10 +160,6 @@ function hasStructuredProviderError(record: Record<string, unknown>): boolean {
   )) || cleanString(record.error) !== "" && (
     cleanString(record.provider) !== "" || cleanString(record.code) !== "" || cleanString(record.kind) !== ""
   );
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function cleanLower(value: unknown): string {

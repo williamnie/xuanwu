@@ -8,6 +8,7 @@ import {
   createAutomaticallyManagedProject,
   ensureProjectAutomaticTakeover
 } from "../domain/project/automaticTakeover.ts";
+import { cleanString } from "../util/values.ts";
 
 const STATE_PATH_ENV = "XUANWU_CODEX_STATE";
 const HASH_LENGTH = 8;
@@ -179,8 +180,4 @@ function remoteProjectLabel(project: RemoteProject): string {
   const hostID = cleanString(project.hostId);
   const remotePath = cleanString(project.remotePath);
   return hostID === "" ? remotePath : `${hostID}:${remotePath}`;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

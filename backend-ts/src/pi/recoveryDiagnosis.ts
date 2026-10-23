@@ -1,3 +1,5 @@
+import { cleanString } from "../util/values.ts";
+
 export const RECOVERY_DIAGNOSIS_CODES = [
   "provider_eof",
   "stream_disconnect",
@@ -82,9 +84,9 @@ const TRANSIENT_PROVIDER_CATEGORIES = new Set(["network", "rate_limit", "stream_
 const ACTIONABLE_PROVIDER_CATEGORIES = new Set(["auth", "business_failure", "permission", "quota"]);
 
 export function classifyRecoveryDiagnosis(input: RecoveryDiagnosisInput): RecoveryDiagnosisClassification {
-  const status = clean(input.status).toLowerCase();
-  const diagnosis = clean(input.diagnosisCode).toLowerCase();
-  const providerCategory = clean(input.providerErrorCategory).toLowerCase();
+  const status = cleanString(input.status).toLowerCase();
+  const diagnosis = cleanString(input.diagnosisCode).toLowerCase();
+  const providerCategory = cleanString(input.providerErrorCategory).toLowerCase();
   if (UNSAFE_DIAGNOSIS.has(diagnosis)) return diagnosisClassification("unsafe", "urgent", diagnosis);
   if (EXHAUSTED_DIAGNOSIS.has(diagnosis)) return diagnosisClassification("exhausted", "actionable", diagnosis);
   if (NEEDS_CONTEXT_DIAGNOSIS.has(diagnosis)) return diagnosisClassification("needs_context", "actionable", diagnosis);
@@ -105,7 +107,7 @@ export function classifyRecoveryDiagnosis(input: RecoveryDiagnosisInput): Recove
 }
 
 export function isTransientRecoveryDiagnosis(value: string | undefined): boolean {
-  return TRANSIENT_DIAGNOSIS.has(clean(value).toLowerCase());
+  return TRANSIENT_DIAGNOSIS.has(cleanString(value).toLowerCase());
 }
 
 export function isAutomaticRecoveryBlockedDiagnosis(value: string | undefined): boolean {
@@ -130,8 +132,4 @@ function classification(
   evidence: string[]
 ): RecoveryDiagnosisClassification {
   return { diagnosis_code: diagnosis, evidence, failure_class: failureClass, reason, severity };
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

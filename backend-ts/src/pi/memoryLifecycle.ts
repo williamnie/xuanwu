@@ -4,6 +4,7 @@ import {
   getPiMemoryItem,
   updatePiMemoryItem
 } from "../db/repositories/pi.ts";
+import { cleanString } from "../util/values.ts";
 
 export type PiMemoryBatchAction = "disable" | "enable" | "forget" | "pin";
 type PiMemoryBatchInput = { action: PiMemoryBatchAction; ids: string[] };
@@ -33,9 +34,5 @@ function forgetBatch(db: RunnerDatabase, ids: string[]) {
 }
 
 function uniqueIDs(ids: string[]): string[] {
-  return [...new Set(ids.map(clean).filter(Boolean))];
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return [...new Set(ids.map(cleanString).filter(Boolean))];
 }

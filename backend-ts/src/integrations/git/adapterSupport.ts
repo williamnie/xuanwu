@@ -5,6 +5,7 @@ import { redactedUserVisibleText } from "../../util/redact.ts";
 import {
   type RemoteGitMutationResponse
 } from "./remoteProvider.ts";
+import { cleanString } from "../../util/values.ts";
 
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
@@ -41,7 +42,7 @@ export function buildRemoteGitConnectorConfig(input: {
   token_ref: unknown;
   web_base_url: unknown;
 }): RemoteGitConnectorConfig {
-  const tokenRef = cleanText(input.token_ref) || input.default_token_ref;
+  const tokenRef = cleanString(input.token_ref) || input.default_token_ref;
   if (!/^[a-z][a-z0-9+.-]*:\/\/[^\s]+$/i.test(tokenRef)) {
     throw new Error("remote Git token ref must be a secret locator, not a raw credential");
   }
@@ -50,7 +51,7 @@ export function buildRemoteGitConnectorConfig(input: {
     display_name: requiredText(input.display_name, "provider display name", 128),
     git_base_url: cleanBaseUrl(input.git_base_url, input.default_git_base_url, "Git base URL", true),
     provider_id: requiredText(input.provider_id, "provider id", 128),
-    token: cleanText(input.token),
+    token: cleanString(input.token),
     token_ref: tokenRef,
     web_base_url: cleanBaseUrl(input.web_base_url, input.default_web_base_url, "web base URL")
   };
@@ -81,12 +82,8 @@ export function arrayValue(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-function cleanText(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function cleanBaseUrl(value: unknown, fallback: string, label: string, allowFile = false): string {
-  const text = cleanText(value) || fallback;
+  const text = cleanString(value) || fallback;
   let parsed: URL;
   try {
     parsed = new URL(text);
@@ -101,7 +98,7 @@ function cleanBaseUrl(value: unknown, fallback: string, label: string, allowFile
 }
 
 function requiredText(value: unknown, label: string, maximum: number): string {
-  const text = cleanText(value);
+  const text = cleanString(value);
   if (text === "") throw new Error(`${label} is required`);
   if (text.length > maximum) throw new Error(`${label} exceeds ${maximum} characters`);
   if (/\0|\r|\n/.test(text)) throw new Error(`${label} cannot contain control lines`);

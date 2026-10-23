@@ -9,6 +9,7 @@ import {
 import { redactAuditJsonText, redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { cleanString, numberValue, objectValue } from "../util/values.ts";
 
 type PiSupervisorApiContext = { database: RunnerDatabase };
 type RetryAfterEvidence = {
@@ -57,7 +58,7 @@ function issueSupervisorView(db: RunnerDatabase, id: number): Record<string, unk
     issue_id: id,
     latest: {
       created_at: latestDecision?.created_at || providerEvidence?.created_at || "",
-      diagnosis_code: latestDecision?.diagnosis_code || clean(rowValue(providerEvidence, "diagnosis_code")),
+      diagnosis_code: latestDecision?.diagnosis_code || cleanString(rowValue(providerEvidence, "diagnosis_code")),
       executed_recovery_message: recoveryMessage(latestRecovery) || decisionView(latestDecision).recovery_message,
       pi_decision: decisionView(latestDecision),
       provider_error: providerErrorView(providerEvidence),
@@ -78,14 +79,14 @@ function decisionView(event: IssueSupervisorEvent | undefined): Record<string, u
   const decision = objectValue(jsonValue(event?.payload_json ?? "{}").decision);
   return {
     confidence: event?.confidence ?? "",
-    decision: event?.decision || clean(decision.decision),
+    decision: event?.decision || cleanString(decision.decision),
     evidence_refs: stringArray(decision.evidence_refs),
-    expected_outcome: clean(decision.expected_outcome),
-    fallback_if_no_progress: clean(decision.fallback_if_no_progress),
-    rationale: clean(decision.rationale),
-    recovery_message: clean(decision.recovery_message),
-    risk_level: clean(decision.risk_level),
-    wait_until: clean(decision.wait_until) || event?.retry_after_at || ""
+    expected_outcome: cleanString(decision.expected_outcome),
+    fallback_if_no_progress: cleanString(decision.fallback_if_no_progress),
+    rationale: cleanString(decision.rationale),
+    recovery_message: cleanString(decision.recovery_message),
+    risk_level: cleanString(decision.risk_level),
+    wait_until: cleanString(decision.wait_until) || event?.retry_after_at || ""
   };
 }
 
@@ -93,11 +94,11 @@ function providerErrorView(event: IssueSupervisorEvent | IssueEvent | undefined)
   const payload = jsonValue(eventPayload(event));
   const providerError = objectValue(payload.provider_error);
   return {
-    category: clean(rowValue(event, "provider_error_category")) || clean(providerError.category),
-    diagnosis_code: clean(rowValue(event, "diagnosis_code")),
-    provider: clean(rowValue(event, "provider")) || clean(providerError.provider),
-    raw_summary: safeText(clean(payload.raw_summary) || clean(payload.reason) || clean(payload.error)),
-    retry_after_at: clean(rowValue(event, "retry_after_at")) || clean(payload.retry_after_at) || clean(providerError.retry_after_at),
+    category: cleanString(rowValue(event, "provider_error_category")) || cleanString(providerError.category),
+    diagnosis_code: cleanString(rowValue(event, "diagnosis_code")),
+    provider: cleanString(rowValue(event, "provider")) || cleanString(providerError.provider),
+    raw_summary: safeText(cleanString(payload.raw_summary) || cleanString(payload.reason) || cleanString(payload.error)),
+    retry_after_at: cleanString(rowValue(event, "retry_after_at")) || cleanString(payload.retry_after_at) || cleanString(providerError.retry_after_at),
     status_code: numberValue(payload.status_code) || numberValue(providerError.status_code) || 0
   };
 }
@@ -108,9 +109,9 @@ function recoveryActionView(event: IssueSupervisorEvent | undefined): Record<str
     action_id: event?.action_id ?? "",
     action_type: event?.action_type ?? "",
     decision: event?.decision ?? "",
-    outcome: clean(payload.outcome) || clean(payload.status),
-    provider_turn_id: clean(payload.provider_turn_id),
-    retry_after_at: event?.retry_after_at || clean(payload.retry_after_at)
+    outcome: cleanString(payload.outcome) || cleanString(payload.status),
+    provider_turn_id: cleanString(payload.provider_turn_id),
+    retry_after_at: event?.retry_after_at || cleanString(payload.retry_after_at)
   };
 }
 
@@ -144,12 +145,12 @@ function retryAfterView(
 
 function supervisorRetryAfter(event: IssueSupervisorEvent): RetryAfterEvidence | null {
   const payload = jsonValue(event.payload_json);
-  const at = event.retry_after_at || clean(payload.retry_after_at) || clean(objectValue(payload.decision).wait_until);
+  const at = event.retry_after_at || cleanString(payload.retry_after_at) || cleanString(objectValue(payload.decision).wait_until);
   if (!at) return null;
   return {
     at,
     remaining_seconds: 0,
-    reason: event.diagnosis_code || clean(payload.reason),
+    reason: event.diagnosis_code || cleanString(payload.reason),
     source: `supervisor_event:${event.id}`,
     source_event_id: event.action_id || String(event.id)
   };
@@ -158,14 +159,14 @@ function supervisorRetryAfter(event: IssueSupervisorEvent): RetryAfterEvidence |
 function issueRetryAfter(event: IssueEvent): RetryAfterEvidence | null {
   if (event.type !== "issue.retry_after_scheduled") return null;
   const payload = jsonValue(event.payload);
-  const at = clean(payload.retry_after_at);
+  const at = cleanString(payload.retry_after_at);
   if (!at) return null;
   return {
     at,
     remaining_seconds: 0,
-    reason: safeText(clean(payload.reason)),
+    reason: safeText(cleanString(payload.reason)),
     source: `issue_event:${event.id}`,
-    source_event_id: clean(payload.source_event_id) || String(event.id)
+    source_event_id: cleanString(payload.source_event_id) || String(event.id)
   };
 }
 
@@ -181,11 +182,11 @@ function issueRetryRecord(issue: { auto_retry_next_at: string; auto_retry_reason
 
 function recoveryMessage(event: IssueSupervisorEvent | undefined): string {
   const payload = jsonValue(event?.payload_json ?? "{}");
-  return safeText(clean(payload.prompt) || clean(payload.message) || clean(objectValue(payload.decision).recovery_message));
+  return safeText(cleanString(payload.prompt) || cleanString(payload.message) || cleanString(objectValue(payload.decision).recovery_message));
 }
 
 function eventMessage(event: IssueSupervisorEvent): string {
-  return recoveryMessage(event) || clean(decisionView(event).rationale) || clean(providerErrorView(event).raw_summary);
+  return recoveryMessage(event) || cleanString(decisionView(event).rationale) || cleanString(providerErrorView(event).raw_summary);
 }
 
 function latestRetryIssueEvent(events: IssueEvent[]): IssueEvent | undefined {
@@ -215,20 +216,8 @@ function jsonValue(value: unknown): Record<string, unknown> {
   }
 }
 
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
-}
-
-function numberValue(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function safeText(value: string): string {

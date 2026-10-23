@@ -3,6 +3,7 @@ import { gitEventProvider, upsertGitRepoMapping } from "../db/repositories/gitRe
 import { syncGitProviderEvent } from "../integrations/gitEvents.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { cleanString } from "../util/values.ts";
 
 type GitEventsApiContext = { database: RunnerDatabase };
 type JsonObject = Record<string, unknown>;
@@ -44,7 +45,7 @@ async function resyncResponse(context: GitEventsApiContext, request: Request): P
   const results = events.map((value) => {
     const event = object(value, "event");
     return syncGitProviderEvent(context.database, {
-      delivery_id: optionalText(event.delivery_id), event_name: text(event.event_name),
+      delivery_id: cleanString(event.delivery_id), event_name: text(event.event_name),
       payload: object(event.payload, "event.payload"), provider, trigger: "manual"
     });
   });
@@ -67,6 +68,5 @@ function object(value: unknown, label: string): JsonObject {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new HttpError(400, `${label} must be an object`);
   return value as JsonObject;
 }
-function text(value: unknown): string { const output = optionalText(value); if (!output) throw new HttpError(400, "required field is missing"); return output; }
-function optionalText(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
+function text(value: unknown): string { const output = cleanString(value); if (!output) throw new HttpError(400, "required field is missing"); return output; }
 function invalid(error: unknown): HttpError { return error instanceof HttpError ? error : new HttpError(400, error instanceof Error ? error.message : "invalid Git event"); }

@@ -29,6 +29,7 @@ import { recordHandoffDelivery } from "../notifications/handoffNotifier.ts";
 import { githubWorkAcceptanceProblem, githubWorkExecutionContext } from "../integrations/github/issueWorkflow.ts";
 import { assertPriorEvidenceReferences, assertPriorExecutionEvidenceFresh, assertPriorExecutionEvidenceLedgerFresh } from "../domain/acceptance/priorExecutionEvidence.ts";
 import { issueExecutionContext } from "../domain/work/issueExecutionAuthority.ts";
+import { cleanString, errorMessage, nonNegativeInteger, objectValue } from "../util/values.ts";
 
 const PI_ACCEPTANCE_DECISION_EVENT = "issue.pi_acceptance_decision.v1";
 const PI_ACCEPTANCE_APPLIED_EVENT = "issue.pi_acceptance_applied.v1";
@@ -293,7 +294,7 @@ async function continueSameSession(
     return mustGetIssue(db, issue.id);
   } catch (error) {
     if (isProviderInterruptedError(error)) return mustGetIssue(db, issue.id);
-    const message = safeError(error);
+    const message = errorMessage(error);
     recordIssueEvent(db, issue.id, "issue.pi_acceptance_continuation_failed.v1", {
       card_fingerprint: card.fingerprint,
       error: message,
@@ -401,7 +402,7 @@ async function retryInNewSession(
       issueID: issue.id,
       issueRunID: run.id,
       providerID,
-      reportedOutcome: { outcome: "failed", reason: safeError(error) }
+      reportedOutcome: { outcome: "failed", reason: errorMessage(error) }
     });
   }
   return mustGetIssue(db, issue.id);
@@ -578,22 +579,4 @@ function parseJson(value: string): unknown {
   } catch {
     return {};
   }
-}
-
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function nonNegativeInteger(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
-}
-
-function safeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

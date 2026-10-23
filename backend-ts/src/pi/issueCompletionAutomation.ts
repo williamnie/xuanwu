@@ -16,6 +16,7 @@ import type {
 } from "../db/repositories/pi/issueCompletionWatches.ts";
 import type { PiIssueCompletionWatchNotification } from "../db/repositories/pi/issueCompletionWatchAdmin.ts";
 import type { AutomationAudit, AutomationID } from "../domain/automation/contracts.ts";
+import { cleanString } from "../util/values.ts";
 
 const ISSUE_COMPLETION_TERMINAL_STATUSES = new Set([
   "done", "failed", "cancelled"
@@ -32,23 +33,23 @@ export function createIssueCompletionAutomation(
     if (!issue) throw new Error(`issue ${id} not found`);
     return issue;
   });
-  const projectID = clean(input.project_id) || issues[0]?.project_id || "";
+  const projectID = cleanString(input.project_id) || issues[0]?.project_id || "";
   if (!projectID || issues.some((issue) => issue.project_id !== projectID)) throw new Error("issue project_id does not match watch");
   const original = object(input.condition);
   const statuses = Array.isArray(original.terminal_statuses)
-    ? original.terminal_statuses.map(clean).filter((status) => ISSUE_COMPLETION_TERMINAL_STATUSES.has(status))
+    ? original.terminal_statuses.map(cleanString).filter((status) => ISSUE_COMPLETION_TERMINAL_STATUSES.has(status))
     : [...ISSUE_COMPLETION_TERMINAL_STATUSES];
   const target = {
     // W1 callers omitted target_channel because only Feishu existed. Explicit
     // connector ids now pass through unchanged; the fallback only reads that
     // historical API shape.
-    connector_id: clean(input.target_channel) || "feishu",
-    conversation_id: clean(input.target_chat_id),
-    reply_to_message_id: clean(input.target_message_id),
-    thread_id: clean(input.target_thread_id)
+    connector_id: cleanString(input.target_channel) || "feishu",
+    conversation_id: cleanString(input.target_chat_id),
+    reply_to_message_id: cleanString(input.target_message_id),
+    thread_id: cleanString(input.target_thread_id)
   };
-  const requestedID = clean(input.id);
-  const sourceKey = [clean(input.source_event_id), clean(input.source_message_id), projectID, ...issueIDs].join(":");
+  const requestedID = cleanString(input.id);
+  const sourceKey = [cleanString(input.source_event_id), cleanString(input.source_message_id), projectID, ...issueIDs].join(":");
   const audit = automationWatchAudit("create", sourceKey);
   const watch = createAutomationWatch(db, {
     allow_empty_notification_target: true,
@@ -56,10 +57,10 @@ export function createIssueCompletionAutomation(
       match: original.type === "any_terminal" ? "any" : "all",
       metadata: {
         original_condition: original,
-        origin_conversation_id: clean(input.origin_conversation_id),
-        requested_by: clean(input.requested_by),
-        source_event_id: clean(input.source_event_id),
-        source_message_id: clean(input.source_message_id),
+        origin_conversation_id: cleanString(input.origin_conversation_id),
+        requested_by: cleanString(input.requested_by),
+        source_event_id: cleanString(input.source_event_id),
+        source_message_id: cleanString(input.source_message_id),
         target_channel: target.connector_id
       },
       statuses: [...new Set(statuses)].sort(),
@@ -85,8 +86,8 @@ export function listIssueCompletionAutomations(
   db: RunnerDatabase,
   filter: { limit?: number; projectId?: string; status?: string } = {}
 ): PiIssueCompletionWatch[] {
-  const projectID = clean(filter.projectId);
-  const status = clean(filter.status);
+  const projectID = cleanString(filter.projectId);
+  const status = cleanString(filter.status);
   return listAutomationIssueWatches(db)
     .map((watch) => projectIssueCompletionAutomation(db, watch))
     .filter((watch) => !projectID || watch.project_id === projectID)
@@ -102,7 +103,7 @@ export function cancelIssueCompletionAutomation(
   const current = requireWatch(db, id);
   if (current.status !== "active") return current;
   const watch = cancelAutomationWatch(db, current.id as AutomationID, automationWatchAudit("cancel", current.id, reason));
-  db.sqlite.run("update automation_watches set error=? where automation_id=?", [clean(reason), watch.automation_id]);
+  db.sqlite.run("update automation_watches set error=? where automation_id=?", [cleanString(reason), watch.automation_id]);
   return projectIssueCompletionAutomation(db, getAutomationWatch(db, watch.automation_id)!);
 }
 
@@ -173,11 +174,11 @@ function projectIssueCompletionAutomation(db: RunnerDatabase, watch: AutomationW
     idempotency_key: watch.dedupe_key,
     items: watch.subject.issue_ids.map((issueID) => projectItem(db, watch, issueID, projectID)),
     notified_at: watch.notified_at,
-    origin_conversation_id: clean(metadata.origin_conversation_id),
+    origin_conversation_id: cleanString(metadata.origin_conversation_id),
     project_id: projectID,
-    requested_by: clean(metadata.requested_by),
-    source_event_id: clean(metadata.source_event_id),
-    source_message_id: clean(metadata.source_message_id),
+    requested_by: cleanString(metadata.requested_by),
+    source_event_id: cleanString(metadata.source_event_id),
+    source_message_id: cleanString(metadata.source_message_id),
     status,
     target_channel: watch.notification_target.connector_id,
     target_chat_id: watch.notification_target.conversation_id,
@@ -211,12 +212,12 @@ function legacyStatus(watch: AutomationWatch): PiIssueCompletionWatch["status"] 
 
 function requireWatch(db: RunnerDatabase, id: string): PiIssueCompletionWatch {
   const watch = getIssueCompletionAutomation(db, id);
-  if (!watch) throw new Error(`Automation issue completion watch ${clean(id)} not found`);
+  if (!watch) throw new Error(`Automation issue completion watch ${cleanString(id)} not found`);
   return watch;
 }
 
 function automationWatchID(value: string): AutomationID {
-  const text = clean(value);
+  const text = cleanString(value);
   if (text.startsWith("automation:")) return text as AutomationID;
   const slug = text.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 96) || crypto.randomUUID();
   return `automation:watch-${slug}` as AutomationID;
@@ -248,5 +249,3 @@ function object(value: unknown): Record<string, unknown> {
 function boundedLimit(value: unknown): number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? Math.min(value, 100) : 20;
 }
-
-function clean(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }

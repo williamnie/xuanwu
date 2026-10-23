@@ -1,5 +1,6 @@
 import type { RunnerDatabase } from "../database.ts";
 import { normalizeID } from "./piMcpServers.ts";
+import { cleanString } from "../../util/values.ts";
 
 export type PiMcpCapabilityInput = {
   description?: string;
@@ -100,13 +101,13 @@ function normalized(input: PiMcpCapabilityInput, existing?: PiMcpCapability): Pi
   const permission = input.permission ?? existing?.permission ?? (input.kind === "resource" ? "read" : "write");
   const risk = input.risk_level ?? existing?.risk_level ?? (permission === "read" ? "low" : permission === "admin" ? "high" : "medium");
   const readOnly = input.read_only ?? existing?.read_only ?? (permission === "read" && risk === "low");
-  return { description: clean(input.description ?? existing?.description), diagnostics: input.diagnostics ?? existing?.diagnostics ?? [],
+  return { description: cleanString(input.description ?? existing?.description), diagnostics: input.diagnostics ?? existing?.diagnostics ?? [],
     enabled: input.enabled ?? existing?.enabled ?? false, id: input.id || capabilityID(input), input_schema: input.input_schema ?? existing?.input_schema ?? {},
     kind: input.kind, metadata: input.metadata ?? existing?.metadata ?? {}, name: normalizeName(input.name),
     output_schema: input.output_schema ?? existing?.output_schema ?? {}, permission, read_only: readOnly,
     requires_confirmation: input.requires_confirmation ?? existing?.requires_confirmation ?? (risk === "high" || permission === "admin"),
-    risk_level: risk, server_id: input.server_id, source_path: clean(input.source_path ?? existing?.source_path),
-    timeout_ms: positive(input.timeout_ms ?? existing?.timeout_ms) || 10000, uri: clean(input.uri ?? existing?.uri) };
+    risk_level: risk, server_id: input.server_id, source_path: cleanString(input.source_path ?? existing?.source_path),
+    timeout_ms: positive(input.timeout_ms ?? existing?.timeout_ms) || 10000, uri: cleanString(input.uri ?? existing?.uri) };
 }
 
 function capabilityID(input: Pick<PiMcpCapabilityInput, "kind" | "name" | "server_id">): string {
@@ -141,8 +142,4 @@ function json<T>(raw: string, fallback: T): T {
 function positive(value: unknown): number {
   const parsed = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

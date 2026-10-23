@@ -5,6 +5,7 @@ import {
   type ConnectorDeliveryReceipt,
   type OutboundEnvelope
 } from "./channelConnectorContracts.ts";
+import { cleanString } from "../util/values.ts";
 
 /**
  * Generic IM channel layer (design: 2026-08-02-generic-im-channel-telegram-design.md,
@@ -543,8 +544,4 @@ function optionalText(value: unknown, label: string, errors: string[], maximum: 
 
 function result(errors: string[]): Conformance {
   return { errors, ok: errors.length === 0 };
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

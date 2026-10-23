@@ -1,4 +1,5 @@
 import { isToolPermission, type ToolJsonSchema, type ToolPermission } from "./toolProviderEnvelope.ts";
+import { isRecord } from "../util/values.ts";
 
 export type CliCommandTemplate = { executable: string; args?: string[] };
 type CliConnectorAuth = { type: "none" | "env" | "oauth" | "custom"; env?: string[]; description?: string };
@@ -289,10 +290,6 @@ function safeExecutable(value: string): boolean {
 
 function isPositiveInteger(value: unknown): value is number {
   return Number.isInteger(value) && Number(value) > 0;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function jsonError(error: unknown): string {

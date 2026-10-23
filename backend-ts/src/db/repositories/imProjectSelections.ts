@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../database.ts";
+import { cleanString, unique } from "../../util/values.ts";
 
 /**
  * Provider-neutral one-shot project selections (design §13.2). Selecting a
@@ -198,14 +199,6 @@ function parseCandidates(value: string): string[] {
   } catch {
     return [];
   }
-}
-
-function unique(values: string[]): string[] {
-  return [...new Set(values)];
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function optionalString(value: unknown): string {

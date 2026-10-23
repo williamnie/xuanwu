@@ -5,6 +5,7 @@ import { ProjectNotFoundError } from "../db/repositories/projects.ts";
 import { createPendingPiAction, type PiActionContext } from "./actionEngine.ts";
 import { scopedRunnerChatActionContext } from "./runnerChatAuthorization.ts";
 import { IMPLEMENT_WORKFLOW_REF } from "../workflows/implement.ts";
+import { cleanString } from "../util/values.ts";
 
 export type IssueScheduleEnqueueInput = {
   issue_id: number;
@@ -123,8 +124,4 @@ function requiredString(value: unknown, label: string): string {
 
 function cleanObject(input: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined && value !== ""));
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

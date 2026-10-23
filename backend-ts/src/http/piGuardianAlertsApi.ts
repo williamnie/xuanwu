@@ -10,6 +10,7 @@ import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import { guardianAlertPresentation } from "../pi/guardianAlertPresentation.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { cleanString } from "../util/values.ts";
 
 type PiGuardianAlertsContext = { database: RunnerDatabase };
 
@@ -31,10 +32,10 @@ function ackAlertResponse(db: RunnerDatabase, request: Request): Record<string, 
 
 function alertFilter(request: Request): PiGuardianAlertFilter {
   const params = new URL(request.url).searchParams;
-  const status = clean(params.get("status"));
+  const status = cleanString(params.get("status"));
   return {
-    alertType: clean(params.get("alert_type") ?? params.get("alertType")),
-    projectId: clean(params.get("project_id") ?? params.get("projectId")),
+    alertType: cleanString(params.get("alert_type") ?? params.get("alertType")),
+    projectId: cleanString(params.get("project_id") ?? params.get("projectId")),
     status: status === "all" ? undefined : status || "open"
   };
 }
@@ -87,8 +88,4 @@ function safeJson(value: string): unknown {
 
 function safeText(value: string): string {
   return redactAuditText(value);
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

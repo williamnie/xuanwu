@@ -40,6 +40,7 @@ import {
 } from "../db/repositories/workSummary.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import type { Router } from "./router.ts";
+import { cleanString } from "../util/values.ts";
 
 const WORK_HTTP_POLICY_REF = "xuanwu-work-http-authenticated-write-v1";
 const DEFAULT_PAGE_SIZE = 50;
@@ -81,9 +82,9 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
     const projectID = requiredString(body.project_id, "project_id");
     const project = getProject(context.database, projectID);
     if (!project) throw workError(404, "project_not_found", "Project not found");
-    const agentProfileID = optionalString(body.agent_profile_id);
+    const agentProfileID = cleanString(body.agent_profile_id);
     validateWorkExecutionSelection(context, project, agentProfileID);
-    const type = optionalString(body.type) || "engineering_task";
+    const type = cleanString(body.type) || "engineering_task";
     if (!WORK_TYPES.includes(type as typeof WORK_TYPES[number])) {
       throw workError(400, "invalid_request", "type is invalid");
     }
@@ -94,7 +95,7 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
         "objective Work creation is unavailable while Issues remain the write authority"
       );
     }
-    const status = optionalString(body.status) || "triage";
+    const status = cleanString(body.status) || "triage";
     if (status !== "triage" && status !== "todo") {
       throw workError(400, "invalid_request", "status must be triage or todo when creating Work");
     }
@@ -105,7 +106,7 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
       goal: requiredString(body.goal, "goal"),
       project_id: projectID,
       status,
-      ...(optionalString(body.title) ? { title: optionalString(body.title) } : {}),
+      ...(cleanString(body.title) ? { title: cleanString(body.title) } : {}),
       type
     });
     kickProject(context, result.work);
@@ -115,7 +116,7 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
     const work = requireWork(context.database, workID(request));
     const body = await objectBody(request);
     assertKeys(body, ["agent_profile_id", "audit", "depends_on_issue_ids", "expected_revision", "goal", "title"]);
-    const requestedAgentProfileID = Object.hasOwn(body, "agent_profile_id") ? optionalString(body.agent_profile_id) : undefined;
+    const requestedAgentProfileID = Object.hasOwn(body, "agent_profile_id") ? cleanString(body.agent_profile_id) : undefined;
     if (work.status === "in_progress" && requestedAgentProfileID !== undefined && requestedAgentProfileID !== (work.agent_profile_id ?? "")) {
       throw workError(409, "running_work_profile_locked", "running Work agent_profile_id cannot be changed");
     }
@@ -130,7 +131,7 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
         ? { depends_on_issue_ids: positiveIssueIDArray(body.depends_on_issue_ids) ?? [] }
         : {}),
       ...(Object.hasOwn(body, "goal") ? { goal: requiredString(body.goal, "goal") } : {}),
-      ...(Object.hasOwn(body, "title") && optionalString(body.title) ? { title: optionalString(body.title) } : {})
+      ...(Object.hasOwn(body, "title") && cleanString(body.title) ? { title: cleanString(body.title) } : {})
     };
     if (Object.keys(patch).length === 0) throw workError(400, "invalid_request", "Work patch is empty");
     const result = updateIssueBackedWork(context.database, {
@@ -187,8 +188,8 @@ function validateWorkExecutionSelection(
 function boardResponse(db: RunnerDatabase, request: Request, context: ReadApiContext): Record<string, unknown> {
   const params = new URL(request.url).searchParams;
   const source = workSourceParam(params);
-  const query = optionalString(params.get("q")).toLowerCase();
-  const projectID = optionalString(params.get("project_id"));
+  const query = cleanString(params.get("q")).toLowerCase();
+  const projectID = cleanString(params.get("project_id"));
   if (projectID && !getProject(db, projectID)) throw workError(404, "project_not_found", "Project not found");
   const pageSize = positiveIntegerParam(params.get("page_size"), "page_size", 20, MAX_PAGE_SIZE);
   const sort = enumParam(
@@ -225,7 +226,7 @@ function boardResponse(db: RunnerDatabase, request: Request, context: ReadApiCon
 
 function summaryResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
   const params = new URL(request.url).searchParams;
-  const projectID = optionalString(params.get("project_id"));
+  const projectID = cleanString(params.get("project_id"));
   if (projectID && !getProject(db, projectID)) throw workError(404, "project_not_found", "Project not found");
   const requestedIncludeProjects = booleanParam(params.get("include_projects"), "include_projects", !projectID);
   if (projectID && requestedIncludeProjects) {
@@ -248,12 +249,12 @@ function summaryResponse(db: RunnerDatabase, request: Request): Record<string, u
 
 function listResponse(db: RunnerDatabase, request: Request, context: ReadApiContext): Record<string, unknown> {
   const params = new URL(request.url).searchParams;
-  const projectID = optionalString(params.get("project_id"));
+  const projectID = cleanString(params.get("project_id"));
   if (projectID && !getProject(db, projectID)) throw workError(404, "project_not_found", "Project not found");
   const statuses = enumParams(params, "status", WORK_STATUSES);
   const types = enumParams(params, "type", WORK_TYPES);
   const source = workSourceParam(params);
-  const query = optionalString(params.get("q")).toLowerCase();
+  const query = cleanString(params.get("q")).toLowerCase();
   const sort = enumParam(
     params.get("sort"),
     ["created_at", "status", "title", "updated_at"] as const,
@@ -261,7 +262,7 @@ function listResponse(db: RunnerDatabase, request: Request, context: ReadApiCont
     "sort"
   );
   const order = enumParam(params.get("order"), ["asc", "desc"] as const, "desc", "order");
-  const cursorText = optionalString(params.get("cursor"));
+  const cursorText = cleanString(params.get("cursor"));
   if (cursorText && (sort !== "updated_at" || order !== "desc")) {
     throw workError(400, "cursor_sort_unsupported", "cursor only supports updated_at desc");
   }
@@ -356,7 +357,7 @@ function readinessRequirement(value: unknown, index: number): ReadinessRequireme
   }
   return {
     environment: requiredString(item.environment, `requirements[${index}].environment`),
-    ...(optionalString(item.migration_gate) ? { migration_gate: optionalString(item.migration_gate) } : {}),
+    ...(cleanString(item.migration_gate) ? { migration_gate: cleanString(item.migration_gate) } : {}),
     release_window: requiredString(item.release_window, `requirements[${index}].release_window`),
     required_stage: stage as ReadinessRequirement["required_stage"],
     runtime_revision: requiredString(item.runtime_revision, `requirements[${index}].runtime_revision`),
@@ -370,7 +371,7 @@ function timelineResponse(db: RunnerDatabase, request: Request): Record<string, 
   const params = new URL(request.url).searchParams;
   try {
     const result = queryWorkTimeline(db, work.id, {
-        cursor: optionalString(params.get("cursor")) || undefined,
+        cursor: cleanString(params.get("cursor")) || undefined,
         limit: positiveIntegerParam(params.get("limit"), "limit", 50, 500)
       });
     return {
@@ -569,7 +570,7 @@ function decodeWorkCursor(value: string, fingerprint: string): WorkCursorV1 {
 }
 
 function booleanParam(value: string | null, field: string, fallback: boolean): boolean {
-  const raw = optionalString(value).toLowerCase();
+  const raw = cleanString(value).toLowerCase();
   if (raw === "") return fallback;
   if (raw === "true" || raw === "1") return true;
   if (raw === "false" || raw === "0") return false;
@@ -577,7 +578,7 @@ function booleanParam(value: string | null, field: string, fallback: boolean): b
 }
 
 function positiveIntegerParam(value: string | null, field: string, fallback: number, maximum?: number): number {
-  const raw = optionalString(value);
+  const raw = cleanString(value);
   if (raw === "") return fallback;
   if (!/^[0-9]+$/.test(raw)) throw workError(400, "invalid_request", `${field} must be a positive integer`);
   const parsed = Number(raw);
@@ -606,7 +607,7 @@ function enumParam<const T extends readonly string[]>(
   fallback: T[number],
   field: string
 ): T[number] {
-  const requested = optionalString(value);
+  const requested = cleanString(value);
   if (requested === "") return fallback;
   if (!values.includes(requested as T[number])) throw workError(400, "invalid_request", `${field} is invalid`);
   return requested as T[number];
@@ -640,13 +641,9 @@ function objectValue(value: unknown, field: string): Record<string, unknown> {
 }
 
 function requiredString(value: unknown, field: string): string {
-  const text = optionalString(value);
+  const text = cleanString(value);
   if (text === "") throw workError(400, "invalid_request", `${field} is required`);
   return text;
-}
-
-function optionalString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function positiveIssueIDArray(value: unknown): number[] | undefined {

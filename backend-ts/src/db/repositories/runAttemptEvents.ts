@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../database.ts";
 import type { NormalizedRunEvent } from "../../providers/types.ts";
 import { emptyRunCost, type CostUsage, type RunCost } from "../../domain/run/contracts.ts";
 import { issueTimestamp } from "./issueCreate.ts";
+import { objectValue } from "../../util/values.ts";
 
 type AttemptRow = { attempt_id: string; kind: string };
 type Baseline = { cost: RunCost; source_ref: string };
@@ -108,8 +109,4 @@ function moneyDelta(total: RunCost, baseline: RunCost): RunCost["money"] {
 function tokenDelta(total: number | null, baseline: number | null): number | null {
   if (total === null || baseline === null || total < baseline) return null;
   return total - baseline;
-}
-
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }

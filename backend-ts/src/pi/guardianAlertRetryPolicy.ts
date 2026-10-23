@@ -5,6 +5,7 @@ import type {
 } from "../db/repositories/pi/guardianAlerts.ts";
 export { DEFAULT_GUARDIAN_ALERT_MAX_RETRY_COUNT } from "../db/repositories/pi/guardianAlerts.ts";
 import { DEFAULT_GUARDIAN_ALERT_MAX_RETRY_COUNT } from "../db/repositories/pi/guardianAlerts.ts";
+import { isoSeconds } from "../util/values.ts";
 
 type RetryAlert = Pick<
   PiGuardianAlert,
@@ -64,7 +65,7 @@ function nextSentRetryCount(alert: RetryAlert, maxRetry: number): number {
 }
 
 function nextRetryAt(now: Date, retryCount: number, retryAfterSeconds: number | undefined): string {
-  return iso(new Date(now.getTime() + retryDelaySeconds(retryCount, retryAfterSeconds) * 1000));
+  return isoSeconds(new Date(now.getTime() + retryDelaySeconds(retryCount, retryAfterSeconds) * 1000));
 }
 
 function retryDelaySeconds(retryCount: number, retryAfterSeconds: number | undefined): number {
@@ -78,8 +79,4 @@ function maxRetryCount(value: number): number {
 
 function positiveSeconds(value: number | undefined): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.ceil(value) : 0;
-}
-
-function iso(value: Date): string {
-  return value.toISOString().replace(/\.\d{3}Z$/, "Z");
 }

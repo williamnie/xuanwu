@@ -15,6 +15,7 @@ import {
   type ProviderSessionDetailView,
   type ProviderSessionTurn
 } from "../core/sessionView.ts";
+import { cleanString } from "../../util/values.ts";
 
 const PROVIDER = "pi-coding-agent";
 const PI_SESSION_FILE_SUFFIX = ".jsonl";
@@ -78,8 +79,8 @@ export async function resolvePiSessionFile(
 }
 
 function defaultPiSessionRoots(env: NodeJS.ProcessEnv = globalThis.process.env): string[] {
-  const configuredSessionDirectory = clean(env.PI_CODING_AGENT_SESSION_DIR);
-  const configuredAgentDirectory = clean(env.PI_CODING_AGENT_DIR);
+  const configuredSessionDirectory = cleanString(env.PI_CODING_AGENT_SESSION_DIR);
+  const configuredAgentDirectory = cleanString(env.PI_CODING_AGENT_DIR);
   const agentDirectory = configuredAgentDirectory || join(homedir(), ".pi", "agent");
   return [configuredSessionDirectory, join(agentDirectory, "sessions")].filter(Boolean);
 }
@@ -105,11 +106,7 @@ function collectMatches(
 }
 
 function uniqueRoots(roots: readonly string[]): string[] {
-  return [...new Set(roots.map(clean).filter(Boolean))];
-}
-
-function clean(value: string | undefined): string {
-  return value?.trim() ?? "";
+  return [...new Set(roots.map(cleanString).filter(Boolean))];
 }
 
 function isMissingDirectory(error: unknown): boolean {

@@ -6,6 +6,7 @@ import { syncCliRawEvents } from "./cliRawEventSync.ts";
 import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
 import type { ToolCallAuditContext } from "./toolCallAudit.ts";
 import type { AssistantTool, ToolProvider, ToolResult } from "./toolProviderEnvelope.ts";
+import { cleanString, positiveInteger } from "../util/values.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -110,8 +111,8 @@ function selectSourcePullTarget(
     env: options.env
   });
   const providers = snapshot.providers;
-  const providerID = clean(input.providerID);
-  const toolName = clean(input.toolName);
+  const providerID = cleanString(input.providerID);
+  const toolName = cleanString(input.toolName);
   const candidates = sourcePullTargets(providers, snapshot.tools);
   if (providerID !== "") return explicitTarget(input.source, providers, candidates, providerID, toolName);
   const bySource = candidates.filter((target) => target.provider.id === input.source);
@@ -164,21 +165,21 @@ function sourcePullTargets(providers: ToolProvider[], tools: AssistantTool[]): S
 function isRawEventsPullTool(tool: AssistantTool): boolean {
   const outputProperties = objectValue(tool.output_schema?.properties);
   const metadata = objectValue(tool.metadata);
-  return "events" in outputProperties || clean(metadata.source_contract) === "raw_events";
+  return "events" in outputProperties || cleanString(metadata.source_contract) === "raw_events";
 }
 
 function sourcePullToolInput(input: ManualSourcePullInput): JsonObject {
-  const since = clean(input.query.since);
+  const since = cleanString(input.query.since);
   const until = input.now.toISOString();
   return cleanObject({
     attachment_kinds: input.attachmentKinds,
-    cursor: clean(input.cursor),
+    cursor: cleanString(input.cursor),
     limit: positiveInteger(input.limit) || positiveInteger(input.query.limit),
-    message_id: clean(input.messageID || input.query.message_id),
+    message_id: cleanString(input.messageID || input.query.message_id),
     require_attachments: input.requireAttachments === true,
     since,
     source: input.source,
-    thread_key: clean(input.threadKey || input.query.thread_key),
+    thread_key: cleanString(input.threadKey || input.query.thread_key),
     time_window: cleanObject({ since, until }),
     until
   });
@@ -189,7 +190,7 @@ function needsUserFromToolResult(
   target: SourcePullTarget,
   result: ToolResult
 ): ManualSourcePullResult {
-  const code = clean(result.error?.code);
+  const code = cleanString(result.error?.code);
   const reason = result.status === "denied" || /auth|permission|unauthor/i.test(code)
     ? "source_pull_unauthorized"
     : "source_pull_failed";
@@ -247,14 +248,6 @@ function emptyValue(value: unknown): boolean {
   return value === "" || value === undefined || value === null || (Array.isArray(value) && value.length === 0);
 }
 
-function positiveInteger(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
-}
-
 function unique(items: string[]): string[] {
-  return [...new Set(items.map(clean).filter(Boolean))];
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return [...new Set(items.map(cleanString).filter(Boolean))];
 }

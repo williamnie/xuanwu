@@ -5,6 +5,7 @@ import { reflectionReasonCode } from "../pi/memoryReflectionTelemetry.ts";
 import { containsSensitiveMemoryContent } from "../pi/memoryPolicy.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { HttpError } from "./errors.ts";
+import { arrayValue } from "../util/values.ts";
 
 export const MEMORY_DIAGNOSTICS_CONTRACT = "xw.memory-diagnostics.v1";
 const MAX_JSON_BYTES = 65_536;
@@ -151,7 +152,7 @@ function eventView(row: Row) {
     reason_code: kind === "retrieval_snapshot" ? retrieval.reason_code : reasonCode(payload.reason_code),
     acceptance_event_id: number(payload.acceptance_event_id), attempt: number(payload.attempt), started_at: text(payload.started_at),
     captured_for: choice(payload.captured_for ?? payload.phase, ["execution", "recovery"]),
-    memory_refs: references(refs), applicability: array(payload.applicability).slice(0, 24).map(value => {
+    memory_refs: references(refs), applicability: arrayValue(payload.applicability).slice(0, 24).map(value => {
       const item = object(value);
       return { ...memoryRef(item), status: choice(item.status,
         ["requires_current_fact_check", "excluded_not_current_candidate", "excluded_revision_changed"]) };
@@ -210,7 +211,7 @@ function memoryRef(value: unknown) {
       citation_type: text(provenance.citation_type ?? item.citation_type), citation_id: text(provenance.citation_id ?? item.citation_id) } };
 }
 
-function references(value: unknown) { return array(value).slice(0, 24).map(memoryRef); }
+function references(value: unknown) { return arrayValue(value).slice(0, 24).map(memoryRef); }
 function unknownCost() { return { elapsed_ms: null as number | null, input_tokens: null as number | null,
   output_tokens: null as number | null, cache_read_tokens: null as number | null, cache_write_tokens: null as number | null,
   model_calls: null as number | null, completed_calls: null as number | null, input_bytes: null as number | null,
@@ -234,7 +235,6 @@ function object(value: unknown): ObjectValue {
   if (typeof value === "string") { try { return object(JSON.parse(value)); } catch { return {}; } }
   return value && typeof value === "object" && !Array.isArray(value) ? value as ObjectValue : {};
 }
-function array(value: unknown): unknown[] { return Array.isArray(value) ? value : []; }
 function number(value: unknown): number | null { return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null; }
 function choice(value: unknown, values: string[]): string { return typeof value === "string" && values.includes(value) ? value : "unknown"; }
 function text(value: unknown): string | null {

@@ -14,6 +14,7 @@ import { redactAuditJsonText, redactAuditText } from "../../db/repositories/pi/a
 import { queryEventSummaries, type PublicEventSummary } from "../../events/eventSummaryQuery.ts";
 import { issueIDToWorkID, workIDToIssueID } from "./issueAdapter.ts";
 import type { WorkID } from "./contracts.ts";
+import { cleanString } from "../../util/values.ts";
 
 const WORK_TIMELINE_SCHEMA_VERSION = "xuanwu.work-timeline.v1" as const;
 const WORK_TIMELINE_NODE_KINDS = [
@@ -193,7 +194,7 @@ function workEventNode(workID: WorkID, issueID: number, event: WorkEvent): WorkT
 
 function issueEventNodes(workID: WorkID, issueID: number, event: PublicEventSummary): WorkTimelineNode[] {
   const payload = jsonObject(event.payload);
-  const status = text(payload.status) || event.type;
+  const status = cleanString(payload.status) || event.type;
   const kind = issueEventKind(event.type);
   return [timelineNode({
     eventName: issueEventName(event.type),
@@ -523,8 +524,4 @@ function jsonObject(value: unknown): Record<string, unknown> {
 
 function cleanText(value: unknown): string {
   return redactAuditText(typeof value === "string" ? value.trim() : "");
-}
-
-function text(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

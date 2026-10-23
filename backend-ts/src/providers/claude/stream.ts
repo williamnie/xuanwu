@@ -1,6 +1,7 @@
 import { redactSensitiveText } from "../../util/redact.ts";
 import { normalizedRunEvent, providerEventSourceRef, providerRunCost, unknownRunEvent } from "../runEvents.ts";
 import type { NormalizedRunEvent, ProviderEvent, SessionRef } from "../types.ts";
+import { objectValue } from "../../util/values.ts";
 
 const PROVIDER = "claude";
 const RAW_LIMIT = 240;
@@ -99,7 +100,7 @@ function contentEvent(item: Record<string, unknown>, state: ParseState, raw: Pro
 }
 
 function userToolEvents(record: Record<string, unknown>, state: ParseState, raw: ProviderEvent["raw"]): ProviderEvent[] {
-  const topLevel = recordValue(record["tool_use_result"]);
+  const topLevel = objectValue(record["tool_use_result"]);
   if (Object.keys(topLevel).length > 0) return textEvent(toolResultText(topLevel, state), state, raw, "tool");
   return contentArray(recordField(record, "message"), "content")
     .filter((item) => stringField(item, "type") === "tool_result")
@@ -282,7 +283,7 @@ function streamLines(input: string): string[] {
 }
 
 function parseRecord(text: string): Record<string, unknown> | undefined {
-  try { return recordValue(JSON.parse(text)); } catch { return undefined; }
+  try { return objectValue(JSON.parse(text)); } catch { return undefined; }
 }
 
 function toolCommand(item: Record<string, unknown>, state: ParseState): string {
@@ -312,7 +313,7 @@ function redact(value: string, state: ParseState): string {
 function redactPayload(value: unknown, state: ParseState): unknown {
   if (typeof value === "string") return redact(value, state);
   if (Array.isArray(value)) return value.map((item) => redactPayload(item, state));
-  const record = recordValue(value);
+  const record = objectValue(value);
   if (Object.keys(record).length === 0) return value;
   return Object.fromEntries(Object.entries(record).map(([key, item]) => [key, sensitiveKey(key) ? "[redacted]" : redactPayload(item, state)]));
 }
@@ -328,15 +329,11 @@ function rawSummary(method: string, payload: unknown): string {
 
 function contentArray(record: Record<string, unknown>, key: string): Record<string, unknown>[] {
   const items = Array.isArray(record[key]) ? record[key] as unknown[] : [];
-  return items.map(recordValue).filter((item) => Object.keys(item).length > 0);
+  return items.map(objectValue).filter((item) => Object.keys(item).length > 0);
 }
 
 function recordField(raw: Record<string, unknown>, key: string): Record<string, unknown> {
-  return recordValue(raw[key]);
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return objectValue(raw[key]);
 }
 
 function stringField(raw: Record<string, unknown>, key: string): string {

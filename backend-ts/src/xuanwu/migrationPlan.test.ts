@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { unique } from "../util/values.ts";
 
 type DependencyNode = {
   depends_on: string[];
@@ -268,8 +269,4 @@ function phaseCounts(nodes: readonly RoadmapNode[]): Record<string, number> {
     counts[phase] = (counts[phase] ?? 0) + 1;
   }
   return counts;
-}
-
-function unique<T>(values: readonly T[]): T[] {
-  return [...new Set(values)];
 }

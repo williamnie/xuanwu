@@ -82,6 +82,7 @@ import {
   scheduleSystemRestart,
   type SystemRestartAuditEvent
 } from "../http/systemRestartApi.ts";
+import { cleanString } from "../util/values.ts";
 
 export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionLayer & PiRepoReadActionLayer & {
   commentIssue(input: IssueCommentInput): unknown;
@@ -953,8 +954,4 @@ function cleanObjectPayload(input: Record<string, unknown>): Record<string, unkn
   return Object.fromEntries(Object.entries(input).filter(([, value]) => (
     Array.isArray(value) ? value.length > 0 : value !== undefined && value !== ""
   )));
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

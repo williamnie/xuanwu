@@ -1,3 +1,5 @@
+import { cleanString } from "../util/values.ts";
+
 export const PI_RUNTIME_PROMPT_PROFILES = [
   "chat",
   "acceptance",
@@ -19,8 +21,4 @@ export function resolvePiChatToolMode(
   return cleanString(env.XUANWU_PI_CHAT_TOOL_SURFACE).toLowerCase() === "legacy_full"
     ? "legacy_full"
     : "full";
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

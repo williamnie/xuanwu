@@ -7,6 +7,7 @@ import type {
 } from "../db/repositories/contextBundles.ts";
 import type { ExternalEventRecord } from "../db/repositories/externalEvents.ts";
 import { untrustedSourceReference } from "../security/promptInjectionDefense.ts";
+import { cleanString } from "../util/values.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -266,10 +267,6 @@ function positiveInteger(value: unknown, fallback: number): number {
 
 function firstText(...values: unknown[]): string {
   return values.map(cleanString).find(Boolean) ?? "";
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function objectValue(value: unknown): JsonObject {

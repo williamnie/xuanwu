@@ -1,6 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
+import { cleanString } from "../../util/values.ts";
 
 const CLAUDE_ENVIRONMENT_AUTH_KEYS = [
   "ANTHROPIC_API_KEY",
@@ -54,16 +55,16 @@ export function claudeProcessEnvironment(
 }
 
 export function environmentAuthenticationStatus(env: Record<string, string>): ClaudeAuthenticationStatus {
-  if (clean(env.ANTHROPIC_API_KEY)) return { configured: true, mode: "environment", source: "api_key" };
-  if (clean(env.ANTHROPIC_AUTH_TOKEN)) return { configured: true, mode: "environment", source: "auth_token" };
-  if (clean(env.CLAUDE_CODE_OAUTH_TOKEN)) return { configured: true, mode: "environment", source: "claude_oauth_token" };
+  if (cleanString(env.ANTHROPIC_API_KEY)) return { configured: true, mode: "environment", source: "api_key" };
+  if (cleanString(env.ANTHROPIC_AUTH_TOKEN)) return { configured: true, mode: "environment", source: "auth_token" };
+  if (cleanString(env.CLAUDE_CODE_OAUTH_TOKEN)) return { configured: true, mode: "environment", source: "claude_oauth_token" };
   return { configured: false, mode: "environment", source: "none", reason: "Claude SDK environment authentication is not configured" };
 }
 
 function platformProfileStatus(config: ProviderRuntimeConfig): ClaudeAuthenticationStatus {
   const environment = claudeProcessEnvironment(config);
-  const configDir = clean(config.platformConfigDir)
-    || clean(environment.ANTHROPIC_CONFIG_DIR)
+  const configDir = cleanString(config.platformConfigDir)
+    || cleanString(environment.ANTHROPIC_CONFIG_DIR)
     || defaultAnthropicConfigDir(environment);
   if (!configDir) return missingProfile("Anthropic platform profile config directory is unavailable");
   const profile = resolveProfileName(config.platformProfile, environment, configDir);
@@ -71,9 +72,9 @@ function platformProfileStatus(config: ProviderRuntimeConfig): ClaudeAuthenticat
   const profilePath = join(configDir, "configs", `${profile}.json`);
   const document = readProfile(profilePath);
   if (!document) return missingProfile("Anthropic platform profile config is missing or invalid", profile, configDir);
-  const authType = clean(document.authentication?.type);
+  const authType = cleanString(document.authentication?.type);
   if (authType === "user_oauth") {
-    const configuredPath = clean(document.authentication?.credentials_path);
+    const configuredPath = cleanString(document.authentication?.credentials_path);
     const credentialsPath = configuredPath
       ? (isAbsolute(configuredPath) ? configuredPath : join(configDir, configuredPath))
       : join(configDir, "credentials", `${profile}.json`);
@@ -87,13 +88,13 @@ function platformProfileStatus(config: ProviderRuntimeConfig): ClaudeAuthenticat
     };
   }
   if (authType === "oidc_federation") {
-    const identityPath = clean(document.authentication?.identity_token?.path)
-      || clean(environment.ANTHROPIC_IDENTITY_TOKEN_FILE);
-    const inlineIdentity = clean(environment.ANTHROPIC_IDENTITY_TOKEN);
+    const identityPath = cleanString(document.authentication?.identity_token?.path)
+      || cleanString(environment.ANTHROPIC_IDENTITY_TOKEN_FILE);
+    const inlineIdentity = cleanString(environment.ANTHROPIC_IDENTITY_TOKEN);
     const identityReady = inlineIdentity !== "" || (identityPath !== "" && privateRegularFile(identityPath));
-    const fieldsReady = clean(document.authentication?.federation_rule_id) !== ""
-      && clean(document.authentication?.service_account_id) !== ""
-      && clean(document.organization_id) !== "";
+    const fieldsReady = cleanString(document.authentication?.federation_rule_id) !== ""
+      && cleanString(document.authentication?.service_account_id) !== ""
+      && cleanString(document.organization_id) !== "";
     const configured = identityReady && fieldsReady;
     return {
       configured,
@@ -113,10 +114,10 @@ function platformProfileStatus(config: ProviderRuntimeConfig): ClaudeAuthenticat
 }
 
 function resolveProfileName(configured: string | undefined, environment: Record<string, string | undefined>, configDir: string): string {
-  const explicit = clean(configured) || clean(environment.ANTHROPIC_PROFILE);
+  const explicit = cleanString(configured) || cleanString(environment.ANTHROPIC_PROFILE);
   if (explicit) return explicit;
   try {
-    return clean(readFileSync(join(configDir, "active_config"), "utf8")) || "default";
+    return cleanString(readFileSync(join(configDir, "active_config"), "utf8")) || "default";
   } catch {
     return "default";
   }
@@ -141,8 +142,8 @@ function privateRegularFile(path: string): boolean {
 }
 
 function defaultAnthropicConfigDir(environment: Record<string, string | undefined>): string {
-  if (process.platform === "win32") return clean(environment.APPDATA) ? join(clean(environment.APPDATA), "Anthropic") : "";
-  const base = clean(environment.XDG_CONFIG_HOME) || (clean(environment.HOME) ? join(clean(environment.HOME), ".config") : "");
+  if (process.platform === "win32") return cleanString(environment.APPDATA) ? join(cleanString(environment.APPDATA), "Anthropic") : "";
+  const base = cleanString(environment.XDG_CONFIG_HOME) || (cleanString(environment.HOME) ? join(cleanString(environment.HOME), ".config") : "");
   return base ? join(base, "anthropic") : "";
 }
 
@@ -170,11 +171,7 @@ function missingProfile(reason: string, profile = "", configDir = ""): ClaudeAut
 }
 
 function summarizeConfigDir(configDir: string): string {
-  const home = clean(Bun.env.HOME);
+  const home = cleanString(Bun.env.HOME);
   if (home && configDir === join(home, ".config", "anthropic")) return "<home>/.config/anthropic";
   return configDir ? "<configured>" : "";
-}
-
-function clean(value: string | undefined): string {
-  return value?.trim() ?? "";
 }

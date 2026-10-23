@@ -11,6 +11,7 @@ import type {
   ToolEnvelopeMetadata,
   ToolProvider
 } from "./toolProviderEnvelope.ts";
+import { cleanString, errorMessage } from "../util/values.ts";
 
 type CliConnectorRegistryOptions = {
   env?: Record<string, string | undefined>;
@@ -87,7 +88,7 @@ function manifestFiles(dir: string, diagnostics: CliConnectorDiagnostic[]): stri
     return readdirSync(dir).filter((name) => name.endsWith(".json"))
       .map((name) => join(dir, name));
   } catch (error) {
-    diagnostics.push(diagnostic("directory_unavailable", dir, safeMessage(error)));
+    diagnostics.push(diagnostic("directory_unavailable", dir, errorMessage(error)));
     return [];
   }
 }
@@ -117,7 +118,7 @@ function readManifest(path: string, diagnostics: CliConnectorDiagnostic[]) {
   try {
     return parseCliConnectorManifestJson(readFileSync(path, "utf8"));
   } catch (error) {
-    diagnostics.push(diagnostic("manifest_unreadable", path, safeMessage(error), providerIDHint(path)));
+    diagnostics.push(diagnostic("manifest_unreadable", path, errorMessage(error), providerIDHint(path)));
     return undefined;
   }
 }
@@ -273,12 +274,4 @@ function providerIDHint(path: string): string | undefined {
 
 function unique<T>(items: T[]): T[] {
   return [...new Set(items)];
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function safeMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

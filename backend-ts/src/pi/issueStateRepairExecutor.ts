@@ -13,6 +13,7 @@ import {
   stableJson,
   type IssueStateSnapshot
 } from "./issueStateSnapshot.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 export function applyIssueStateRepair(db: RunnerDatabase, payload: Record<string, unknown>): unknown {
   const issueID = positiveID(payload.issue_id);
@@ -40,7 +41,7 @@ function executeRepair(
   payload: Record<string, unknown>
 ): unknown {
   if (operation === "enqueue") return enqueueIssue(db, issueID);
-  const patch = objectPayload(payload.patch);
+  const patch = objectValue(payload.patch);
   if (operation === "request_pi_decision") {
     reconcileTerminalRuntime(db, issueID, payload);
     return requestIssuePiAcceptance(db, issueID, {
@@ -175,10 +176,6 @@ function reconcileTerminalRuntime(
 
 const TERMINAL_SESSION_STATUSES = new Set(["aborted", "cancelled", "completed", "done", "error", "failed", "stopped"]);
 
-function objectPayload(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 function requiredString(value: unknown, key: string): string {
   const text = cleanString(value);
   if (text === "") throw new Error(`${key} is required`);
@@ -188,10 +185,6 @@ function requiredString(value: unknown, key: string): string {
 function positiveID(value: unknown): number {
   if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return value;
   throw new Error("issue_id is required");
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function normalize(value: string): string {

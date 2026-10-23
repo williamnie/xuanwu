@@ -1,3 +1,5 @@
+import { cleanString } from "../util/values.ts";
+
 type SkillPolicy = {
   allowed?: string[];
   recommended?: string[];
@@ -70,8 +72,4 @@ function assertValidSkillIntentID(id: string): void {
   if (id.length > MAX_SKILL_INTENT_ID_LENGTH || !SKILL_INTENT_ID_RE.test(id)) {
     throw new Error(`skill id 不合法: ${id}`);
   }
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

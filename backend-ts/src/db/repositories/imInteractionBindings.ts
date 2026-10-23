@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { RunnerDatabase } from "../database.ts";
+import { cleanString } from "../../util/values.ts";
 
 /**
  * Provider-neutral interaction transport bindings (design §13.3). A binding
@@ -425,8 +426,4 @@ function optionalString(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (typeof value !== "string") throw new Error("expected string row value");
   return value.trim();
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

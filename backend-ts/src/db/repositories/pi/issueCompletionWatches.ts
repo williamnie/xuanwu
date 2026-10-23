@@ -9,6 +9,7 @@ import {
   optionalString,
   requiredString
 } from "./common.ts";
+import { placeholders } from "../../sql.ts";
 
 type PiIssueCompletionWatchStatus = "active" | "satisfied" | "notified" | "cancelled" | "failed";
 export type PiIssueCompletionWatch = {
@@ -295,8 +296,4 @@ function terminalStatus(status: string, condition: unknown): boolean {
 function watchStatus(value: unknown): PiIssueCompletionWatchStatus {
   const status = optionalString(value) as PiIssueCompletionWatchStatus;
   return ["active", "satisfied", "notified", "cancelled", "failed"].includes(status) ? status : "active";
-}
-
-function placeholders(count: number): string {
-  return Array.from({ length: count }, () => "?").join(", ");
 }

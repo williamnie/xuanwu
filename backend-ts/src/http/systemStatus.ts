@@ -21,6 +21,7 @@ import { runProgressProjectionStatus } from "../db/repositories/runProgress.ts";
 import { isSensitiveFieldName } from "../security/redactionRegistry.ts";
 import { buildRuntimeObservability } from "../observability/runtimeObservability.ts";
 import { PROCESS_GROUP_MEMORY_CONTRACT } from "../observability/processGroupMemory.ts";
+import { objectValue } from "../util/values.ts";
 
 type SystemStatusContext = {
   authEnabled: boolean;
@@ -584,7 +585,7 @@ function systemHealth(status: {
     reasons.push(healthReason("provider_unavailable", "warning", `provider:${provider.id}`, `${provider.label} is unavailable`));
   }
   for (const connector of status.connector_health) {
-    const health = object(connector.health);
+    const health = objectValue(connector.health);
     const state = String(health.state ?? connector.state ?? "");
     if (["failed", "degraded", "disconnected", "rate_limited", "revoked"].includes(state)) {
       reasons.push(healthReason(
@@ -601,11 +602,11 @@ function systemHealth(status: {
   if (Number(status.run_progress_projection.stalled_runs ?? 0) > 0) {
     reasons.push(healthReason("run_progress_stalled", "warning", "run_progress_projection", `${Number(status.run_progress_projection.stalled_runs)} runs stalled`));
   }
-  const healthSignals = object(status.observability.health_signals);
+  const healthSignals = objectValue(status.observability.health_signals);
   for (const signal of arrayObjects(healthSignals.reasons)) {
     reasons.push(healthReason(String(signal.code ?? "observability_degraded"), "warning", String(signal.source_ref ?? "observability"), `${Number(signal.count ?? 0)} affected`));
   }
-  const memoryBudget = object(status.process_group_memory.budget);
+  const memoryBudget = objectValue(status.process_group_memory.budget);
   if (memoryBudget.status === "hard_exceeded" || memoryBudget.status === "soft_exceeded") {
     reasons.push(healthReason(
       "process_group_memory_budget_exceeded",
@@ -636,12 +637,8 @@ function healthReason(code: string, severity: "critical" | "warning", sourceRef:
   return { code, severity, source_ref: sourceRef, message: redactSensitiveText(message) };
 }
 
-function object(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 function arrayObjects(value: unknown): Array<Record<string, unknown>> {
-  return Array.isArray(value) ? value.map(object) : [];
+  return Array.isArray(value) ? value.map(objectValue) : [];
 }
 
 function roundedMs(value: number): number {

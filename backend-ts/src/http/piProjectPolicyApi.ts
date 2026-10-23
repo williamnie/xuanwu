@@ -5,6 +5,7 @@ import { normalizeMcpCapabilityList } from "../mcp/policy.ts";
 import { normalizeSkillIntentList } from "../skills/intents.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { cleanString } from "../util/values.ts";
 
 type PiProjectPolicyContext = { database: RunnerDatabase };
 const SUPERVISOR_WAIT_POLICIES = new Set(["respect_retry_after", "default_cooldown", "ask"]);
@@ -114,7 +115,7 @@ function objectField(body: Record<string, unknown>, keys: string[], label: strin
 function objectValue(value: unknown, label: string): unknown {
   if (value === undefined || value === null) return undefined;
   if (value && typeof value === "object" && !Array.isArray(value)) return value;
-  const text = stringValue(value);
+  const text = cleanString(value);
   if (text === "") return undefined;
   try {
     const parsed = JSON.parse(text) as unknown;
@@ -160,7 +161,7 @@ function actionList(value: unknown, label: string): string[] {
 
 function parseList(value: unknown): string[] {
   if (Array.isArray(value)) return value.map(String);
-  const text = stringValue(value);
+  const text = cleanString(value);
   if (text === "") return [];
   try {
     const parsed = JSON.parse(text) as unknown;
@@ -173,7 +174,7 @@ function cleanActionList(values: string[], label: string): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const value of values) {
-    const id = stringValue(value).toLowerCase();
+    const id = cleanString(value).toLowerCase();
     if (id === "") continue;
     if (id.length > 128 || !/^[a-z0-9_.:-]+$/.test(id)) throw new HttpError(400, `${label} id 不合法: ${id}`);
     if (!seen.has(id)) out.push(id);
@@ -184,7 +185,7 @@ function cleanActionList(values: string[], label: string): string[] {
 
 function supervisorWaitPolicy(body: Record<string, unknown>): string | undefined {
   if (!Object.hasOwn(body, "supervisor_rate_limit_wait_policy")) return undefined;
-  const mode = stringValue(body.supervisor_rate_limit_wait_policy);
+  const mode = cleanString(body.supervisor_rate_limit_wait_policy);
   if (SUPERVISOR_WAIT_POLICIES.has(mode)) return mode;
   throw new HttpError(400, "supervisor_rate_limit_wait_policy 不合法");
 }
@@ -192,7 +193,7 @@ function supervisorWaitPolicy(body: Record<string, unknown>): string | undefined
 function positiveIntegerField(body: Record<string, unknown>, key: string): number | undefined {
   if (!Object.hasOwn(body, key)) return undefined;
   const value = body[key];
-  const number = typeof value === "number" ? value : Number(stringValue(value));
+  const number = typeof value === "number" ? value : Number(cleanString(value));
   if (Number.isInteger(number) && number > 0) return number;
   throw new HttpError(400, `${key} 必须是正整数`);
 }
@@ -201,15 +202,11 @@ function unlimitedProjectRecoveryField(body: Record<string, unknown>): number | 
   const key = "supervisor_max_recoveries_per_project_per_hour";
   if (!Object.hasOwn(body, key)) return undefined;
   const value = body[key];
-  const number = typeof value === "number" ? value : Number(stringValue(value));
+  const number = typeof value === "number" ? value : Number(cleanString(value));
   if (Number.isInteger(number) && number >= 0) return 0;
   throw new HttpError(400, `${key} 必须是非负整数；0 表示项目级不限制`);
 }
 
 function stringField(body: Record<string, unknown>, key: string): string | undefined {
-  return Object.hasOwn(body, key) ? stringValue(body[key]) : undefined;
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return Object.hasOwn(body, key) ? cleanString(body[key]) : undefined;
 }

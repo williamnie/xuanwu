@@ -1,4 +1,5 @@
 import type { AttentionInboxItemRecord } from "../db/repositories/intakeRuns.ts";
+import { cleanString, numberValue } from "../util/values.ts";
 
 type JsonObject = Record<string, unknown>;
 type ActionRisk = "low" | "medium" | "high";
@@ -168,13 +169,5 @@ function shouldWatch(item: AttentionInboxItemRecord): boolean {
 
 function ambiguousProject(item: AttentionInboxItemRecord): boolean {
   const hints = item.target_hints.filter((hint) => hint.kind === "project" && cleanString(hint.id) !== "");
-  return hints.length !== 1 || confidence(hints[0].confidence) < 0.8;
-}
-
-function confidence(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return hints.length !== 1 || numberValue(hints[0].confidence) < 0.8;
 }

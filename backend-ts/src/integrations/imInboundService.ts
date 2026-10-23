@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { upsertExternalEvent, type ExternalEventRecord } from "../db/repositories/externalEvents.ts";
 import type { InboundEnvelope } from "./channelConnectorContracts.ts";
 import { validateImInboundMessage, type ImInboundMessageV1 } from "./imChannelContracts.ts";
+import { cleanString } from "../util/values.ts";
 
 /**
  * Single provider-neutral inbox writer. Channel adapters normalize transport
@@ -79,8 +80,4 @@ function attachmentSummary(message: ImInboundMessageV1): string {
   return message.attachments.length === 0
     ? `[empty ${message.connector_id} message]`
     : `[${message.attachments.length} ${message.connector_id} attachment metadata item(s)]`;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

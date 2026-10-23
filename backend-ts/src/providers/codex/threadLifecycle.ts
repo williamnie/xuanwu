@@ -1,4 +1,5 @@
 import { redactSensitiveText } from "../../util/redact.ts";
+import { objectValue } from "../../util/values.ts";
 
 const PROVIDER_CODEX = "codex";
 
@@ -98,7 +99,7 @@ export function normalizeThreadStartResult(value: unknown): ThreadStartResult {
 }
 
 export function normalizeThreadListResult(value: unknown): ThreadListResult {
-  const raw = recordValue(value);
+  const raw = objectValue(value);
   return {
     data: arrayField(raw, ["data", "threads"], value).map(normalizeThread).filter((item) => item.provider_session_id !== ""),
     nextCursor: stringField(raw, "nextCursor") || stringField(raw, "next_cursor") || undefined,
@@ -107,22 +108,22 @@ export function normalizeThreadListResult(value: unknown): ThreadListResult {
 }
 
 export function normalizeThreadTurnsListResult(value: unknown): ThreadTurnsListResult {
-  const raw = recordValue(value);
+  const raw = objectValue(value);
   return {
-    data: arrayField(raw, ["data", "turns"], value).map(recordValue),
+    data: arrayField(raw, ["data", "turns"], value).map(objectValue),
     nextCursor: stringField(raw, "nextCursor") || stringField(raw, "next_cursor") || undefined,
     backwardsCursor: stringField(raw, "backwardsCursor") || stringField(raw, "backwards_cursor") || undefined
   };
 }
 
 export function normalizeThreadResult(value: unknown): ThreadSummary {
-  const raw = recordValue(value);
+  const raw = objectValue(value);
   return normalizeThread(raw.thread ?? raw.data ?? value);
 }
 
 export function normalizeTurnStartResult(threadID: string, value: unknown): TurnStartResult {
-  const raw = recordValue(value);
-  const turn = recordValue(raw.turn ?? raw.data ?? value);
+  const raw = objectValue(value);
+  const turn = objectValue(raw.turn ?? raw.data ?? value);
   const turnID = stringField(turn, "id") || stringField(raw, "turnId") || stringField(raw, "turn_id");
   return { provider: PROVIDER_CODEX, sessionId: threadID.trim(), provider_session_id: threadID.trim(), turn_id: turnID };
 }
@@ -187,7 +188,7 @@ export function localImageInput(path: string, detail: "high" | "original" = "hig
 }
 
 function normalizeThread(value: unknown): ThreadSummary {
-  const raw = recordValue(value);
+  const raw = objectValue(value);
   const rawID = threadID(raw);
   const thread = {
     id: providerSessionKey(rawID),
@@ -253,17 +254,13 @@ function providerSessionKey(sessionID: string): string {
 
 function isRunningStatus(value: unknown): boolean {
   if (typeof value === "string") return isRunningText(value);
-  const raw = recordValue(value);
+  const raw = objectValue(value);
   return ["type", "state", "status"].some((key) => isRunningText(stringField(raw, key)));
 }
 
 function isRunningText(value: string): boolean {
   return ["running", "inprogress", "in-progress", "streaming", "busy", "active"]
     .includes(value.trim().toLowerCase().replaceAll("_", "-"));
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function arrayField(raw: Record<string, unknown>, keys: string[], direct?: unknown): unknown[] {

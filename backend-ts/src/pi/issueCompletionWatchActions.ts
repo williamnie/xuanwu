@@ -13,6 +13,7 @@ import {
   createSupervisorCommitment,
   isSupervisorCommitmentWatch
 } from "./supervisorCommitments.ts";
+import { cleanString } from "../util/values.ts";
 
 export type IssueCompletionWatchCreateInput = {
   condition?: unknown;
@@ -213,10 +214,6 @@ function cleanObject(input: Record<string, unknown>): Record<string, string> {
   return Object.fromEntries(Object.entries(input)
     .map(([key, value]) => [key, cleanString(value)])
     .filter(([, value]) => value !== "")) as Record<string, string>;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function forgetReason(value: unknown): boolean {

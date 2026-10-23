@@ -1,3 +1,5 @@
+import { cleanString, objectValue } from "../util/values.ts";
+
 type ProgressStatePoint = {
   status?: string;
   updated_at?: string;
@@ -91,7 +93,7 @@ function inspectEvent(input: {
   const payload = objectValue(parseJsonMaybe(event.payload));
   const text = eventText(event, payload);
   const rawText = rawEventText(event, payload);
-  const command = clean(payload.command);
+  const command = cleanString(payload.command);
   const inspection = { command, event, payload, rawText, text };
   const ignorable = markIgnorable(inspection, ignored);
   if (isRepeatedError(inspection, seenErrors)) {
@@ -140,27 +142,27 @@ function addTextSignalReasons(value: string, reasons: Set<ProgressReason>): void
 function isAgentMessage(input: EventInspection): boolean {
   const { event, payload, text, command } = input;
   if (text === "" || command !== "") return false;
-  const type = clean(payload.type || event.type).toLowerCase();
-  const method = clean(payload.raw_method).toLowerCase();
+  const type = cleanString(payload.type || event.type).toLowerCase();
+  const method = cleanString(payload.raw_method).toLowerCase();
   return type === "text" || type === "agent_message" || method.includes("agentmessage");
 }
 
 function isCompletedCommand(payload: Record<string, unknown>, command: string): boolean {
   if (command === "") return false;
-  const status = clean(payload.status).toLowerCase();
+  const status = cleanString(payload.status).toLowerCase();
   return status === "completed" || status === "done" || status === "success" || status === "0";
 }
 
 function isTokenUsage(event: ProgressEvent, payload: Record<string, unknown>): boolean {
-  const type = clean(payload.type || event.type).toLowerCase();
+  const type = cleanString(payload.type || event.type).toLowerCase();
   if (/token|usage/.test(type)) return true;
   return containsTokenUsage(payload);
 }
 
 function isRepeatedError(input: EventInspection, seenErrors: Set<string>): boolean {
   const { event, payload, rawText, text } = input;
-  if (clean(payload.type || event.type).toLowerCase() !== "error" && !payload.error) return false;
-  const key = clean(payload.error || text || rawText).toLowerCase();
+  if (cleanString(payload.type || event.type).toLowerCase() !== "error" && !payload.error) return false;
+  const key = cleanString(payload.error || text || rawText).toLowerCase();
   if (key === "") return false;
   const repeated = seenErrors.has(key);
   seenErrors.add(key);
@@ -169,9 +171,9 @@ function isRepeatedError(input: EventInspection, seenErrors: Set<string>): boole
 
 function isEmptyTurn(input: EventInspection): boolean {
   const { event, payload, text, command } = input;
-  const type = clean(payload.type || event.type).toLowerCase();
-  const method = clean(payload.raw_method).toLowerCase();
-  const status = clean(payload.status).toLowerCase();
+  const type = cleanString(payload.type || event.type).toLowerCase();
+  const method = cleanString(payload.raw_method).toLowerCase();
+  const status = cleanString(payload.status).toLowerCase();
   return command === "" && text === "" &&
     (type.includes("turn") || type === "done" || method.includes("turn/completed")) &&
     status !== "failed";
@@ -183,28 +185,24 @@ function stateChanged(baseline?: ProgressStatePoint, current?: ProgressStatePoin
 }
 
 function changedText(before?: string, after?: string): boolean {
-  return clean(before) !== "" && clean(after) !== "" && clean(before) !== clean(after);
+  return cleanString(before) !== "" && cleanString(after) !== "" && cleanString(before) !== cleanString(after);
 }
 
 function hashChanged(before?: string, after?: string): boolean {
-  return (clean(before) !== "" || clean(after) !== "") && clean(before) !== clean(after);
+  return (cleanString(before) !== "" || cleanString(after) !== "") && cleanString(before) !== cleanString(after);
 }
 
 function eventText(event: ProgressEvent, payload: Record<string, unknown>): string {
-  return clean(payload.text || payload.error);
+  return cleanString(payload.text || payload.error);
 }
 
 function rawEventText(event: ProgressEvent, payload: Record<string, unknown>): string {
-  return clean(payload.raw_payload || event.payload);
+  return cleanString(payload.raw_payload || event.payload);
 }
 
 function parseJsonMaybe(value: unknown): unknown {
   if (typeof value !== "string") return value;
   try { return JSON.parse(value) as unknown; } catch { return value; }
-}
-
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function containsTokenUsage(value: unknown): boolean {
@@ -225,8 +223,8 @@ function tokenUsageField(key: string, value: unknown): boolean {
 }
 
 function isKeepalive(input: EventInspection): boolean {
-  const type = clean(input.payload.type || input.event.type).toLowerCase();
-  const method = clean(input.payload.raw_method).toLowerCase();
+  const type = cleanString(input.payload.type || input.event.type).toLowerCase();
+  const method = cleanString(input.payload.raw_method).toLowerCase();
   const text = `${input.text}\n${input.rawText}`.trim().toLowerCase();
   if (/keep[_-]?alive|heartbeat/.test(type) || /keep[_-]?alive|heartbeat/.test(method)) return true;
   return /^(keep[_-]?alive|heartbeat)(\s|:|$)/.test(text) || text === ": heartbeat";
@@ -243,8 +241,4 @@ function isTimestampKey(key: string): boolean {
 
 function isTimestampValue(value: unknown): boolean {
   return typeof value === "string" && Number.isFinite(Date.parse(value.trim()));
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

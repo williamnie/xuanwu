@@ -21,6 +21,7 @@ import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts
 import { HttpError } from "./errors.ts";
 import { searchProjectReferences } from "./projectReferences.ts";
 import { previewCodexProjects, syncCodexProjects } from "./projectSync.ts";
+import { cleanString } from "../util/values.ts";
 
 export type FrontendCompatContext = {
   bus?: EventBus;
@@ -282,8 +283,4 @@ function commandIssueID(command: CommandPayload): number {
 
 function stateDir(db: RunnerDatabase): string {
   return db.path.replace(/\/[^/]+$/, "");
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

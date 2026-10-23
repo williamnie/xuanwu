@@ -16,6 +16,7 @@ import {
   type PiRuntimeToolProfile,
   type ToolPermission
 } from "./toolProviderEnvelope.ts";
+import { errorMessage } from "../util/values.ts";
 
 type ToolContext = NonNullable<Parameters<typeof createPiProjectTools>[2]>;
 type ToolSource = "registry";
@@ -105,7 +106,7 @@ export function recordPiRuntimeToolRegistryAudit(
         : "PI runtime tool registry is unavailable; no fallback tools were installed"
     });
   } catch (error) {
-    console.warn("[pi-runtime] failed to audit tool registry snapshot:", safeError(error));
+    console.warn("[pi-runtime] failed to audit tool registry snapshot:", errorMessage(error));
   }
 }
 
@@ -114,7 +115,7 @@ export function unavailablePiRuntimeToolRegistryAudit(error: unknown): PiRuntime
     counts: { custom_tools: 0, sdk_tools: 0, skipped_tools: 0 },
     custom_tool_names: [],
     provider_ids: [],
-    registry_error: safeError(error),
+    registry_error: errorMessage(error),
     skipped_tool_names: [],
     source: "registry",
     status: "unavailable",
@@ -282,8 +283,4 @@ function auditSnapshot(
     surface_mode: surfaceModeValue,
     tool_names: tools
   };
-}
-
-function safeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

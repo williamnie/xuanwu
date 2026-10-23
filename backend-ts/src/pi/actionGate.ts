@@ -8,6 +8,7 @@ import {
 } from "./supervisorControlContracts.ts";
 import { assessDataEgress, isExternalEgressAction } from "../security/promptInjectionDefense.ts";
 import { piActionContract } from "./actionContracts.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 type PiRiskGate = "safe" | "confirm" | "high";
 export type PiRiskLevel = "low" | "medium" | "high";
@@ -249,7 +250,7 @@ function authorizedMcpCapabilities(envelope: PiActionEnvelope, policy: PiGatePol
 }
 
 function mcpCapabilitiesFromPayload(payload: Record<string, unknown>): string[] {
-  const patch = objectPayload(payload.patch);
+  const patch = objectValue(payload.patch);
   return [
     ...stringList(payload.capability_id),
     ...stringList(payload.capability_ids),
@@ -331,10 +332,6 @@ function stringList(value: unknown): string[] {
   } catch {}
   return text.split(/\n|,/).map(cleanString).filter(Boolean);
 }
-
-function objectPayload(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
 function authorizedByEnvelope(envelope: PiActionEnvelope, authorized: PiAuthorizedAction[]): boolean {
   return authorized.some((candidate) => (
     optionalMatch(candidate.action_type, envelope.action_type) &&
@@ -384,9 +381,6 @@ function isRiskLevel(value: unknown): value is PiRiskLevel {
 
 function cleanID(value: unknown): string {
   return cleanString(value).toLowerCase();
-}
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function withScopeReason(reason: string, scopeReason: string): string {

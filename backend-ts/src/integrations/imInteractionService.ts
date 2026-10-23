@@ -6,6 +6,7 @@ import {
   type ImInteractionBinding
 } from "../db/repositories/imInteractionBindings.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { cleanString } from "../util/values.ts";
 
 /**
  * Generic IM interaction service (design §5.6/§10.3): provider callback
@@ -186,8 +187,4 @@ function isPermanentResolverError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const status = Number((error as { status?: unknown }).status);
   return Number.isInteger(status) && status >= 400 && status < 500;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

@@ -2,6 +2,7 @@ import { getAgentSession, listAgentSessions, type AgentSession } from "../db/rep
 import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue, listIssueRuns, type Issue, type IssueRun } from "../db/repositories/issues.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { cleanString } from "../util/values.ts";
 
 export type IssueStateSnapshot = {
   issue: {
@@ -50,29 +51,29 @@ export function issueStateSnapshot(
 ): IssueStateSnapshot {
   return {
     issue: {
-      codex_thread_id: clean(issue.codex_thread_id),
-      codex_turn_id: clean(issue.codex_turn_id),
+      codex_thread_id: cleanString(issue.codex_thread_id),
+      codex_turn_id: cleanString(issue.codex_turn_id),
       error: safeText(issue.error),
       id: issue.id,
-      project_id: clean(issue.project_id),
-      status: clean(issue.status),
-      updated_at: clean(issue.updated_at)
+      project_id: cleanString(issue.project_id),
+      status: cleanString(issue.status),
+      updated_at: cleanString(issue.updated_at)
     },
     run: run ? {
-      ended_at: clean(run.ended_at),
-      id: clean(run.id),
-      provider: clean(run.provider),
-      provider_session_id: clean(run.provider_session_id),
-      provider_turn_id: clean(run.provider_turn_id),
-      started_at: clean(run.started_at),
-      status: clean(run.status)
+      ended_at: cleanString(run.ended_at),
+      id: cleanString(run.id),
+      provider: cleanString(run.provider),
+      provider_session_id: cleanString(run.provider_session_id),
+      provider_turn_id: cleanString(run.provider_turn_id),
+      started_at: cleanString(run.started_at),
+      status: cleanString(run.status)
     } : null,
     session: session ? {
-      provider: clean(session.provider),
-      provider_session_id: clean(session.provider_session_id),
-      session_key: clean(session.session_key),
-      status: clean(session.status),
-      updated_at: clean(session.updated_at)
+      provider: cleanString(session.provider),
+      provider_session_id: cleanString(session.provider_session_id),
+      session_key: cleanString(session.session_key),
+      status: cleanString(session.status),
+      updated_at: cleanString(session.updated_at)
     } : null
   };
 }
@@ -133,13 +134,13 @@ function normalizeIssueSnapshot(value: unknown): IssueStateSnapshot["issue"] {
   const input = objectPayload(value, "expected_state.issue");
   requireKeys(input, ISSUE_KEYS, "expected_state.issue");
   return {
-    codex_thread_id: clean(input.codex_thread_id),
-    codex_turn_id: clean(input.codex_turn_id),
+    codex_thread_id: cleanString(input.codex_thread_id),
+    codex_turn_id: cleanString(input.codex_turn_id),
     error: safeText(input.error),
     id: positiveID(input.id, "expected_state.issue.id"),
-    project_id: clean(input.project_id),
-    status: clean(input.status),
-    updated_at: clean(input.updated_at)
+    project_id: cleanString(input.project_id),
+    status: cleanString(input.status),
+    updated_at: cleanString(input.updated_at)
   };
 }
 
@@ -147,13 +148,13 @@ function normalizeRunSnapshot(value: unknown): IssueStateSnapshot["run"] {
   const input = objectPayload(value, "expected_state.run");
   requireKeys(input, RUN_KEYS, "expected_state.run");
   return {
-    ended_at: clean(input.ended_at),
-    id: clean(input.id),
-    provider: clean(input.provider),
-    provider_session_id: clean(input.provider_session_id),
-    provider_turn_id: clean(input.provider_turn_id),
-    started_at: clean(input.started_at),
-    status: clean(input.status)
+    ended_at: cleanString(input.ended_at),
+    id: cleanString(input.id),
+    provider: cleanString(input.provider),
+    provider_session_id: cleanString(input.provider_session_id),
+    provider_turn_id: cleanString(input.provider_turn_id),
+    started_at: cleanString(input.started_at),
+    status: cleanString(input.status)
   };
 }
 
@@ -161,11 +162,11 @@ function normalizeSessionSnapshot(value: unknown): IssueStateSnapshot["session"]
   const input = objectPayload(value, "expected_state.session");
   requireKeys(input, SESSION_KEYS, "expected_state.session");
   return {
-    provider: clean(input.provider),
-    provider_session_id: clean(input.provider_session_id),
-    session_key: clean(input.session_key),
-    status: clean(input.status),
-    updated_at: clean(input.updated_at)
+    provider: cleanString(input.provider),
+    provider_session_id: cleanString(input.provider_session_id),
+    session_key: cleanString(input.session_key),
+    status: cleanString(input.status),
+    updated_at: cleanString(input.updated_at)
   };
 }
 
@@ -184,10 +185,6 @@ function positiveID(value: unknown, label: string): number {
   throw new Error(`${label} must be positive`);
 }
 
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function safeText(value: unknown): string {
-  return redactSensitiveText(clean(value)).replace(ABSOLUTE_PATH_PATTERN, "[redacted-path]");
+  return redactSensitiveText(cleanString(value)).replace(ABSOLUTE_PATH_PATTERN, "[redacted-path]");
 }

@@ -33,6 +33,7 @@ import { reconcileProviderOutcome } from "./providerOutcome.ts";
 import { prepareReservedIssueRun } from "../domain/run/runPreparation.ts";
 import { refreshSafeWorkspaceWaits } from "../domain/review/workspaceWait.ts";
 import { issueExecutionContext } from "../domain/work/issueExecutionAuthority.ts";
+import { cleanString } from "../util/values.ts";
 
 export type ProjectLoopInput = {
   bus?: Pick<EventBus, "publish">;
@@ -411,10 +412,6 @@ function hasMcpRequirementContext(project: Project, issue: Issue): boolean {
 
 function skillSummary(skill: ReturnType<typeof listSkillRegistry>[number]) {
   return { id: skill.id, name: skill.name, description: skill.description, risk_level: skill.risk_level, allowed_roles: skill.allowed_roles };
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function optionalDate(value: Date | string | undefined): Date | undefined {

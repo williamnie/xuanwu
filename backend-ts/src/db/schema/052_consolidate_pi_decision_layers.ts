@@ -1,5 +1,6 @@
 import type { Database as SQLiteDatabase } from "bun:sqlite";
 import type { SqlMigration } from "../migrations.ts";
+import { cleanString } from "../../util/values.ts";
 
 type ProposalRow = {
   actions_json: string;
@@ -172,8 +173,4 @@ function parseJSON(value: string): unknown {
 
 function objectValue(value: unknown): JsonObject {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

@@ -14,6 +14,8 @@ import {
 } from "../../domain/automation/contracts.ts";
 import { INVESTIGATE_WORKFLOW_REF } from "../../workflows/investigate.ts";
 import type { ImTargetV1 } from "../../integrations/imChannelContracts.ts";
+import { cleanString, nonNegativeInteger } from "../../util/values.ts";
+import { placeholders } from "../sql.ts";
 
 type AutomationWatchStatus = "watching" | "satisfied" | "notified" | "expired" | "cancelled" | "failed";
 export type AutomationWatchOutcome = "" | "completion" | "failure" | "cancelled" | "thread_event" | "timeout";
@@ -290,7 +292,7 @@ export function migrateLegacyCompletionWatches(
 }
 
 function normalizeNativeInput(db: RunnerDatabase, input: CreateAutomationWatchInput, audit: AutomationAudit) {
-  const projectID = clean(input.project_id);
+  const projectID = cleanString(input.project_id);
   if (projectID === "" || !projectExists(db, projectID)) throw new Error("automation watch project is required");
   const condition = normalizeCondition(input.condition);
   const subject = normalizeSubject(db, input.subject, projectID);
@@ -299,7 +301,7 @@ function normalizeNativeInput(db: RunnerDatabase, input: CreateAutomationWatchIn
     throw new Error("thread condition requires an external thread target");
   }
   const notificationTarget = normalizeNotificationTarget(input.notification_target, input.allow_empty_notification_target !== true);
-  const dedupeKey = clean(input.dedupe_key);
+  const dedupeKey = cleanString(input.dedupe_key);
   if (dedupeKey === "") throw new Error("automation watch dedupe_key is required");
   const expiresAt = optionalTimestamp(input.expires_at);
   const automationID = input.id ?? `automation:watch-${crypto.randomUUID()}` as AutomationID;
@@ -308,7 +310,7 @@ function normalizeNativeInput(db: RunnerDatabase, input: CreateAutomationWatchIn
     condition,
     dedupeKey,
     expiresAt,
-    name: clean(input.name) || "Watch Automation",
+    name: cleanString(input.name) || "Watch Automation",
     notificationTarget,
     projectID,
     subject
@@ -377,7 +379,7 @@ function refreshShadow(db: RunnerDatabase, current: AutomationWatch, desired: De
 function desiredShadow(legacy: PiIssueCompletionWatch): DesiredShadow {
   const parsed = parseObject(legacy.condition);
   const statuses = Array.isArray(parsed.terminal_statuses)
-    ? parsed.terminal_statuses.map(clean).filter((item) => TERMINAL_STATUSES.has(item))
+    ? parsed.terminal_statuses.map(cleanString).filter((item) => TERMINAL_STATUSES.has(item))
     : [];
   const condition: AutomationWatchCondition = {
     match: "all",
@@ -392,7 +394,7 @@ function desiredShadow(legacy: PiIssueCompletionWatch): DesiredShadow {
     expiresAt: legacyExpiry(parsed),
     legacy,
     notificationTarget: normalizeNotificationTarget({
-      connector_id: clean(legacy.target_channel) || "feishu",
+      connector_id: cleanString(legacy.target_channel) || "feishu",
       conversation_id: legacy.target_chat_id,
       reply_to_message_id: legacy.target_message_id,
       thread_id: legacy.target_thread_id
@@ -424,7 +426,7 @@ function insertWatch(db: RunnerDatabase, input: {
     input.automationID, input.migrationMode, input.legacyWatchID, stableJson(input.condition),
     stableJson(input.subject), stableJson(input.notificationTarget), input.dedupeKey, input.expiresAt,
     input.status, input.outcome, "", input.lastExternalEventID, input.satisfiedAt ?? "",
-    input.notifiedAt ?? "", clean(input.error), input.timestamp, input.timestamp
+    input.notifiedAt ?? "", cleanString(input.error), input.timestamp, input.timestamp
   ]);
 }
 
@@ -498,23 +500,23 @@ function requireAutomationWatch(db: RunnerDatabase, id: AutomationID): Automatio
 
 function mapWatch(row: Row): AutomationWatch {
   const stored: StoredWatch = {
-    automation_id: clean(row.automation_id) as AutomationID,
-    condition_json: clean(row.condition_json) || "{}",
-    created_at: clean(row.created_at),
-    dedupe_key: clean(row.dedupe_key),
-    error: clean(row.error),
-    expires_at: clean(row.expires_at),
-    last_external_event_id: integer(row.last_external_event_id),
-    legacy_watch_id: clean(row.legacy_watch_id),
-    matched_ref: clean(row.matched_ref),
+    automation_id: cleanString(row.automation_id) as AutomationID,
+    condition_json: cleanString(row.condition_json) || "{}",
+    created_at: cleanString(row.created_at),
+    dedupe_key: cleanString(row.dedupe_key),
+    error: cleanString(row.error),
+    expires_at: cleanString(row.expires_at),
+    last_external_event_id: nonNegativeInteger(row.last_external_event_id),
+    legacy_watch_id: cleanString(row.legacy_watch_id),
+    matched_ref: cleanString(row.matched_ref),
     migration_mode: row.migration_mode === "legacy_shadow" ? "legacy_shadow" : "native",
-    notification_target_json: clean(row.notification_target_json) || "{}",
-    notified_at: clean(row.notified_at),
+    notification_target_json: cleanString(row.notification_target_json) || "{}",
+    notified_at: cleanString(row.notified_at),
     outcome: watchOutcome(row.outcome),
-    satisfied_at: clean(row.satisfied_at),
+    satisfied_at: cleanString(row.satisfied_at),
     status: watchStatus(row.status),
-    subject_json: clean(row.subject_json) || "{}",
-    updated_at: clean(row.updated_at)
+    subject_json: cleanString(row.subject_json) || "{}",
+    updated_at: cleanString(row.updated_at)
   };
   return {
     ...stored,
@@ -526,13 +528,13 @@ function mapWatch(row: Row): AutomationWatch {
 
 function normalizeCondition(value: AutomationWatchCondition): AutomationWatchCondition {
   if (value?.type === "issue_status") {
-    const statuses = [...new Set((value.statuses ?? []).map(clean).filter((item) => TERMINAL_STATUSES.has(item)))].sort();
+    const statuses = [...new Set((value.statuses ?? []).map(cleanString).filter((item) => TERMINAL_STATUSES.has(item)))].sort();
     if (statuses.length === 0) throw new Error("issue watch requires terminal statuses");
     if (!['all', 'any'].includes(value.match)) throw new Error("issue watch match must be all or any");
     return { match: value.match, ...(value.metadata ? { metadata: parseObject(value.metadata) } : {}), statuses, type: "issue_status" };
   }
   if (value?.type === "external_thread_event") {
-    const eventTypes = [...new Set((value.event_types ?? []).map(clean).filter(Boolean))].sort();
+    const eventTypes = [...new Set((value.event_types ?? []).map(cleanString).filter(Boolean))].sort();
     return { event_types: eventTypes, ...(value.metadata ? { metadata: parseObject(value.metadata) } : {}), type: "external_thread_event" };
   }
   throw new Error("unsupported automation watch condition");
@@ -549,8 +551,8 @@ function normalizeSubject(db: RunnerDatabase, value: AutomationWatchSubject, pro
     return { issue_ids: ids, kind: "issues" };
   }
   if (value?.kind === "external_thread") {
-    const provider = clean(value.provider);
-    const threadID = clean(value.thread_id);
+    const provider = cleanString(value.provider);
+    const threadID = cleanString(value.thread_id);
     if (provider === "" || threadID === "") throw new Error("external thread watch requires provider and thread_id");
     return { kind: "external_thread", provider, thread_id: threadID };
   }
@@ -562,10 +564,10 @@ function normalizeNotificationTarget(
   required: boolean
 ): AutomationWatchNotificationTarget {
   const target = {
-    connector_id: clean(value.connector_id) || clean(value.channel),
-    conversation_id: clean(value.conversation_id) || clean(value.chat_id),
-    reply_to_message_id: clean(value.reply_to_message_id) || clean(value.message_id),
-    thread_id: clean(value.thread_id)
+    connector_id: cleanString(value.connector_id) || cleanString(value.channel),
+    conversation_id: cleanString(value.conversation_id) || cleanString(value.chat_id),
+    reply_to_message_id: cleanString(value.reply_to_message_id) || cleanString(value.message_id),
+    thread_id: cleanString(value.thread_id)
   };
   if (target.connector_id === "") throw new Error("automation watch notification connector_id is required");
   if (required && target.conversation_id === "" && target.reply_to_message_id === "" && target.thread_id === "") {
@@ -609,7 +611,7 @@ function legacyExpiry(condition: Record<string, unknown>): string {
 }
 
 function legacyAutomationID(id: string): AutomationID {
-  const slug = clean(id).toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  const slug = cleanString(id).toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
   const hash = createHash("sha256").update(id).digest("hex").slice(0, 12);
   return `automation:watch-legacy-${(slug || "watch").slice(0, 80)}-${hash}` as AutomationID;
 }
@@ -619,13 +621,13 @@ function derivedAudit(audit: AutomationAudit, index: number, suffix: string): Au
 }
 
 function assertAllowedAudit(audit: AutomationAudit): void {
-  if (!clean(audit.actor_id) || !clean(audit.correlation_id) || !clean(audit.event_id) || !clean(audit.reason)) {
+  if (!cleanString(audit.actor_id) || !cleanString(audit.correlation_id) || !cleanString(audit.event_id) || !cleanString(audit.reason)) {
     throw new Error("automation watch audit identity, correlation, event, and reason are required");
   }
   if (audit.gate.decision !== "allow" || !["deterministic_policy", "human_approval"].includes(audit.gate.authority)) {
     throw new Error("automation watch mutation requires a deterministic or human allow gate");
   }
-  if (!clean(audit.gate.policy_ref)) throw new Error("automation watch audit policy_ref is required");
+  if (!cleanString(audit.gate.policy_ref)) throw new Error("automation watch audit policy_ref is required");
   normalizeTimestamp(audit.occurred_at);
 }
 
@@ -640,7 +642,7 @@ function tableExists(db: RunnerDatabase, table: string): boolean {
 }
 
 function optionalTimestamp(value: unknown): string {
-  const text = clean(value);
+  const text = cleanString(value);
   return text === "" ? "" : normalizeTimestamp(text);
 }
 
@@ -663,23 +665,11 @@ function stableJson(value: unknown): string {
 }
 
 function watchStatus(value: unknown): AutomationWatchStatus {
-  const status = clean(value) as AutomationWatchStatus;
+  const status = cleanString(value) as AutomationWatchStatus;
   return ["watching", "satisfied", "notified", "expired", "cancelled", "failed"].includes(status) ? status : "failed";
 }
 
 function watchOutcome(value: unknown): AutomationWatchOutcome {
-  const outcome = clean(value) as AutomationWatchOutcome;
+  const outcome = cleanString(value) as AutomationWatchOutcome;
   return ["", "completion", "failure", "cancelled", "thread_event", "timeout"].includes(outcome) ? outcome : "";
-}
-
-function placeholders(count: number): string {
-  return Array.from({ length: count }, () => "?").join(", ");
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function integer(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
 }

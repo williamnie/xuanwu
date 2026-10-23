@@ -15,6 +15,7 @@ import {
 } from "../integrations/channelConnectorContracts.ts";
 import { json } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 const WEBHOOK_MAX_AGE_MS = 5 * 60 * 1000;
 const WEBHOOK_SOURCE = "webhook";
@@ -64,7 +65,7 @@ export function registerWebhookEventRoutes(router: Router, context: WebhookEvent
 }
 
 async function handleWebhookEvent(request: Request, context: WebhookEventRoutesContext): Promise<Response> {
-  const secret = clean(context.signingSecret ?? Bun.env.XUANWU_WEBHOOK_SIGNING_SECRET);
+  const secret = cleanString(context.signingSecret ?? Bun.env.XUANWU_WEBHOOK_SIGNING_SECRET);
   if (secret === "") return webhookError(503, "webhook_unavailable", "webhook signing is not configured");
   const rawBody = await request.text();
   const verification = verifySignature(request.headers, rawBody, secret, context.now?.() ?? new Date());
@@ -121,15 +122,15 @@ function verifySignature(
   secret: string,
   now: Date
 ): SignatureVerification {
-  const idempotencyKey = clean(headers.get("idempotency-key"));
+  const idempotencyKey = cleanString(headers.get("idempotency-key"));
   if (!validKey(idempotencyKey)) return { code: "invalid_idempotency_key", message: "Idempotency-Key is required", ok: false };
-  const timestamp = clean(headers.get("x-xuanwu-timestamp"));
+  const timestamp = cleanString(headers.get("x-xuanwu-timestamp"));
   const timestampMs = Date.parse(timestamp);
   if (!Number.isFinite(timestampMs) || Math.abs(now.getTime() - timestampMs) > WEBHOOK_MAX_AGE_MS) {
     return { code: "invalid_signature_timestamp", message: "webhook timestamp is invalid or expired", ok: false };
   }
   const expected = `${SIGNATURE_PREFIX}${createHmac("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex")}`;
-  const received = clean(headers.get("x-xuanwu-signature"));
+  const received = cleanString(headers.get("x-xuanwu-signature"));
   if (!safeEqual(received, expected)) return { code: "invalid_signature", message: "webhook signature is invalid", ok: false };
   return { idempotency_key: idempotencyKey, ok: true, timestamp };
 }
@@ -148,14 +149,14 @@ function normalizeWebhookWorkCreate(
   timestamp: string,
   rawBody: string
 ): NormalizedWebhookWorkCreate | Response {
-  if (clean(body.type) !== WORK_CREATE_EVENT) return webhookError(400, "unsupported_event", "webhook event type is unsupported");
+  if (cleanString(body.type) !== WORK_CREATE_EVENT) return webhookError(400, "unsupported_event", "webhook event type is unsupported");
   const eventID = required(body.id);
   const occurredAt = timestampValue(body.occurred_at) || timestamp;
-  const data = object(body.data);
+  const data = objectValue(body.data);
   const projectID = required(data.project_id);
   const title = required(data.title);
   const goal = required(data.goal);
-  const status = clean(data.status) || "triage";
+  const status = cleanString(data.status) || "triage";
   if (eventID === "" || projectID === "" || title === "" || goal === "") {
     return webhookError(400, "invalid_event", "work.create requires id, data.project_id, data.title and data.goal");
   }
@@ -225,7 +226,7 @@ function persistInboundEvent(
     trust_level: "signed",
     normalized_message: normalized.envelope.payload
   });
-  const existingHash = clean(existing.summary.raw_payload_sha256);
+  const existingHash = cleanString(existing.summary.raw_payload_sha256);
   if (existingHash !== "" && existingHash !== normalized.raw_payload_sha256) {
     return webhookError(409, "webhook_idempotency_conflict", "Idempotency-Key conflicts with a different event");
   }
@@ -272,19 +273,11 @@ function validKey(value: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$/.test(value);
 }
 
-function object(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 function required(value: unknown): string {
-  return clean(value);
+  return cleanString(value);
 }
 
 function timestampValue(value: unknown): string {
-  const text = clean(value);
+  const text = cleanString(value);
   return text !== "" && Number.isFinite(Date.parse(text)) ? text : "";
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

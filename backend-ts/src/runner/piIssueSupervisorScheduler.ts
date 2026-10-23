@@ -26,6 +26,7 @@ import {
   refreshSupervisorProgressResult,
   supervisorResultOutcome
 } from "./issueSupervisorProgressTracker.ts";
+import { cleanString, errorMessage } from "../util/values.ts";
 export type PiIssueSupervisorSchedulerInput = {
   bus?: Pick<EventBus, "publish">;
   database: RunnerDatabase;
@@ -130,7 +131,7 @@ async function collectTargets(
       now,
       staleAfterSeconds
     });
-    if (clean(context.policy.mode) === "off") continue;
+    if (cleanString(context.policy.mode) === "off") continue;
     if (context.candidates.length > 0) {
       const provider = options.providers?.[String(context.latest_run?.provider) as ExecutorProviderId];
       const observed = await reconcileCurrentProviderTurn({ database: db, issueID, provider, bus: options.bus });
@@ -174,7 +175,7 @@ function supervisorCandidateDispatchable(
   if (isTransientRecoveryDiagnosis(candidate.diagnosis_code) && cooldownBlocksCandidate(context, candidate, now)) return false;
   if (supervisorCandidateReady(context, candidate, now, { staleAfterSeconds: options.staleAfterSeconds })) return true;
   return candidate.diagnosis_code === "provider_retry_after_waiting" &&
-    clean(candidate.source_event_type) !== "issue.retry_after_scheduled";
+    cleanString(candidate.source_event_type) !== "issue.retry_after_scheduled";
 }
 
 function cooldownBlocksCandidate(
@@ -183,7 +184,7 @@ function cooldownBlocksCandidate(
   now: Date
 ): boolean {
   if (candidate.diagnosis_code === "provider_retry_after_ready" &&
-    clean(context.recovery_history.last_action_type) === "issue.retry_after") return false;
+    cleanString(context.recovery_history.last_action_type) === "issue.retry_after") return false;
   const until = Date.parse(cooldownUntil(context, now));
   return Number.isFinite(until) && until > now.getTime();
 }
@@ -220,10 +221,10 @@ function recordTarget(
         report_status: "invalid_decision_retry_boundary"
       },
       project_id: target.projectID,
-      provider: clean(target.context.session.provider),
-      provider_session_id: clean(target.context.session.provider_session_id),
-      provider_turn_id: clean(target.context.session.provider_turn_id),
-      run_id: clean(target.context.latest_run?.id)
+      provider: cleanString(target.context.session.provider),
+      provider_session_id: cleanString(target.context.session.provider_session_id),
+      provider_turn_id: cleanString(target.context.session.provider_turn_id),
+      run_id: cleanString(target.context.latest_run?.id)
     });
   }
   recordSignal(db, target, now);
@@ -245,17 +246,17 @@ function invalidDecisionBudgetExhausted(db: RunnerDatabase, target: SupervisorTa
 function recordSignal(db: RunnerDatabase, target: SupervisorTarget, now: Date): void {
   const candidate = target.candidates[0];
   createIssueSupervisorEvent(db, {
-    diagnosis_code: clean(candidate?.diagnosis_code),
+    diagnosis_code: cleanString(candidate?.diagnosis_code),
     event_type: "signal",
     issue_id: target.issueID,
     payload_json: { candidate, candidates: target.candidates },
     project_id: target.projectID,
-    provider: clean(target.context.session.provider) || clean(target.context.provider_error?.provider),
-    provider_error_category: clean(target.context.provider_error?.category),
-    provider_session_id: clean(target.context.session.provider_session_id),
-    provider_turn_id: clean(target.context.session.provider_turn_id),
-    retry_after_at: clean(candidate?.wait_until),
-    run_id: clean(target.context.latest_run?.id)
+    provider: cleanString(target.context.session.provider) || cleanString(target.context.provider_error?.provider),
+    provider_error_category: cleanString(target.context.provider_error?.category),
+    provider_session_id: cleanString(target.context.session.provider_session_id),
+    provider_turn_id: cleanString(target.context.session.provider_turn_id),
+    retry_after_at: cleanString(candidate?.wait_until),
+    run_id: cleanString(target.context.latest_run?.id)
   });
 }
 
@@ -279,23 +280,23 @@ async function decideTarget(
 }
 
 function recordFailure(db: RunnerDatabase, target: SupervisorTarget, error: unknown, now: Date): void {
-  const message = `PI Supervisor unavailable for issue #${target.issueID}: ${safeError(error)}`;
+  const message = `PI Supervisor unavailable for issue #${target.issueID}: ${errorMessage(error)}`;
   createIssueSupervisorEvent(db, {
     decision: "pi_runtime_failed",
     diagnosis_code: primaryDiagnosis(target.context),
     event_type: "decision_failed",
     issue_id: target.issueID,
     payload_json: {
-      error: safeError(error),
+      error: errorMessage(error),
       recovery_message: message,
       supervisor_agent: { runnable: false, source: "pi_supervisor_runtime" }
     },
     project_id: target.projectID,
-    provider: clean(target.context.session.provider) || clean(target.context.provider_error?.provider),
-    provider_error_category: clean(target.context.provider_error?.category),
-    provider_session_id: clean(target.context.session.provider_session_id),
-    provider_turn_id: clean(target.context.session.provider_turn_id),
-    run_id: clean(target.context.latest_run?.id)
+    provider: cleanString(target.context.session.provider) || cleanString(target.context.provider_error?.provider),
+    provider_error_category: cleanString(target.context.provider_error?.category),
+    provider_session_id: cleanString(target.context.session.provider_session_id),
+    provider_turn_id: cleanString(target.context.session.provider_turn_id),
+    run_id: cleanString(target.context.latest_run?.id)
   });
   ingestPiGuardianEvent(db, {
     eventType: "guardian.pi_supervisor.unavailable",
@@ -357,14 +358,14 @@ function latestSupervisorResult(events: ReturnType<typeof listIssueSupervisorEve
   return result ? supervisorResultOutcome(result) : "";
 }
 function primaryDiagnosis(context: IssueSupervisorRecoveryContext): string {
-  return clean(context.candidates.find((candidate) => candidate.exhausted)?.diagnosis_code) ||
-    clean(context.candidates.find((candidate) => candidate.diagnosis_code === "provider_retry_after_ready")?.diagnosis_code) ||
-    clean(context.candidates[0]?.diagnosis_code);
+  return cleanString(context.candidates.find((candidate) => candidate.exhausted)?.diagnosis_code) ||
+    cleanString(context.candidates.find((candidate) => candidate.diagnosis_code === "provider_retry_after_ready")?.diagnosis_code) ||
+    cleanString(context.candidates[0]?.diagnosis_code);
 }
 function readyRetryAfterTime(context: IssueSupervisorRecoveryContext): number {
   for (const candidate of context.candidates) {
     if (candidate.diagnosis_code !== "provider_retry_after_ready") continue;
-    const ms = Date.parse(clean(candidate.wait_until));
+    const ms = Date.parse(cleanString(candidate.wait_until));
     if (Number.isFinite(ms)) return ms;
   }
   return 0;
@@ -375,18 +376,12 @@ function latestEvidenceTime(context: IssueSupervisorRecoveryContext): number {
 function boundedLimit(value: number): number {
   return Math.min(Math.max(Number.isFinite(value) ? Math.round(value) : DEFAULT_LIMIT, 1), DEFAULT_LIMIT);
 }
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-function safeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 function numberValue(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : Number(value) || 0;
 }
 
 function cooldownUntil(context: IssueSupervisorRecoveryContext, now: Date): string {
-  const last = Date.parse(clean(context.recovery_history.last_action_at));
+  const last = Date.parse(cleanString(context.recovery_history.last_action_at));
   const seconds = numberValue(context.policy.cooldown_seconds);
   if (!Number.isFinite(last) || seconds <= 0) return "";
   const until = new Date(last + seconds * 1_000);

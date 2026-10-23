@@ -4,6 +4,7 @@ import {
   type ExternalEventInput,
   type ExternalEventRecord
 } from "../db/repositories/externalEvents.ts";
+import { arrayValue } from "../util/values.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -82,10 +83,6 @@ function externalIDFromSourceRef(value: unknown): string {
 
 function objectValue(value: unknown): JsonObject {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
-}
-
-function arrayValue(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
 }
 
 function firstText(...values: unknown[]): string {

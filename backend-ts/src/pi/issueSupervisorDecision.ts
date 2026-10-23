@@ -22,6 +22,7 @@ import {
   parseStructuredAssistantOutput,
   structuredAssistantProviderError
 } from "./structuredAssistantOutput.ts";
+import { cleanString } from "../util/values.ts";
 
 type PiSupervisorDecisionRuntimeInput = {
   agent: PiAgent;
@@ -337,8 +338,4 @@ function futureRetryAfter(context: IssueSupervisorRecoveryContext, now: Date): b
 
 function candidateEvidence(context: IssueSupervisorRecoveryContext): string[] {
   return context.candidates.flatMap((candidate) => candidate.evidence_refs ?? []).slice(0, 5);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

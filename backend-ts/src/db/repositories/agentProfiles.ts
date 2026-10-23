@@ -10,6 +10,7 @@ import {
   policyFromLegacyWrite,
   readStoredExecutionPolicy
 } from "../../providers/core/policyPersistence.ts";
+import { cleanString } from "../../util/values.ts";
 
 export type AgentProfile = {
   approval_policy: string;
@@ -193,8 +194,6 @@ function mapAgentProfileRow(row: AgentProfileRow): AgentProfile {
     updated_at: requiredString(row.updated_at, "agent_profiles.updated_at")
   };
 }
-
-function cleanString(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
 function optionalString(value: unknown, fallback = ""): string {
   if (value === null || value === undefined) return fallback;
   if (typeof value !== "string") throw new Error("expected string row value");

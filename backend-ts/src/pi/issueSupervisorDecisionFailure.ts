@@ -4,6 +4,7 @@ import {
   type PiSupervisorDecisionJson
 } from "./issueSupervisorRecovery.ts";
 import type { IssueSupervisorRecoveryContext } from "./issueSupervisorContext.ts";
+import { cleanString } from "../util/values.ts";
 
 export type DecisionFailure = {
   error: string;
@@ -93,8 +94,4 @@ function truncatedRawText(value: string): string {
 
 function isTruncated(value: string): boolean {
   return value.length > MAX_RAW_TEXT_CHARS;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

@@ -10,6 +10,7 @@ import type { PiGuardianAlert } from "../db/repositories/pi/guardianAlerts.ts";
 import { routeNotification, type NotificationRoute } from "../notifications/unifiedNotificationPipeline.ts";
 import { guardianAlertPresentation } from "./guardianAlertPresentation.ts";
 import { resolvePiNotificationPreference } from "./notificationPreferenceResolver.ts";
+import { cleanString } from "../util/values.ts";
 
 type GuardianOperationsSummary = {
   active_pi_handling: number;
@@ -56,7 +57,7 @@ export function guardianOperationsSnapshot(
   const now = input.now ?? new Date();
   const until = validTimestamp(input.until) || now.toISOString();
   const since = validTimestamp(input.since) || new Date(Date.parse(until) - 24 * 60 * 60_000).toISOString();
-  const projectID = clean(input.projectID);
+  const projectID = cleanString(input.projectID);
   const alerts = listPiGuardianAlerts(db).filter((alert) => scopeMatches(alert, projectID, input.projectID === undefined));
   // Acknowledged incidents remain in the source until recovery, but the user
   // explicitly asked not to be reminded again. Keep them out of current action
@@ -213,13 +214,13 @@ function operationsDailyReportEnabled(db: RunnerDatabase, row: RouteRow, now: Da
 
 function reportTime(db: RunnerDatabase, preferenceID: string): string {
   const preference = getPiNotificationPreference(db, preferenceID);
-  const dailyAt = clean(parseRecord(preference?.digest_policy_json ?? "{}").daily_at);
+  const dailyAt = cleanString(parseRecord(preference?.digest_policy_json ?? "{}").daily_at);
   return /^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(dailyAt) ? dailyAt : DEFAULT_DAILY_AT;
 }
 
 function reportExists(db: RunnerDatabase, projectID: string, bucket: string): boolean {
   return listPiReportRecords(db, { projectId: projectID, type: REPORT_TYPE }).some((record) => {
-    return clean(parseRecord(record.body_json).bucket) === bucket;
+    return cleanString(parseRecord(record.body_json).bucket) === bucket;
   });
 }
 
@@ -289,10 +290,6 @@ function parseRecord(value: unknown): Record<string, unknown> {
 }
 
 function validTimestamp(value: unknown): string {
-  const text = clean(value);
+  const text = cleanString(value);
   return Number.isFinite(Date.parse(text)) ? text : "";
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

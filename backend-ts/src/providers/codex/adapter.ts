@@ -28,6 +28,7 @@ import type {
   TurnStartOptions,
   TurnStartResult
 } from "./threadLifecycle.ts";
+import { objectValue } from "../../util/values.ts";
 
 export { CodexThreadLifecycleError } from "./threadLifecycle.ts";
 export type { ThreadStartInput, ThreadStartResult, ThreadSummary, TurnStartOptions, TurnStartResult } from "./threadLifecycle.ts";
@@ -149,7 +150,7 @@ export class CodexAdapter {
     const cleanThreadID = threadID.trim();
     const cleanTurnID = turnID.trim();
     const result = await this.lifecycleRequest("turn/steer", { threadId: cleanThreadID, expectedTurnId: cleanTurnID, input });
-    return normalizeTurnStartResult(cleanThreadID, { turnId: cleanTurnID, ...recordValue(result) });
+    return normalizeTurnStartResult(cleanThreadID, { turnId: cleanTurnID, ...objectValue(result) });
   }
 
   async resolveApproval(requestID: string, decision: ApprovalDecision): Promise<{ ok: true }> {
@@ -184,7 +185,7 @@ export class CodexAdapter {
 }
 
 function normalizeInitializeResult(value: unknown): CodexInitializeResult {
-  const raw = recordValue(value);
+  const raw = objectValue(value);
   return {
     protocolVersion: stringField(raw, "protocolVersion") || stringField(raw, "protocol_version"),
     serverInfo: serverInfo(raw),
@@ -193,7 +194,7 @@ function normalizeInitializeResult(value: unknown): CodexInitializeResult {
 }
 
 function normalizeModelListResult(value: unknown): ModelListResult {
-  const raw = recordValue(value);
+  const raw = objectValue(value);
   return {
     data: arrayField(raw, ["data", "models"], value).map(normalizeModel).filter((item) => item.id !== ""),
     nextCursor: stringField(raw, "nextCursor") || stringField(raw, "next_cursor") || undefined
@@ -201,7 +202,7 @@ function normalizeModelListResult(value: unknown): ModelListResult {
 }
 
 function normalizeModel(value: unknown): Model {
-  const raw = recordValue(value);
+  const raw = objectValue(value);
   const id = stringField(raw, "id") || stringField(raw, "model");
   const efforts = reasoningEfforts(raw);
   return {
@@ -227,7 +228,7 @@ function serviceTiers(raw: Record<string, unknown>): ModelServiceTier[] {
 }
 
 function normalizeServiceTier(value: unknown): ModelServiceTier {
-  const raw = recordValue(value);
+  const raw = objectValue(value);
   return {
     id: stringField(raw, "id"),
     name: stringField(raw, "name"),
@@ -243,7 +244,7 @@ function reasoningEfforts(raw: Record<string, unknown>): ReasoningEffortOption[]
 
 function normalizeReasoningEffort(value: unknown): ReasoningEffortOption {
   if (typeof value === "string") return { reasoningEffort: value, description: "" };
-  const raw = recordValue(value);
+  const raw = objectValue(value);
   return {
     reasoningEffort: stringField(raw, "reasoningEffort") || stringField(raw, "value") || stringField(raw, "id"),
     description: stringField(raw, "description") || stringField(raw, "label")
@@ -261,12 +262,6 @@ function recordField(raw: Record<string, unknown>, key: string): Record<string, 
   return typeof raw[key] === "object" && raw[key] !== null && !Array.isArray(raw[key])
     ? raw[key] as Record<string, unknown>
     : undefined;
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
 }
 
 function arrayField(raw: Record<string, unknown>, keys: string[], direct?: unknown): unknown[] {

@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { applyStalePendingActions, dryRunStalePendingActions } from "../pi/stalePendingActions.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { cleanString } from "../util/values.ts";
 
 type PiMaintenanceContext = {
   database: RunnerDatabase;
@@ -24,8 +25,4 @@ async function parseObjectBody(request: Request): Promise<Record<string, unknown
     if (error instanceof HttpError) throw new HttpError(400, "请求体不是合法 JSON");
     throw error;
   }
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

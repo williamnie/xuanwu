@@ -14,6 +14,7 @@ import { createPendingPiAction, recordPiActionAuditEvent } from "../pi/actionEng
 import { decideSourcePermission, type SourcePermissionDecision } from "../pi/sourcePermissionPolicy.ts";
 import { executeApprovedPiAction, resolvePiActionDecision, type PiActionDecisionContext } from "./piActionDecision.ts";
 import { HttpError } from "./errors.ts";
+import { cleanString, stringList } from "../util/values.ts";
 
 type JsonObject = Record<string, unknown>;
 type ActionEditMap = Record<string, { payload?: JsonObject }>;
@@ -315,14 +316,6 @@ function parseJson(value: string): unknown {
   try { return JSON.parse(value || "{}"); } catch { return {}; }
 }
 
-function stringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(cleanString).filter(Boolean) : [];
-}
-
 function firstString(...values: unknown[]): string {
   return values.map(cleanString).find(Boolean) || "";
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

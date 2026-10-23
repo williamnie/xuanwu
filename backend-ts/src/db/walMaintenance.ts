@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, renameSync, statfsSync, statSync, writeFileSync 
 import { dirname, resolve } from "node:path";
 import { recordMaintenanceAudit } from "./repositories/eventMaintenance.ts";
 import { WAL_AUTOCHECKPOINT_PAGES } from "./database.ts";
+import { errorMessage } from "../util/values.ts";
 
 export const WAL_MAINTENANCE_SCHEMA = "xuanwu.sqlite-wal-maintenance.v1" as const;
 
@@ -242,8 +243,4 @@ function required(value: string | undefined, flag: string): string {
 
 function shellPlaceholder(path: string): string {
   return path.includes(" ") ? "<path>" : path;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

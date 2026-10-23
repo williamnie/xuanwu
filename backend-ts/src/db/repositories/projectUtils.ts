@@ -9,6 +9,7 @@ import {
   parseExecutionPolicyWrite,
   policyFromLegacyWrite
 } from "../../providers/core/policyPersistence.ts";
+import { cleanString } from "../../util/values.ts";
 
 export type ProjectWriteInput = Partial<Record<keyof NormalizedProjectWrite | "execution_policy", unknown>>;
 export type ProjectPatchInput = ProjectWriteInput;
@@ -113,10 +114,6 @@ function projectNameFromCWD(cwd: string): string {
   const trimmed = cleanString(cwd).replace(new RegExp(`${escapeRegExp(sep)}+$`), "");
   const name = basename(trimmed);
   return name === "." || name === sep || name === "" ? "project" : name;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function hasPatchValue(input: ProjectPatchInput, key: keyof NormalizedProjectWrite): boolean {

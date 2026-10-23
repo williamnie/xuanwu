@@ -15,6 +15,7 @@ import {
 import { telegramConnectorStatus } from "./telegramConfig.ts";
 import type { TelegramConnectorConfig } from "./telegramTypes.ts";
 import { notificationPresentation } from "../notifications/notificationPresentation.ts";
+import { cleanString } from "../util/values.ts";
 
 type Options = {
   database: RunnerDatabase;
@@ -96,17 +97,13 @@ function telegramFallback(options: Options, alert: PiGuardianAlert): ResolvedImN
   const config = options.telegramConfig?.();
   if (!config || !telegramConnectorStatus(config).enabled) return null;
   const mapping = config.projectMappings.find((item) => item.projectId === alert.project_id);
-  const mappedChat = clean(mapping?.chatId) || clean(mapping?.userId);
+  const mappedChat = cleanString(mapping?.chatId) || cleanString(mapping?.userId);
   const useDefault = mappedChat === "" && options.feishuConfigured?.() !== true;
-  const chatID = mappedChat || (useDefault ? clean(config.defaultChatId) : "");
+  const chatID = mappedChat || (useDefault ? cleanString(config.defaultChatId) : "");
   if (chatID === "" || !config.allowedChatIds.includes(chatID)) return null;
   return {
     connector_id: "telegram",
     conversation_id: chatID,
     external_event_id: 0
   };
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

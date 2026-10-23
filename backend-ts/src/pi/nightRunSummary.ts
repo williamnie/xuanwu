@@ -1,4 +1,5 @@
 import type { IssueStateDiagnostic } from "./issueStateManager.ts";
+import { cleanString } from "../util/values.ts";
 
 type NightRunIssueSummary = Record<string, unknown> & {
   error?: string; evidence_links?: Record<string, string>; id: number; status: string; title: string;
@@ -70,13 +71,13 @@ function categoryLines(label: string, issues: NightRunIssueSummary[], includeRea
 }
 
 function issueLine(issue: NightRunIssueSummary, includeReason: boolean): string {
-  const title = clean(issue.title) || `Issue ${issue.id}`;
-  const reason = includeReason && clean(issue.error) ? `；原因：${clean(issue.error)}` : "";
+  const title = cleanString(issue.title) || `Issue ${issue.id}`;
+  const reason = includeReason && cleanString(issue.error) ? `；原因：${cleanString(issue.error)}` : "";
   return `#${issue.id} ${title}${reason}；链接：${linksText(issue.evidence_links)}`;
 }
 
 function linksText(links: Record<string, string> | undefined): string {
-  const entries = Object.entries(links ?? {}).filter(([, value]) => clean(value) !== "");
+  const entries = Object.entries(links ?? {}).filter(([, value]) => cleanString(value) !== "");
   if (entries.length === 0) return "无";
   return entries.map(([key, value]) => `${key}=${value}`).join("，");
 }
@@ -96,11 +97,11 @@ function toIssueSummary(value: Record<string, unknown>): NightRunIssueSummary | 
   if (id <= 0) return undefined;
   return {
     ...value,
-    error: clean(value.error),
+    error: cleanString(value.error),
     evidence_links: recordOfStrings(value.evidence_links),
     id,
-    status: clean(value.status),
-    title: clean(value.title)
+    status: cleanString(value.status),
+    title: cleanString(value.title)
   };
 }
 
@@ -110,9 +111,5 @@ function isIssueSummary(value: NightRunIssueSummary | undefined): value is Night
 
 function recordOfStrings(value: unknown): Record<string, string> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, clean(entry)]));
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, cleanString(entry)]));
 }

@@ -7,6 +7,7 @@ import type {
   AgentWorkflowInput,
   NeedsUserEscalationInput
 } from "./agentOrchestration.ts";
+import { cleanString } from "../util/values.ts";
 
 export function workflowIssuePayload(
   project: Project,
@@ -118,8 +119,4 @@ function roleResponsibility(role: AgentRole): string {
 
 function roleLabel(role: AgentRole): string {
   return role[0].toUpperCase() + role.slice(1);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

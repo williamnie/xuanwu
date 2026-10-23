@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { dayKey, isoWeekKey, monthKey, zeroUsage } from "./helpers.ts";
 import type { TokenUsage } from "./types.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 type ProviderUsageRow = {
   captured_at: string;
@@ -95,7 +96,7 @@ function providerCost(value: string): { money: MoneySummary; usage: Record<strin
     const usage = objectValue(parsed.usage);
     const money = objectValue(parsed.money);
     const amount = nonNegativeInteger(money.amount_micros);
-    const currency = text(money.currency).toUpperCase();
+    const currency = cleanString(money.currency).toUpperCase();
     const hasUsage = USAGE_FIELDS.some((field) => nonNegativeInteger(usage[field]) !== null);
     const hasMoney = amount !== null && currency !== "";
     if (!hasUsage && !hasMoney) return null;
@@ -152,18 +153,10 @@ function finishMoney(values: Map<string, number>): MoneySummary {
   return { amount_micros: amount, completeness: "available", currency };
 }
 
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 function nonNegativeInteger(value: unknown): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
-function text(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function clean(value: unknown): string {
-  return text(value).slice(0, 64);
+  return cleanString(value).slice(0, 64);
 }

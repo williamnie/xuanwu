@@ -1,3 +1,5 @@
+import { cleanString } from "../util/values.ts";
+
 type PiAttentionDecisionValue =
   "ignore" | "inbox_only" | "propose_issue" | "ask_clarification" | "blocked_by_policy";
 
@@ -85,12 +87,12 @@ export function decidePiAttention(input: PiAttentionInput): PiAttentionDecision 
 function normalizeMessage(message: PiAttentionMessage): Required<PiAttentionMessage> {
   return {
     attachments: Array.isArray(message.attachments) ? message.attachments : [],
-    chat_id: clean(message.chat_id),
+    chat_id: cleanString(message.chat_id),
     mentions: Array.isArray(message.mentions) ? message.mentions : [],
-    message_id: clean(message.message_id),
-    sender_id: clean(message.sender_id),
-    sender_open_id: clean(message.sender_open_id),
-    text: clean(message.text)
+    message_id: cleanString(message.message_id),
+    sender_id: cleanString(message.sender_id),
+    sender_open_id: cleanString(message.sender_open_id),
+    text: cleanString(message.text)
   };
 }
 
@@ -99,19 +101,15 @@ function matchesAllowedUser(allowed: string[] | undefined, message: Required<PiA
 }
 
 function mentionValue(message: Required<PiAttentionMessage>): string {
-  return message.mentions.map((item) => clean(item.name) || clean(item.id)).filter(Boolean).join(",") || "@PI";
+  return message.mentions.map((item) => cleanString(item.name) || cleanString(item.id)).filter(Boolean).join(",") || "@PI";
 }
 
 function botMentioned(message: Required<PiAttentionMessage>): boolean {
   if (BOT_MENTION_PATTERN.test(message.text)) return true;
-  return message.mentions.some((item) => BOT_MENTION_PATTERN.test(clean(item.name) || clean(item.id)));
+  return message.mentions.some((item) => BOT_MENTION_PATTERN.test(cleanString(item.name) || cleanString(item.id)));
 }
 
 function includesClean(values: string[] | undefined, value: string): boolean {
-  const needle = clean(value);
-  return needle !== "" && Array.isArray(values) && values.map(clean).includes(needle);
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  const needle = cleanString(value);
+  return needle !== "" && Array.isArray(values) && values.map(cleanString).includes(needle);
 }

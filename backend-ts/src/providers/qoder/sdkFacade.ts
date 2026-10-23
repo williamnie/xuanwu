@@ -21,6 +21,7 @@ import {
 } from "./events.ts";
 import { qoderPermissionOptions } from "./permissionBroker.ts";
 import type { ResolvedExecutionPolicy } from "../core/policyContracts.ts";
+import { cleanString, objectValue } from "../../util/values.ts";
 export { QODER_VERSION_PAIR } from "./version.ts";
 
 type QoderTerminal = "succeeded" | "failed" | "interrupted" | "cancelled";
@@ -138,9 +139,9 @@ export function buildQoderQueryOptions(
   "pathToQoderCLIExecutable" | "permissionMode" | "resolveModel" | "resume" | "sessionId" | "systemPrompt" | "tools"
 > {
   const policy = qoderPermissionOptions(options.approvalPolicy, options.sandbox, options.canUseTool, options.policy);
-  const model = clean(options.model) || clean(runtime?.model);
+  const model = cleanString(options.model) || cleanString(runtime?.model);
   const resolveModel = qoderModelPolicy(model, options.reasoningEffort);
-  const systemPrompt = clean(options.systemPrompt);
+  const systemPrompt = cleanString(options.systemPrompt);
   return {
     ...(runtime ? {
       auth: buildQoderAuthOptions(runtime),
@@ -152,11 +153,11 @@ export function buildQoderQueryOptions(
       pathToQoderCLIExecutable: runtime.command
     } : {}),
     ...policy,
-    cwd: clean(options.cwd) || undefined,
+    cwd: cleanString(options.cwd) || undefined,
     model: resolveModel ? undefined : model || undefined,
     resolveModel,
-    resume: clean(options.resume) || undefined,
-    sessionId: clean(options.resume) === "" ? clean(options.sessionId) || undefined : undefined,
+    resume: cleanString(options.resume) || undefined,
+    sessionId: cleanString(options.resume) === "" ? cleanString(options.sessionId) || undefined : undefined,
     systemPrompt: systemPrompt ? { type: "preset", preset: "qodercli", append: systemPrompt } : undefined
   };
 }
@@ -229,7 +230,7 @@ class RealQoderSdkFacade implements QoderSdkFacade {
       controller: new AbortController(),
       interruptAcknowledged: false,
       interruptRequested: false,
-      sessionId: clean(options.resume) || clean(options.sessionId),
+      sessionId: cleanString(options.resume) || cleanString(options.sessionId),
       startedAt: new Date().toISOString(),
       timedOut: false
     };
@@ -255,7 +256,7 @@ class RealQoderSdkFacade implements QoderSdkFacade {
         active.controller.abort(`Qoder query timed out after ${timeoutMs}ms`);
       }, timeoutMs);
       for await (const message of query) {
-        if (clean(message.session_id)) active.sessionId = clean(message.session_id);
+        if (cleanString(message.session_id)) active.sessionId = cleanString(message.session_id);
         if (message.type === "result") {
           resultCount += 1;
           resultMessage = message;
@@ -288,8 +289,8 @@ class RealQoderSdkFacade implements QoderSdkFacade {
       if (!terminal) throw qoderError("protocol", "Qoder result did not map to a terminal", { sessionId: active.sessionId });
       return {
         invocationRef: invocationKey,
-        messageRef: clean(resultMessage.uuid),
-        sessionId: clean(resultMessage.session_id) || active.sessionId,
+        messageRef: cleanString(resultMessage.uuid),
+        sessionId: cleanString(resultMessage.session_id) || active.sessionId,
         terminal,
         usage
       };
@@ -338,7 +339,7 @@ class RealQoderSdkFacade implements QoderSdkFacade {
     const queryOptions: Options = {
       ...buildQoderQueryOptions({
         approvalPolicy: "never",
-        cwd: clean(this.config.cwd) || process.cwd(),
+        cwd: cleanString(this.config.cwd) || process.cwd(),
         invocationKey: "qoder-model-discovery",
         sandbox: "read-only"
       }, this.config),
@@ -453,8 +454,8 @@ function assertObservedPermissionMode(
   sessionId: string
 ): void {
   if (!policy || message.type !== "system" || message.subtype !== "init") return;
-  const expected = clean(policy.nativeSummary.permissionMode);
-  const observed = clean((message as unknown as Record<string, unknown>).permissionMode);
+  const expected = cleanString(policy.nativeSummary.permissionMode);
+  const observed = cleanString((message as unknown as Record<string, unknown>).permissionMode);
   if (expected === "" || observed === "" || expected === observed) return;
   throw qoderError(
     "configuration",
@@ -475,14 +476,14 @@ export function createFakeQoderSdkFacade(
     async run(_prompt, runOptions, onMessage) {
       calls.push({ ...runOptions });
       active.add(runOptions.invocationKey);
-      let sessionId = options.sessionId ?? (clean(runOptions.resume) || clean(runOptions.sessionId) || "qoder-session-1");
+      let sessionId = options.sessionId ?? (cleanString(runOptions.resume) || cleanString(runOptions.sessionId) || "qoder-session-1");
       let result: Extract<SDKMessage, { type: "result" }> | undefined;
       let initSeen = false;
       let resultCount = 0;
       try {
         for (const message of messages) {
           if (message === "throw") throw new Error("sdk failure");
-          if (clean(message.session_id)) sessionId = clean(message.session_id);
+          if (cleanString(message.session_id)) sessionId = cleanString(message.session_id);
           if (message.type === "result") {
             resultCount += 1;
             result = message;
@@ -502,7 +503,7 @@ export function createFakeQoderSdkFacade(
         if (terminal === "failed" && result) throw new QoderExecutionError(qoderResultFailure(result));
         return {
           invocationRef: runOptions.invocationKey,
-          messageRef: result ? clean(result.uuid) : "",
+          messageRef: result ? cleanString(result.uuid) : "",
           sessionId,
           terminal,
           usage
@@ -524,14 +525,14 @@ export function createFakeQoderSdkFacade(
 }
 
 function qoderModelPolicy(modelValue: string, effortValue: string | undefined): ModelPolicyProvider | undefined {
-  const effort = clean(effortValue);
+  const effort = cleanString(effortValue);
   if (!effort) return undefined;
-  const model = clean(modelValue);
+  const model = cleanString(modelValue);
   if (!model) throw qoderError("policy_input", "Qoder reasoning effort requires an explicitly selected model");
   return ({ availableModels }) => {
     const selected = availableModels.find((item) => item.value === model || item.modelId === model || item.model === model);
     if (!selected) throw qoderError("policy_input", `Qoder model ${model} is not in the current account model list`);
-    const efforts = Array.isArray(selected.efforts) ? selected.efforts.map(clean).filter(Boolean) : [];
+    const efforts = Array.isArray(selected.efforts) ? selected.efforts.map(cleanString).filter(Boolean) : [];
     if (!efforts.includes(effort)) {
       throw qoderError("policy_input", `Qoder model ${model} does not support reasoning effort ${effort}`);
     }
@@ -559,11 +560,11 @@ async function qoderUsageProjection(
         billable: usage.billable,
         credits: finiteNumber(usage.credits),
         input_tokens: finiteNumber(usage.input_tokens),
-        model: clean(message.message.model),
+        model: cleanString(message.message.model),
         original_credits: finiteNumber(usage.original_credits),
         output_tokens: finiteNumber(usage.output_tokens),
         provenance: "assistant.message.usage",
-        request_id: clean(message.request_id) || clean(resultUsage.request_id)
+        request_id: cleanString(message.request_id) || cleanString(resultUsage.request_id)
       })];
     }),
     credits: {
@@ -607,7 +608,7 @@ async function qoderUsageProjection(
 }
 
 function validModelInfo(value: ModelInfo): boolean {
-  return clean(value?.value) !== "" && clean(value?.displayName) !== "" && value?.isEnabled !== false;
+  return cleanString(value?.value) !== "" && cleanString(value?.displayName) !== "" && value?.isEnabled !== false;
 }
 
 function controlPrompt(signal: AbortSignal): AsyncIterable<never> {
@@ -629,7 +630,7 @@ function finiteNumber(value: unknown): number | undefined {
 }
 
 function qoderException(error: unknown, sessionId: string): QoderExecutionError {
-  const raw = recordValue(error);
+  const raw = objectValue(error);
   const message = redactSensitiveText(error instanceof Error ? error.message : String(error));
   const code = typeof raw.code === "string" || typeof raw.code === "number" ? raw.code : undefined;
   const exitCode = typeof raw.exitCode === "number" || raw.exitCode === null ? raw.exitCode : undefined;
@@ -655,16 +656,8 @@ function qoderError(
   return new QoderExecutionError({ category, message, retryable: false, ...details });
 }
 
-function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 function required(value: unknown, label: string): string {
-  const text = clean(value);
+  const text = cleanString(value);
   if (!text) throw qoderError("configuration", `${label} is required`);
   return text;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

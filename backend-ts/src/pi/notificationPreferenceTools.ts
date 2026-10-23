@@ -6,6 +6,7 @@ import { executeSafePiAction, type PiActionContext } from "./actionEngine.ts";
 import { resolvePiNotificationPreference } from "./notificationPreferenceResolver.ts";
 import { writePiNotificationPreference } from "./notificationPreferenceService.ts";
 import { scopedRunnerChatActionContext } from "./runnerChatAuthorization.ts";
+import { cleanString } from "../util/values.ts";
 
 export const PI_NOTIFICATION_PREFERENCE_TOOL_NAMES = [
   "notification_preference_read",
@@ -70,10 +71,10 @@ export function createPiNotificationPreferenceTools(
         payload: params,
         projectID: projectID(params.project_id, context),
         execute: () => resolvePiNotificationPreference(db, {
-          conversationID: clean(params.conversation_id) || clean(context.conversationID),
+          conversationID: cleanString(params.conversation_id) || cleanString(context.conversationID),
           projectID: projectID(params.project_id, context),
-          referenceTime: clean(params.reference_time),
-          runGroupID: clean(params.run_group_id)
+          referenceTime: cleanString(params.reference_time),
+          runGroupID: cleanString(params.run_group_id)
         })
       })
     ),
@@ -95,10 +96,10 @@ export function createPiNotificationPreferenceTools(
           projectID: targetProjectID,
           execute: () => writePiNotificationPreference(db, {
             ...params,
-            conversation_id: clean(params.conversation_id) || clean(context.conversationID),
+            conversation_id: cleanString(params.conversation_id) || cleanString(context.conversationID),
             policy_kind: "user_preference",
             project_id: targetProjectID,
-            run_group_id: clean(params.run_group_id)
+            run_group_id: cleanString(params.run_group_id)
           })
         });
       }
@@ -136,9 +137,5 @@ function toolResult(details: unknown): AgentToolResult<unknown> {
 }
 
 function projectID(value: unknown, context: PreferenceContext): string {
-  return clean(value) || clean(context.projectID);
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return cleanString(value) || cleanString(context.projectID);
 }

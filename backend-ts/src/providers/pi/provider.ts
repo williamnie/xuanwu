@@ -26,6 +26,7 @@ import {
   piTranscriptTurns,
   type PiSessionFunctions
 } from "./sessionHistory.ts";
+import { objectValue } from "../../util/values.ts";
 
 /**
  * P10：Pi Coding Agent executor（RPC transport，G10 gate 已通过）。
@@ -476,7 +477,7 @@ export class PiExecutorProvider implements ExecutorProvider {
               .catch((error) => rejectTerminal(error instanceof Error ? error : new Error(String(error)), "pi-coding-agent/approval_bridge"));
             break;
           case "message_update": {
-            const update = recordValue(event.assistantMessageEvent);
+            const update = objectValue(event.assistantMessageEvent);
             if (update.type === "error") failureReason = String(update.error ?? update.reason ?? "Pi model request failed");
             if (update.type === "text_delta" && typeof update.delta === "string" && update.delta !== "") {
               const session = sessionForEvent();
@@ -637,7 +638,7 @@ function parsePolicyToolCall(value: unknown): PiPolicyToolCall | undefined {
     return {
       toolCallId: stringValue(parsed.toolCallId),
       toolName,
-      input: recordValue(parsed.input)
+      input: objectValue(parsed.input)
     };
   } catch {
     return undefined;
@@ -735,7 +736,7 @@ type PiToolObservation = {
 function piToolObservation(event: PiRpcEvent, defaultCwd: string): PiToolObservation | undefined {
   const toolName = stringValue(event.toolName).toLowerCase();
   if (toolName !== "bash") return undefined;
-  const args = recordValue(event.args);
+  const args = objectValue(event.args);
   const command = stringValue(args.command) || stringValue(args.cmd);
   const id = stringValue(event.toolCallId);
   if (command === "" || id === "") return undefined;
@@ -748,14 +749,14 @@ function piToolObservation(event: PiRpcEvent, defaultCwd: string): PiToolObserva
 }
 
 function piToolOutput(value: unknown): string {
-  const result = recordValue(value);
+  const result = objectValue(value);
   if (!Array.isArray(result.content)) return stringValue(result.text);
-  return result.content.map(recordValue).map((item) => stringValue(item.text)).filter(Boolean).join("\n");
+  return result.content.map(objectValue).map((item) => stringValue(item.text)).filter(Boolean).join("\n");
 }
 
 function piToolExitCode(value: unknown, failed: boolean, output: string): number {
-  const result = recordValue(value);
-  const details = recordValue(result.details);
+  const result = objectValue(value);
+  const details = objectValue(result.details);
   if (typeof details.exitCode === "number" && Number.isSafeInteger(details.exitCode)) return details.exitCode;
   const match = output.match(/Command exited with code (\d+)/);
   if (match) return Number(match[1]);
@@ -809,10 +810,6 @@ function piVersion(path?: string): string {
   } catch {
     return "";
   }
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function assertPiApprovalPolicy(value: string | undefined): void {

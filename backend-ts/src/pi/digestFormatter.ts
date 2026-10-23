@@ -1,6 +1,7 @@
 import type { PiNotificationIntent } from "../db/repositories/pi.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 type DigestIssue = { bucket: string; issueID: number; reason: string; status: string; title: string };
 type DigestView = {
@@ -39,7 +40,7 @@ function digestView(intent: PiNotificationIntent): DigestView {
     failed: count(payload, "failed_count", "failed"),
     issues: issueList(payload.issues),
     needsUser: count(payload, "needs_user_count", "needsUser"),
-    runGroupID: text(payload.run_group_id) || intent.run_group_id,
+    runGroupID: cleanString(payload.run_group_id) || intent.run_group_id,
     skipped: count(payload, "skipped_count", "skipped"),
     total: count(payload, "total_count", "total"),
     verification: count(payload, "verification_count", "verification")
@@ -91,11 +92,11 @@ function issueList(value: unknown): DigestIssue[] {
 function issueView(value: unknown): DigestIssue {
   const row = objectValue(value);
   return {
-    bucket: text(row.bucket),
+    bucket: cleanString(row.bucket),
     issueID: positiveNumber(row.issue_id),
-    reason: text(row.reason),
-    status: text(row.status),
-    title: text(row.title)
+    reason: cleanString(row.reason),
+    status: cleanString(row.status),
+    title: cleanString(row.title)
   };
 }
 
@@ -115,20 +116,12 @@ function parsePayload(value: string): Record<string, unknown> {
   }
 }
 
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 function positiveNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 }
 
-function text(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function safeSummary(value: unknown, maxRunes: number): string {
-  const safe = redactSensitiveText(text(value))
+  const safe = redactSensitiveText(cleanString(value))
     .split(/\r?\n/)
     .filter((line) => !STACK_LINE_PATTERN.test(line))
     .join(" ")

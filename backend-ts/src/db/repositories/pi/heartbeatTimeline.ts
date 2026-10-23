@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../../database.ts";
 import { integerInput, integerValue, optionalString } from "./common.ts";
 import { redactAuditJsonText, redactAuditText } from "./auditRedaction.ts";
+import { cleanString } from "../../../util/values.ts";
 
 type PiHeartbeatTimelineFilter = { issueId?: number; limit?: number; projectId?: string };
 type PiHeartbeatTimelineStage =
@@ -78,7 +79,7 @@ function listSupervisorTimelineRows(
 function heartbeatWhere(filter: PiHeartbeatTimelineFilter): { args: SqlValue[]; sql: string } {
   const args: SqlValue[] = [];
   const conditions: string[] = [];
-  const projectId = clean(filter.projectId);
+  const projectId = cleanString(filter.projectId);
   const issueId = integerInput(filter.issueId);
   if (projectId !== "") {
     conditions.push("project_id=?");
@@ -97,7 +98,7 @@ function heartbeatWhere(filter: PiHeartbeatTimelineFilter): { args: SqlValue[]; 
 function supervisorWhere(filter: PiHeartbeatTimelineFilter): { args: SqlValue[]; sql: string } {
   const args: SqlValue[] = [];
   const conditions: string[] = [];
-  const projectId = clean(filter.projectId);
+  const projectId = cleanString(filter.projectId);
   const issueId = integerInput(filter.issueId);
   if (projectId !== "") {
     conditions.push("project_id=?");
@@ -113,7 +114,7 @@ function supervisorWhere(filter: PiHeartbeatTimelineFilter): { args: SqlValue[];
 function actionWhere(filter: PiHeartbeatTimelineFilter): { args: SqlValue[]; sql: string } {
   const args: SqlValue[] = [];
   const conditions: string[] = [];
-  const projectId = clean(filter.projectId);
+  const projectId = cleanString(filter.projectId);
   const issueId = integerInput(filter.issueId);
   if (projectId !== "") {
     conditions.push("project_id=?");
@@ -276,8 +277,4 @@ function jsonObject(text: string): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

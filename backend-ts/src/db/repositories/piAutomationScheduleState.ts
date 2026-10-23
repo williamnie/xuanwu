@@ -1,3 +1,5 @@
+import { cleanString, nonNegativeInteger } from "../../util/values.ts";
+
 export type PiAutomationScheduleState = {
   error: string; failed_cursor: string; last_result: string; last_run_at: string;
   last_status: string; last_successful_cursor: string; lock_expires_at: string;
@@ -18,15 +20,15 @@ const DEFAULT_RUN_TIMEOUT_MS = 300_000;
 
 function automationScheduleState(input: ScheduleInput, trigger: TriggerLike, timestamp: Date): PiAutomationScheduleState {
   return {
-    error: clean(input.error), failed_cursor: clean(input.failed_cursor),
-    last_result: clean(input.last_result), last_run_at: clean(input.last_run_at),
-    last_status: clean(input.last_status), last_successful_cursor: clean(input.last_successful_cursor),
-    lock_expires_at: clean(input.lock_expires_at), lock_token: clean(input.lock_token),
-    next_run_at: initialNextRun(input.next_run_at, trigger, timestamp, nonNegative(input.id) > 0),
-    processed_watermark: clean(input.processed_watermark),
+    error: cleanString(input.error), failed_cursor: cleanString(input.failed_cursor),
+    last_result: cleanString(input.last_result), last_run_at: cleanString(input.last_run_at),
+    last_status: cleanString(input.last_status), last_successful_cursor: cleanString(input.last_successful_cursor),
+    lock_expires_at: cleanString(input.lock_expires_at), lock_token: cleanString(input.lock_token),
+    next_run_at: initialNextRun(input.next_run_at, trigger, timestamp, nonNegativeInteger(input.id) > 0),
+    processed_watermark: cleanString(input.processed_watermark),
     retry_backoff_seconds: positive(input.retry_backoff_seconds, DEFAULT_RETRY_BACKOFF_SECONDS),
-    retry_count: nonNegative(input.retry_count), run_count: nonNegative(input.run_count),
-    run_started_at: clean(input.run_started_at),
+    retry_count: nonNegativeInteger(input.retry_count), run_count: nonNegativeInteger(input.run_count),
+    run_started_at: cleanString(input.run_started_at),
     run_timeout_ms: positive(input.run_timeout_ms, DEFAULT_RUN_TIMEOUT_MS)
   };
 }
@@ -38,7 +40,7 @@ export function mapAutomationScheduleState(row: Record<string, unknown>): PiAuto
 export function automationIntervalMs(trigger: Record<string, unknown>): number {
   const value = trigger.every ?? trigger.interval_ms ?? trigger.intervalMs;
   if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return value;
-  const match = clean(value).match(/^(\d+)(ms|s|m|h)$/);
+  const match = cleanString(value).match(/^(\d+)(ms|s|m|h)$/);
   if (!match) return 0;
   const amount = Number(match[1]);
   if (match[2] === "h") return amount * 60 * 60 * 1000;
@@ -48,7 +50,7 @@ export function automationIntervalMs(trigger: Record<string, unknown>): number {
 }
 
 function initialNextRun(value: unknown, trigger: TriggerLike, timestamp: Date, existing: boolean): string {
-  const explicit = clean(value);
+  const explicit = cleanString(value);
   if (explicit !== "") return validTimestamp(explicit);
   if (existing || !["schedule", "continuous"].includes(trigger.type)) return "";
   return new Date(timestamp.getTime() + automationIntervalMs(trigger)).toISOString();
@@ -59,14 +61,6 @@ function validTimestamp(value: string): string {
   return new Date(value).toISOString();
 }
 
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function positive(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : fallback;
-}
-
-function nonNegative(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
 }

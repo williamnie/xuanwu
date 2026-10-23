@@ -1,5 +1,6 @@
 import type { ProviderEvent } from "../providers/types.ts";
 import { codexDynamicExecObservation } from "../providers/codex/dynamicExec.ts";
+import { nonNegativeInteger, objectValue } from "../util/values.ts";
 
 const ISSUE_LOG_CHUNK_EVENT_LIMIT = 64;
 const ISSUE_LOG_CHUNK_TEXT_BYTES = 32 * 1024;
@@ -474,10 +475,6 @@ function terminalExitCode(value: unknown, status: string): number {
   return ["completed", "done", "success", "succeeded"].includes(status.trim().toLowerCase()) ? 0 : 1;
 }
 
-function nonNegativeInteger(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
-}
-
 function commandOutput(item: Record<string, unknown>): string {
   const aggregate = stringValue(item.aggregatedOutput);
   if (aggregate !== "") return aggregate;
@@ -507,10 +504,6 @@ function rawObject(value: unknown): Record<string, unknown> {
     }
   }
   return objectValue(value);
-}
-
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function compactObject(value: Record<string, unknown>): Record<string, unknown> {

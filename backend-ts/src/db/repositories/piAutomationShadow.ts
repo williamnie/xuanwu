@@ -13,6 +13,7 @@ import type {
   AutomationID,
   AutomationTriggerConfig
 } from "../../domain/automation/contracts.ts";
+import { cleanString } from "../../util/values.ts";
 
 const PI_AUTOMATION_SHADOW_WORKFLOW_REF = "workflow:legacy-pi-shadow@1";
 const PI_AUTOMATION_SHADOW_EVENT = "automation.legacy_pi_shadow_mapped.v1";
@@ -209,14 +210,14 @@ function mapTrigger(legacy: PiAutomationRecord): AutomationTriggerConfig {
   const trigger = legacy.trigger as Record<string, unknown>;
   if (legacy.trigger_type === "manual") return { type: "manual", config: {} };
   if (legacy.trigger_type === "webhook") {
-    const eventType = clean(trigger.event_type ?? trigger.eventType ?? trigger.topic);
+    const eventType = cleanString(trigger.event_type ?? trigger.eventType ?? trigger.topic);
     if (!eventType) throw new Error("legacy webhook trigger requires event_type");
-    const secretRef = clean(trigger.secret_ref ?? trigger.secretRef);
+    const secretRef = cleanString(trigger.secret_ref ?? trigger.secretRef);
     return { type: "webhook", config: { event_type: eventType, ...(secretRef ? { secret_ref: secretRef } : {}) } };
   }
-  const expression = clean(trigger.expression ?? trigger.cron);
+  const expression = cleanString(trigger.expression ?? trigger.cron);
   if (expression) {
-    const timezone = clean(trigger.timezone);
+    const timezone = cleanString(trigger.timezone);
     if (!timezone) throw new Error("legacy cron trigger requires an explicit IANA timezone");
     return { type: "cron", config: { expression, timezone } };
   }
@@ -247,8 +248,4 @@ function sortValue(value: unknown): unknown {
   return Object.fromEntries(Object.entries(value as Record<string, unknown>)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, item]) => [key, sortValue(item)]));
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

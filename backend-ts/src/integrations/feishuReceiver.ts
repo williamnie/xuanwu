@@ -17,6 +17,7 @@ import {
   resolveLegacyFeishuProjectSelectionInteraction
 } from "./feishuInteractionAdapter.ts";
 import type { ImInteractionHandleResult } from "./imInteractionService.ts";
+import { cleanString } from "../util/values.ts";
 
 export type FeishuReceiverStatus = {
   connected: boolean;
@@ -290,10 +291,6 @@ function cardActionAllowed(
 
 function targetAllowed(allowlist: string[], value: string): boolean {
   return allowlist.length === 0 || (value !== "" && allowlist.includes(value));
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function normalizeState(

@@ -25,6 +25,7 @@ import { DEFAULT_EXECUTION_POLICY, type ExecutionPolicyRequest } from "../provid
 import { parseExecutionPolicyWrite } from "../providers/core/policyPersistence.ts";
 import { resolveExecutionPolicy } from "../providers/core/policyResolution.ts";
 import { translateLegacyExecutionPolicy } from "../providers/core/legacyExecutionPolicy.ts";
+import { cleanString, isRecord } from "../util/values.ts";
 
 type SessionApiContext = {
   bus?: EventBus;
@@ -447,14 +448,14 @@ function publicAgentSession(session: AgentSession): Record<string, unknown> {
 
 function qualifiedProviderSession(provider: string, session: Record<string, unknown>): Record<string, unknown> {
   const providerSessionID = firstNonEmpty(
-    stringValue(session.provider_session_id),
-    stringValue(session.sessionId),
-    stringValue(session.thread_id),
-    providerIDFromKey(stringValue(session.id), provider)
+    cleanString(session.provider_session_id),
+    cleanString(session.sessionId),
+    cleanString(session.thread_id),
+    providerIDFromKey(cleanString(session.id), provider)
   );
   return {
     ...session,
-    id: providerSessionID ? `${provider}:${providerSessionID}` : stringValue(session.id),
+    id: providerSessionID ? `${provider}:${providerSessionID}` : cleanString(session.id),
     provider,
     ...(providerSessionID ? { provider_session_id: providerSessionID } : {})
   };
@@ -536,7 +537,7 @@ function reconcileProviderSessionMetadata(
 ): Record<string, unknown> {
   const indexed = getAgentSession(db, `${provider}:${sessionId}`);
   if (provider === "codex" || !indexed) return detail;
-  const status = stringValue(detail.status) || (detail.isRunning === true ? "running" : "");
+  const status = cleanString(detail.status) || (detail.isRunning === true ? "running" : "");
   const rawRef = correctedRuntimeRawRef(indexed.raw_ref, provider, detail);
   if (!status && !rawRef) return detail;
   const updated = upsertAgentSession(db, {
@@ -569,14 +570,6 @@ function stringBody(body: Record<string, unknown>, key: string): string {
   return typeof body[key] === "string" ? body[key].trim() : "";
 }
 
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
 function firstNonEmpty(...values: string[]): string {
   return values.find((value) => value.trim() !== "")?.trim() ?? "";
 }
@@ -590,15 +583,15 @@ function indexedActivityWins(
 }
 
 function activeSessionStatus(value: unknown): boolean {
-  const normalized = stringValue(value).toLowerCase().replaceAll("_", "-");
+  const normalized = cleanString(value).toLowerCase().replaceAll("_", "-");
   return ["active", "busy", "in-progress", "inprogress", "running", "streaming"].includes(normalized);
 }
 
 function codexProcessNotLoaded(value: unknown): boolean {
   if (value && typeof value === "object" && !Array.isArray(value)) {
-    return stringValue((value as Record<string, unknown>).type).toLowerCase() === "notloaded";
+    return cleanString((value as Record<string, unknown>).type).toLowerCase() === "notloaded";
   }
-  return stringValue(value).toLowerCase().replaceAll("_", "") === "notloaded";
+  return cleanString(value).toLowerCase().replaceAll("_", "") === "notloaded";
 }
 
 function cleanParam(value: string | null): string {

@@ -29,6 +29,7 @@ import {
   executeDecisionActions,
   executeReadyDecisionActions
 } from "./guardianDecisionActions.ts";
+import { isoSeconds } from "../util/values.ts";
 
 type GuardianDecisionOrchestratorOptions = {
   limit?: number;
@@ -163,7 +164,7 @@ function matchesActiveDecision(decision: PiGuardianDecision, baseKey: string): b
 function suppressForCooldown(db: RunnerDatabase, candidate: GuardianDecisionCandidate, now: Date): boolean {
   if (["actionable", "urgent"].includes(candidate.severity) || candidate.decision_kind === "approval") return false;
   const baseKey = guardianDecisionBaseKey(candidate);
-  const timestamp = iso(now);
+  const timestamp = isoSeconds(now);
   return listPiGuardianDecisions(db, {
     decisionKind: candidate.decision_kind,
     issueId: candidate.issue_id,
@@ -232,7 +233,7 @@ function existingPlan(existing: PiGuardianDecision | null, plan: GuardianDecisio
 
 function consumeEvent(db: RunnerDatabase, event: PiGuardianEvent, now: Date): void {
   updatePiGuardianEvent(db, event.id, {
-    consumed_at: event.consumed_at || iso(now),
+    consumed_at: event.consumed_at || isoSeconds(now),
     status: "consumed"
   });
 }
@@ -273,8 +274,4 @@ function addSummary(
   total.merged += next.merged;
   total.rescheduled += next.rescheduled;
   total.scanned += next.scanned;
-}
-
-function iso(value: Date): string {
-  return value.toISOString().replace(/\.\d{3}Z$/, "Z");
 }

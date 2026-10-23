@@ -1,6 +1,7 @@
 import type { PiActionEnvelope } from "./actionGate.ts";
 import type { PiActionContext, PiActionRequest } from "./actionEngine.ts";
 import { guardianActionLeaseKey } from "./guardianActionLease.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 type ActionRecordMetadata = {
   before_snapshot_json: string;
@@ -67,16 +68,12 @@ function expectedStateJson(payload: Record<string, unknown>): string {
       expected[key.slice("expected_".length)] = value;
     }
   }
-  const explicit = objectPayload(payload.expected_state);
+  const explicit = objectValue(payload.expected_state);
   return stableJson({ ...expected, ...explicit });
 }
 
 function beforeSnapshotJson(payload: Record<string, unknown>): string {
-  return stableJson(objectPayload(payload.before_snapshot));
-}
-
-function objectPayload(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return stableJson(objectValue(payload.before_snapshot));
 }
 
 function payloadHash(payload: Record<string, unknown>): string {
@@ -91,8 +88,4 @@ function stableJson(value: unknown): string {
       .join(",")}}`;
   }
   return JSON.stringify(value ?? null);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

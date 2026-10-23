@@ -6,6 +6,7 @@ import type { RunnerConfig } from "../config/env.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 import { providerStatus } from "./systemStatus.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 type PiReportsContext = {
   bus?: EventBus;
@@ -37,12 +38,12 @@ function listReports(context: PiReportsContext, request: Request): unknown {
       heartbeat_id: record.heartbeat_id,
       id: record.id,
       issue_ids: parseJsonArray(record.issue_ids_json),
-      notification: parseRecord(body.notification),
+      notification: objectValue(body.notification),
       project_id: record.project_id,
       source: record.source,
       status: record.status,
       summary: parseJsonObject(record.summary_json),
-      supervisor_summary: parseRecord(body.supervisor_summary),
+      supervisor_summary: objectValue(body.supervisor_summary),
       type: record.type,
       window: { since: record.since_at, until: record.until_at }
     };
@@ -86,10 +87,6 @@ async function objectBody(request: Request): Promise<Record<string, unknown>> {
   }
 }
 
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function numericID(request: Request): number {
   const parts = new URL(request.url).pathname.split("/").filter(Boolean);
   const id = Number(parts[parts.indexOf("reports") + 1] ?? 0);
@@ -113,8 +110,4 @@ function parseJsonArray(value: string): unknown[] {
   } catch {
     return [];
   }
-}
-
-function parseRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }

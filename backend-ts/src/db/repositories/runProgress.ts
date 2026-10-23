@@ -21,6 +21,7 @@ import {
   type RunProgressSourceEvent,
   type RunProgressTimelineItem
 } from "../../events/runProgressProjector.ts";
+import { cleanString } from "../../util/values.ts";
 
 export const RUN_PROGRESS_STALLED_AFTER_MS = 15 * 60 * 1000;
 const RUN_PROGRESS_SOURCE_EVENT_LIMIT = 5000;
@@ -279,12 +280,12 @@ function eventAttempt(
   attempts: AttemptProjectionRow[]
 ): AttemptProjectionRow | undefined {
   const providerAttempts = attempts.filter((attempt) => attempt.provider === event.provider);
-  const turnID = text(event.metadata.provider_turn_id);
+  const turnID = cleanString(event.metadata.provider_turn_id);
   if (turnID) {
     const exact = providerAttempts.filter((attempt) => attempt.provider_turn_id === turnID).at(-1);
     if (exact) return exact;
   }
-  const sessionID = text(event.metadata.provider_session_id);
+  const sessionID = cleanString(event.metadata.provider_session_id);
   if (sessionID) {
     const session = providerAttempts.filter((attempt) => attempt.provider_session_id === sessionID &&
       insideAttemptWindow(occurredAt, attempt)).at(-1);
@@ -360,7 +361,7 @@ function stalledSignal(
 
 function eventSummary(payload: Record<string, unknown>, event: NormalizedRunEvent): string {
   return [payload.error, payload.status, payload.text, payload.command, payload.raw_method, payload.type]
-    .map(text)
+    .map(cleanString)
     .find(Boolean) || event.source.method;
 }
 
@@ -390,10 +391,6 @@ function latestTimestamp(...values: string[]): string {
 function timestamp(value: string): number {
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function text(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function sum(values: number[]): number {

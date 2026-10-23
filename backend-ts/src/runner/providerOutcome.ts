@@ -9,6 +9,7 @@ import {
   recordCompletionGitObservation,
   TERMINAL_COMMAND_OBSERVATION_CONTRACT
 } from "../domain/acceptance/completionCard.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 export type ProviderReportedOutcome = {
   outcome: "completed" | "failed" | "needs_user" | "unknown";
@@ -178,16 +179,6 @@ function parseEventPayload(value: string): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function normalizedOutcome(value: unknown): ProviderReportedOutcome["outcome"] {

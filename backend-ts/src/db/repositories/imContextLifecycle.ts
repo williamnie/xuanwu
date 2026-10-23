@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../database.ts";
+import { cleanString, nonNegativeInteger } from "../../util/values.ts";
 
 type ImContextDirection = "inbound" | "outbound";
 type ImContextProjectionEvent = {
@@ -85,7 +86,7 @@ export function reserveImContextProjection(
           error=''
         where im_context_event_bindings.status='failed'`, [
         connectorID, scopeKey, conversationID, turnID, direction(event.direction),
-        positiveInteger(event.sourceRowID), clean(event.messageRef), required(event.projectionHash, "projectionHash"),
+        positiveInteger(event.sourceRowID), cleanString(event.messageRef), required(event.projectionHash, "projectionHash"),
         now.toISOString()
       ]);
     }
@@ -219,7 +220,7 @@ function getImContextRollover(db: RunnerDatabase, id: string): ImContextRollover
     select id, connector_id, scope_key, parent_conversation_id, child_conversation_id,
       parent_epoch, child_epoch, trigger, status, capsule_json, expected_active_conversation_id,
       created_at, activated_at, error from im_context_rollovers where id=?
-  `).get(clean(id));
+  `).get(cleanString(id));
   return row ? mapRollover(row) : null;
 }
 
@@ -241,15 +242,15 @@ function mapCursor(row: Record<string, unknown>): ImContextCursor {
 }
 
 function mapRollover(row: Record<string, unknown>): ImContextRollover {
-  const status = clean(row.status);
+  const status = cleanString(row.status);
   if (!(["activated", "failed", "preparing"] as const).includes(status as never)) {
     throw new Error("invalid IM context rollover status");
   }
   return {
-    activated_at: clean(row.activated_at), capsule_json: required(row.capsule_json, "capsule_json"),
+    activated_at: cleanString(row.activated_at), capsule_json: required(row.capsule_json, "capsule_json"),
     child_conversation_id: required(row.child_conversation_id, "child_conversation_id"),
     child_epoch: nonNegativeInteger(row.child_epoch), connector_id: required(row.connector_id, "connector_id"),
-    created_at: required(row.created_at, "created_at"), error: clean(row.error), id: required(row.id, "id"),
+    created_at: required(row.created_at, "created_at"), error: cleanString(row.error), id: required(row.id, "id"),
     expected_active_conversation_id: required(row.expected_active_conversation_id, "expected_active_conversation_id"),
     parent_conversation_id: required(row.parent_conversation_id, "parent_conversation_id"),
     parent_epoch: nonNegativeInteger(row.parent_epoch), scope_key: required(row.scope_key, "scope_key"),
@@ -269,18 +270,10 @@ function positiveInteger(value: unknown): number {
   return value;
 }
 
-function nonNegativeInteger(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
-}
-
 function required(value: unknown, name: string): string {
-  const text = clean(value);
+  const text = cleanString(value);
   if (text === "") throw new Error(`${name} is required`);
   return text;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function bounded(value: string, max: number): string {

@@ -1,6 +1,7 @@
 import type { RunnerLocalSettings } from "../../config/localSettings.ts";
 import type { SecretService } from "./service.ts";
 import { resolveSecretLocator } from "./service.ts";
+import { cleanString } from "../../util/values.ts";
 
 const FEISHU_REFS = [
   ["appSecretRef", "appSecret"],
@@ -38,7 +39,7 @@ function resolveTelegram(
   secrets: SecretService,
   env: Record<string, string | undefined>
 ): Record<string, unknown> {
-  const ref = stringValue(value.botTokenRef);
+  const ref = cleanString(value.botTokenRef);
   if (ref === "") return value;
   try {
     return { ...value, botToken: resolveSecretLocator(secrets, ref, env) };
@@ -52,7 +53,7 @@ function resolveQoder(
   secrets: SecretService,
   env: Record<string, string | undefined>
 ): NonNullable<NonNullable<RunnerLocalSettings["providers"]>["qoder"]> {
-  const ref = stringValue(value.credentialRef);
+  const ref = cleanString(value.credentialRef);
   if (ref === "") return value;
   try {
     return { ...value, credential: resolveSecretLocator(secrets, ref, env) };
@@ -68,7 +69,7 @@ function resolveFeishu(
 ): Record<string, unknown> {
   const resolved = { ...value };
   for (const [refKey, valueKey] of FEISHU_REFS) {
-    const ref = stringValue(value[refKey]);
+    const ref = cleanString(value[refKey]);
     if (ref !== "") resolved[valueKey] = resolveSecretLocator(secrets, ref, env);
   }
   return resolved;
@@ -79,12 +80,8 @@ function resolveRemoteGit(
   secrets: SecretService,
   env: Record<string, string | undefined>
 ): Record<string, unknown> {
-  const ref = stringValue(value.tokenRef ?? value.token_ref);
+  const ref = cleanString(value.tokenRef ?? value.token_ref);
   if (ref === "") return value;
   if (!ref.startsWith("secret://") && !ref.startsWith("env://")) return value;
   return { ...value, token: resolveSecretLocator(secrets, ref, env) };
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

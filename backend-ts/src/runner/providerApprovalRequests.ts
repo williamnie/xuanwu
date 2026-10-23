@@ -3,6 +3,7 @@ import { resolvePiApprovalRequestRecord } from "../db/repositories/pi/approvalLi
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ProviderEvent } from "../providers/types.ts";
 import { recordApprovalFastAudit } from "../pi/approvalFastAudit.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 type ApprovalRuntimeContext = {
   database?: RunnerDatabase;
@@ -84,8 +85,8 @@ function recordApprovalResolved(input: ApprovalRuntimeContext, event: ProviderEv
 
 function parseApprovalPayload(event: ProviderEvent): ParsedApprovalPayload {
   const rawPayload = approvalPayload(event);
-  const params = recordValue(rawPayload.params);
-  const item = recordValue(params.item);
+  const params = objectValue(rawPayload.params);
+  const item = objectValue(params.item);
   const method = cleanString(rawPayload.method) || cleanString(event.raw?.method);
   const command = cleanString(params.command ?? item.command);
   const path = cleanString(params.path ?? item.path);
@@ -102,10 +103,10 @@ function parseApprovalPayload(event: ProviderEvent): ParsedApprovalPayload {
 }
 
 function approvalPayload(event: ProviderEvent): Record<string, unknown> {
-  const payload = recordValue(event.payload);
+  const payload = objectValue(event.payload);
   if (Object.keys(payload).length > 0) return payload;
   if (typeof event.payload === "string") return parseRecord(event.payload);
-  const rawPayload = recordValue(event.raw?.payload);
+  const rawPayload = objectValue(event.raw?.payload);
   if (Object.keys(rawPayload).length > 0) return rawPayload;
   if (typeof event.raw?.payload === "string") return parseRecord(event.raw.payload);
   return {};
@@ -114,7 +115,7 @@ function approvalPayload(event: ProviderEvent): Record<string, unknown> {
 function parseRecord(text: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(text) as unknown;
-    return recordValue(parsed);
+    return objectValue(parsed);
   } catch {
     return {};
   }
@@ -128,7 +129,7 @@ function approvalRequestType(
 ): string {
   if (method.includes("commandExecution") || command !== "") return "command";
   if (method.includes("fileChange") || path !== "") return "file";
-  if (method.includes("permissions") || Object.keys(recordValue(params.permissions)).length > 0) return "permission";
+  if (method.includes("permissions") || Object.keys(objectValue(params.permissions)).length > 0) return "permission";
   return "approval";
 }
 
@@ -142,12 +143,4 @@ function approvalSummary(parsed: ParsedApprovalPayload): string {
 
 function cancelledDecision(decision: string): boolean {
   return ["abort", "aborted", "cancel", "cancelled"].includes(decision.trim());
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }

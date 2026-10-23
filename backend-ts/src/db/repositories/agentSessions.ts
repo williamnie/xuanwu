@@ -1,6 +1,7 @@
 import { normalizeAgentSessionRole } from "../../agents/roles.ts";
 import type { RunnerDatabase } from "../database.ts";
 import { issueTimestamp } from "./issueCreate.ts";
+import { cleanString } from "../../util/values.ts";
 
 export type AgentSession = {
   agent_role: string; created_at: string; issue_id: number; preview: string;
@@ -127,8 +128,6 @@ function mapAgentSessionRow(row: AgentSessionRow): AgentSession {
     updated_at: requiredString(row.updated_at, "agent_sessions.updated_at")
   };
 }
-
-function cleanString(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
 function positiveOrZero(value: unknown): number { return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : 0; }
 function optionalString(value: unknown): string {
   if (value === null || value === undefined) return "";

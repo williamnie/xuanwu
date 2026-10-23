@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../database.ts";
+import { cleanString } from "../../util/values.ts";
 
 /**
  * Provider-neutral IM conversation state repository (A3, design
@@ -211,10 +212,6 @@ function requireString(value: unknown, label: string): string {
   const text = cleanString(value);
   if (text === "") throw new Error(`${label} is required`);
   return text;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function integerValue(value: unknown, label: string): number {

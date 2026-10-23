@@ -7,6 +7,7 @@ import {
   type GuardianFailureClassification,
   type GuardianSignalSeverity
 } from "./guardianFailureClassifier.ts";
+import { cleanString, isoSeconds, positiveInteger } from "../util/values.ts";
 
 type GuardianSignalSource = "heartbeat" | "supervisor";
 type GuardianSignal = {
@@ -65,24 +66,24 @@ function writeGuardianSignal(db: RunnerDatabase, signal: GuardianSignal): PiGuar
 }
 
 function heartbeatActionSignal(action: HeartbeatActionCandidate, context: GuardianSignalContext): GuardianSignal {
-  const projectID = clean(action.project_id) || context.projectID;
-  const issueID = positiveNumber(action.issue_id) || positiveNumber(action.payload.issue_id);
+  const projectID = cleanString(action.project_id) || context.projectID;
+  const issueID = positiveInteger(action.issue_id) || positiveInteger(action.payload.issue_id);
   const classification = classifyGuardianFailure({
-    diagnosisCode: clean(action.payload.diagnosis_code),
-    message: `${action.rationale} ${clean(action.payload.reason)}`,
-    status: clean(action.payload.status)
+    diagnosisCode: cleanString(action.payload.diagnosis_code),
+    message: `${action.rationale} ${cleanString(action.payload.reason)}`,
+    status: cleanString(action.payload.status)
   });
   const severity = heartbeatActionSeverity(action.action_type, classification.severity);
   return {
     action_type: "heartbeat.action_candidate",
     classification: { ...classification, severity },
-    diagnosis_code: clean(action.payload.diagnosis_code) || action.action_type,
+    diagnosis_code: cleanString(action.payload.diagnosis_code) || action.action_type,
     event_type: "guardian.heartbeat.action_candidate",
     idempotency_key: ["guardian.heartbeat.action_candidate", projectID, issueID, action.action_type, sourceID(context)].join(":"),
     issue_id: issueID,
     payload: {
       action_type: action.action_type,
-      diagnosis_code: clean(action.payload.diagnosis_code) || action.action_type,
+      diagnosis_code: cleanString(action.payload.diagnosis_code) || action.action_type,
       original_payload: action.payload,
       rationale: action.rationale,
       risk_level: action.risk_level,
@@ -99,8 +100,8 @@ function supervisorCandidateSignal(
   candidate: HeartbeatSupervisorCandidateSignal,
   context: GuardianSignalContext
 ): GuardianSignal {
-  const projectID = clean(candidate.project_id) || context.projectID;
-  const issueID = positiveNumber(candidate.issue_id);
+  const projectID = cleanString(candidate.project_id) || context.projectID;
+  const issueID = positiveInteger(candidate.issue_id);
   const classification = classifyGuardianFailure({
     diagnosisCode: candidate.diagnosis_code,
     message: candidate.reason,
@@ -154,17 +155,5 @@ function heartbeatActionSeverity(actionType: string, fallback: GuardianSignalSev
 }
 
 function sourceID(context: GuardianSignalContext): string {
-  return clean(context.heartbeatID) || `guardian-signal:${context.projectID}:${iso(context.now)}`;
-}
-
-function iso(value: Date): string {
-  return value.toISOString().replace(/\.\d{3}Z$/, "Z");
-}
-
-function positiveNumber(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return cleanString(context.heartbeatID) || `guardian-signal:${context.projectID}:${isoSeconds(context.now)}`;
 }

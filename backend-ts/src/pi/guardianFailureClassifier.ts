@@ -4,6 +4,7 @@ import {
   classifyRecoveryDiagnosis,
   type RecoveryFailureClass
 } from "./recoveryDiagnosis.ts";
+import { cleanString } from "../util/values.ts";
 
 const GUARDIAN_SIGNAL_SEVERITIES = ["info", "watch", "actionable", "urgent"] as const;
 
@@ -54,10 +55,6 @@ export function resolveDeterministicSeverity(
 }
 
 function severityValue(value: unknown): GuardianSignalSeverity | undefined {
-  const text = clean(value).toLowerCase();
+  const text = cleanString(value).toLowerCase();
   return (GUARDIAN_SIGNAL_SEVERITIES as readonly string[]).includes(text) ? text as GuardianSignalSeverity : undefined;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

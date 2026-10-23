@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { emptyRuntime, readSkillRuntimeManifest, type SkillRegistryTool, type SkillRuntimeMetadata } from "./runtimeManifest.ts";
+import { cleanString } from "../util/values.ts";
 
 export type SkillMetadata = SkillRuntimeMetadata & {
   allowed_roles: string[];
@@ -165,7 +166,7 @@ function readSkillFile(
   const frontMatter = parseFrontMatter(text);
   const id = normalizeID(root.prefix ? `${root.prefix}:${parentName(path)}` : parentName(path));
   const name = normalizeID(frontMatter.name) || id;
-  const description = clean(frontMatter.description);
+  const description = cleanString(frontMatter.description);
   if (description === "") return badSkill(root, path, diagnostics, "missing_description", "SKILL.md missing description");
   const instructionSha256 = createHash("sha256").update(text).digest("hex");
   return {
@@ -182,7 +183,7 @@ function readSkillFile(
     summary: description,
     ...runtimeManifest(path, root, options, diagnostics),
     trigger_rules: description || `Use when ${name} is requested.`,
-    version: clean(frontMatter.version) || `sha256:${instructionSha256.slice(0, 12)}`
+    version: cleanString(frontMatter.version) || `sha256:${instructionSha256.slice(0, 12)}`
   };
 }
 
@@ -234,7 +235,7 @@ function riskLevel(text: string): SkillMetadata["risk_level"] {
 }
 
 function tokenize(text: string): string[] {
-  return clean(text).toLowerCase().split(/[^a-z0-9_:-]+/).filter((term) => term.length >= 3);
+  return cleanString(text).toLowerCase().split(/[^a-z0-9_:-]+/).filter((term) => term.length >= 3);
 }
 
 function sortedSkills(skills: SkillMetadata[]): SkillMetadata[] {
@@ -246,7 +247,7 @@ function parentName(path: string): string {
 }
 
 function publicPath(path: string, root: SkillRegistryRoot): string {
-  const label = clean(root.label) || clean(root.prefix) || "skill-root";
+  const label = cleanString(root.label) || cleanString(root.prefix) || "skill-root";
   const base = label === "repo" || label === "runner-package" ? dirname(root.path) : root.path;
   return `${label}:${relative(base, path).replaceAll("\\", "/")}`;
 }
@@ -256,7 +257,7 @@ function repoRoot(): string {
 }
 
 function normalizeID(value: unknown): string {
-  return clean(value).toLowerCase().replace(/[^a-z0-9_:-]+/g, "-").replace(/^-+|-+$/g, "");
+  return cleanString(value).toLowerCase().replace(/[^a-z0-9_:-]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
 function safeReadDir(path: string, root: SkillRegistryRoot, diagnostics: SkillRegistryDiagnostic[]): string[] {
@@ -272,12 +273,12 @@ function safeStat(path: string) {
 }
 
 function rootMissing(root: SkillRegistryRoot, depth: number, diagnostics: SkillRegistryDiagnostic[]): string[] {
-  if (depth === 0) diagnostics.push(diagnostic("root_missing", clean(root.label) || "skill-root", "Skill root is missing"));
+  if (depth === 0) diagnostics.push(diagnostic("root_missing", cleanString(root.label) || "skill-root", "Skill root is missing"));
   return [];
 }
 
 function rootNotDirectory(root: SkillRegistryRoot, depth: number, diagnostics: SkillRegistryDiagnostic[]): string[] {
-  if (depth === 0) diagnostics.push(diagnostic("root_not_directory", clean(root.label) || "skill-root", "Skill root is not a directory"));
+  if (depth === 0) diagnostics.push(diagnostic("root_not_directory", cleanString(root.label) || "skill-root", "Skill root is not a directory"));
   return [];
 }
 
@@ -288,8 +289,4 @@ function badSkill(root: SkillRegistryRoot, path: string, diagnostics: SkillRegis
 
 function diagnostic(code: SkillRegistryDiagnostic["code"], source_path: string, message: string): SkillRegistryDiagnostic {
   return { code, message, severity: "warning", source_path };
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

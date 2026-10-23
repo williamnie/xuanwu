@@ -8,6 +8,7 @@ import {
   type PiRunGroup
 } from "../db/repositories/pi.ts";
 import { deriveRunGroupReportView } from "./runGroupReportStatus.ts";
+import { cleanString } from "../util/values.ts";
 
 type BatchRunGroupInput = {
   conversationID?: string;
@@ -70,8 +71,4 @@ function normalizeEnqueueStatus(status: string): string {
   if (clean === "failed") return "failed";
   if (clean === "skipped" || clean === "denied" || clean === "snoozed") return "skipped";
   return "failed";
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

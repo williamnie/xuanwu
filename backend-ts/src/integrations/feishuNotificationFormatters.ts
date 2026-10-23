@@ -1,6 +1,7 @@
 import type { Issue } from "../db/repositories/issues.ts";
 import { redactedUserVisibleText } from "../util/redact.ts";
 import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
+import { cleanString } from "../util/values.ts";
 
 const SUMMARY_LIMIT = 180;
 
@@ -108,8 +109,4 @@ function safeMultiline(value: unknown, maxRunes: number): string {
   const safe = lines.join("\n");
   const runes = [...safe];
   return runes.length <= maxRunes ? safe : `${runes.slice(0, maxRunes - 1).join("")}…`;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

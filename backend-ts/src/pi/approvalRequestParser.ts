@@ -1,5 +1,6 @@
 import { posix as posixPath } from "node:path";
 import { redactSensitiveText } from "../util/redact.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 type ApprovalRequestType = "command" | "fileChange" | "permissions" | "unknown";
 type ApprovalParseStatus = "ok" | "ambiguous";
@@ -43,7 +44,7 @@ const SUMMARY_MAX_LENGTH = 320;
 
 export function parseCodexApprovalRequest(input: ParseCodexApprovalRequestInput): NormalizedApprovalRequest {
   try {
-    return normalizeRequest(input, recordValue(input.params));
+    return normalizeRequest(input, objectValue(input.params));
   } catch {
     return ambiguousRequest(input, {});
   }
@@ -55,13 +56,13 @@ function normalizeRequest(
 ): NormalizedApprovalRequest {
   const envelope = approvalEnvelope(input.method, rawParams);
   const params = envelope.params;
-  const item = recordValue(params.item);
+  const item = objectValue(params.item);
   const method = envelope.method;
   const requestType = requestTypeFor(method, params, item);
   const cwd = normalizeCwd(textField(params, item, "cwd", "workingDirectory", "workspace"));
   const command = textField(params, item, "command");
   const paths = normalizePaths([...explicitPathValues(params, item), ...commandPathValues(command)], cwd);
-  const permissions = recordValue(params.permissions);
+  const permissions = objectValue(params.permissions);
   const parseStatus = ambiguousInput(input.params, params, {
     command,
     paths,
@@ -78,8 +79,8 @@ function normalizeRequest(
     permissions,
     request_type: requestType,
     summary: approvalSummary({ command, paths, permissions, requestType }),
-    thread_id: cleanText(params.threadId ?? params.conversationId),
-    turn_id: cleanText(params.turnId)
+    thread_id: cleanString(params.threadId ?? params.conversationId),
+    turn_id: cleanString(params.turnId)
   };
 }
 
@@ -87,7 +88,7 @@ function ambiguousRequest(
   input: ParseCodexApprovalRequestInput,
   params: Record<string, unknown>
 ): NormalizedApprovalRequest {
-  const method = cleanText(input.method);
+  const method = cleanString(input.method);
   const requestType = requestTypeFor(method, params, {});
   return {
     approval_id: approvalID(input.jsonRpcId, params, params),
@@ -105,10 +106,10 @@ function ambiguousRequest(
 }
 
 function approvalEnvelope(method: string, rawParams: Record<string, unknown>) {
-  const nestedParams = recordValue(rawParams.params);
-  const nestedMethod = cleanText(rawParams.method);
+  const nestedParams = objectValue(rawParams.params);
+  const nestedMethod = cleanString(rawParams.method);
   if (nestedMethod === "" || Object.keys(nestedParams).length === 0) {
-    return { method: cleanText(method), params: rawParams };
+    return { method: cleanString(method), params: rawParams };
   }
   return { method: nestedMethod, params: nestedParams };
 }
@@ -118,15 +119,15 @@ function requestTypeFor(
   params: Record<string, unknown>,
   item: Record<string, unknown>
 ): ApprovalRequestType {
-  if (method.includes("commandExecution") || cleanText(params.command ?? item.command) !== "") return "command";
+  if (method.includes("commandExecution") || cleanString(params.command ?? item.command) !== "") return "command";
   if (method.includes("fileChange") || explicitPathValues(params, item).length > 0) return "fileChange";
-  if (method.includes("permissions") || Object.keys(recordValue(params.permissions)).length > 0) return "permissions";
+  if (method.includes("permissions") || Object.keys(objectValue(params.permissions)).length > 0) return "permissions";
   return "unknown";
 }
 
 function explicitPathValues(params: Record<string, unknown>, item: Record<string, unknown>): string[] {
   return [
-    cleanText(params.path ?? item.path),
+    cleanString(params.path ?? item.path),
     ...changesPaths(params),
     ...changesPaths(item)
   ].filter(Boolean);
@@ -134,7 +135,7 @@ function explicitPathValues(params: Record<string, unknown>, item: Record<string
 
 function changesPaths(raw: Record<string, unknown>): string[] {
   const changes = Array.isArray(raw.changes) ? raw.changes : [];
-  return changes.map((value) => cleanText(recordValue(value).path)).filter(Boolean);
+  return changes.map((value) => cleanString(objectValue(value).path)).filter(Boolean);
 }
 
 function commandPathValues(command: string): string[] {
@@ -208,7 +209,7 @@ function safeJSONString(value: Record<string, unknown>): string {
 
 function redactedValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redactedValue);
-  const raw = recordValue(value);
+  const raw = objectValue(value);
   if (Object.keys(raw).length === 0) return value;
   return Object.fromEntries(
     Object.entries(raw).map(([key, item]) => [key, sensitiveKey(key) ? "[redacted]" : redactedValue(item)])
@@ -255,7 +256,7 @@ function ambiguousInput(
 
 function textField(params: Record<string, unknown>, item: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
-    const value = cleanText(params[key] ?? item[key]);
+    const value = cleanString(params[key] ?? item[key]);
     if (value !== "") return value;
   }
   return "";
@@ -266,15 +267,7 @@ function cleanPathToken(value: string): string {
 }
 
 function firstText(...values: unknown[]): string {
-  return values.map(cleanText).find((value) => value !== "") ?? "";
-}
-
-function cleanText(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return values.map(cleanString).find((value) => value !== "") ?? "";
 }
 
 function truncate(text: string): string {

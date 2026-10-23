@@ -4,6 +4,7 @@ import { upsertPiGuardianDecision } from "../db/repositories/pi/guardianDecision
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ProviderEvent } from "../providers/types.ts";
 import { parseCodexApprovalRequest } from "./approvalRequestParser.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 type ApprovalFastAuditContext = {
   database?: RunnerDatabase;
@@ -136,8 +137,8 @@ function decisionEvidence(approvalID: string, audit: FastAuditPayload, summary: 
 }
 
 function fastAuditPayload(event: ProviderEvent): FastAuditPayload {
-  const payload = recordValue(event.payload);
-  const params = recordValue(payload.params);
+  const payload = objectValue(event.payload);
+  const params = objectValue(payload.params);
   return {
     decision: cleanString(payload.decision),
     fastDecision: cleanString(payload.fast_decision),
@@ -177,7 +178,7 @@ function payloadHash(value: unknown): string {
 
 function stableJSON(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJSON).join(",")}]`;
-  const raw = recordValue(value);
+  const raw = objectValue(value);
   if (Object.keys(raw).length === 0) return JSON.stringify(value ?? null);
   return `{${Object.keys(raw).sort().map((key) => `${JSON.stringify(key)}:${stableJSON(raw[key])}`).join(",")}}`;
 }
@@ -218,12 +219,4 @@ function cleanScope(value: string): string {
 
 function nonNegativeInteger(value: unknown): number {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : 0;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }

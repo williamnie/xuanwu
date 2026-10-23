@@ -3,6 +3,7 @@ import { basename, join } from "node:path";
 import { Database } from "bun:sqlite";
 import { addUsage, dayKey, isoWeekKey, monthKey, zeroUsage } from "./helpers.ts";
 import type { TokenUsage } from "./types.ts";
+import { objectValue } from "../util/values.ts";
 
 type PiUsageSessionRef = {
   conversation_id: string;
@@ -264,12 +265,6 @@ function parseRecord(line: string): Record<string, unknown> | undefined {
   } catch {
     return undefined;
   }
-}
-
-function objectValue(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
 }
 
 function tokenNumber(value: unknown): number {

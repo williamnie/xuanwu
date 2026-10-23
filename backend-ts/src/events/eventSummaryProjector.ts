@@ -12,6 +12,7 @@ import {
   type SourceIssueEvent
 } from "../db/repositories/eventSummaryProjection.ts";
 import { classifyEventRetention } from "./retentionPolicy.ts";
+import { cleanString, sha256 } from "../util/values.ts";
 
 export const EVENT_SUMMARY_PROJECTOR_VERSION = "xuanwu.event-summary-projector.v1" as const;
 export const EVENT_SUMMARY_QUERY_SCHEMA_VERSION = "xuanwu.event-summary-query.v1" as const;
@@ -85,7 +86,7 @@ export function projectPendingEventSummaries(
 
 export function projectSourceIssueEvent(row: SourceIssueEvent, projectedAt: string): EventSummaryProjectionWrite {
   const body = jsonObject(row.payload);
-  const rawMethod = text(body.raw_method);
+  const rawMethod = cleanString(body.raw_method);
   const classification = classifyEventRetention({
     event_type: row.event_type,
     raw_method: rawMethod,
@@ -139,7 +140,7 @@ function logSummaryPayload(body: Record<string, unknown>, fallback: string): str
 
 function eventSummary(eventType: string, body: Record<string, unknown>, summaryPayload: string): string {
   const candidate = [body.error, body.status, body.body, body.reason, body.text, body.command, body.raw_method, body.type]
-    .map(text)
+    .map(cleanString)
     .find(Boolean);
   return boundedText(candidate || (eventType === "issue.log" ? summaryPayload : compactJson(summaryPayload)), SUMMARY_TEXT_LIMIT);
 }
@@ -161,20 +162,12 @@ function jsonObject(value: string): Record<string, unknown> {
   }
 }
 
-function text(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function boundedText(value: unknown, maximum: number): string {
   const input = typeof value === "string" ? value : "";
   if (Buffer.byteLength(input) <= maximum) return input;
   let end = Math.min(input.length, maximum);
   while (end > 0 && Buffer.byteLength(input.slice(0, end)) > maximum) end -= 1;
   return input.slice(0, end);
-}
-
-function sha256(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
 }
 
 function positiveInteger(value: number, label: string): number {

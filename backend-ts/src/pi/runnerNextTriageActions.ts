@@ -6,6 +6,7 @@ import { createPendingPiAction, type PiActionContext } from "./actionEngine.ts";
 import { parseBatchTriageScope, type BatchTriageScope } from "./runnerBatchTriageScope.ts";
 import { scopedRunnerChatActionContext } from "./runnerChatAuthorization.ts";
 import { attachRunGroupEnqueueAction, createBatchRunGroup, updateRunGroupEnqueueResult } from "./runGroupService.ts";
+import { cleanString, errorMessage, objectValue } from "../util/values.ts";
 
 export type NextTriageIssueInput = { project_id?: string; rationale?: string };
 export type BatchTriageIssueInput = {
@@ -102,13 +103,13 @@ function enqueueBatchCandidates(
   const result = { enqueued: [] as unknown[], pending: [] as unknown[], failed: [] as unknown[] };
   for (const issue of issues) {
     const actionResult = runEnqueueAction(db, context, issue, rationale, runGroupID);
-    const actionID = cleanString(objectPayload(actionResult).action_id);
+    const actionID = cleanString(objectValue(actionResult).action_id);
     attachRunGroupEnqueueAction(db, runGroupID, issue.id, actionID);
     updateRunGroupEnqueueResult(
       db,
       runGroupID,
       issue.id,
-      cleanString(objectPayload(actionResult).status),
+      cleanString(objectValue(actionResult).status),
       actionFailureReason(actionResult)
     );
     collectBatchResult(result, issue, actionResult);
@@ -127,12 +128,12 @@ function runEnqueueAction(
     return createPendingPiAction(db, enqueueActionContext(context, issue), enqueueProposal(issue, rationale, runGroupID),
       () => compactEnqueuedIssue(enqueueIssue(db, issue.id)));
   } catch (error) {
-    return { error: safeError(error), status: "failed" };
+    return { error: errorMessage(error), status: "failed" };
   }
 }
 
 function collectBatchResult(result: BatchBuckets, issue: Issue, actionResult: unknown): void {
-  const record = objectPayload(actionResult);
+  const record = objectValue(actionResult);
   const status = cleanString(record.status);
   if (status === "completed") result.enqueued.push(compactIssue(issue, getResultIssue(record.result)));
   else if (status === "pending") {
@@ -209,7 +210,7 @@ type SkipReason = { count: number; reason: string };
 function skipReasons(result: BatchBuckets): SkipReason[] {
   const reasons = new Map<string, number>();
   for (const item of [...result.pending, ...result.failed]) {
-    const reason = cleanString(objectPayload(item).reason) || "not_enqueued";
+    const reason = cleanString(objectValue(item).reason) || "not_enqueued";
     reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
   }
   return [...reasons.entries()].map(([reason, count]) => skipReason(reason, count));
@@ -224,14 +225,14 @@ function batchStatus(result: BatchBuckets): string {
     return result.pending.length > 0 || result.failed.length > 0 ? "partial" : "completed";
   }
   if (result.pending.length > 0) return "pending";
-  const failedStatuses = result.failed.map((item) => cleanString(objectPayload(item).status));
+  const failedStatuses = result.failed.map((item) => cleanString(objectValue(item).status));
   return failedStatuses.length > 0 && failedStatuses.every((status) => status === "denied")
     ? "denied"
     : "failed";
 }
 
 function actionFailureReason(value: unknown): string {
-  const record = objectPayload(value);
+  const record = objectValue(value);
   return cleanString(record.error) || cleanString(record.gate_reason);
 }
 
@@ -252,16 +253,8 @@ function enqueueProposal(issue: Issue, rationale: string | undefined, runGroupID
   };
 }
 
-function objectPayload(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 function getResultIssue(value: unknown): Record<string, unknown> {
-  return objectPayload(value);
-}
-
-function safeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return objectValue(value);
 }
 
 function shortTitle(value: string): string {
@@ -272,10 +265,6 @@ function scopedProjectID(id: unknown, context: NextTriageContext): string {
   const projectID = cleanString(id) || (context.project?.id ?? "");
   if (projectID === "") throw new ProjectNotFoundError();
   return projectID;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function cleanObject(input: Record<string, unknown>): Record<string, unknown> {

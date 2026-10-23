@@ -24,6 +24,7 @@ import {
   imOutboundPayloadFromEnvelope,
   type ImInboundMessageV1
 } from "./imChannelContracts.ts";
+import { cleanString } from "../util/values.ts";
 
 export const FEISHU_CONNECTOR_ID = "feishu" as const;
 
@@ -470,8 +471,4 @@ function requiredText(value: unknown, label: string): string {
 function positiveInteger(value: unknown, label: string): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) throw new Error(`${label} is required`);
   return value;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

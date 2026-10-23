@@ -4,6 +4,7 @@ import { recordIssueEvent } from "../../db/repositories/issueEvents.ts";
 import { listStoredEvidence, type StoredEvidenceRecord } from "../../db/repositories/evidence.ts";
 import { canSatisfyEvidenceGate, validateEvidence, type EvidenceRecord } from "../evidence/contracts.ts";
 import type { DomainActor, WorkID } from "../../xuanwu/coreDomainContracts.ts";
+import { cleanString } from "../../util/values.ts";
 
 const READINESS_REQUIREMENTS_EVENT_TYPE = "work.readiness_requirements.declared.v1";
 export const READINESS_REQUIREMENTS_SCHEMA_VERSION = 1 as const;
@@ -255,17 +256,17 @@ function missingForRequirement(
 
 function readinessEvidenceFacts(evidence: EvidenceRecord): ReadinessEvidenceFacts | null {
   const facts = evidence.decisive_output.facts;
-  const event = textFact(facts.readiness_event) as ReadinessEvidenceEvent;
+  const event = cleanString(facts.readiness_event) as ReadinessEvidenceEvent;
   if (!READINESS_EVIDENCE_EVENTS.includes(event)) return null;
   const output = {
-    environment: textFact(facts.environment),
+    environment: cleanString(facts.environment),
     event,
-    migration_gate: textFact(facts.migration_gate),
-    release_window: textFact(facts.release_window),
-    rollback_ref: textFact(facts.rollback_ref),
-    runtime_revision: textFact(facts.runtime_revision),
-    runtime_stamp: textFact(facts.runtime_stamp),
-    source_revision: textFact(facts.source_revision)
+    migration_gate: cleanString(facts.migration_gate),
+    release_window: cleanString(facts.release_window),
+    rollback_ref: cleanString(facts.rollback_ref),
+    runtime_revision: cleanString(facts.runtime_revision),
+    runtime_stamp: cleanString(facts.runtime_stamp),
+    source_revision: cleanString(facts.source_revision)
   };
   return output.environment && output.release_window && output.runtime_revision && output.source_revision ? output : null;
 }
@@ -381,10 +382,6 @@ function nextStep(missing: string | undefined): string {
   if (missing.startsWith("observed:")) return "Record matching release-window Golden Journey observation Evidence.";
   if (missing.startsWith("gate_passed:")) return "Record matching migration gate Evidence.";
   return missing.replace(/^invalid:/, "");
-}
-
-function textFact(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function uniqueStrings(values: string[]): string[] {

@@ -1,5 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 export function reconcileCodexSessionIndexes(db: RunnerDatabase, sessions: Array<Record<string, unknown>>): void {
   for (const session of sessions) {
@@ -22,10 +23,10 @@ export function reconcileCodexSessionIndex(
 
 function sessionIDFromProviderSession(session: Record<string, unknown>): string {
   return firstNonEmpty(
-    stringValue(session.provider_session_id),
-    stringValue(session.sessionId),
-    stringValue(session.thread_id),
-    sessionIDFromProviderKey(stringValue(session.id))
+    cleanString(session.provider_session_id),
+    cleanString(session.sessionId),
+    cleanString(session.thread_id),
+    sessionIDFromProviderKey(cleanString(session.id))
   );
 }
 
@@ -37,8 +38,8 @@ function providerSessionStatus(session: Record<string, unknown>): string {
 
 function sessionStatusText(value: unknown): string {
   if (typeof value === "string") return value.trim();
-  const raw = recordValue(value);
-  return firstNonEmpty(stringValue(raw.type), stringValue(raw.state), stringValue(raw.status));
+  const raw = objectValue(value);
+  return firstNonEmpty(cleanString(raw.type), cleanString(raw.state), cleanString(raw.status));
 }
 
 function canonicalSessionStatus(value: string): string {
@@ -58,12 +59,4 @@ function sessionIDFromProviderKey(value: string): string {
 
 function firstNonEmpty(...values: string[]): string {
   return values.find((value) => value.trim() !== "")?.trim() ?? "";
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }

@@ -3,6 +3,7 @@ import {
   listActivePiNotificationPreferences,
   type PiNotificationPreference
 } from "../db/repositories/pi.ts";
+import { cleanString, isRecord } from "../util/values.ts";
 
 type PiNotificationPreferenceResolveContext = {
   conversationID?: string;
@@ -103,9 +104,9 @@ function hasRequiredScopeID(
   scope: "conversation" | "global" | "project" | "run_group"
 ): boolean {
   if (scope === "global") return true;
-  if (scope === "project") return text(context.projectID) !== "";
-  if (scope === "conversation") return text(context.conversationID) !== "";
-  return text(context.runGroupID) !== "";
+  if (scope === "project") return cleanString(context.projectID) !== "";
+  if (scope === "conversation") return cleanString(context.conversationID) !== "";
+  return cleanString(context.runGroupID) !== "";
 }
 
 function filterForScope(
@@ -160,12 +161,4 @@ function parseJson(value: string, fallback: unknown): unknown {
 
 function comparableSequence(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function text(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

@@ -4,6 +4,7 @@ import { constrainApprovalGrantScope, type ScopedApprovalDecision } from "../../
 import { parseCodexApprovalRequest } from "../../pi/approvalRequestParser.ts";
 import { normalizedRunEvent } from "../runEvents.ts";
 import type { ApprovalDecision, ProviderEvent } from "../types.ts";
+import { objectValue } from "../../util/values.ts";
 
 type PendingApproval = {
   id: string;
@@ -98,7 +99,7 @@ export function codexProviderApprovalDecision(decision: ApprovalDecision): Appro
 }
 
 function approvalRequest(jsonRpcId: string | number, method: string, params: unknown): PendingApproval {
-  const raw = normalizeApprovalParams(recordValue(params));
+  const raw = normalizeApprovalParams(objectValue(params));
   const id = approvalRequestId(jsonRpcId, raw);
   return { id, method, params: raw, resolve: () => {}, reject: () => {} };
 }
@@ -182,7 +183,7 @@ function approvalAuditParams(params: Record<string, unknown>): Record<string, un
 
 function permissionsResponse(params: Record<string, unknown>, decision: ApprovalDecision): Record<string, unknown> {
   return {
-    permissions: isApproved(decision) ? recordValue(params.permissions) : {},
+    permissions: isApproved(decision) ? objectValue(params.permissions) : {},
     scope: approvalScope(decision)
   };
 }
@@ -221,7 +222,7 @@ function approvalScope(decision: ApprovalDecision): "session" | "turn" {
 
 function approvalEvent(method: string, payload: Record<string, unknown>, status: string): ProviderEvent {
   const safePayload = redactedPayload(payload) as Record<string, unknown>;
-  const params = recordValue(safePayload.params);
+  const params = objectValue(safePayload.params);
   const session = sessionRef(params);
   const resolved = method === "approval/resolved" || method === "approval/fast_resolved";
   return {
@@ -244,7 +245,7 @@ function approvalEvent(method: string, payload: Record<string, unknown>, status:
 function redactedPayload(value: unknown): unknown {
   if (typeof value === "string") return redactSensitiveText(value);
   if (Array.isArray(value)) return value.map(redactedPayload);
-  const raw = recordValue(value);
+  const raw = objectValue(value);
   if (Object.keys(raw).length === 0) return value;
   return Object.fromEntries(
     Object.entries(raw).map(([key, item]) => [key, sensitiveKey(key) ? "[redacted]" : redactedPayload(item)])
@@ -264,10 +265,6 @@ function sessionRef(params: Record<string, unknown>): ProviderEvent["session"] {
 
 function stableJSON(value: unknown): string {
   return JSON.stringify(value);
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function stringField(raw: Record<string, unknown>, key: string): string {

@@ -13,6 +13,7 @@ import type { ReadApiContext } from "./readApiContext.ts";
 import { readDeliveryEffectiveness } from "./deliveryEffectivenessApi.ts";
 import type { Router } from "./router.ts";
 import { HumanReviewConflictError } from "../domain/review/humanReview.ts";
+import { cleanString } from "../util/values.ts";
 
 export function registerCoreReadRoutes(router: Router, context: ReadApiContext): void {
   const handlers = createReadApiDomainHandlers(context);
@@ -207,7 +208,7 @@ function optionalPositiveIntegerParam(params: URLSearchParams, key: string, maxi
 
 function actionOptions(body: Record<string, unknown>): IssueActionOptions {
   return Object.hasOwn(body, "service_tier")
-    ? { serviceTier: stringBody(body.service_tier), serviceTierProvided: true }
+    ? { serviceTier: cleanString(body.service_tier), serviceTierProvided: true }
     : {};
 }
 
@@ -228,10 +229,6 @@ function issueID(request: Request): number {
 
 function cleanParam(value: string | null): string {
   return value?.trim() ?? "";
-}
-
-function stringBody(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function issueMutationActor(request: Request): IssueMutationActor {

@@ -5,6 +5,7 @@ import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import { detectProviderCommand } from "../core/command.ts";
 import type { ProviderRuntimeStatus } from "../types.ts";
 import { QODER_VERSION_PAIR } from "./version.ts";
+import { cleanString } from "../../util/values.ts";
 
 const LOCAL_AUTH_MARKERS = ["oauth_creds.json", "qoder-credentials.json"] as const;
 
@@ -80,13 +81,13 @@ export function qoderAuthenticationStatus(
 ): QoderAuthenticationStatus {
   const mode = normalizeAuthMode(config.authMode);
   if (mode === "pat-env") {
-    const configured = clean(config.env.QODER_PERSONAL_ACCESS_TOKEN) !== "";
+    const configured = cleanString(config.env.QODER_PERSONAL_ACCESS_TOKEN) !== "";
     return configured
       ? { configured: true, mode, source: "environment" }
       : { configured: false, mode, source: "none", reason: "QODER_PERSONAL_ACCESS_TOKEN is not configured" };
   }
   if (mode === "pat-secret-ref" || mode === "service-account-secret-ref") {
-    const configured = clean(config.credentialRef) !== "" && clean(config.credential) !== "";
+    const configured = cleanString(config.credentialRef) !== "" && cleanString(config.credential) !== "";
     const source = mode === "pat-secret-ref" ? "secret_ref" : "service_account_secret_ref";
     return configured
       ? { configured: true, mode, source }
@@ -117,9 +118,9 @@ function inspectQoderLocalCliLogin(config: ProviderRuntimeConfig): boolean {
 }
 
 export function qoderConfigDir(config: ProviderRuntimeConfig, env: Record<string, string | undefined> = Bun.env): string {
-  const explicit = clean(config.configDir) || clean(config.env.QODER_CONFIG_DIR) || clean(env.QODER_CONFIG_DIR);
+  const explicit = cleanString(config.configDir) || cleanString(config.env.QODER_CONFIG_DIR) || cleanString(env.QODER_CONFIG_DIR);
   if (explicit) return explicit;
-  const home = clean(env.HOME);
+  const home = cleanString(env.HOME);
   return home ? join(home, ".qoder") : "";
 }
 
@@ -161,8 +162,4 @@ function privateNonemptyFile(path: string): boolean {
 function normalizeAuthMode(value: string | undefined): QoderAuthenticationStatus["mode"] {
   if (value === "pat-env" || value === "pat-secret-ref" || value === "service-account-secret-ref") return value;
   return "local-cli";
-}
-
-function clean(value: string | undefined): string {
-  return value?.trim() ?? "";
 }

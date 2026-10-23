@@ -1,3 +1,5 @@
+import { cleanString, isRecord } from "../util/values.ts";
+
 const TOOL_PROVIDER_KINDS = ["builtin", "cli", "mcp", "http", "browser"] as const;
 export const TOOL_PERMISSIONS = ["read", "write", "dangerous"] as const;
 const TOOL_RESULT_STATUSES = ["succeeded", "failed", "timeout", "denied"] as const;
@@ -209,17 +211,9 @@ function requireNonNegativeInteger(issues: ToolEnvelopeValidationIssue[], value:
   if (!Number.isInteger(value) || Number(value) < 0) issues.push({ path, message: "must be a non-negative integer" });
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function stringList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map(cleanString).filter(Boolean))];
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function riskLevel(value: unknown, permission: ToolPermission): PiRuntimeToolPolicy["risk_level"] {

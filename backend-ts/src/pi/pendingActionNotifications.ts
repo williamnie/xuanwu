@@ -12,6 +12,7 @@ import {
 import { routeNotification } from "../notifications/unifiedNotificationPipeline.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
+import { cleanString } from "../util/values.ts";
 
 export function queuePendingImActionNotifications(
   db: RunnerDatabase,
@@ -105,10 +106,10 @@ function recordUnroutable(
 function pendingActionText(action: PendingPiActionNotification): string {
   const payload = object(action.payload_json);
   const detail = redactSensitiveText(JSON.stringify({
-    capability: text(payload.capability_id),
-    permission: text(payload.permission),
-    provider: text(payload.provider_id),
-    tool: text(payload.tool_name)
+    capability: cleanString(payload.capability_id),
+    permission: cleanString(payload.permission),
+    provider: cleanString(payload.provider_id),
+    tool: cleanString(payload.tool_name)
   })).slice(0, 360);
   return [
     `${SUPERVISOR_NOTIFICATION_PREFIX}：${action.issue_id > 0 ? `#${action.issue_id}` : "当前任务"} 有一项操作需要你确认。`,
@@ -125,8 +126,4 @@ function object(value: unknown): Record<string, unknown> {
     const parsed = JSON.parse(value) as unknown;
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
   } catch { return {}; }
-}
-
-function text(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

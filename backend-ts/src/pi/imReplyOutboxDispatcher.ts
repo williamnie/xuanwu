@@ -22,6 +22,7 @@ import {
   type ImOutboundPayloadV1
 } from "../integrations/imChannelContracts.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 export type ImOutboxDispatchResult = {
   failed: number;
@@ -274,7 +275,7 @@ function interactionSpec(db: RunnerDatabase, outbox: SyncOutboxRecord): {
 
 function interactionActor(db: RunnerDatabase, externalEventID: number): { id?: string; openId?: string } {
   const event = getExternalEvent(db, externalEventID);
-  const sender = recordValue(event?.normalized_message.sender);
+  const sender = objectValue(event?.normalized_message.sender);
   const id = cleanString(sender.id);
   const openId = cleanString(sender.open_id);
   return { ...(id ? { id } : {}), ...(openId ? { openId } : {}) };
@@ -365,16 +366,8 @@ function piActionIDFromApprovalActionID(value: string): string {
   return text.startsWith("pi_action:") ? cleanString(text.slice("pi_action:".length)) : "";
 }
 
-function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 function emptyResult(): ImOutboxDispatchResult {
   return { failed: 0, processed: 0, retry: 0, sent: 0, skipped: 0 };
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function safeError(error: unknown): string {

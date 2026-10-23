@@ -30,6 +30,7 @@ import {
   resolveImNotificationConnectorID,
   resolveImNotificationTarget
 } from "./imNotificationTargets.ts";
+import { cleanString } from "../util/values.ts";
 
 export type QueueResult = { queued: boolean; reason: string };
 type DigestQueueResult = { failed: number; queued: number; scanned: number; skipped: number };
@@ -288,10 +289,6 @@ function digestTarget(db: RunnerDatabase, intent: PiNotificationIntent) {
   }
   return feishuTargetForConversation(db, intent.conversation_id) ??
     feishuTargetForConversation(db, getPiRunGroup(db, intent.run_group_id)?.origin_conversation_id ?? "");
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function issueNotificationID(issue: Issue): string {

@@ -8,6 +8,7 @@ import { runPiHeartbeatOnce } from "../pi/heartbeatOrchestrator.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { cleanString } from "../util/values.ts";
 
 type PiHeartbeatApiContext = { database: RunnerDatabase };
 type HeartbeatControlAction = "pause" | "resume";
@@ -78,8 +79,4 @@ function pathPart(request: Request, marker: string): string {
   const value = parts[parts.indexOf(marker) + 1]?.trim() ?? "";
   if (value === "") throw new HttpError(400, `${marker} id 不能为空`);
   return decodeURIComponent(value);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

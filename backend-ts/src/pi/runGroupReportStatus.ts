@@ -1,3 +1,5 @@
+import { cleanString } from "../util/values.ts";
+
 type RunGroupReportInput = {
   enqueue_status?: unknown;
   final_issue_status?: unknown;
@@ -101,8 +103,4 @@ function bucketForReportStatus(status: string): string {
 
 function reportable(reportStatus: string, reportBucket: string): RunGroupReportView {
   return { report_bucket: reportBucket, report_status: reportStatus, reportable: true, status: "reportable" };
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

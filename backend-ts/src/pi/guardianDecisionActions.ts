@@ -14,6 +14,7 @@ import {
 } from "./actionEngine.ts";
 import type { PiGatePolicy } from "./actionGate.ts";
 import { recoveryLimitDecision } from "./actionGateRecovery.ts";
+import { cleanString, isoSeconds, objectValue, positiveInteger } from "../util/values.ts";
 
 type ActionExecutionSummary = {
   leases_acquired: number;
@@ -29,7 +30,7 @@ export function executeDecisionActions(
   if (!decision || decision.state !== "proposed") return;
   const requests = actionRequestsFromDecision(decision);
   if (requests.length === 0) return;
-  if (decision.cooldown_until !== "" && decision.cooldown_until > iso(now)) return;
+  if (decision.cooldown_until !== "" && decision.cooldown_until > isoSeconds(now)) return;
   const leasedDecision = claimDecisionLease(db, decision, requests, now);
   if (!leasedDecision) {
     skipHeldDecision(db, decision.id, summary);
@@ -120,11 +121,11 @@ function applyRecoveryGateOverride(request: PiActionRequest, now: Date): PiActio
 function recoveryGatePolicy(policy: PiGatePolicy | undefined, now: Date): PiGatePolicy | undefined {
   if (!policy) return undefined;
   const record = policy as Record<string, unknown>;
-  const gate = objectPayload(record.recovery_gate);
+  const gate = objectValue(record.recovery_gate);
   const budget = numberValue(gate.budget_remaining ?? record.budget_remaining);
   const cooldown = cleanString(gate.cooldown_until ?? record.cooldown_until);
   if (budget === undefined && cooldown === "") return undefined;
-  return { budget_remaining: budget, cooldown_until: cooldown, now: iso(now) } as PiGatePolicy;
+  return { budget_remaining: budget, cooldown_until: cooldown, now: isoSeconds(now) } as PiGatePolicy;
 }
 
 function actionEnvelopeForRecoveryGate(request: PiActionRequest) {
@@ -172,9 +173,9 @@ function actionRequestsFromDecision(decision: PiGuardianDecision): PiActionReque
 
 function actionRequestFromPayload(decision: PiGuardianDecision, item: Record<string, unknown>): PiActionRequest | null {
   const actionType = cleanString(item.action_type);
-  const payload = objectPayload(item.payload);
+  const payload = objectValue(item.payload);
   if (actionType === "" || Object.keys(payload).length === 0) return null;
-  const issueID = positiveNumber(item.issue_id) || positiveNumber(payload.issue_id) || decision.issue_id;
+  const issueID = positiveInteger(item.issue_id) || positiveInteger(payload.issue_id) || decision.issue_id;
   return {
     actionType,
     authorization: authorizationPolicy(item),
@@ -209,14 +210,14 @@ function riskOverride(item: Record<string, unknown>): PiActionRequest["riskOverr
 }
 
 function authorizationPolicy(item: Record<string, unknown>): PiGatePolicy | undefined {
-  const gatePolicy = objectPayload(item.gate_policy);
-  const authorization = Object.keys(gatePolicy).length > 0 ? gatePolicy : objectPayload(item.authorization);
+  const gatePolicy = objectValue(item.gate_policy);
+  const authorization = Object.keys(gatePolicy).length > 0 ? gatePolicy : objectValue(item.authorization);
   hydrateRedactedAuthorizedActions(authorization);
   return Object.keys(authorization).length > 0 ? authorization as PiGatePolicy : undefined;
 }
 
 function authorizationAt(policy: PiGatePolicy | undefined, now: Date): PiGatePolicy | undefined {
-  return policy ? { ...policy, now: iso(now) } : undefined;
+  return policy ? { ...policy, now: isoSeconds(now) } : undefined;
 }
 
 function hydrateRedactedAuthorizedActions(authorization: Record<string, unknown>): void {
@@ -234,24 +235,16 @@ function guardianOwner(): string {
 function jsonArray(value: string): Array<Record<string, unknown>> {
   try {
     const parsed = JSON.parse(value || "[]") as unknown;
-    return Array.isArray(parsed) ? parsed.map(objectPayload) : [];
+    return Array.isArray(parsed) ? parsed.map(objectValue) : [];
   } catch {
     return [];
   }
-}
-
-function objectPayload(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function stringArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.map(cleanString).filter(Boolean);
   const text = cleanString(value);
   return text === "" ? [] : text.split(/\n|,/).map(cleanString).filter(Boolean);
-}
-
-function positiveNumber(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
 }
 
 function numberValue(value: unknown): number | undefined {
@@ -262,12 +255,4 @@ function booleanValue(value: unknown): boolean | undefined {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value === 1 ? true : value === 0 ? false : undefined;
   return undefined;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function iso(value: Date): string {
-  return value.toISOString().replace(/\.\d{3}Z$/, "Z");
 }

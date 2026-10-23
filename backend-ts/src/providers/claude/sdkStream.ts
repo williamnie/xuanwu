@@ -2,6 +2,7 @@ import { redactSensitiveText } from "../../util/redact.ts";
 import { redactRegisteredSecrets } from "../../security/redactionRegistry.ts";
 import { normalizedRunEvent, providerRunCost, unknownRunEvent } from "../runEvents.ts";
 import type { ProviderEvent, SessionRef } from "../types.ts";
+import { arrayValue, cleanString, numberValue, objectValue } from "../../util/values.ts";
 
 const PROVIDER = "claude" as const;
 const RAW_LIMIT = 2_000;
@@ -21,10 +22,10 @@ export function createClaudeSdkStreamState(): ClaudeSdkStreamState {
 
 export function projectClaudeSdkMessage(message: unknown, state: ClaudeSdkStreamState): ProviderEvent[] {
   const record = objectValue(message);
-  const type = stringValue(record.type) || "unknown";
-  const subtype = stringValue(record.subtype);
-  state.sessionId = stringValue(record.session_id) || state.sessionId;
-  state.turnId = stringValue(record.uuid) || state.turnId;
+  const type = cleanString(record.type) || "unknown";
+  const subtype = cleanString(record.subtype);
+  state.sessionId = cleanString(record.session_id) || state.sessionId;
+  state.turnId = cleanString(record.uuid) || state.turnId;
   const method = subtype ? `${type}.${subtype}` : type;
   const raw = { method, payload: rawSummary(record) };
 
@@ -36,9 +37,9 @@ export function projectClaudeSdkMessage(message: unknown, state: ClaudeSdkStream
       runEvent: normalizedRunEvent({
         kind: "started",
         metadata: {
-          claude_code_version: stringValue(record.claude_code_version),
-          model: stringValue(record.model),
-          permission_mode: stringValue(record.permissionMode),
+          claude_code_version: cleanString(record.claude_code_version),
+          model: cleanString(record.model),
+          permission_mode: cleanString(record.permissionMode),
           sdk_transport: "query"
         },
         method,
@@ -62,7 +63,7 @@ export function projectClaudeSdkMessage(message: unknown, state: ClaudeSdkStream
       raw,
       runEvent: normalizedRunEvent({ kind: "progress", method, outcome: "running", provider: PROVIDER, session }),
       session,
-      status: stringValue(record.status) || "running",
+      status: cleanString(record.status) || "running",
       type: "status"
     })];
   }
@@ -230,11 +231,11 @@ function resultEvent(
   method: string
 ): ProviderEvent {
   state.terminal = true;
-  const failed = record.is_error === true || stringValue(record.subtype) !== "success";
+  const failed = record.is_error === true || cleanString(record.subtype) !== "success";
   state.completed = !failed;
   const session = sessionRef(state);
   const error = failed ? resultError(record) : "";
-  const status = stringValue(record.terminal_reason) || stringValue(record.stop_reason) || (failed ? "failed" : "completed");
+  const status = cleanString(record.terminal_reason) || cleanString(record.stop_reason) || (failed ? "failed" : "completed");
   const cost = resultCost(record, method, session);
   return event({
     ...(failed ? { error } : { text: safeText(record.result) }),
@@ -247,8 +248,8 @@ function resultEvent(
         duration_api_ms: numberValue(record.duration_api_ms),
         duration_ms: numberValue(record.duration_ms),
         num_turns: numberValue(record.num_turns),
-        result_subtype: stringValue(record.subtype),
-        terminal_reason: stringValue(record.terminal_reason)
+        result_subtype: cleanString(record.subtype),
+        terminal_reason: cleanString(record.terminal_reason)
       },
       method,
       outcome: failed ? "failed" : "succeeded",
@@ -321,11 +322,11 @@ function event(input: Omit<ProviderEvent, "provider"> & { method: string }): Pro
 
 function resultError(record: Record<string, unknown>): string {
   const errors = arrayValue(record.errors).map(safeText).filter(Boolean);
-  return errors.join("; ") || safeText(record.result) || `Claude SDK result failed: ${stringValue(record.subtype) || "unknown"}`;
+  return errors.join("; ") || safeText(record.result) || `Claude SDK result failed: ${cleanString(record.subtype) || "unknown"}`;
 }
 
 function toolSummary(block: Record<string, unknown>): string {
-  const name = stringValue(block.name) || "tool";
+  const name = cleanString(block.name) || "tool";
   const input = rawSummary(objectValue(block.input));
   return input === "{}" ? name : `${name} ${input}`;
 }
@@ -349,24 +350,8 @@ function rawSummary(value: unknown): string {
   return redacted.length <= RAW_LIMIT ? redacted : `${redacted.slice(0, RAW_LIMIT)}…`;
 }
 
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function arrayValue(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function safeText(value: unknown): string {
   return redactSensitiveText(typeof value === "string" ? value : "");
-}
-
-function numberValue(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function tokenValue(value: unknown): number | null {

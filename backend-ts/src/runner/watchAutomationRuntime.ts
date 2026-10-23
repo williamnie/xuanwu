@@ -18,6 +18,7 @@ import { queueExistingNotificationIntent } from "../notifications/unifiedNotific
 import { redactSensitiveText } from "../util/redact.ts";
 import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
 import { recordSupervisorCommitmentTerminalOutcome } from "../pi/supervisorCommitments.ts";
+import { cleanString } from "../util/values.ts";
 
 type WatchAutomationCycleResult = {
   cursor_advanced: number;
@@ -223,7 +224,7 @@ function evaluateThreadWatch(
   const eventTypes = new Set(condition.event_types);
   const match = events.find((event) => {
     const normalized = parseObject(event.normalized_message_json);
-    const threadID = clean(normalized.thread_id) || clean(normalized.root_id);
+    const threadID = cleanString(normalized.thread_id) || cleanString(normalized.root_id);
     const providerMatches = event.provider === subject.provider || event.source === subject.provider;
     return providerMatches && threadID === subject.thread_id &&
       (eventTypes.size === 0 || eventTypes.has(event.event_type));
@@ -308,8 +309,4 @@ function parseObject(value: string): Record<string, unknown> {
     const parsed = JSON.parse(value) as unknown;
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
   } catch { return {}; }
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

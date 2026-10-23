@@ -1,3 +1,5 @@
+import { cleanString } from "../util/values.ts";
+
 type McpPolicy = {
   allowed?: string[];
   recommended?: string[];
@@ -74,8 +76,4 @@ function assertValidMcpCapabilityID(id: string): void {
   if (id.length > MAX_MCP_CAPABILITY_ID_LENGTH || !MCP_CAPABILITY_ID_RE.test(id)) {
     throw new Error(`MCP capability id 不合法: ${id}`);
   }
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

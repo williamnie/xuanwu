@@ -3,6 +3,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getImContextCursor } from "../db/repositories/imContextLifecycle.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { imConversationScopeKey } from "./imConversationRouting.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 type ImContextConversation = {
   connectorId: string;
@@ -231,10 +232,6 @@ function estimateTextTokens(value: string): number {
   return value === "" ? 0 : Math.ceil(Buffer.byteLength(value, "utf8") / 4);
 }
 
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 function jsonObject(value: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(value) as unknown;
@@ -247,8 +244,4 @@ function jsonObject(value: string): Record<string, unknown> {
 function truncate(value: string, maxRunes: number): string {
   const runes = [...value];
   return runes.length <= maxRunes ? value : `${runes.slice(0, maxRunes - 1).join("")}…`;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

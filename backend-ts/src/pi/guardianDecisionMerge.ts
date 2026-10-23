@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { PiGuardianDecision, PiGuardianEvent } from "../db/repositories/pi.ts";
 import { guardianDecisionActionsJson } from "./guardianDecisionActionCandidates.ts";
 import { classifyRecoveryDiagnosis } from "./recoveryDiagnosis.ts";
+import { cleanString, isoSeconds } from "../util/values.ts";
 
 const GUARDIAN_DECISION_TERMINAL_STATES = new Set(["completed", "failed", "skipped", "superseded"]);
 
@@ -59,7 +60,7 @@ export function guardianDecisionCandidate(event: PiGuardianEvent, db?: RunnerDat
   const severity = deterministicSeverity(event, payload, diagnosis, severityValue(event.severity));
   const decisionKind = decisionKindForEvent(event, payload);
   return {
-    action_type: clean(payload.action_type),
+    action_type: cleanString(payload.action_type),
     actions_json: guardianDecisionActionsJson(event, payload, db),
     conversation_id: event.conversation_id,
     created_at: event.created_at,
@@ -89,7 +90,7 @@ export function guardianDecisionPlan(
   const exact = sourceEventKey(candidate);
   const bucket = windowMs === 0 ? `event:${exact}` : `bucket:${bucketStart(candidate.created_at, windowMs)}`;
   return {
-    cooldown_until: windowMs === 0 ? "" : iso(new Date(now.getTime() + windowMs)),
+    cooldown_until: windowMs === 0 ? "" : isoSeconds(new Date(now.getTime() + windowMs)),
     id: `${mergeKey}:${bucket}`,
     idempotency_key: `${mergeKey}:${bucket}`,
     merge_key: mergeKey,
@@ -104,9 +105,9 @@ function guardianDecisionMergeKey(candidate: GuardianDecisionCandidate): string 
 export function guardianDecisionBaseKey(candidate: GuardianDecisionCandidate): string {
   return [
     candidate.decision_kind,
-    clean(candidate.project_id) || "global",
+    cleanString(candidate.project_id) || "global",
     decisionScope(candidate),
-    clean(candidate.action_type) || clean(candidate.diagnosis_code) || clean(candidate.event_type) || "general"
+    cleanString(candidate.action_type) || cleanString(candidate.diagnosis_code) || cleanString(candidate.event_type) || "general"
   ].join(":");
 }
 
@@ -147,13 +148,13 @@ export function guardianDecisionMergeMeta(decision: PiGuardianDecision): Guardia
   const evidence = jsonArray(decision.evidence_json);
   for (const item of evidence) {
     const meta = jsonRecord(item.guardian_decision_merge);
-    if (clean(meta.merge_key) === "") continue;
+    if (cleanString(meta.merge_key) === "") continue;
     return {
       event_count: positiveInt(meta.event_count) || 0,
       event_ids: stringArray(meta.event_ids),
-      base_key: clean(meta.base_key) || baseKeyFromMergeKey(meta.merge_key),
-      idempotency_key: clean(meta.idempotency_key),
-      merge_key: clean(meta.merge_key),
+      base_key: cleanString(meta.base_key) || baseKeyFromMergeKey(meta.merge_key),
+      idempotency_key: cleanString(meta.idempotency_key),
+      merge_key: cleanString(meta.merge_key),
       severity: severityValue(meta.severity),
       source_event_sequence_id: positiveInt(meta.source_event_sequence_id) || 0,
       window_ms: positiveInt(meta.window_ms) || 0
@@ -172,8 +173,8 @@ function decisionWindowMs(candidate: GuardianDecisionCandidate, forceImmediate: 
 }
 
 function decisionKindForEvent(event: PiGuardianEvent, payload: Record<string, unknown>): string {
-  const type = clean(event.event_type).toLowerCase();
-  if (type.includes("approval") || clean(payload.approval_id) !== "") return "approval";
+  const type = cleanString(event.event_type).toLowerCase();
+  if (type.includes("approval") || cleanString(payload.approval_id) !== "") return "approval";
   if (type.includes("notification") || type.startsWith("issue.")) return "notification";
   return "recovery";
 }
@@ -185,8 +186,8 @@ function decisionValue(kind: string, severity: GuardianDecisionSeverity): string
 
 function diagnosisCode(event: PiGuardianEvent, payload: Record<string, unknown>): string {
   const classification = jsonRecord(payload.classification);
-  return clean(payload.diagnosis_code) || clean(classification.diagnosis_code) ||
-    clean(payload.kind) || clean(payload.signal_type) || clean(event.event_type);
+  return cleanString(payload.diagnosis_code) || cleanString(classification.diagnosis_code) ||
+    cleanString(payload.kind) || cleanString(payload.signal_type) || cleanString(event.event_type);
 }
 
 function deterministicSeverity(
@@ -198,26 +199,26 @@ function deterministicSeverity(
   if (!classifiesRecoveryDiagnosis(event, payload)) return fallback;
   const deterministic = classifyRecoveryDiagnosis({
     diagnosisCode: diagnosis,
-    providerErrorCategory: clean(payload.provider_error_category),
-    status: clean(payload.status)
+    providerErrorCategory: cleanString(payload.provider_error_category),
+    status: cleanString(payload.status)
   });
   return maxSeverity(fallback, deterministic.severity);
 }
 
 function classifiesRecoveryDiagnosis(event: PiGuardianEvent, payload: Record<string, unknown>): boolean {
-  return clean(event.event_type) === "guardian.supervisor.candidate" ||
-    clean(payload.signal_type) === "supervisor.candidate" ||
-    clean(payload.provider_error_category) !== "";
+  return cleanString(event.event_type) === "guardian.supervisor.candidate" ||
+    cleanString(payload.signal_type) === "supervisor.candidate" ||
+    cleanString(payload.provider_error_category) !== "";
 }
 
 function decisionScope(candidate: GuardianDecisionCandidate): string {
   if (candidate.issue_id > 0) return `issue:${candidate.issue_id}`;
-  if (clean(candidate.run_group_id) !== "") return `group:${clean(candidate.run_group_id)}`;
-  return `conversation:${clean(candidate.conversation_id) || "global"}`;
+  if (cleanString(candidate.run_group_id) !== "") return `group:${cleanString(candidate.run_group_id)}`;
+  return `conversation:${cleanString(candidate.conversation_id) || "global"}`;
 }
 
 function sourceEventKey(candidate: GuardianDecisionCandidate): string {
-  const sourceEventID = clean(candidate.source_event_id);
+  const sourceEventID = cleanString(candidate.source_event_id);
   if (sourceEventID !== "") return sourceEventID;
   return candidate.source_event_sequence_id > 0 ? String(candidate.source_event_sequence_id) : candidate.event_id;
 }
@@ -225,7 +226,7 @@ function sourceEventKey(candidate: GuardianDecisionCandidate): string {
 function bucketStart(timestamp: string, windowMs: number): string {
   const parsed = Date.parse(timestamp);
   const time = Number.isFinite(parsed) ? parsed : Date.now();
-  return iso(new Date(Math.floor(time / windowMs) * windowMs));
+  return isoSeconds(new Date(Math.floor(time / windowMs) * windowMs));
 }
 
 function maxSeverity(left: GuardianDecisionSeverity | undefined, right: GuardianDecisionSeverity): GuardianDecisionSeverity {
@@ -243,7 +244,7 @@ function riskLevel(severity: GuardianDecisionSeverity): string {
 }
 
 function severityValue(value: unknown): GuardianDecisionSeverity {
-  const text = clean(value).toLowerCase();
+  const text = cleanString(value).toLowerCase();
   return text in SEVERITY_RANK ? text as GuardianDecisionSeverity : "info";
 }
 
@@ -268,22 +269,14 @@ function jsonArray(value: string): Array<Record<string, unknown>> {
 }
 
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(clean).filter(Boolean) : [];
+  return Array.isArray(value) ? value.map(cleanString).filter(Boolean) : [];
 }
 
 function baseKeyFromMergeKey(value: unknown): string {
-  const parts = clean(value).split(":");
+  const parts = cleanString(value).split(":");
   return parts.length > 1 ? parts.slice(0, -1).join(":") : "";
 }
 
 function positiveInt(value: unknown): number {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : 0;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function iso(value: Date): string {
-  return value.toISOString().replace(/\.\d{3}Z$/, "Z");
 }

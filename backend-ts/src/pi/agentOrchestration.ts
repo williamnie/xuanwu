@@ -8,6 +8,7 @@ import { mergeSkillIntents, parseSkillPolicy } from "../skills/intents.ts";
 import { needsUserComment, workflowIssuePayload } from "./agentOrchestrationPayloads.ts";
 import { selectRoleProfile, type RoleProfileSelection } from "./roleProfileSelector.ts";
 import type { ExecutionPolicyRequest } from "../providers/core/policyContracts.ts";
+import { cleanString, positiveInteger } from "../util/values.ts";
 export type AgentRole = ExecutionAgentRole;
 
 export type AgentRecommendationInput = {
@@ -222,7 +223,7 @@ function resolveProject(db: RunnerDatabase, contextProject: Project | undefined,
 }
 
 function optionalIssue(db: RunnerDatabase, id: unknown): Issue | null {
-  const issueID = positiveID(id);
+  const issueID = positiveInteger(id);
   return issueID > 0 ? requireIssue(db, issueID) : null;
 }
 
@@ -257,12 +258,4 @@ function parseWorkflowSnapshot(value: string): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-function positiveID(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

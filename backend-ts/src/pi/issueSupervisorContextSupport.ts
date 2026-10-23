@@ -9,6 +9,7 @@ import { parseIssueEventProviderError, type ProviderErrorSignal } from "./provid
 import type { PiSupervisorDiagnosisCode } from "./issueSupervisorRecovery.ts";
 import { recoveryBudgetCandidate } from "./recoveryBudget.ts";
 import { providerOutageCandidate } from "./providerOutageDiagnosis.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 export type RecentSupervisorEvent = {
   at: string;
@@ -143,7 +144,7 @@ export function latestProviderError(events: IssueEvent[], now: Date): ProviderEr
 }
 
 function adjustRetryWindow(signal: ProviderErrorSignal, now: Date, observedAt: Date): ProviderErrorSignal {
-  const retryAfterAt = clean(signal.retry_after_at);
+  const retryAfterAt = cleanString(signal.retry_after_at);
   const observed = signal.observed_at || observedAt.toISOString();
   if (signal.category !== "rate_limit" || retryAfterAt === "") return { ...signal, observed_at: observed };
   return {
@@ -294,8 +295,8 @@ function cooldownWaitUntil(input: CandidateInput, diagnosis: PiSupervisorDiagnos
 function eventMarkers(type: string, payload: unknown, text: string): string[] {
   const record = objectValue(payload);
   const markers: string[] = [];
-  if (clean(record.command) !== "") markers.push("tool_command");
-  if (clean(record.type) === "text" && clean(record.text) !== "") markers.push("agent_message");
+  if (cleanString(record.command) !== "") markers.push("tool_command");
+  if (cleanString(record.type) === "text" && cleanString(record.text) !== "") markers.push("agent_message");
   if (/test|vitest|verification/i.test(text)) markers.push("verification");
   if (/\bgit\s+commit\b|\bcommitted\b/i.test(text)) markers.push("commit");
   if (/xuanwu\s+issue\s+update|issue update --id/i.test(text)) markers.push("issue_update");
@@ -305,7 +306,7 @@ function eventMarkers(type: string, payload: unknown, text: string): string[] {
 
 function eventSummary(payload: unknown): string {
   const record = objectValue(payload);
-  const value = clean(record.text || record.error || record.command || record.raw_payload || payload);
+  const value = cleanString(record.text || record.error || record.command || record.raw_payload || payload);
   return truncate(redactAuditText(value || redactAuditJsonText(JSON.stringify(payload ?? {}))));
 }
 
@@ -357,7 +358,7 @@ function stoppedSession(session: AgentSession | null): boolean {
 }
 
 function blocksStoppedRecovery(providerError: ProviderErrorSignal | null): boolean {
-  return ["auth", "permission", "quota"].includes(clean(providerError?.category));
+  return ["auth", "permission", "quota"].includes(cleanString(providerError?.category));
 }
 
 function stoppedStatus(value: string): boolean {
@@ -381,7 +382,7 @@ function consecutiveNoProgress(events: IssueSupervisorEvent[]): number {
 }
 
 function outcome(event: IssueSupervisorEvent | undefined): string {
-  return clean(objectValue(parsePayload(event?.payload_json ?? "{}")).outcome);
+  return cleanString(objectValue(parsePayload(event?.payload_json ?? "{}")).outcome);
 }
 
 function isRecoveryAction(event: IssueSupervisorEvent): boolean {
@@ -418,14 +419,6 @@ function ageSeconds(value: string, now: Date): number {
   return Number.isFinite(timestamp) ? Math.max(0, Math.round((now.getTime() - timestamp) / 1_000)) : 0;
 }
 
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function truncate(value: string): string {
   return value.length <= 260 ? value : `${value.slice(0, 259)}…`;
 }
@@ -437,7 +430,7 @@ function hashText(value: string): string {
 }
 
 function timeMs(value: string | undefined): number | undefined {
-  const ms = Date.parse(clean(value));
+  const ms = Date.parse(cleanString(value));
   return Number.isFinite(ms) ? ms : undefined;
 }
 

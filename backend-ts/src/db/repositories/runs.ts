@@ -19,6 +19,7 @@ import {
   type RunTrigger,
   type WorkID
 } from "../../domain/run/contracts.ts";
+import { cleanString } from "../../util/values.ts";
 
 export type RunListFilter = {
   limit: number;
@@ -325,7 +326,7 @@ export function countRunsByStatus(db: RunnerDatabase): Record<RunStatus, number>
 }
 
 export function listLatestRunsForWorkIDs(db: RunnerDatabase, workIDs: WorkID[]): RunView[] {
-  const requested = unique(workIDs.map(clean).filter(Boolean));
+  const requested = unique(workIDs.map(cleanString).filter(Boolean));
   if (requested.length === 0) return [];
   if (requested.length > 100) throw new Error("latest Runs query supports at most 100 Work ids");
   const placeholders = requested.map(() => "?").join(", ");
@@ -465,7 +466,7 @@ function mapRunRow(db: RunnerDatabase, row: RunRow, timelineLimit?: number | "su
   const trigger = RUN_TRIGGERS.includes(row.trigger as RunTrigger)
     ? row.trigger as RunTrigger
     : row.run_sequence === 1 ? "initial" : null;
-  const updatedAt = clean(row.ended_at) || clean(row.latest_attempt_updated_at) || row.started_at;
+  const updatedAt = cleanString(row.ended_at) || cleanString(row.latest_attempt_updated_at) || row.started_at;
   const progress = timelineLimit === "summary"
     ? summarizedRunProgress(status, attemptStatus, updatedAt)
     : rebuildRunProgressProjection(db, id, {
@@ -479,7 +480,7 @@ function mapRunRow(db: RunnerDatabase, row: RunRow, timelineLimit?: number | "su
   ];
   const terminal = status && ["succeeded", "failed", "cancelled"].includes(status) && row.ended_at
     ? {
-        reason: clean(row.exit_reason) || clean(row.error) || `legacy issue_run ${row.legacy_status}`,
+        reason: cleanString(row.exit_reason) || cleanString(row.error) || `legacy issue_run ${row.legacy_status}`,
         source_ref: `issue_runs:${row.legacy_id}`
       }
     : undefined;
@@ -506,7 +507,7 @@ function mapRunRow(db: RunnerDatabase, row: RunRow, timelineLimit?: number | "su
     sequence: row.run_sequence,
     started_at: row.started_at,
     status,
-    supersedes_run_id: clean(row.supersedes_run_id) ? row.supersedes_run_id as RunID : null,
+    supersedes_run_id: cleanString(row.supersedes_run_id) ? row.supersedes_run_id as RunID : null,
     ...(terminal ? { terminal } : {}),
     trigger,
     updated_at: progress.updated_at || updatedAt,
@@ -568,15 +569,15 @@ function mapAttemptRow(row: AttemptRow, runID: RunID, runError: string): RunAtte
   const status = ATTEMPT_STATUSES.includes(row.status as AttemptStatus) ? row.status as AttemptStatus : null;
   const kind = ATTEMPT_KINDS.includes(row.kind as AttemptKind) ? row.kind as AttemptKind : null;
   const cost = parseRunCost(row.cost_json);
-  const sessionRef = clean(row.provider_session_id);
+  const sessionRef = cleanString(row.provider_session_id);
   const terminal = status && ["succeeded", "failed", "cancelled", "interrupted"].includes(status) && row.ended_at
     ? {
-        reason: clean(row.terminal_reason) || runError || `${status} Attempt`,
-        source_ref: clean(row.terminal_source_ref) || `run_attempts:${row.attempt_id}`
+        reason: cleanString(row.terminal_reason) || runError || `${status} Attempt`,
+        source_ref: cleanString(row.terminal_source_ref) || `run_attempts:${row.attempt_id}`
       }
     : undefined;
   return {
-    agent_session_key: clean(row.agent_session_key),
+    agent_session_key: cleanString(row.agent_session_key),
     cost: cost.value,
     created_at: row.created_at,
     ended_at: row.ended_at,
@@ -587,7 +588,7 @@ function mapAttemptRow(row: AttemptRow, runID: RunID, runError: string): RunAtte
       ...(sessionRef ? { provider_session: `/api/sessions/${encodeURIComponent(`${row.provider}:${sessionRef}`)}` } : {})
     },
     mapping_errors: [
-      ...(clean(row.mapping_error) ? [row.mapping_error] : []),
+      ...(cleanString(row.mapping_error) ? [row.mapping_error] : []),
       ...(status ? [] : [`Attempt status is unmapped: ${row.status ?? "null"}`]),
       ...(kind ? [] : [`Attempt kind is unmapped: ${row.kind}`]),
       ...(cost.error ? [cost.error] : [])
@@ -596,7 +597,7 @@ function mapAttemptRow(row: AttemptRow, runID: RunID, runError: string): RunAtte
       invocation_ref: row.provider_invocation_ref,
       provider: row.provider,
       ...(sessionRef ? { observation_ref: `${row.provider}:${sessionRef}`, session_ref: sessionRef } : {}),
-      ...(clean(row.provider_turn_id) ? { turn_ref: row.provider_turn_id } : {})
+      ...(cleanString(row.provider_turn_id) ? { turn_ref: row.provider_turn_id } : {})
     },
     revision: row.revision,
     run_id: runID,
@@ -668,7 +669,7 @@ function addFilter(
   expression: string,
   value: string | undefined
 ): void {
-  const text = clean(value);
+  const text = cleanString(value);
   if (!text) return;
   clauses.push(expression);
   args.push(text);
@@ -688,8 +689,4 @@ function addListFilter(
 
 function unique<T extends string>(values: T[]): T[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))] as T[];
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

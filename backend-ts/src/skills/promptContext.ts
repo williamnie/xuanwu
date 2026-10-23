@@ -11,6 +11,7 @@ import { JEV_SKILL_ID } from "./jev/config.ts";
 import { libraryRegistryOptions, managedSkillPolicy } from "./libraryContext.ts";
 import { visibleManagedSkills } from "./managedStore.ts";
 import { dirname } from "node:path";
+import { cleanString } from "../util/values.ts";
 
 type SkillPromptContextInput = {
   authorization?: PiGatePolicy;
@@ -212,8 +213,4 @@ function skillPromptSummary(skill: SkillMetadata): SkillPromptSummary {
 
 function truncate(value: string): string {
   return value.length > 180 ? `${value.slice(0, 177)}...` : value;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

@@ -2,6 +2,7 @@ import { parseCommandArgs } from "./common.ts";
 import { getJSON, postJSON } from "./http.ts";
 import { formatJSON } from "./output.ts";
 import type { EnvReader, Fetcher } from "./types.ts";
+import { objectValue } from "../util/values.ts";
 
 const CREATE_FLAGS = [
   { name: "project", required: true },
@@ -64,7 +65,7 @@ async function getTimeline(args: string[], env: EnvReader, fetcher: Fetcher): Pr
 
 function format(value: Record<string, unknown>, json: boolean): string {
   if (json) return formatJSON(value);
-  const work = object(value.work);
+  const work = objectValue(value.work);
   const id = string(work.id);
   const status = string(work.status);
   if (id !== "" && status !== "") return `${id} ${status}\n`;
@@ -89,10 +90,6 @@ function workID(value: string | undefined): string {
   const id = (value ?? "").trim();
   if (id === "") throw new Error("--id is required");
   return id;
-}
-
-function object(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function string(value: unknown): string {

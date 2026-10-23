@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { objectValue } from "../../util/values.ts";
 
 type CountRow = { count: number };
 type ProposalRow = { actions_json: string; id: string; source_item_ids_json: string; status: string };
@@ -122,10 +123,6 @@ function parseArray(value: string): unknown[] {
   } catch {
     return [];
   }
-}
-
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function required(value: string, name: string): string {

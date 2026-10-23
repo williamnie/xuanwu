@@ -16,6 +16,7 @@ import {
   runBuiltinDomainProposalSkill
 } from "./builtinDomainProposal.ts";
 import type { SkillMetadata } from "./registry.ts";
+import { arrayValue, cleanString, stringList } from "../util/values.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -638,14 +639,6 @@ function isRecord(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function arrayValue(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-function stringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(cleanString).filter(Boolean) : [];
-}
-
 function sortedUnique(values: string[]): string[] {
   return [...new Set(values.map(cleanString).filter(Boolean))].sort((left, right) => left.localeCompare(right));
 }
@@ -656,8 +649,4 @@ function safeID(value: string): string {
 
 function positiveInteger(value: unknown): number {
   return Number.isSafeInteger(value) && Number(value) > 0 ? Number(value) : 0;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

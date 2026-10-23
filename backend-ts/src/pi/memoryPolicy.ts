@@ -1,5 +1,6 @@
 import { containsSecretLikeValue, redactionRegistry } from "../security/redactionRegistry.ts";
 import { parseMemoryExperience } from "./memoryExperience.ts";
+import { cleanString } from "../util/values.ts";
 
 const SENSITIVE_MEMORY_ERROR = "memory content contains sensitive data";
 const SENSITIVE_LINE_MARKERS = [
@@ -55,10 +56,10 @@ export function containsSensitiveMemoryContent(content: string): boolean {
 }
 
 export function reusableMemoryRejection(input: ReusableMemoryWrite): string | undefined {
-  if (clean(input.content) === "") return "memory content is required";
+  if (cleanString(input.content) === "") return "memory content is required";
   if (!isReusableMemoryKind(input.kind)) return "memory kind is not reusable";
   if (!validMemoryKey(input.memoryKey)) return "memory_key must be a stable lowercase identifier";
-  if (clean(input.confidence) === "low") return "low-confidence observations are not memory";
+  if (cleanString(input.confidence) === "low") return "low-confidence observations are not memory";
   if (containsSensitiveMemoryContent(input.content)) return SENSITIVE_MEMORY_ERROR;
   if (transientStatusSnapshot(input.content) &&
     (managerSource(input.source) || !reusableExperienceContent(input.kind, input.content))) {
@@ -68,14 +69,14 @@ export function reusableMemoryRejection(input: ReusableMemoryWrite): string | un
   if (normalChatSource(input.source)) {
     return input.userAuthorized === true ? undefined : "normal chat memory requires an explicit user statement";
   }
-  if (["approved_memory_action", "manual_settings"].includes(clean(input.source))) {
+  if (["approved_memory_action", "manual_settings"].includes(cleanString(input.source))) {
     return input.userAuthorized === true ? undefined : "memory action requires explicit approval";
   }
   return "this runtime source cannot create durable memory";
 }
 
 export function retrievableMemoryKind(kind: string): boolean {
-  const normalized = clean(kind).toLowerCase();
+  const normalized = cleanString(kind).toLowerCase();
   return isReusableMemoryKind(normalized) || LEGACY_REUSABLE_KINDS.has(normalized);
 }
 
@@ -96,11 +97,11 @@ export function transientStatusSnapshot(content: string): boolean {
 }
 
 function managerMemoryRejection(input: ReusableMemoryWrite): string | undefined {
-  if (!EXPERIENCE_MEMORY_KINDS.has(clean(input.kind).toLowerCase())) {
+  if (!EXPERIENCE_MEMORY_KINDS.has(cleanString(input.kind).toLowerCase())) {
     return "manager cycles may remember only reusable debugging patterns or resolutions";
   }
-  if (clean(input.scope) !== "project") return "automatic experience memory must be project-scoped";
-  if (!["", "medium", "high"].includes(clean(input.confidence))) return "automatic experience confidence must be medium or high";
+  if (cleanString(input.scope) !== "project") return "automatic experience memory must be project-scoped";
+  if (!["", "medium", "high"].includes(cleanString(input.confidence))) return "automatic experience confidence must be medium or high";
   if (parseMemoryExperience(input.content)?.outcome === "diagnosis_only" && input.kind !== "debugging_pattern") {
     return "diagnosis-only experience cannot claim a successful resolution";
   }
@@ -108,29 +109,25 @@ function managerMemoryRejection(input: ReusableMemoryWrite): string | undefined 
 }
 
 function reusableExperienceContent(kind: string, value: string): boolean {
-  if (!EXPERIENCE_MEMORY_KINDS.has(clean(kind).toLowerCase())) return false;
+  if (!EXPERIENCE_MEMORY_KINDS.has(cleanString(kind).toLowerCase())) return false;
   const content = value.trim();
   return ROOT_CAUSE_PATTERN.test(content) && RESOLUTION_PATTERN.test(content);
 }
 
 function isReusableMemoryKind(kind: string): kind is ReusableMemoryKind {
-  return (REUSABLE_MEMORY_KINDS as readonly string[]).includes(clean(kind).toLowerCase());
+  return (REUSABLE_MEMORY_KINDS as readonly string[]).includes(cleanString(kind).toLowerCase());
 }
 
 function validMemoryKey(value: string): boolean {
-  return /^[a-z0-9][a-z0-9._:/-]{2,119}$/.test(clean(value));
+  return /^[a-z0-9][a-z0-9._:/-]{2,119}$/.test(cleanString(value));
 }
 
 function managerSource(source: string | undefined): boolean {
-  return ["pi_manager_cycle", "pi_memory_reflection"].includes(clean(source));
+  return ["pi_manager_cycle", "pi_memory_reflection"].includes(cleanString(source));
 }
 
 function normalChatSource(source: string | undefined): boolean {
-  return ["feishu_runner_chat", "telegram_runner_chat", "runner_chat"].includes(clean(source));
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return ["feishu_runner_chat", "telegram_runner_chat", "runner_chat"].includes(cleanString(source));
 }
 
 const EXPERIENCE_MEMORY_KINDS = new Set(["debugging_pattern", "resolution"]);

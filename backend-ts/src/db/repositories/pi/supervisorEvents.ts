@@ -10,6 +10,7 @@ import {
   type PatchInput
 } from "./common.ts";
 import { redactAuditJsonText } from "./auditRedaction.ts";
+import { lastInsertID, placeholders } from "../../sql.ts";
 
 export type IssueSupervisorEvent = {
   action_id: string; action_type: string; confidence: string; created_at: string;
@@ -204,16 +205,8 @@ function payloadText(value: unknown): string {
   return redactAuditJsonText(JSON.stringify(value ?? {}));
 }
 
-function lastInsertID(db: RunnerDatabase): number {
-  return db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get()?.id ?? 0;
-}
-
 function insertColumns(): string {
   return `issue_id, project_id, run_id, provider, provider_session_id, provider_turn_id,
     event_type, diagnosis_code, provider_error_category, retry_after_at, decision,
     confidence, action_id, action_type, payload_json, created_at`;
-}
-
-function placeholders(count: number): string {
-  return Array.from({ length: count }, () => "?").join(", ");
 }

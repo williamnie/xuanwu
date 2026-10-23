@@ -67,6 +67,7 @@ import {
   parseAppLanguage,
   type AppLanguage
 } from "../i18n/language.ts";
+import { cleanString, numberValue, objectValue } from "../util/values.ts";
 
 type PiConversationContext = {
   auditSystemRestart?: (event: SystemRestartAuditEvent) => void;
@@ -647,7 +648,7 @@ async function imContextRolloverTrigger(db: RunnerDatabase, conversation: PiConv
       and json_valid(payload_json) and json_extract(payload_json, '$.phase')='preflight'
     order by id desc limit 1
   `).get(conversation.id)?.payload_json ?? "{}");
-  const percent = numberValue(recordValue(latestBudget?.context).projected_input_percent);
+  const percent = numberValue(objectValue(latestBudget?.context).projected_input_percent);
   if (percent >= 60) return "projected_context_threshold";
   const metrics = await piSessionFileMetrics(resolvePiConversationSessionFile(conversation.session_file));
   if (metrics.compactions >= 2) return "compaction_count";
@@ -668,7 +669,7 @@ async function piSessionFileMetrics(path: string): Promise<{ bytes: number; comp
       if (line.trim() === "") continue;
       const entry = jsonRecord(line);
       if (entry.type === "compaction") compactions += 1;
-      if (entry.type === "message" && recordValue(entry.message).role === "user") userTurns += 1;
+      if (entry.type === "message" && objectValue(entry.message).role === "user") userTurns += 1;
     }
     return { bytes: metadata.size, compactions, userTurns };
   } catch {
@@ -683,15 +684,7 @@ function isContextOverflow(error: unknown): boolean {
 }
 
 function jsonRecord(value: string): Record<string, unknown> {
-  try { return recordValue(JSON.parse(value)); } catch { return {}; }
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function numberValue(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+  try { return objectValue(JSON.parse(value)); } catch { return {}; }
 }
 
 async function resetConversationProjectRuntime(
@@ -1048,10 +1041,6 @@ function requireConversationAgent(db: RunnerDatabase, conversation: PiConversati
   if (!agent) throw new HttpError(400, "Conversation Supervisor 不存在");
   if (agent.enabled !== 1) throw new HttpError(400, "disabled Supervisor cannot start conversation");
   return agent;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function oneShotProjectSource(value: unknown, fallback: string): string {

@@ -3,6 +3,7 @@ import type { PiMemoryItem } from "../db/repositories/pi.ts";
 import { memoryWriteIdentity } from "../db/repositories/pi/memoryHistory.ts";
 import { parseMemoryExperience } from "./memoryExperience.ts";
 import { MEMORY_TECHNICAL_LIMIT, rankMemoryCandidates, technicalMemory, type MemoryTaskContext, type MemoryScope } from "./memoryRetrieval.ts";
+import { cleanString, positiveInteger } from "../util/values.ts";
 
 type PiMemorySelection = { id: string; revision: number; content_fingerprint: string; reason: string };
 type PiMemoryPromptContextInput = MemoryTaskContext & {
@@ -398,14 +399,6 @@ function truncateRunes(value: string, maxRunes: number): string {
   if (runes.length <= maxRunes) return value;
   if (maxRunes <= 1) return "…";
   return `${runes.slice(0, maxRunes - 1).join("")}…`;
-}
-
-function positiveInteger(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
-}
-
-function cleanString(value: string | undefined): string {
-  return value?.trim() ?? "";
 }
 
 function cleanScopeID(value: number | string | undefined): string {

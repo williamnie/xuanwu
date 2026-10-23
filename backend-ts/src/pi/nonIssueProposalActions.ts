@@ -8,6 +8,7 @@ import { createAutomationWatch } from "../db/repositories/automationWatches.ts";
 import { createIssueCompletionWatchAction } from "./issueCompletionWatchActions.ts";
 import { assertMemoryContentSafe, reusableMemoryRejection } from "./memoryPolicy.ts";
 import { INVESTIGATE_WORKFLOW_REF } from "../workflows/investigate.ts";
+import { cleanString, stringList } from "../util/values.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -240,10 +241,6 @@ function flag(value: unknown): number {
   return typeof value === "number" && Number.isInteger(value) && value !== 0 ? 1 : 0;
 }
 
-function stringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(cleanString).filter(Boolean) : [];
-}
-
 function firstString(...values: unknown[]): string {
   return values.map(cleanString).find(Boolean) || "";
 }
@@ -253,8 +250,4 @@ function cleanObject(input: JsonObject): JsonObject {
     if (value === undefined || value === "" || value === 0) return false;
     return !Array.isArray(value) || value.length > 0;
   }));
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

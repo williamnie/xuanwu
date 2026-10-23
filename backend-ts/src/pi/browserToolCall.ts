@@ -6,6 +6,7 @@ import {
   BROWSER_SNAPSHOT_ENV
 } from "./browserToolProvider.ts";
 import type { ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
+import { arrayValue } from "../util/values.ts";
 type BrowserToolCallInput = {
   env?: Record<string, string | undefined>;
   input?: Record<string, unknown>;
@@ -274,7 +275,6 @@ function parseJson(raw: string): JsonObject | null { try { return objectValue(JS
 function firstRecord(...values: unknown[]): JsonObject { return objectValue(firstValue(...values)); }
 function firstValue(...values: unknown[]): unknown { return values.find((value) => value !== undefined && value !== null) ?? {}; }
 function objectValue(value: unknown): JsonObject { return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {}; }
-function arrayValue(value: unknown): unknown[] { return Array.isArray(value) ? value : []; }
 function cleanObject(value: JsonObject): JsonObject { return Object.fromEntries(Object.entries(value).filter(([, child]) => child !== "" && child !== undefined && child !== null)); }
 function unique(items: string[]): string[] { return [...new Set(items)]; }
 function firstText(...values: unknown[]): string { for (const value of values) { const text = cleanString(value); if (text !== "") return text; } return ""; }

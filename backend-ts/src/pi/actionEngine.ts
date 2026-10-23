@@ -21,6 +21,7 @@ import { normalizePiActionEnvelope } from "./actionEnvelope.ts";
 import { publishGateEvent, publishPiActionEvent, recordPiActionAuditEvent } from "./actionAudit.ts";
 import { actionRecordMetadata } from "./actionRecordMetadata.ts";
 import { piActionApprovalExpiresAt } from "./mcpApprovalExpiry.ts";
+import { cleanString } from "../util/values.ts";
 
 export type PiActionRequest = {
   actionType: string;
@@ -315,8 +316,4 @@ function safeError(error: unknown): string {
 
 function identity(value: unknown): unknown {
   return value;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

@@ -39,6 +39,7 @@ import {
   type SessionRef,
   type SessionReadInput
 } from "../types.ts";
+import { cleanString } from "../../util/values.ts";
 
 const PROVIDER = "claude";
 const DEFAULT_MAX_TURNS = "50";
@@ -110,7 +111,7 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
   }
 
   async createSession(input: SessionCreateInput): Promise<SessionCreateResult> {
-    const prompt = clean(input.prompt);
+    const prompt = cleanString(input.prompt);
     if (prompt === "") throw new Error("Claude CLI session creation requires a prompt");
     const result = await this.execute({ ...input, prompt });
     const session = requiredSession(result);
@@ -125,11 +126,11 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
   }
 
   async sendSessionMessage(input: SessionMessageInput): Promise<SessionMessageResult> {
-    const sessionId = clean(input.sessionId);
+    const sessionId = cleanString(input.sessionId);
     if (sessionId === "") throw new Error("Claude CLI resume requires a session id");
-    if (clean(input.mode) === "steer") throw new Error('provider "claude" does not support live steer; interrupt or resume the session instead');
-    const discovered = clean(input.cwd) ? undefined : await this.sessionFunctions().getSessionInfo(sessionId);
-    const cwd = clean(input.cwd) || clean(discovered?.cwd) || clean(this.config.cwd);
+    if (cleanString(input.mode) === "steer") throw new Error('provider "claude" does not support live steer; interrupt or resume the session instead');
+    const discovered = cleanString(input.cwd) ? undefined : await this.sessionFunctions().getSessionInfo(sessionId);
+    const cwd = cleanString(input.cwd) || cleanString(discovered?.cwd) || cleanString(this.config.cwd);
     const result = await this.execute({ ...input, cwd }, sessionId);
     const session = requiredSession(result);
     if (!session.turnId) throw new Error("Claude CLI completed without a provider turn ref");
@@ -146,7 +147,7 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
     const offset = numericCursor(input.cursor);
     const limit = normalizeLimit(input.limit);
     const sessions = await this.sessionFunctions().listSessions({
-      ...(clean(input.cwd) ? { dir: clean(input.cwd) } : {}),
+      ...(cleanString(input.cwd) ? { dir: cleanString(input.cwd) } : {}),
       limit,
       offset
     });
@@ -158,7 +159,7 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
 
   async readSession(sessionId: string, input: SessionReadInput = {}): Promise<Record<string, unknown>> {
     this.assertReady();
-    const id = clean(sessionId);
+    const id = cleanString(sessionId);
     if (id === "") throw new Error("Claude CLI session id is required");
     const functions = this.sessionFunctions();
     const info = await functions.getSessionInfo(id);
@@ -176,7 +177,7 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
     assertUsableCwd(input.cwd);
     this.assertReady();
     const runId = input.issueId ? `cli:claude:${input.issueId}` : `cli:claude:${resume || "new-session"}`;
-    const durableSessionID = resume || clean(this.options.sessionIdFactory?.()) || crypto.randomUUID();
+    const durableSessionID = resume || cleanString(this.options.sessionIdFactory?.()) || crypto.randomUUID();
     const process = this.spawn(input, resume, durableSessionID);
     const active: ActiveClaudeProcess = { interrupted: false, process, reason: "" };
     const session: SessionRef = { provider: PROVIDER, sessionId: durableSessionID };
@@ -184,7 +185,7 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
     this.track(session, active, aliases);
     input.onEvent?.(providerSessionStartedEvent(PROVIDER, durableSessionID, {
       method: resume ? "claude-cli/session_resumed" : "claude-cli/session_started",
-      metadata: { model: clean(input.model) || clean(this.config.model), sdk_transport: "cli" }
+      metadata: { model: cleanString(input.model) || cleanString(this.config.model), sdk_transport: "cli" }
     }));
     try {
       const [stdout, stderr, exitCode] = await waitForProcess(process, this.config.timeoutMs);
@@ -237,7 +238,7 @@ export class ClaudeCliExecutorProvider implements ExecutorProvider {
     const ready = commandReady && (authMode === "local-cli" ? localAuthUsable : environmentAuth.configured);
     return {
       active_sessions: new Set(this.active.values()).size,
-      api_key_configured: authMode === "environment" && clean(this.config.env.ANTHROPIC_API_KEY) !== "",
+      api_key_configured: authMode === "environment" && cleanString(this.config.env.ANTHROPIC_API_KEY) !== "",
       auth_configured: authConfigured,
       auth_mode: authMode,
       auth_source: authMode === "local-cli" ? "local_cli" : environmentAuth.source,
@@ -343,9 +344,9 @@ function claudeCommand(
   }
   if (resume) args.push("--resume", resume);
   else args.push("--session-id", sessionID);
-  const model = clean(input.model) || clean(config.model);
+  const model = cleanString(input.model) || cleanString(config.model);
   if (model !== "" && model !== "codex-default") args.push("--model", model);
-  args.push("--max-turns", DEFAULT_MAX_TURNS, clean(input.prompt));
+  args.push("--max-turns", DEFAULT_MAX_TURNS, cleanString(input.prompt));
   return [...command, ...args];
 }
 
@@ -367,7 +368,7 @@ function requiredSession(result: ProviderRunResult): SessionRef {
 }
 
 function numericCursor(value: string | undefined): number {
-  const cursor = clean(value);
+  const cursor = cleanString(value);
   if (cursor === "") return 0;
   const parsed = Number(cursor);
   if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error("Claude session cursor is invalid");
@@ -379,13 +380,13 @@ function normalizeLimit(value: number | undefined): number {
 }
 
 function claudeAllowedTools(sandbox?: string): string {
-  return clean(sandbox).toLowerCase() === "read-only"
+  return cleanString(sandbox).toLowerCase() === "read-only"
     ? "Read,Grep,Glob,LS"
     : "Read,Grep,Glob,LS,Edit,MultiEdit,Write,Bash";
 }
 
 function claudePermissionMode(policy?: string): string {
-  switch (clean(policy).toLowerCase()) {
+  switch (cleanString(policy).toLowerCase()) {
     case "never":
     case "on-request":
     case "danger-only":
@@ -504,7 +505,7 @@ function secretValues(env: Record<string, string>): string[] {
     "CLAUDE_CODE_OAUTH_TOKEN",
     "ANTHROPIC_IDENTITY_TOKEN"
   ]) {
-    const value = clean(env[key]) || clean(Bun.env[key]);
+    const value = cleanString(env[key]) || cleanString(Bun.env[key]);
     if (value !== "") values.add(value);
   }
   return [...values];
@@ -517,7 +518,7 @@ function redact(value: string, secrets: string[]): string {
 }
 
 function assertUsableCwd(cwd: string): void {
-  const path = clean(cwd);
+  const path = cleanString(cwd);
   if (path === "") throw new Error("Claude Code issue run blocked: cwd is required");
   try {
     if (statSync(path).isDirectory()) return;
@@ -525,10 +526,6 @@ function assertUsableCwd(cwd: string): void {
     // fall through to stable sanitized error below
   }
   throw new Error(`Claude Code issue run blocked: cwd unavailable: ${path}`);
-}
-
-function clean(value: string | undefined): string {
-  return value?.trim() ?? "";
 }
 
 function safeLabel(value: unknown): string {

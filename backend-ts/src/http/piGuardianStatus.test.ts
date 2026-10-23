@@ -8,6 +8,7 @@ import { createIssue } from "../db/repositories/issueCreate.ts";
 import { createPiNotificationIntent, upsertPiGuardianWatchdogStatus } from "../db/repositories/pi.ts";
 import { createIssueCompletionAutomation } from "../pi/issueCompletionAutomation.ts";
 import { createDefaultRouter, registerSystemStatusRoute } from "./server.ts";
+import { isoSeconds } from "../util/values.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
@@ -23,26 +24,26 @@ describe("PI guardian system status", () => {
       const healthySeen = new Date(Date.now() - 30_000);
       upsertPiGuardianWatchdogStatus(database, {
         checked_components_json: [{ component: "outbox", status: "ok" }],
-        last_seen_at: iso(healthySeen),
-        last_success_at: iso(healthySeen)
+        last_seen_at: isoSeconds(healthySeen),
+        last_success_at: isoSeconds(healthySeen)
       });
       const router = createDefaultRouter();
       registerSystemStatusRoute(router, { authToken: "", config, database });
 
       const healthy = await statusBody(router);
       const staleSeen = new Date(Date.now() - 180_000);
-      upsertPiGuardianWatchdogStatus(database, { last_seen_at: iso(staleSeen) });
+      upsertPiGuardianWatchdogStatus(database, { last_seen_at: isoSeconds(staleSeen) });
       const stale = await statusBody(router);
 
       expect(healthy.pi_guardian.watchdog).toEqual({
         is_stale: false,
-        last_seen: iso(healthySeen),
-        stale_after: iso(new Date(healthySeen.getTime() + 120_000))
+        last_seen: isoSeconds(healthySeen),
+        stale_after: isoSeconds(new Date(healthySeen.getTime() + 120_000))
       });
       expect(stale.pi_guardian.watchdog).toEqual({
         is_stale: true,
-        last_seen: iso(staleSeen),
-        stale_after: iso(new Date(staleSeen.getTime() + 120_000))
+        last_seen: isoSeconds(staleSeen),
+        stale_after: isoSeconds(new Date(staleSeen.getTime() + 120_000))
       });
     } finally {
       database.close();
@@ -139,7 +140,3 @@ type SystemStatusBody = {
     watchdog: { is_stale: boolean; last_seen: string; stale_after: string };
   };
 };
-
-function iso(value: Date): string {
-  return value.toISOString().replace(/\.\d{3}Z$/, "Z");
-}

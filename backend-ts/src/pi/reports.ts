@@ -20,6 +20,7 @@ import { reportWarnings, summarizeProviderHealth } from "./reportHealth.ts";
 import { issueReportSummary } from "./reportIssueSummary.ts";
 import { listReportSupervisorEvents, supervisorReportSummary } from "./reportSupervisorSummary.ts";
 import { buildUsageCostSummary } from "./reportUsage.ts";
+import { cleanString } from "../util/values.ts";
 
 type PiReportInput = {
   bus?: Pick<EventBus, "publish">; codexSessionsDir?: string; database: RunnerDatabase;
@@ -47,7 +48,7 @@ export async function buildPiReport(input: PiReportInput): Promise<PiReport> {
   }).diagnostics;
   const usage = await usageSummary(input, project?.id ?? "");
   const report = persistReport(input.database, assembleReport(input.database, {
-    diagnostics, evidence, issues, now, project, scope, type: clean(input.type) || "manual", usage, window
+    diagnostics, evidence, issues, now, project, scope, type: cleanString(input.type) || "manual", usage, window
   }));
   return report;
 }
@@ -278,8 +279,8 @@ function notificationPlan(projectID: string): Record<string, unknown> {
 }
 
 function reportWindow(input: PiReportInput, now: Date): { since: string; until: string } {
-  const until = clean(input.until) || now.toISOString();
-  const since = clean(input.since) || new Date(Date.parse(until) - 24 * 60 * 60 * 1000).toISOString();
+  const until = cleanString(input.until) || now.toISOString();
+  const since = cleanString(input.since) || new Date(Date.parse(until) - 24 * 60 * 60 * 1000).toISOString();
   return { since, until };
 }
 
@@ -289,14 +290,14 @@ function projectScope(db: RunnerDatabase, projectID: string): Project | null {
 }
 
 function resolveReportScope(input: PiReportInput): ReportScope {
-  const delegationID = clean(input.delegationID);
+  const delegationID = cleanString(input.delegationID);
   const delegation = delegationID ? getPiDelegation(input.database, delegationID) : null;
   return {
     delegationID,
-    heartbeatID: clean(input.heartbeatID),
-    projectID: clean(input.projectID) || (delegation?.project_id ?? ""),
+    heartbeatID: cleanString(input.heartbeatID),
+    projectID: cleanString(input.projectID) || (delegation?.project_id ?? ""),
     providerStatuses: input.providerStatuses,
-    source: clean(input.source) || (delegationID ? "delegation" : "manual")
+    source: cleanString(input.source) || (delegationID ? "delegation" : "manual")
   };
 }
 
@@ -306,9 +307,5 @@ function inWindow(value: string, window: { since: string; until: string }): bool
 }
 
 function safeText(value: unknown): string {
-  return redactSensitiveText(clean(value)).replace(ABSOLUTE_PATH_PATTERN, "[redacted-path]");
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return redactSensitiveText(cleanString(value)).replace(ABSOLUTE_PATH_PATTERN, "[redacted-path]");
 }

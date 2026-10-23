@@ -56,6 +56,7 @@ import { writePiNotificationPreference } from "../pi/notificationPreferenceServi
 import { registerRunRoutes } from "./runApi.ts";
 import { registerWorkRoutes } from "./workApi.ts";
 import { createRouter } from "./router.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 export type ProjectLoopStarter = (
   runtime: ProjectLoopRuntime,
@@ -224,7 +225,7 @@ export async function dispatchPiAction(
         },
         capabilityID: requiredPayloadText(payload, "capability_id"),
         db: context.database,
-        input: objectPayload(payload.input),
+        input: objectValue(payload.input),
         registry: { database: context.database },
         timeoutMs: positiveInputID(payload.timeout_ms) || undefined
       });
@@ -239,7 +240,7 @@ export async function dispatchPiAction(
           source: action.source || "pi_action_dispatch"
         },
         db: context.database,
-        input: objectPayload(payload.input),
+        input: objectValue(payload.input),
         manifestDirs: stringArray(payload.manifest_dirs),
         maxPermission: toolPermission(payload.permission),
         projectID: action.project_id,
@@ -424,7 +425,7 @@ async function updateExecutorIssue(
   payload: Record<string, unknown>
 ): Promise<unknown> {
   const issueID = positivePayloadID(payload, "issue_id");
-  const patch = objectPayload(payload.patch);
+  const patch = objectValue(payload.patch);
   if (cleanString(patch.status) !== "done") return updateIssue(db, issueID, patch);
   return requestIssuePiAcceptance(db, issueID, {
     reason: cleanString(patch.reason) || `PI action ${action.id} requested done`,
@@ -538,7 +539,7 @@ function workflowRole(payload: Record<string, unknown>): string {
 function workflowSnapshot(payload: Record<string, unknown>): Record<string, unknown> {
   try {
     const parsed = JSON.parse(cleanString(payload.workflow_snapshot_json) || "{}") as unknown;
-    return objectPayload(parsed);
+    return objectValue(parsed);
   } catch {
     return {};
   }
@@ -582,14 +583,10 @@ function runnerChatAction(action: PiAction): boolean {
 function parsePayload(action: PiAction): Record<string, unknown> {
   try {
     const value = JSON.parse(action.payload_json || "{}") as unknown;
-    return objectPayload(value);
+    return objectValue(value);
   } catch {
     throw new Error("PI action payload_json is invalid");
   }
-}
-
-function objectPayload(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function positivePayloadID(payload: Record<string, unknown>, key: string): number {
@@ -701,8 +698,4 @@ function rawRefTurnID(rawRef: string | undefined): string {
   } catch {
     return "";
   }
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

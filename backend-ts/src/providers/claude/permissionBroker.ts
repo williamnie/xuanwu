@@ -5,6 +5,7 @@ import type { ResolvedExecutionPolicy } from "../core/policyContracts.ts";
 import { normalizedRunEvent } from "../runEvents.ts";
 import type { ApprovalDecision, ProviderEvent, SessionRef } from "../types.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
+import { cleanString } from "../../util/values.ts";
 
 const READ_TOOLS = new Set(["Read", "Grep", "Glob", "LS"]);
 const PATH_TOOLS = new Set(["Edit", "MultiEdit", "Write", "NotebookEdit"]);
@@ -150,7 +151,7 @@ function approvalEvent(pending: Pending, method: "approval/requested" | "approva
 }
 
 async function pathWithinProject(input: Record<string, unknown>, cwdValue: string): Promise<boolean> {
-  const cwd = text(cwdValue);
+  const cwd = cleanString(cwdValue);
   const path = firstText(input.file_path, input.path, input.notebook_path);
   if (!isAbsolute(cwd) || path === "") return false;
   try {
@@ -193,5 +194,4 @@ function allow(toolUseID: string): PermissionResult { return { behavior: "allow"
 function deny(toolUseID: string, message: string, interrupt = false): PermissionResult {
   return { behavior: "deny", toolUseID, message: redactSensitiveText(message), ...(interrupt ? { interrupt: true } : {}), decisionClassification: "user_reject" };
 }
-function firstText(...values: unknown[]): string { return values.map(text).find(Boolean) ?? ""; }
-function text(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
+function firstText(...values: unknown[]): string { return values.map(cleanString).find(Boolean) ?? ""; }

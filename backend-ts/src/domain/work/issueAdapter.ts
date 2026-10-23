@@ -23,6 +23,7 @@ import {
   type WorkTransitionAudit
 } from "./contracts.ts";
 import { createWork, transitionWork, updateWork } from "./service.ts";
+import { cleanString, errorMessage } from "../../util/values.ts";
 
 const ISSUE_WORK_WRITE_EVENT = "issue.work_adapter_write";
 const ISSUE_WORK_SHADOW_MISMATCH_EVENT = "issue.work_shadow_mismatch";
@@ -433,7 +434,7 @@ function disabledShadow(workID: WorkLedgerEntry["id"]): IssueWorkShadowResult {
 function issueProvenance(issue: Issue, createdEvent?: IssueEvent): WorkProvenance {
   const eventPayload = parsedObject(createdEvent?.payload);
   const actor = domainActor(eventPayload?.actor);
-  const correlationID = stringValue(eventPayload?.correlation_id);
+  const correlationID = cleanString(eventPayload?.correlation_id);
   const source = automationSource(eventPayload?.source, actor, correlationID, createdEvent?.created_at || issue.created_at);
   if (source) {
     return {
@@ -476,9 +477,9 @@ function automationSource(
 ): WorkProvenance["origin"] | undefined {
   if (!actor || !correlationID || !value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const source = value as Record<string, unknown>;
-  const authority = stringValue(source.authority);
-  const externalID = stringValue(source.external_id);
-  const sourceEventID = stringValue(source.source_event_id);
+  const authority = cleanString(source.authority);
+  const externalID = cleanString(source.external_id);
+  const sourceEventID = cleanString(source.source_event_id);
   if (authority !== "automation_definitions" || !externalID || !sourceEventID || source.kind !== "automation_trigger") return undefined;
   return {
     actor, authority, completeness: "complete", correlation_id: correlationID,
@@ -808,14 +809,10 @@ function parsedObject(value: unknown): Record<string, unknown> | undefined {
 function domainActor(value: unknown): DomainActor | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const actor = value as Record<string, unknown>;
-  const id = stringValue(actor.id);
-  const kind = stringValue(actor.kind);
+  const id = cleanString(actor.id);
+  const kind = cleanString(actor.kind);
   if (!id || !["user", "supervisor", "runner", "guardian", "automation", "system"].includes(kind)) return undefined;
   return { id, kind: kind as DomainActor["kind"] };
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function sameJson(left: unknown, right: unknown): boolean {
@@ -835,8 +832,4 @@ function sortJson(value: unknown): unknown {
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([key, item]) => [key, sortJson(item)])
   );
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

@@ -3,6 +3,7 @@ import { ProjectNotFoundError } from "../db/repositories/projects.ts";
 import { queryEventSummaries } from "../events/eventSummaryQuery.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { cleanString } from "../util/values.ts";
 
 type EventSummariesContext = { database: RunnerDatabase; readDatabase?: RunnerDatabase };
 
@@ -38,7 +39,7 @@ function eventSummaryFilter(request: Request, defaultLimit?: number) {
     beforeID,
     excludeTypes: eventTypes(params, "exclude_type"),
     limit: optionalPositiveInteger(params.get("limit"), "limit", 500) ?? defaultLimit,
-    projectID: clean(params.get("project_id") || params.get("projectId")),
+    projectID: cleanString(params.get("project_id") || params.get("projectId")),
     types: eventTypes(params, "type")
   };
 }
@@ -57,15 +58,11 @@ function eventTypes(params: URLSearchParams, key: string): string[] {
 }
 
 function optionalPositiveInteger(value: string | null, label: string, maximum?: number): number | undefined {
-  const raw = clean(value);
+  const raw = cleanString(value);
   if (!raw) return undefined;
   if (!/^\d+$/.test(raw)) throw new HttpError(400, `${label} 必须是正整数`);
   const parsed = Number(raw);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new HttpError(400, `${label} 必须是正整数`);
   if (maximum !== undefined && parsed > maximum) throw new HttpError(400, `${label} 不能大于 ${maximum}`);
   return parsed;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

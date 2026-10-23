@@ -22,6 +22,7 @@ import {
   SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS,
   SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_TOKENS
 } from "./supervisorControlContracts.ts";
+import { arrayValue, cleanString, isRecord, numberValue, objectValue } from "../util/values.ts";
 
 export { SUPERVISOR_CONTROL_DANGEROUS_TOOL_NAMES, SUPERVISOR_CONTROL_HIGH_RISK_ACTION_TYPES, SUPERVISOR_CONTROL_READ_TOOL_NAMES, SUPERVISOR_CONTROL_TOOL_NAMES, SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS, SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_TOKENS } from "./supervisorControlContracts.ts";
 
@@ -725,26 +726,6 @@ function select(value: unknown, keys: string[]): Record<string, unknown> {
 
 function cleanObject(value: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== ""));
-}
-
-function arrayValue(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-function objectValue(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function numberValue(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function requiredString(value: unknown, label: string): string {

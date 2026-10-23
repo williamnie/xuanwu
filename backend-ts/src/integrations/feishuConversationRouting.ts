@@ -7,6 +7,7 @@ import { getImConversationState } from "../db/repositories/imConversationState.t
 import type { FeishuNormalizedMessageEvent } from "./feishu.ts";
 import { feishuImInboundMessage } from "./feishuChannelConnector.ts";
 import { routeImConversation } from "./imConversationRouting.ts";
+import { cleanString } from "../util/values.ts";
 
 export type FeishuConversationClock = { now(): Date };
 type FeishuConversationRouteInput = {
@@ -112,8 +113,4 @@ function legacyCarrierState(db: RunnerDatabase, key: string): LegacyConversation
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

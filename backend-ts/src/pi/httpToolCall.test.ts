@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listPiActionEvents } from "../db/repositories/pi.ts";
 import { invokeReadOnlyAssistantTool } from "./readOnlyToolInvocation.ts";
+import { objectValue } from "../util/values.ts";
 
 const tempRoots: string[] = [];
 
@@ -109,7 +110,7 @@ describe("HTTP read-only url_fetch provider", () => {
         },
         status: "succeeded"
       });
-      expect(String(recordValue(result.output).text).length).toBeLessThanOrEqual(64);
+      expect(String(objectValue(result.output).text).length).toBeLessThanOrEqual(64);
       expect(JSON.stringify(result.output)).not.toContain("L".repeat(512));
       expect(JSON.stringify(auditPayloads(db, "conv-http-large"))).not.toContain("L".repeat(512));
     } finally {
@@ -185,8 +186,4 @@ function fixtureUrl(server: ReturnType<typeof Bun.serve>, path: string): string 
 
 function htmlResponse(body: string): Response {
   return new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } });
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }

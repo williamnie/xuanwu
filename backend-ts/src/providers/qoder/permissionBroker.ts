@@ -7,6 +7,7 @@ import { constrainApprovalGrantScope } from "../../pi/approvalGrantScope.ts";
 import { normalizedRunEvent } from "../runEvents.ts";
 import type { ApprovalDecision, ProviderEvent, SessionRef } from "../types.ts";
 import type { ResolvedExecutionPolicy } from "../core/policyContracts.ts";
+import { cleanString } from "../../util/values.ts";
 
 const READ_TOOLS = ["Read", "Grep", "Glob"] as const;
 const WRITE_TOOLS = new Set(["Edit", "Write"]);
@@ -226,7 +227,7 @@ export function qoderPermissionOptions(
   if (resolvedPolicy) {
     const native = resolvedPolicy.nativeSummary;
     const tools = stringArray(native.tools);
-    const permissionMode = clean(native.permissionMode);
+    const permissionMode = cleanString(native.permissionMode);
     const bridge = native.approvalBridge === true;
     const requireCallback = bridge || (resolvedPolicy.requested.access === "provider-native-development" && resolvedPolicy.requested.approval === "unattended");
     if (requireCallback && !canUseTool) throw new Error("Qoder resolved execution policy requires a canUseTool callback");
@@ -277,7 +278,7 @@ function toolSensitivity(toolName: string, input: Record<string, unknown>, cwd: 
 }
 
 function routineDevelopmentCommand(input: Record<string, unknown>): boolean {
-  const command = clean(input.command ?? input.cmd);
+  const command = cleanString(input.command ?? input.cmd);
   if (command === "") return false;
   return /^(?:git\s+(?:status|diff|show|log)(?:\s|$)|(?:bun|npm|pnpm|yarn)\s+(?:test|run\s+(?:test|lint|build|format|check))(?:\s|$)|(?:cargo|go)\s+(?:test|check|build)(?:\s|$)|(?:pytest|python\s+-m\s+pytest|swift\s+test|xcodebuild\b))/.test(command);
 }
@@ -298,11 +299,11 @@ function permissionEvent(
     method: "qoder/canUseTool",
     params: {
       callback_owner_ref: pending.context.invocationRef,
-      agent_id: clean(pending.options.agentID),
+      agent_id: cleanString(pending.options.agentID),
       blocked_path: redactedPath(pending.options.blockedPath, pending.context.cwd),
-      decision_reason: redactSensitiveText(clean(pending.options.decisionReason)),
-      description: redactSensitiveText(clean(pending.options.description)),
-      display_name: redactSensitiveText(clean(pending.options.displayName)),
+      decision_reason: redactSensitiveText(cleanString(pending.options.decisionReason)),
+      description: redactSensitiveText(cleanString(pending.options.description)),
+      display_name: redactSensitiveText(cleanString(pending.options.displayName)),
       path: WRITE_TOOLS.has(pending.toolName) ? pending.path : "",
       invocation_ref: pending.context.invocationRef,
       policy_revision: pending.context.policy?.contract ?? "legacy",
@@ -333,19 +334,19 @@ function permissionEvent(
 }
 
 function normalizePolicy(value: string | undefined): QoderApprovalPolicy {
-  const policy = clean(value) || "never";
+  const policy = cleanString(value) || "never";
   if (policy === "never" || policy === "danger-only" || policy === "always") return policy;
   throw new Error(`Unsupported Qoder approval policy ${policy}`);
 }
 
 function normalizeSandbox(value: string | undefined): QoderSandbox {
-  const sandbox = clean(value) || "workspace-write";
+  const sandbox = cleanString(value) || "workspace-write";
   if (sandbox === "danger-full-access" || sandbox === "read-only" || sandbox === "workspace-write") return sandbox;
   throw new Error(`Unsupported Qoder sandbox ${sandbox}`);
 }
 
 async function inputPathWithinWorkspace(input: Record<string, unknown>, cwdValue: string): Promise<boolean> {
-  const cwd = clean(cwdValue);
+  const cwd = cleanString(cwdValue);
   const path = firstText(input.file_path, input.path, input.notebook_path);
   if (!isAbsolute(cwd) || path === "") return false;
   try {
@@ -370,17 +371,17 @@ async function inputPathWithinWorkspace(input: Record<string, unknown>, cwdValue
 
 function toolInputSummary(input: Record<string, unknown>, cwd: string): string {
   const safe = redactionRegistry.redactValue({
-    command: clean(input.command ?? input.cmd),
+    command: cleanString(input.command ?? input.cmd),
     path: redactedPath(firstText(input.file_path, input.path, input.notebook_path), cwd),
-    description: redactSensitiveText(clean(input.description))
+    description: redactSensitiveText(cleanString(input.description))
   });
   const text = JSON.stringify(safe);
   return text.length > 320 ? `${text.slice(0, 319)}…` : text;
 }
 
 function redactedPath(value: unknown, cwdValue: string): string {
-  const path = clean(value);
-  const cwd = clean(cwdValue);
+  const path = cleanString(value);
+  const cwd = cleanString(cwdValue);
   if (!path) return "";
   const absolute = isAbsolute(path) ? resolve(path) : isAbsolute(cwd) ? resolve(cwd, path) : "";
   if (absolute && isAbsolute(cwd)) {
@@ -406,15 +407,11 @@ function denyResult(toolUseID: string, message: string, interrupt = false): Perm
 }
 
 function cancelledDecision(decision: ApprovalDecision): boolean {
-  return ["abort", "cancel"].includes(clean(decision.decision));
+  return ["abort", "cancel"].includes(cleanString(decision.decision));
 }
 
 function firstText(...values: unknown[]): string {
-  return values.map(clean).find(Boolean) ?? "";
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return values.map(cleanString).find(Boolean) ?? "";
 }
 
 function missingPath(error: unknown): boolean {

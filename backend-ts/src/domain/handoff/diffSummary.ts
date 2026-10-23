@@ -8,6 +8,7 @@ import {
   type EvidenceRecord
 } from "../evidence/contracts.ts";
 import type { GitChangedFileDetail } from "../evidence/gitCollector.ts";
+import { isRecord } from "../../util/values.ts";
 
 const HANDOFF_DIFF_SUMMARY_SCHEMA_VERSION = 1 as const;
 export const HANDOFF_LARGE_FILE_THRESHOLD_BYTES = 5 * 1024 * 1024;
@@ -487,8 +488,4 @@ function sortedUnique(values: readonly string[]): string[] {
 
 function compareText(left: string, right: string): number {
   return Buffer.from(left).compare(Buffer.from(right));
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

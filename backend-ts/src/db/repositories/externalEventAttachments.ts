@@ -1,4 +1,5 @@
 import { redactedString } from "./externalEventRedaction.ts";
+import { cleanString, objectValue } from "../../util/values.ts";
 
 export type ExternalEventAttachment = {
   kind: string;
@@ -37,12 +38,4 @@ function normalizeAttachment(value: unknown): ExternalEventAttachment {
     ocr_text: cleanString(item.ocr_text),
     vision_summary: cleanString(item.vision_summary)
   };
-}
-
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

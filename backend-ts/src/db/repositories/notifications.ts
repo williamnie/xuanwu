@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../database.ts";
+import { cleanString } from "../../util/values.ts";
 
 export type NotificationRecord = {
   created_at: string;
@@ -163,10 +164,6 @@ function optionalString(value: unknown, fallback = ""): string {
   if (value === null || value === undefined) return fallback;
   if (typeof value !== "string") throw new Error("expected string row value");
   return value.trim();
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function iso(now: Date): string {

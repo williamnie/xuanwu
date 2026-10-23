@@ -4,6 +4,7 @@ import {
   bumpImConversationEpoch,
   getImConversationState
 } from "./imConversationState.ts";
+import { cleanString } from "../../util/values.ts";
 
 /**
  * W1 compatibility shim over the provider-neutral `im_conversation_state`
@@ -141,8 +142,4 @@ function legacyView(state: NeutralState): FeishuConversationState {
     started_at: state.started_at,
     updated_at: state.updated_at
   };
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

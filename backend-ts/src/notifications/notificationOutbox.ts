@@ -5,6 +5,7 @@ import {
   createImReplyDraft
 } from "../db/repositories/imReplyOutbox.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { cleanString, positiveInteger } from "../util/values.ts";
 
 export type NotificationOutboxTarget = {
   chatID?: string;
@@ -119,12 +120,4 @@ function requiredText(value: unknown, label: string): string {
   const text = cleanString(value);
   if (text === "") throw new Error(`${label} is required`);
   return text;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function positiveInteger(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
 }

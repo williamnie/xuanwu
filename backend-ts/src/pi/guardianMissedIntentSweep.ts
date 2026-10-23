@@ -25,6 +25,7 @@ import {
   missedFlushBucket,
   type GuardianMissedOutageWindow
 } from "./guardianMissedIntentDigest.ts";
+import { cleanString } from "../util/values.ts";
 
 type GuardianMissedIntentSweepInput = {
   fallbackConnectorID?: string;
@@ -93,7 +94,7 @@ export function runGuardianMissedIntentSweepOnce(
     writeMissedDigest(
       { db, nowText, result },
       { alerts: openAlerts, intents, window },
-      text(input.fallbackConnectorID)
+      cleanString(input.fallbackConnectorID)
     );
   }
   return result;
@@ -250,11 +251,11 @@ function latestDigestTarget(db: RunnerDatabase, projectID: string): DigestTarget
     order by updated_at desc, created_at desc, id desc limit 1
   `).get(...args);
   return {
-    conversation_id: text(row?.conversation_id),
-    target_chat_id: text(row?.target_chat_id),
-    target_channel: text(row?.target_channel),
-    target_message_id: text(row?.target_message_id),
-    target_thread_id: text(row?.target_thread_id)
+    conversation_id: cleanString(row?.conversation_id),
+    target_chat_id: cleanString(row?.target_chat_id),
+    target_channel: cleanString(row?.target_channel),
+    target_message_id: cleanString(row?.target_message_id),
+    target_thread_id: cleanString(row?.target_thread_id)
   };
 }
 
@@ -299,7 +300,7 @@ function outageComponent(alert: PiGuardianAlert): PiGuardianWatchdogComponent | 
 
 function evidenceOldestAt(alert: PiGuardianAlert): string {
   const evidence = parseRecord(alert.evidence_json);
-  return text(evidence.oldest_created_at) || text(evidence.created_at) || text(evidence.deadline_at);
+  return cleanString(evidence.oldest_created_at) || cleanString(evidence.created_at) || cleanString(evidence.deadline_at);
 }
 
 function inWindow(value: string, window: GuardianMissedOutageWindow): boolean {
@@ -330,10 +331,6 @@ function parseRecord(value: string): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-function text(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function boundedLimit(value: unknown): number {

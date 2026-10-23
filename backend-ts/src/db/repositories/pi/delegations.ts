@@ -14,6 +14,7 @@ import {
   type PatchInput
 } from "./common.ts";
 import type { PiDelegation } from "./heartbeats.ts";
+import { placeholders } from "../../sql.ts";
 
 type PiDelegationInput = PatchInput<PiDelegation>;
 type PiDelegationFilter = { projectId?: string; status?: string };
@@ -189,8 +190,4 @@ function delegationStatus(value: unknown, fallback?: PiDelegationStatus): PiDele
   const status = cleanString(value) || fallback || "";
   if (status === "active" || status === "paused" || status === "expired") return status;
   throw new Error(`unsupported PI delegation status: ${status || "<empty>"}`);
-}
-
-function placeholders(count: number): string {
-  return Array.from({ length: count }, () => "?").join(", ");
 }

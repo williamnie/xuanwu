@@ -17,6 +17,7 @@ import { publicIntakeRun } from "./piSkillRunViews.ts";
 import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { cleanString } from "../util/values.ts";
 
 type AttentionInboxContext = { database: RunnerDatabase };
 type JsonObject = Record<string, unknown>;
@@ -270,7 +271,4 @@ function queryInt(value: string | null): number | undefined {
 
 function cleanParam(value: string | null): string {
   return value?.trim() ?? "";
-}
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

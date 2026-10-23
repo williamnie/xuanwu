@@ -18,6 +18,7 @@ import { telegramConnectorStatus } from "./telegramConfig.ts";
 import { createDatabaseSecretService, type SecretService } from "../security/secrets/service.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { FeishuReceiverStatus } from "./feishuReceiver.ts";
+import { cleanString } from "../util/values.ts";
 
 const CONNECTOR_DIAGNOSTIC_SCHEMA = "xuanwu.connector-diagnostics.v1" as const;
 
@@ -158,14 +159,14 @@ function staticDefinitions(context: ConnectorDiagnosticsContext, secrets: Secret
   const githubSecret = secretEntry("token", context.config.integrations.github.token_ref, context.config.integrations.github.token !== "", true, secrets);
   const gitlabSecret = secretEntry("token", context.config.integrations.gitlab.token_ref, context.config.integrations.gitlab.token !== "", true, secrets);
   const feishuRefs = [
-    secretEntry("app_secret", text(local.feishu?.appSecretRef), context.config.integrations.feishu.appSecret !== "", true, secrets),
-    secretEntry("verification_token", text(local.feishu?.verificationTokenRef), context.config.integrations.feishu.verificationToken !== "", context.config.integrations.feishu.receiveMode === "callback", secrets),
-    secretEntry("encrypt_key", text(local.feishu?.encryptKeyRef), context.config.integrations.feishu.encryptKey !== "", false, secrets)
+    secretEntry("app_secret", cleanString(local.feishu?.appSecretRef), context.config.integrations.feishu.appSecret !== "", true, secrets),
+    secretEntry("verification_token", cleanString(local.feishu?.verificationTokenRef), context.config.integrations.feishu.verificationToken !== "", context.config.integrations.feishu.receiveMode === "callback", secrets),
+    secretEntry("encrypt_key", cleanString(local.feishu?.encryptKeyRef), context.config.integrations.feishu.encryptKey !== "", false, secrets)
   ];
   const webhookConfigured = clean(context.webhookSigningSecret) !== "";
   const telegramSecret = secretEntry(
     "bot_token",
-    text(local.telegram?.botTokenRef),
+    cleanString(local.telegram?.botTokenRef),
     context.config.integrations.telegram.botToken !== "",
     true,
     secrets
@@ -375,11 +376,11 @@ function latestOutboundState(
       and json_extract(payload_json, '$.target.provider_id')=?
     order by updated_at desc, id desc limit 1`).get(provider);
   if (!row) return empty;
-  const retryAt = text(row.cooldown_until);
+  const retryAt = cleanString(row.cooldown_until);
   const retrySeconds = Number.isInteger(row.retry_after_seconds) && row.retry_after_seconds > 0
     ? row.retry_after_seconds
     : 0;
-  const failed = ["failed", "retry"].includes(text(row.status)) && text(row.last_error) !== "";
+  const failed = ["failed", "retry"].includes(cleanString(row.status)) && cleanString(row.last_error) !== "";
   return {
     attempts: Number.isInteger(row.attempt_count) ? row.attempt_count : 0,
     blocked: retryAt !== "" && Date.parse(retryAt) > now.getTime(),
@@ -388,7 +389,7 @@ function latestOutboundState(
       ? { retry_after_seconds: retrySeconds, reset_at: retryAt || new Date(now.getTime() + retrySeconds * 1000).toISOString() }
       : null,
     retry_at: retryAt,
-    updated_at: text(row.updated_at)
+    updated_at: cleanString(row.updated_at)
   };
 }
 
@@ -530,14 +531,10 @@ function latestTimestamp(...values: string[]): string {
   return values.filter((value) => value !== "").sort((left, right) => Date.parse(right) - Date.parse(left))[0] ?? "";
 }
 
-function text(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function stringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(text).filter(Boolean) : [];
+  return Array.isArray(value) ? value.map(cleanString).filter(Boolean) : [];
 }
 
 function clean(value: unknown): string {
-  return text(value);
+  return cleanString(value);
 }

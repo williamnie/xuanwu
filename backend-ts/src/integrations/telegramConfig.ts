@@ -3,6 +3,7 @@ import type {
   TelegramConnectorConfig,
   TelegramProjectMapping
 } from "./telegramTypes.ts";
+import { objectValue } from "../util/values.ts";
 
 const DEFAULT_POLL_TIMEOUT_SECONDS = 25;
 const DEFAULT_GET_ME_CACHE_TTL_SECONDS = 300;
@@ -77,7 +78,7 @@ function parseMapping(value: string): TelegramProjectMapping | null {
 }
 
 function normalizeMapping(value: unknown): TelegramProjectMapping | null {
-  const item = record(value);
+  const item = objectValue(value);
   const projectId = clean(item.projectId);
   const chatId = telegramId(item.chatId, true);
   const userId = telegramId(item.userId, false);
@@ -129,8 +130,4 @@ function firstValue(...values: unknown[]): unknown {
 
 function clean(value: unknown): string {
   return typeof value === "string" ? value.trim() : typeof value === "number" ? String(value) : "";
-}
-
-function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }

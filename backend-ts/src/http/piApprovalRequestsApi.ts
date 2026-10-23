@@ -8,6 +8,7 @@ import {
   resolveProviderApprovalDecision
 } from "./attentionDecisionService.ts";
 import type { Router } from "./router.ts";
+import { cleanString } from "../util/values.ts";
 
 type PiApprovalRequestsContext = {
   bus?: EventBus;
@@ -34,14 +35,14 @@ function approvalDetail(db: RunnerDatabase, request: Request): Response {
 
 function listApprovalRequests(db: RunnerDatabase, request: Request) {
   const params = new URL(request.url).searchParams;
-  const status = clean(params.get("status"));
+  const status = cleanString(params.get("status"));
   const rows = listPiApprovalRequests(db, {
     issueId: positiveID(params.get("issue_id")),
-    projectId: clean(params.get("project_id")),
-    provider: clean(params.get("provider")),
-    runId: clean(params.get("run_id")),
-    sessionId: clean(params.get("session_id") ?? params.get("sessionId")),
-    threadId: clean(params.get("thread_id") ?? params.get("threadId"))
+    projectId: cleanString(params.get("project_id")),
+    provider: cleanString(params.get("provider")),
+    runId: cleanString(params.get("run_id")),
+    sessionId: cleanString(params.get("session_id") ?? params.get("sessionId")),
+    threadId: cleanString(params.get("thread_id") ?? params.get("threadId"))
   });
   if (status === "open") return rows.filter((row) => ["pending", "delivered", "resolve_failed"].includes(row.status));
   if (status !== "") return rows.filter((row) => row.status === status);
@@ -65,12 +66,8 @@ function approvalRequestID(request: Request): string {
 }
 
 function positiveID(value: string | null): number | undefined {
-  const text = clean(value);
+  const text = cleanString(value);
   if (text === "") return undefined;
   const id = Number(text);
   return Number.isSafeInteger(id) && id > 0 ? id : undefined;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

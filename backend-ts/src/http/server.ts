@@ -47,6 +47,7 @@ import type { TelegramConnectorConfig } from "../integrations/telegramTypes.ts";
 import { registerReleaseUpdateRoutes } from "./releaseUpdateApi.ts";
 import type { ReleaseUpdateMonitor } from "../release/releaseUpdateMonitor.ts";
 import type { GitHubIssueSyncRuntime } from "../integrations/github/issueSyncRuntime.ts";
+import { cleanString } from "../util/values.ts";
 
 type ServerRuntime = DefaultRouterOptions & { database: RunnerDatabase; startedAt?: Date };
 type DefaultRouterOptions = {
@@ -296,13 +297,9 @@ async function routeOrStatic(router: Router, request: Request, options: RequestH
 }
 
 function shouldTryStaticWeb(request: Request, response: Response, webDir: string | undefined): boolean {
-  return response.status === 404 && clean(webDir) !== "" && !isApiPath(request);
+  return response.status === 404 && cleanString(webDir) !== "" && !isApiPath(request);
 }
 
 function isApiPath(request: Request): boolean {
   return new URL(request.url).pathname.startsWith("/api/");
-}
-
-function clean(value: string | undefined): string {
-  return value?.trim() ?? "";
 }

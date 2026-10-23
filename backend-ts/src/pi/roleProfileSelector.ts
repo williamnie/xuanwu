@@ -1,6 +1,7 @@
 import type { AgentProfile } from "../db/repositories/agentProfiles.ts";
 import { parseSkillIntentList } from "../skills/intents.ts";
 import type { AgentRole } from "./agentOrchestration.ts";
+import { cleanString } from "../util/values.ts";
 
 type RoleProfileSelectorInput = {
   allowStrategy?: boolean;
@@ -87,8 +88,4 @@ function fallbackReason(projectProvider: string, missing: string[]): string {
 
 function reasonWithMissing(reason: string, missing: string[]): string {
   return [reason, ...missing].join("; ");
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

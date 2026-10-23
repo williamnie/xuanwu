@@ -10,6 +10,7 @@ import {
 import { quietHoursResumeAt } from "../schedule/cronSchedule.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { routeNotification, type NotificationRoute } from "./unifiedNotificationPipeline.ts";
+import { cleanString, positiveInteger } from "../util/values.ts";
 
 export type DailyDigestResult = {
   aggregated: number;
@@ -239,12 +240,4 @@ function parseRecord(value: string): Record<string, unknown> {
 function safeDeepLink(value: unknown): string {
   const text = cleanString(value);
   return text.startsWith("#/") || text.startsWith("/api/") ? text : "";
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function positiveInteger(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
 }

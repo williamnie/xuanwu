@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../database.ts";
+import { cleanString } from "../../util/values.ts";
 
 type ConnectorCursorRecord = {
   connector_id: string;
@@ -66,7 +67,7 @@ export function recordConnectorUpdateAudit(
       required(input.connectorId, "connector_id"),
       required(input.updateId, "update_id"),
       input.outcome,
-      clean(input.reason),
+      cleanString(input.reason),
       (input.createdAt ?? new Date()).toISOString()
     ]
   );
@@ -116,12 +117,8 @@ export function saveConnectorDeliveryPart(
   return listConnectorDeliveryParts(db, connector, key).find((part) => part.part_index === input.part_index)!;
 }
 
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function required(value: unknown, label: string): string {
-  const text = clean(value);
+  const text = cleanString(value);
   if (text === "") throw new Error(`${label} is required`);
   return text;
 }

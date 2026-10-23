@@ -46,6 +46,7 @@ import {
 } from "../pi/guardianOperationsDailyReport.ts";
 import { piActionGateDiagnostic } from "../pi/actionGateDiagnostic.ts";
 import { buildCommandCenterInbox, commandCenterInboxReaders, type InboxItem, type InboxReaders } from "./commandCenterInbox.ts";
+import { cleanString } from "../util/values.ts";
 
 export const COMMAND_CENTER_SUMMARY_CONTRACT = "xw.command-center.summary.v1" as const;
 
@@ -492,7 +493,7 @@ function piActionNotificationStatus(
     return { delivery: "sent", error: "", state: row.state };
   }
   if (row.state === "failed" || row.outbox_status === "failed" || row.error !== "") {
-    return { delivery: "failed", error: cleanText(row.outbox_error) || row.error, state: row.state };
+    return { delivery: "failed", error: cleanString(row.outbox_error) || row.error, state: row.state };
   }
   return { delivery: "queued", error: "", state: row.state };
 }
@@ -504,7 +505,7 @@ function piActionTarget(
   const payload = safeRecord(action.payload_json);
   let issueID = positiveID(action.issue_id) || positiveID(payload.issue_id);
   if (issueID <= 0) {
-    const providerSessionID = cleanText(payload.provider_session_id);
+    const providerSessionID = cleanString(payload.provider_session_id);
     const session = providerSessionID ? db.sqlite.query<{ issue_id: number }, [string]>(`
       select issue_id from agent_sessions where provider_session_id=? order by updated_at desc limit 1
     `).get(providerSessionID) : null;
@@ -514,7 +515,7 @@ function piActionTarget(
   const issue = db.sqlite.query<{ status: string; updated_at: string }, [number]>(
     "select status, updated_at from issues where id=?"
   ).get(issueID);
-  return { issueID, issueStatus: cleanText(issue?.status), updatedAt: cleanText(issue?.updated_at) };
+  return { issueID, issueStatus: cleanString(issue?.status), updatedAt: cleanString(issue?.updated_at) };
 }
 
 function piActionIsHistorical(action: PiAction, issueStatus: string): boolean {
@@ -553,10 +554,6 @@ function safeRecord(value: string): Record<string, unknown> {
 function positiveID(value: unknown): number {
   const number = Number(value);
   return Number.isSafeInteger(number) && number > 0 ? number : 0;
-}
-
-function cleanText(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function attentionComponent(type: string): string {
@@ -736,7 +733,7 @@ function attentionDecisionDetails(db: RunnerDatabase, attention: AttentionRecord
         const payload = safeRecord(action.payload_json);
         details.push({
         action_type: action.action_type,
-        capability_id: cleanText(payload.capability_id),
+        capability_id: cleanString(payload.capability_id),
         expires_at: action.lease_expires_at,
         gate: piActionGateDiagnostic(db, action),
         gate_decision: action.gate_decision,

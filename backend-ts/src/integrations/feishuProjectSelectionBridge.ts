@@ -18,6 +18,7 @@ import type {
 import type { FeishuProjectSelectionAction } from "./feishuProjectSelection.ts";
 import type { ChannelConnector } from "./channelConnectorContracts.ts";
 import { deliverImOutboundNow } from "./imOutboundDelivery.ts";
+import { cleanString } from "../util/values.ts";
 
 type FeishuProjectSelectionBridgeOptions = {
   clock?: FeishuConversationClock;
@@ -169,10 +170,6 @@ function deliveryConnector(options: FeishuProjectSelectionBridgeOptions): Channe
 function safeError(error: unknown): string {
   return redactSensitiveText(error instanceof Error ? error.message : String(error))
     .replace(/(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g, "[redacted-path]");
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function stableTextKey(value: string): string {

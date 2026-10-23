@@ -6,6 +6,7 @@ import { createPiActionEvent, listPiActions } from "../db/repositories/pi/action
 import { listProjects, type Project } from "../db/repositories/projects.ts";
 import { getIssueAsWork } from "../domain/work/issueAdapter.ts";
 import type { WorkLedgerEntry } from "../domain/work/contracts.ts";
+import { cleanString } from "../util/values.ts";
 
 const SUPERVISOR_CONTEXT_CANDIDATE_SOURCES = [
   "work_reference",
@@ -431,10 +432,6 @@ function targetBinding(
     return "one_shot";
   }
   return "conversation";
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function positiveInteger(value: unknown): number {

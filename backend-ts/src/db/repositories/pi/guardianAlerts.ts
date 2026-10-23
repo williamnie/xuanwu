@@ -12,6 +12,7 @@ import {
   type PatchInput
 } from "./common.ts";
 import { redactAuditJsonText, redactAuditText } from "./auditRedaction.ts";
+import { placeholders } from "../../sql.ts";
 
 export type PiGuardianAlert = {
   alert_type: string; created_at: string; direct_feishu_error: string;
@@ -252,8 +253,4 @@ function redactedJsonPayload(value: unknown, fallback: string): string {
 
 function assignments(columns: readonly string[]): string {
   return columns.map((column) => `${column}=?`).join(", ");
-}
-
-function placeholders(count: number): string {
-  return Array.from({ length: count }, () => "?").join(", ");
 }

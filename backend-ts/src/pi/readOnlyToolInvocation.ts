@@ -12,6 +12,7 @@ import type { AssistantTool, ToolPermission, ToolProvider, ToolResult, ToolResul
 import { assessDataEgress } from "../security/promptInjectionDefense.ts";
 import type { PiGatePolicy } from "./actionGate.ts";
 import { JEV_CAPABILITY_ID, JEV_TOOL_NAME } from "../skills/jev/config.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 type ReadOnlyToolInvocationInput = {
   authorization?: PiGatePolicy;
@@ -173,7 +174,7 @@ async function executeDefinition(
     undefined,
     {} as never
   );
-  return recordValue(result).details ?? result;
+  return objectValue(result).details ?? result;
 }
 
 function resultFromBuiltin(clock: InvocationClock, output: unknown): ToolResult {
@@ -244,7 +245,7 @@ function finishResult(
 }
 
 function builtinStatus(output: unknown): ToolResult["status"] {
-  const status = cleanString(recordValue(output).status);
+  const status = cleanString(objectValue(output).status);
   if (status === "denied") return "denied";
   if (status === "failed") return "failed";
   if (status === "timeout") return "timeout";
@@ -253,8 +254,8 @@ function builtinStatus(output: unknown): ToolResult["status"] {
 }
 
 function builtinError(output: unknown, status: ToolResult["status"]): ToolResultError {
-  const raw = recordValue(output);
-  const error = recordValue(raw.error);
+  const raw = objectValue(output);
+  const error = objectValue(raw.error);
   return {
     code: cleanString(error.code) || (status === "denied" ? "permission_denied" : "builtin_tool_error"),
     message: cleanString(error.message) || cleanString(raw.reason) || `Builtin tool ${status}`
@@ -278,24 +279,16 @@ function invocationClock(invocationID: string | undefined): InvocationClock {
 }
 
 function mcpCapabilityID(tool: AssistantTool): string {
-  const metadata = recordValue(tool.metadata);
+  const metadata = objectValue(tool.metadata);
   return cleanString(metadata.capability_id ?? metadata.capabilityID);
 }
 
 function providerKindFromMetadata(tool: AssistantTool): ToolProvider["kind"] | "" {
-  const kind = cleanString(recordValue(tool.metadata).connector);
+  const kind = cleanString(objectValue(tool.metadata).connector);
   if (kind === "builtin" || kind === "cli" || kind === "mcp" || kind === "http" || kind === "browser") return kind;
   return "";
 }
 
-function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Builtin tool execution failed";
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

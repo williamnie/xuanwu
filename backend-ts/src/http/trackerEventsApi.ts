@@ -10,6 +10,7 @@ import { syncTrackerIssueEvent, trackerIssueFromPayload } from "../integrations/
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
 import type { GitHubIssueSyncRuntime } from "../integrations/github/issueSyncRuntime.ts";
+import { cleanString } from "../util/values.ts";
 
 type Context = { database: RunnerDatabase; githubIssueSync?: GitHubIssueSyncRuntime };
 type JsonObject = Record<string, unknown>;
@@ -80,7 +81,7 @@ async function pollResponse(context: Context, request: Request): Promise<Respons
     const provider = providerFromPath(request);
     const results = events.map((value) => {
       const event = object(value, "event");
-      return syncTrackerIssueEvent(context.database, trackerIssueFromPayload(provider, object(event.payload, "event.payload"), text(event.event_name, "issue"), optionalText(event.cursor)), "poll");
+      return syncTrackerIssueEvent(context.database, trackerIssueFromPayload(provider, object(event.payload, "event.payload"), text(event.event_name, "issue"), cleanString(event.cursor)), "poll");
     });
     return json({ accepted: true, provider, results, summary: { conflicts: results.filter((item) => item.conflict).length, replayed: results.filter((item) => item.replayed).length, synced: results.length } }, { status: 202 });
   } catch (error) { throw invalid(error); }
@@ -89,8 +90,7 @@ async function pollResponse(context: Context, request: Request): Promise<Respons
 function providerFromPath(request: Request) { const parts = new URL(request.url).pathname.split("/").filter(Boolean); return trackerIssueProvider(parts[parts.indexOf("trackers") + 1] ?? ""); }
 async function objectBody(request: Request): Promise<JsonObject> { try { return object(JSON.parse(await request.text() || "{}"), "body"); } catch { throw new HttpError(400, "request body must be valid JSON"); } }
 function object(value: unknown, label: string): JsonObject { if (!value || typeof value !== "object" || Array.isArray(value)) throw new HttpError(400, `${label} must be an object`); return value as JsonObject; }
-function text(value: unknown, fallback?: string): string { const output = optionalText(value) || fallback || ""; if (!output) throw new HttpError(400, "required field is missing"); return output; }
-function optionalText(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
+function text(value: unknown, fallback?: string): string { const output = cleanString(value) || fallback || ""; if (!output) throw new HttpError(400, "required field is missing"); return output; }
 function positiveInteger(value: unknown): number { if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) throw new HttpError(400, "issue_id must be a positive integer"); return value; }
 function auditID(body: JsonObject): string { const audit = object(body.audit, "audit"); return text(audit.correlation_id); }
 function invalid(error: unknown): HttpError { return error instanceof HttpError ? error : new HttpError(400, error instanceof Error ? error.message : "invalid tracker event"); }

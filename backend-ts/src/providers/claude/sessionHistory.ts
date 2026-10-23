@@ -8,6 +8,7 @@ import {
   type ProviderSessionTurn,
   type ProviderSessionView
 } from "../core/sessionView.ts";
+import { cleanString, objectValue } from "../../util/values.ts";
 
 const PROVIDER = "claude";
 
@@ -110,7 +111,7 @@ function claudeSessionModel(messages: SessionMessage[]): string {
   for (const entry of messages) {
     const record = objectValue(entry);
     const message = objectValue(record.message);
-    model = stringValue(message.model) || stringValue(record.model) || model;
+    model = cleanString(message.model) || cleanString(record.model) || model;
   }
   return model;
 }
@@ -125,7 +126,7 @@ export function assertClaudeSessionHistoryIdentity(
     throw new Error(`Claude session ${expected} resolved to mismatched history ${info.sessionId}`);
   }
   const mismatched = messages.find((message) => {
-    const observed = stringValue(message.session_id);
+    const observed = cleanString(message.session_id);
     return observed !== "" && observed !== expected;
   });
   if (mismatched) {
@@ -155,19 +156,19 @@ function transcriptItems(entry: SessionMessage): Array<Record<string, unknown>> 
   }
   return content.flatMap((value, index) => {
     const block = objectValue(value);
-    const id = stringValue(block.id) || `${entry.uuid}:${index}`;
+    const id = cleanString(block.id) || `${entry.uuid}:${index}`;
     if (block.type === "text") {
-      const text = redactSensitiveText(stringValue(block.text));
+      const text = redactSensitiveText(cleanString(block.text));
       return text ? [messageItem(id, entry.type, text)] : [];
     }
     if (block.type === "thinking") {
-      const text = redactSensitiveText(stringValue(block.thinking));
+      const text = redactSensitiveText(cleanString(block.thinking));
       return text ? [{ id, type: "reasoning", content: [{ type: "text", text }] }] : [];
     }
     if (block.type === "tool_use") return [transcriptToolUse(id, block)];
     if (block.type === "tool_result") {
       return [{
-        id: stringValue(block.tool_use_id) || id,
+        id: cleanString(block.tool_use_id) || id,
         type: "custom_tool_call_output",
         output: claudeTranscriptContent(block.content),
         status: block.is_error ? "failed" : "completed"
@@ -183,16 +184,16 @@ function messageItem(id: string, type: SessionMessage["type"], text: string): Re
 }
 
 function transcriptToolUse(id: string, block: Record<string, unknown>): Record<string, unknown> {
-  const name = stringValue(block.name) || "tool";
+  const name = cleanString(block.name) || "tool";
   const input = objectValue(block.input);
   if (name === "Bash") {
-    return { id, type: "commandExecution", command: redactSensitiveText(stringValue(input.command)), text: "", status: "completed" };
+    return { id, type: "commandExecution", command: redactSensitiveText(cleanString(input.command)), text: "", status: "completed" };
   }
   if (name === "Edit" || name === "Write") {
     return {
       id,
       type: "fileChange",
-      path: redactSensitiveText(stringValue(input.file_path)),
+      path: redactSensitiveText(cleanString(input.file_path)),
       text: claudeTranscriptContent(input),
       status: "completed"
     };
@@ -204,12 +205,4 @@ export function claudeTranscriptContent(value: unknown): string {
   if (value === undefined || value === null || value === "") return "";
   if (typeof value === "string") return redactSensitiveText(value);
   try { return redactSensitiveText(JSON.stringify(value, null, 2)); } catch { return redactSensitiveText(String(value)); }
-}
-
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

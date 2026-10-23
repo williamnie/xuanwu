@@ -11,6 +11,7 @@ import type { McpDiscoveryServer, McpDiscoveryTransport } from "../mcp/discovery
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 import type { RunnerDatabase } from "../db/database.ts";
+import { cleanString, isRecord, objectValue } from "../util/values.ts";
 
 type PiMcpDiscoveryContext = { database: RunnerDatabase };
 
@@ -32,7 +33,7 @@ function sourcesResponse(): Response {
 
 async function scanResponse(context: PiMcpDiscoveryContext, request: Request): Promise<Response> {
   const body = objectValue(await parseJsonBody(request));
-  const scan = await scanMcpDiscoverySources({ sources: stringList(body.sources), workspaceDir: stringInput(body.workspace_dir ?? body.workspaceDir) });
+  const scan = await scanMcpDiscoverySources({ sources: stringList(body.sources), workspaceDir: cleanString(body.workspace_dir ?? body.workspaceDir) });
   const now = new Date().toISOString();
   const servers = scan.servers.map((server) => upsertPiMcpServer(context.database, serverInput(server, now)));
   return json(redactSecrets({ diagnostics: scan.diagnostics, scan_id: crypto.randomUUID(), servers: servers.map(publicServer) }));
@@ -119,16 +120,16 @@ function serverInput(server: McpDiscoveryServer, now: string): PiMcpServerInput 
 }
 
 function manualServerInput(body: Record<string, unknown>): PiMcpServerInput {
-  const name = stringInput(body.name) || "Manual MCP";
+  const name = cleanString(body.name) || "Manual MCP";
   const transport = transportInput(objectValue(body.transport));
-  return { ...transportFields(transport), description: stringInput(body.description), id: stringInput(body.id) || normalizeID(name),
+  return { ...transportFields(transport), description: cleanString(body.description), id: cleanString(body.id) || normalizeID(name),
     name, readiness: "not_introspected", redaction: redactionFor(transportEnv(transport), transportHeaders(transport)),
     risk_level: "medium", source: "manual", source_path: "manual", status: "configured" };
 }
 
 function patchInput(body: Record<string, unknown>): Partial<PiMcpServerInput> {
   const transport = body.transport === undefined ? undefined : transportInput(objectValue(body.transport));
-  const approvalMode = stringInput(body.approval_mode ?? body.approvalMode);
+  const approvalMode = cleanString(body.approval_mode ?? body.approvalMode);
   if (approvalMode && !["dangerous_only", "every_write", "read_only"].includes(approvalMode)) {
     throw new HttpError(400, "approval_mode 不合法");
   }
@@ -136,14 +137,14 @@ function patchInput(body: Record<string, unknown>): Partial<PiMcpServerInput> {
   return { ...(body.enabled === undefined ? {} : { enabled: body.enabled === true }),
     ...(approvalMode ? { approval_mode: approvalMode as "dangerous_only" | "every_write" | "read_only" } : {}),
     ...(grantsApproval ? { approval_granted_at: new Date().toISOString() } : {}),
-    ...(body.name === undefined ? {} : { name: stringInput(body.name) }),
+    ...(body.name === undefined ? {} : { name: cleanString(body.name) }),
     ...(transport ? transportFields(transport) : {}) };
 }
 
 function transportInput(raw: Record<string, unknown>): McpDiscoveryTransport {
-  const type = stringInput(raw.type).toLowerCase();
-  if (type === "http" || type === "sse" || type === "streamable_http") return { headers: stringRecord(raw.headers), type, url: stringInput(raw.url) };
-  return { args: stringList(raw.args), command: stringInput(raw.command), cwd: stringInput(raw.cwd), env: stringRecord(raw.env), type: "stdio" };
+  const type = cleanString(raw.type).toLowerCase();
+  if (type === "http" || type === "sse" || type === "streamable_http") return { headers: stringRecord(raw.headers), type, url: cleanString(raw.url) };
+  return { args: stringList(raw.args), command: cleanString(raw.command), cwd: cleanString(raw.cwd), env: stringRecord(raw.env), type: "stdio" };
 }
 
 function transportFields(transport: McpDiscoveryTransport): Partial<PiMcpServerInput> {
@@ -153,10 +154,10 @@ function transportFields(transport: McpDiscoveryTransport): Partial<PiMcpServerI
 
 function capabilityPatch(body: Record<string, unknown>) {
   return { ...(body.enabled === undefined ? {} : { enabled: body.enabled === true }),
-    ...(body.permission === undefined ? {} : { permission: stringInput(body.permission) as "read" | "write" | "admin" }),
+    ...(body.permission === undefined ? {} : { permission: cleanString(body.permission) as "read" | "write" | "admin" }),
     ...(body.read_only === undefined ? {} : { read_only: body.read_only === true }),
     ...(body.requires_confirmation === undefined ? {} : { requires_confirmation: body.requires_confirmation === true }),
-    ...(body.risk_level === undefined ? {} : { risk_level: stringInput(body.risk_level) as "low" | "medium" | "high" }),
+    ...(body.risk_level === undefined ? {} : { risk_level: cleanString(body.risk_level) as "low" | "medium" | "high" }),
     ...(body.timeout_ms === undefined ? {} : { timeout_ms: numberInput(body.timeout_ms) }) };
 }
 
@@ -213,24 +214,12 @@ function transportHeaders(transport: McpDiscoveryTransport): Record<string, stri
 
 function stringList(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  return value.map(stringInput).filter(Boolean);
+  return value.map(cleanString).filter(Boolean);
 }
 
 function stringRecord(value: unknown): Record<string, string> | undefined {
   if (!isRecord(value)) return undefined;
-  return Object.fromEntries(Object.entries(value).map(([key, child]) => [stringInput(key), stringInput(child)]).filter(([key]) => key));
-}
-
-function objectValue(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function stringInput(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => [cleanString(key), cleanString(child)]).filter(([key]) => key));
 }
 
 function numberInput(value: unknown): number | undefined {

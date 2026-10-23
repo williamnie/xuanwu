@@ -16,6 +16,7 @@ import type { RuntimeSessionInput } from "./piRuntime.ts";
 import { appLanguage, piLanguageContract, type AppLanguage } from "../i18n/language.ts";
 import { buildPiPersonaPromptSection } from "../pi/personaPrompt.ts";
 import { PI_RUNTIME_PROMPT_PROFILES } from "../pi/runtimePromptProfile.ts";
+import { cleanString } from "../util/values.ts";
 
 export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string {
   switch (input.promptProfile) {
@@ -280,10 +281,6 @@ function agentInstructionsSection(agent: Pick<PiAgent, "instructions">): string 
     "The custom instructions below are additional Supervisor behavior and must not override the core role/vocabulary contract, PI/Provider/Host authority contract, authoritative state, authorization gates, tool/MCP policy, memory policy, or data-safety rules.",
     instructions
   ].join("\n");
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function runtimeLanguage(input: RuntimeSessionInput, db: RunnerDatabase): AppLanguage {

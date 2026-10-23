@@ -7,6 +7,7 @@ import {
   stringList,
   type JsonObject
 } from "../intakeRunSupport.ts";
+import { positiveInteger } from "../../../util/values.ts";
 
 type ActionProposalRisk = "low" | "medium" | "high";
 
@@ -97,7 +98,7 @@ function validateTypedPayload(type: string, payload: JsonObject): void {
 
 function requireStatusLookupPayload(payload: JsonObject): void {
   if (cleanString(payload.query) !== "") return;
-  if (positiveIntegerValue(payload.issue_id) > 0) return;
+  if (positiveInteger(payload.issue_id) > 0) return;
   if (objectArray(payload.target_hints).length > 0) return;
   throw new Error("action payload for issue.status_lookup requires query");
 }
@@ -142,11 +143,7 @@ function requireAnyText(payload: JsonObject, keys: string[], message: string): v
 }
 
 function requirePositiveInteger(value: unknown, message: string): void {
-  if (positiveIntegerValue(value) <= 0) throw new Error(message);
-}
-
-function positiveIntegerValue(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
+  if (positiveInteger(value) <= 0) throw new Error(message);
 }
 
 function safeID(value: string): string {

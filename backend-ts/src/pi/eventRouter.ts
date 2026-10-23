@@ -13,6 +13,7 @@ import { domainSkillActionID, runDomainSkillAndMarkProposal } from "./domainSkil
 import { DEFAULT_DOMAIN_SKILL_ID } from "../skills/builtinDomainProposal.ts";
 import { DEFAULT_INTAKE_SKILL_ID, runIntakeSkill, type LlmIntakeModel, type LlmIntakeOptions, type LlmIntakeResult } from "./llmIntake.ts";
 import { sourcePolicyBlockReason, type IntakeMode, type IntakeSourcePolicy } from "./intakeSourcePolicy.ts";
+import { cleanString } from "../util/values.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -136,7 +137,7 @@ export async function routeInboxItemToDomainSkill(
   item: AttentionInboxItemRecord,
   options: { policy?: EventRouterSourcePolicy; project?: ProjectRouteState; retry?: boolean; skillID?: string } = {}
 ): Promise<DomainRouteResult> {
-  const skillID = clean(options.skillID) || DEFAULT_DOMAIN_SKILL_ID;
+  const skillID = cleanString(options.skillID) || DEFAULT_DOMAIN_SKILL_ID;
   const decision = decideInboxRoute(item, options.policy, options.project);
   if (decision.decision === "no_action" || decision.decision === "ask_user") {
     return domainSkipped(decision.decision, decision.reason);
@@ -206,7 +207,7 @@ function projectIntent(item: AttentionInboxItemRecord): boolean {
 }
 
 function projectID(project: ProjectRouteState, item: AttentionInboxItemRecord): string {
-  return clean(project.project_id) || clean(item.target_hints.find((hint) => hint.kind === "project")?.id);
+  return cleanString(project.project_id) || cleanString(item.target_hints.find((hint) => hint.kind === "project")?.id);
 }
 
 function isNoActionItem(item: AttentionInboxItemRecord): boolean {
@@ -263,7 +264,7 @@ function domainSkipped(decision: InboxRouteDecision, reason: string): DomainRout
 }
 
 function intakeSkillID(options: LlmIntakeOptions): string {
-  return clean(options.skillId) || clean(options.skill?.id) || DEFAULT_INTAKE_SKILL_ID;
+  return cleanString(options.skillId) || cleanString(options.skill?.id) || DEFAULT_INTAKE_SKILL_ID;
 }
 
 function eventTokenBudget(options: LlmIntakeOptions & { tokenBudget?: number }): number | undefined {
@@ -271,24 +272,20 @@ function eventTokenBudget(options: LlmIntakeOptions & { tokenBudget?: number }):
 }
 
 function sourceProfile(value: unknown): SourceProfile {
-  const text = clean(value);
+  const text = cleanString(value);
   return text in PROFILE_DEFAULTS ? text as SourceProfile : "custom";
 }
 
 function actionMode(value: unknown): ActionMode {
-  const text = clean(value);
+  const text = cleanString(value);
   return ["observe_only", "draft_only", "propose_actions", "auto_low_risk"].includes(text) ? text as ActionMode : "observe_only";
 }
 
 function intakeMode(value: unknown): IntakeMode {
-  const text = clean(value);
+  const text = cleanString(value);
   return ["manual_only", "mention_only", "scheduled_llm_triage", "continuous_llm_triage"].includes(text) ? text as IntakeMode : "manual_only";
 }
 
 function objectValue(value: unknown): JsonObject {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

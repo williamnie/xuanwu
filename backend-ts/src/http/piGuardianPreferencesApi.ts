@@ -12,6 +12,7 @@ import {
 } from "../pi/notificationPreferenceService.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 type PiGuardianPreferenceContext = { database: RunnerDatabase };
 
@@ -31,18 +32,18 @@ export function registerPiGuardianPreferenceRoutes(
 function preferencesResponse(db: RunnerDatabase, request: Request): Array<Record<string, unknown>> {
   const params = new URL(request.url).searchParams;
   return listPiNotificationPreferences(db, {
-    conversationId: clean(params.get("conversation_id") ?? params.get("conversationId")),
-    projectId: clean(params.get("project_id") ?? params.get("projectId")),
-    runGroupId: clean(params.get("run_group_id") ?? params.get("runGroupId")),
-    scope: clean(params.get("scope")),
-    status: clean(params.get("status"))
+    conversationId: cleanString(params.get("conversation_id") ?? params.get("conversationId")),
+    projectId: cleanString(params.get("project_id") ?? params.get("projectId")),
+    runGroupId: cleanString(params.get("run_group_id") ?? params.get("runGroupId")),
+    scope: cleanString(params.get("scope")),
+    status: cleanString(params.get("status"))
   }).map(preferenceSummary);
 }
 
 async function createPreferenceResponse(db: RunnerDatabase, request: Request): Promise<Record<string, unknown>> {
   const body = await parseJsonBody(request);
   try {
-    const result = writePiNotificationPreference(db, record(body));
+    const result = writePiNotificationPreference(db, objectValue(body));
     return {
       confirmation_text: safeText(result.confirmation_text),
       preference: preferenceSummary(result.preference)
@@ -92,7 +93,7 @@ function preferenceSummary(preference: PiNotificationPreference): Record<string,
 function safePolicyObject(value: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(value || "{}");
-    return stripRawPayload(record(parsed));
+    return stripRawPayload(objectValue(parsed));
   } catch {
     return {};
   }
@@ -120,16 +121,8 @@ function parseList(value: string): string[] {
   }
 }
 
-function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 function safeText(value: string): string {
   return redactAuditText(value);
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function preferenceID(request: Request): string {

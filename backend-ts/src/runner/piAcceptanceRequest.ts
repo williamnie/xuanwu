@@ -3,6 +3,7 @@ import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvent
 import { getIssue, listIssueRuns, type Issue } from "../db/repositories/issues.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { readIssueDecisionProjection } from "../domain/review/humanReview.ts";
+import { cleanString } from "../util/values.ts";
 
 type PiAcceptanceRequestInput = {
   reason?: string;
@@ -76,8 +77,4 @@ function mustGetIssue(db: RunnerDatabase, issueID: number): Issue {
   const issue = getIssue(db, issueID);
   if (!issue) throw new Error(`Issue #${issueID} not found`);
   return issue;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

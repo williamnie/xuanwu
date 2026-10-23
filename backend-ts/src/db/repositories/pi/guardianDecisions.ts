@@ -13,6 +13,8 @@ import {
   type PatchInput
 } from "./common.ts";
 import { redactAuditJsonText, redactAuditText } from "./auditRedaction.ts";
+import { placeholders } from "../../sql.ts";
+import { isoSeconds } from "../../../util/values.ts";
 
 export type PiGuardianDecision = {
   actions_json: string;
@@ -143,8 +145,8 @@ export function claimPiGuardianDecisionLease(
   if (!Number.isInteger(input.ttlMs) || input.ttlMs <= 0) throw new Error("ttlMs must be a positive integer");
   const key = requiredString(id, "id");
   const nowDate = input.now ?? new Date();
-  const timestamp = iso(nowDate);
-  const expiresAt = iso(new Date(nowDate.getTime() + input.ttlMs));
+  const timestamp = isoSeconds(nowDate);
+  const expiresAt = isoSeconds(new Date(nowDate.getTime() + input.ttlMs));
   const result = db.sqlite.run(`update ${TABLE} set lease_owner=?, lease_expires_at=?, updated_at=?
     where id=? and state in ('proposed', 'approved', 'deferred', 'executing')
       and (cooldown_until='' or cooldown_until<=?)
@@ -274,15 +276,7 @@ function piTextReference(value: unknown): string {
   return /^[a-z][a-z0-9_.-]*:[^\s]+$/i.test(text) ? text : "";
 }
 
-function iso(value: Date): string {
-  return value.toISOString().replace(/\.\d{3}Z$/, "Z");
-}
-
 function jsonArrayText(value: unknown): string {
   if (typeof value === "string") return redactAuditJsonText(jsonText(value, "[]"));
   return redactAuditJsonText(JSON.stringify(value ?? []));
-}
-
-function placeholders(count: number): string {
-  return Array.from({ length: count }, () => "?").join(", ");
 }

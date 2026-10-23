@@ -15,6 +15,7 @@ import { makeRunAttemptID } from "../run/contracts.ts";
 import { projectIssueAsWork } from "../work/issueAdapter.ts";
 import { recordExecutionEvidenceContext } from "./executionEvidenceContext.ts";
 import { buildPriorExecutionEvidence, type PriorExecutionEvidence } from "./priorExecutionEvidence.ts";
+import { cleanString, nonNegativeInteger, objectValue } from "../../util/values.ts";
 
 export const COMPLETION_CARD_CONTRACT = "xw.issue-completion-card.v1" as const;
 export const COMPLETION_CARD_EVENT_TYPE = "issue.completion_card.v1";
@@ -846,22 +847,8 @@ function parseJson(value: unknown): unknown {
   }
 }
 
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function integer(value: unknown): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) ? value : null;
-}
-
-function nonNegativeInteger(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
 }
 
 function stringArray(value: unknown): string[] {

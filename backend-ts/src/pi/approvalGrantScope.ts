@@ -1,4 +1,5 @@
 import type { ApprovalDecision } from "../providers/types.ts";
+import { cleanString } from "../util/values.ts";
 
 type ApprovalGrantScopeAudit = {
   effective_decision: string;
@@ -99,8 +100,4 @@ function isCancel(decision: ApprovalDecision): boolean {
 function isApproved(decision: ApprovalDecision): boolean {
   return ["approve", "approved", "accept", "approve_session", "approved_for_session", "acceptForSession"]
     .includes(decision.decision.trim());
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

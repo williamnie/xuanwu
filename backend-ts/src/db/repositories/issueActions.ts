@@ -10,6 +10,7 @@ import { getIssue, listIssueRuns, type Issue, type IssueRun } from "./issues.ts"
 import { removePiRunGroupIssue, syncPiRunGroupsForIssueStatus } from "./pi/runGroups.ts";
 import { getProject, ProjectNotFoundError } from "./projects.ts";
 import { readWorkspaceWait } from "./workspaceWaits.ts";
+import { cleanString } from "../../util/values.ts";
 
 const STATUS_TODO = "todo";
 const STATUS_IN_PROGRESS = "in_progress";
@@ -246,10 +247,6 @@ function recordStatusEvent(
 
 function statusEventPayload(status: string, hasServiceTier: boolean, serviceTier: string): Record<string, string> {
   return hasServiceTier ? { status, service_tier: serviceTier } : { status };
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function mustGetRunnableIssue(db: RunnerDatabase, id: number): Issue {

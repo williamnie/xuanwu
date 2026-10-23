@@ -4,6 +4,7 @@ import { redactSensitiveText } from "../../util/redact.ts";
 import { normalizedRunEvent, providerEventSourceRef, providerRunCost, unknownRunEvent } from "../runEvents.ts";
 import type { NormalizedRunEvent, ProviderEvent, ProviderMetadataValue, SessionRef } from "../types.ts";
 import type { QoderUsageProjection } from "./sdkFacade.ts";
+import { cleanString, objectValue } from "../../util/values.ts";
 
 const PROVIDER = "qoder" as const;
 
@@ -38,7 +39,7 @@ export type QoderFailureDetails = {
 };
 
 export function projectQoderMessage(message: SDKMessage, context: QoderEventContext): ProviderEvent {
-  const raw = recordValue(message);
+  const raw = objectValue(message);
   const method = nativeMethod(raw);
   const session = messageSession(raw);
   const event: ProviderEvent = {
@@ -55,8 +56,8 @@ export function projectQoderMessage(message: SDKMessage, context: QoderEventCont
 
 export function qoderFailureEvent(details: QoderFailureDetails, invocationRef: string): ProviderEvent {
   const method = `qoder/failure/${details.category}`;
-  const session = clean(details.sessionId)
-    ? { provider: PROVIDER, sessionId: clean(details.sessionId) } as const
+  const session = cleanString(details.sessionId)
+    ? { provider: PROVIDER, sessionId: cleanString(details.sessionId) } as const
     : undefined;
   const message = redactSensitiveText(details.message || "Qoder execution failed");
   const metadata = compactMetadata({
@@ -93,8 +94,8 @@ export function qoderInterruptedEvent(
   reason = "Qoder query interrupted"
 ): ProviderEvent {
   const method = "qoder/control/interrupted";
-  const session = clean(sessionId)
-    ? { provider: PROVIDER, sessionId: clean(sessionId), ...(clean(messageRef) ? { turnId: clean(messageRef) } : {}) }
+  const session = cleanString(sessionId)
+    ? { provider: PROVIDER, sessionId: cleanString(sessionId), ...(cleanString(messageRef) ? { turnId: cleanString(messageRef) } : {}) }
     : undefined;
   return {
     provider: PROVIDER,
@@ -115,16 +116,16 @@ export function qoderInterruptedEvent(
 }
 
 export function qoderResultFailure(message: SDKResultMessage): QoderFailureDetails {
-  const raw = recordValue(message);
+  const raw = objectValue(message);
   const text = resultErrorText(raw);
-  const subtype = clean(raw.subtype);
+  const subtype = cleanString(raw.subtype);
   const errorCode = safeNumber(raw.error_code);
   const classification = classifyQoderFailure(text, subtype, errorCode);
   return {
     ...classification,
     ...(errorCode === undefined ? {} : { code: errorCode }),
     message: text || `Qoder result ${subtype || "failed"}`,
-    sessionId: clean(raw.session_id)
+    sessionId: cleanString(raw.session_id)
   };
 }
 
@@ -158,14 +159,14 @@ function qoderRunEvent(
   event: ProviderEvent,
   context: QoderEventContext
 ): NormalizedRunEvent {
-  const type = clean(raw.type);
-  const subtype = clean(raw.subtype);
+  const type = cleanString(raw.type);
+  const subtype = cleanString(raw.subtype);
   const metadata = qoderMetadata(raw, context);
   if (type === "result") return qoderResultRunEvent(method, raw, event.session, metadata, context);
   if (type === "system" && subtype === "init") {
     return normalizedRunEvent({ kind: "started", metadata, method, outcome: "running", provider: PROVIDER, session: event.session });
   }
-  if (type === "system" && subtype === "session_state_changed" && clean(raw.state) === "requires_action") {
+  if (type === "system" && subtype === "session_state_changed" && cleanString(raw.state) === "requires_action") {
     return normalizedRunEvent({
       kind: "approval_requested", metadata, method, outcome: "waiting_approval", provider: PROVIDER, session: event.session
     });
@@ -194,7 +195,7 @@ function qoderResultRunEvent(
   if (context.interrupted) {
     return normalizedRunEvent({ kind: "error", metadata, method, outcome: "interrupted", provider: PROVIDER, session });
   }
-  const succeeded = clean(raw.subtype) === "success" && raw.is_error === false;
+  const succeeded = cleanString(raw.subtype) === "success" && raw.is_error === false;
   const cost = context.resume ? undefined : qoderResultCost(method, raw, session, context.usage);
   return normalizedRunEvent({
     ...(cost ? { cost } : {}),
@@ -216,7 +217,7 @@ function qoderResultCost(
 ) {
   const usage: Record<string, unknown> = projection?.result
     ? { ...projection.result }
-    : recordValue(raw.usage);
+    : objectValue(raw.usage);
   const input = safeNumber(usage.input_tokens);
   const output = safeNumber(usage.output_tokens);
   return providerRunCost({
@@ -231,8 +232,8 @@ function qoderResultCost(
 }
 
 function applyProviderFields(event: ProviderEvent, raw: Record<string, unknown>, context: QoderEventContext): void {
-  const type = clean(raw.type);
-  const subtype = clean(raw.subtype);
+  const type = cleanString(raw.type);
+  const subtype = cleanString(raw.subtype);
   if (type === "result") {
     const succeeded = subtype === "success" && raw.is_error === false;
     if (context.interrupted) {
@@ -241,7 +242,7 @@ function applyProviderFields(event: ProviderEvent, raw: Record<string, unknown>,
     } else if (succeeded) {
       event.type = "done";
       event.status = "completed";
-      event.text = clean(raw.result);
+      event.text = cleanString(raw.result);
     } else {
       event.type = "error";
       event.status = "failed";
@@ -250,7 +251,7 @@ function applyProviderFields(event: ProviderEvent, raw: Record<string, unknown>,
     return;
   }
   if (type === "assistant") {
-    event.text = assistantText(recordValue(raw.message));
+    event.text = assistantText(objectValue(raw.message));
     return;
   }
   if (type === "system" && subtype === "init") {
@@ -259,44 +260,44 @@ function applyProviderFields(event: ProviderEvent, raw: Record<string, unknown>,
   }
   if (type === "system" && subtype === "api_retry") {
     event.status = "retrying";
-    event.error = redactSensitiveText(clean(raw.error));
+    event.error = redactSensitiveText(cleanString(raw.error));
     return;
   }
   if (type === "system" && subtype === "permission_denied") {
     event.status = "denied";
-    event.error = redactSensitiveText(clean(raw.message));
+    event.error = redactSensitiveText(cleanString(raw.message));
     return;
   }
   if (type === "system" && subtype.startsWith("task_")) {
-    event.status = clean(raw.status) || clean(recordValue(raw.patch).status) || "running";
-    event.text = redactSensitiveText(clean(raw.summary) || clean(raw.description));
+    event.status = cleanString(raw.status) || cleanString(objectValue(raw.patch).status) || "running";
+    event.text = redactSensitiveText(cleanString(raw.summary) || cleanString(raw.description));
     return;
   }
-  if (type === "system" && subtype === "session_state_changed") event.status = clean(raw.state);
+  if (type === "system" && subtype === "session_state_changed") event.status = cleanString(raw.state);
 }
 
 function providerEventType(raw: Record<string, unknown>): string {
-  const type = clean(raw.type);
-  const subtype = clean(raw.subtype);
+  const type = cleanString(raw.type);
+  const subtype = cleanString(raw.subtype);
   if (type === "result") return "result";
-  if (type === "assistant") return assistantEventType(recordValue(raw.message));
+  if (type === "assistant") return assistantEventType(objectValue(raw.message));
   if (type === "user" && raw.tool_use_result !== undefined) return "tool_result";
   if (type !== "system") return type === "stream_event" ? "message" : "unknown";
   if (subtype === "init") return "provider.session_started";
   if (subtype === "api_retry") return "provider.retry";
   if (subtype === "permission_denied") return "permission_denied";
   if (subtype === "mirror_error") return "provider.mirror_error";
-  if (subtype === "session_state_changed" && clean(raw.state) === "requires_action") return "approval_requested";
+  if (subtype === "session_state_changed" && cleanString(raw.state) === "requires_action") return "approval_requested";
   if (subtype === "task_started") return "subagent.started";
   if (subtype === "task_progress" || subtype === "task_updated") return "subagent.progress";
-  if (subtype === "task_notification") return `subagent.${clean(raw.status) || "completed"}`;
+  if (subtype === "task_notification") return `subagent.${cleanString(raw.status) || "completed"}`;
   return "unknown";
 }
 
 function assistantEventType(message: Record<string, unknown>): string {
-  const blocks = Array.isArray(message.content) ? message.content.map(recordValue) : [];
-  if (blocks.some((block) => clean(block.type) === "tool_use")) return "tool_call";
-  if (blocks.some((block) => ["tool_result", "tool_use_result"].includes(clean(block.type)))) return "tool_result";
+  const blocks = Array.isArray(message.content) ? message.content.map(objectValue) : [];
+  if (blocks.some((block) => cleanString(block.type) === "tool_use")) return "tool_call";
+  if (blocks.some((block) => ["tool_result", "tool_use_result"].includes(cleanString(block.type)))) return "tool_result";
   return "message";
 }
 
@@ -309,43 +310,43 @@ function progressMessage(type: string, subtype: string): boolean {
 }
 
 function nativeMethod(raw: Record<string, unknown>): string {
-  const type = clean(raw.type) || "unknown";
-  const subtype = clean(raw.subtype);
+  const type = cleanString(raw.type) || "unknown";
+  const subtype = cleanString(raw.subtype);
   return subtype ? `qoder/${type}/${subtype}` : `qoder/${type}`;
 }
 
 function messageSession(raw: Record<string, unknown>): SessionRef | undefined {
-  const sessionId = clean(raw.session_id);
+  const sessionId = cleanString(raw.session_id);
   if (!sessionId) return undefined;
-  const messageRef = clean(raw.type) === "result" ? clean(raw.uuid) : "";
+  const messageRef = cleanString(raw.type) === "result" ? cleanString(raw.uuid) : "";
   return { provider: PROVIDER, sessionId, ...(messageRef ? { turnId: messageRef } : {}) };
 }
 
 function qoderMetadata(raw: Record<string, unknown>, context: QoderEventContext): Record<string, ProviderMetadataValue> {
-  const patch = recordValue(raw.patch);
+  const patch = objectValue(raw.patch);
   return compactMetadata({
     error_code: safeNumber(raw.error_code),
     invocation_ref: context.invocationRef,
-    message_ref: clean(raw.uuid),
-    model: clean(raw.model) || clean(recordValue(raw.message).model),
-    native_subtype: clean(raw.subtype),
-    native_type: clean(raw.type),
-    qodercli_version: clean(raw.qodercli_version),
-    task_id: clean(raw.task_id),
-    task_status: clean(raw.status) || clean(patch.status),
-    tool_use_id: clean(raw.tool_use_id),
+    message_ref: cleanString(raw.uuid),
+    model: cleanString(raw.model) || cleanString(objectValue(raw.message).model),
+    native_subtype: cleanString(raw.subtype),
+    native_type: cleanString(raw.type),
+    qodercli_version: cleanString(raw.qodercli_version),
+    task_id: cleanString(raw.task_id),
+    task_status: cleanString(raw.status) || cleanString(patch.status),
+    tool_use_id: cleanString(raw.tool_use_id),
     usage_scope: context.resume ? "resume_semantics_unverified" : raw.type === "result" ? "attempt" : ""
   });
 }
 
 function redactedRawSummary(raw: Record<string, unknown>, usageProjection?: QoderUsageProjection): unknown {
-  const type = clean(raw.type);
-  const subtype = clean(raw.subtype);
+  const type = cleanString(raw.type);
+  const subtype = cleanString(raw.subtype);
   const summary: Record<string, unknown> = {
     error_code: raw.error_code,
     errors: raw.errors,
     is_error: raw.is_error,
-    model: raw.model ?? recordValue(raw.message).model,
+    model: raw.model ?? objectValue(raw.message).model,
     qodercli_version: raw.qodercli_version,
     session_id: raw.session_id,
     status: raw.status ?? raw.state,
@@ -355,7 +356,7 @@ function redactedRawSummary(raw: Record<string, unknown>, usageProjection?: Qode
     type,
     uuid: raw.uuid
   };
-  if (type === "assistant") summary.content = contentSummary(recordValue(raw.message).content);
+  if (type === "assistant") summary.content = contentSummary(objectValue(raw.message).content);
   if (type === "result") {
     summary.duration_ms = raw.duration_ms;
     summary.stop_reason = raw.stop_reason;
@@ -371,7 +372,7 @@ function redactedRawSummary(raw: Record<string, unknown>, usageProjection?: Qode
 function contentSummary(value: unknown): unknown[] {
   if (!Array.isArray(value)) return [];
   return value.slice(0, 20).map((item) => {
-    const block = recordValue(item);
+    const block = objectValue(item);
     return compactObject({
       id: block.id,
       name: block.name,
@@ -384,12 +385,12 @@ function contentSummary(value: unknown): unknown[] {
 
 function assistantText(message: Record<string, unknown>): string {
   if (!Array.isArray(message.content)) return "";
-  return redactSensitiveText(message.content.map((item) => clean(recordValue(item).text)).filter(Boolean).join("\n"));
+  return redactSensitiveText(message.content.map((item) => cleanString(objectValue(item).text)).filter(Boolean).join("\n"));
 }
 
 function resultErrorText(raw: Record<string, unknown>): string {
-  const errors = Array.isArray(raw.errors) ? raw.errors.map(clean).filter(Boolean) : [];
-  return redactSensitiveText(errors.join("; ") || clean(raw.result) || clean(raw.terminal_reason) || clean(raw.subtype));
+  const errors = Array.isArray(raw.errors) ? raw.errors.map(cleanString).filter(Boolean) : [];
+  return redactSensitiveText(errors.join("; ") || cleanString(raw.result) || cleanString(raw.terminal_reason) || cleanString(raw.subtype));
 }
 
 function compactMetadata(input: Record<string, unknown>): Record<string, ProviderMetadataValue> {
@@ -402,14 +403,6 @@ function compactObject(input: Record<string, unknown>): Record<string, unknown> 
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined && value !== ""));
 }
 
-function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 function safeNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

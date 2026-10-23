@@ -1,3 +1,5 @@
+import { cleanString, objectValue } from "../util/values.ts";
+
 type FeishuPiActionDecision = "approve" | "approve_always" | "reject" | "request_changes" | "snooze";
 
 export type FeishuPiActionCardAction = {
@@ -14,19 +16,19 @@ export type FeishuPiActionCardAction = {
 const PI_ACTION_CARD_ACTION = "pi_action_resolve";
 
 export function normalizeFeishuPiActionCardAction(raw: unknown): FeishuPiActionCardAction | null {
-  const root = recordValue(raw);
-  if (cleanString(recordValue(root.header).event_type) !== "card.action.trigger") return null;
-  const event = recordValue(root.event);
-  const action = recordValue(event.action);
-  const value = recordValue(action.value);
+  const root = objectValue(raw);
+  if (cleanString(objectValue(root.header).event_type) !== "card.action.trigger") return null;
+  const event = objectValue(root.event);
+  const action = objectValue(event.action);
+  const value = objectValue(action.value);
   if (cleanString(value.action) !== PI_ACTION_CARD_ACTION) return null;
   const piActionID = cleanString(value.pi_action_id || value.action_id);
   const decision = normalizeDecision(cleanString(value.decision));
   if (piActionID === "" || !decision) return null;
-  const context = recordValue(event.context);
-  const operatorID = recordValue(recordValue(event.operator).operator_id);
+  const context = objectValue(event.context);
+  const operatorID = objectValue(objectValue(event.operator).operator_id);
   return {
-    actionID: cleanString(recordValue(root.header).event_id),
+    actionID: cleanString(objectValue(root.header).event_id),
     chatID: cleanString(context.open_chat_id || context.chat_id),
     comment: cleanString(value.comment || value.reason),
     decision,
@@ -55,15 +57,7 @@ function normalizeDecision(value: string): FeishuPiActionDecision | null {
   return null;
 }
 
-function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 function positiveNumber(value: unknown): number | undefined {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return undefined;
   return value;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

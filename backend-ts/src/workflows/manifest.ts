@@ -9,6 +9,7 @@ import {
   type WorkflowVerificationPolicy
 } from "../domain/evidence/policy.ts";
 import { TOOL_PERMISSIONS, type ToolPermission } from "../pi/toolProviderEnvelope.ts";
+import { isRecord } from "../util/values.ts";
 
 export const WORKFLOW_MANIFEST_SCHEMA_VERSION = "xuanwu.workflow-manifest.v1" as const;
 const WORKFLOW_PROJECT_OVERRIDE_SCHEMA_VERSION = "xuanwu.workflow-project-override.v1" as const;
@@ -342,10 +343,6 @@ function approvalRank(mode: WorkflowApprovalMode): number {
 
 function add(issues: WorkflowValidationIssue[], path: string, message: string): void {
   issues.push({ code: "invalid_value", message, path });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function jsonError(error: unknown): string {

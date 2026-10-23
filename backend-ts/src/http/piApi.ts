@@ -49,6 +49,7 @@ import type { Router } from "./router.ts";
 import { bindProjectAutomaticTakeover } from "../domain/project/automaticTakeover.ts";
 import { appLanguage } from "../i18n/language.ts";
 import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
+import { cleanString } from "../util/values.ts";
 
 type PiApiContext = {
   agenticClient?: AgenticWorkerClient;
@@ -203,7 +204,6 @@ function assertSupervisorCanManageProjects(db: RunnerDatabase): void {
   if (supervisor.enabled !== 1) throw new HttpError(400, "disabled Supervisor cannot manage projects");
 }
 
-
 function assertAgentCanBeDisabled(db: RunnerDatabase, id: string): void {
   if (id === DEFAULT_PI_AGENT_ID && listProjectPiSettings(db).length > 0) {
     throw new HttpError(400, "enabled=false would disable projects managed by Supervisor");
@@ -278,8 +278,4 @@ function jsonInput(value: unknown, fallback: string): string {
   } catch {
     return fallback;
   }
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

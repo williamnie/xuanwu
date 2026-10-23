@@ -1,3 +1,5 @@
+import { cleanString, nonNegativeInteger, objectValue } from "../../util/values.ts";
+
 type CodexDynamicExecObservation = {
   aggregatedOutput: string;
   command: string;
@@ -15,11 +17,11 @@ type CodexDynamicExecObservation = {
  * tools.exec_command({ ... }) shape and require a terminal wrapper outcome.
  */
 export function codexDynamicExecObservation(item: Record<string, unknown>): CodexDynamicExecObservation | undefined {
-  if (stringValue(item.type) !== "dynamicToolCall" || stringValue(item.tool) !== "exec") return undefined;
+  if (cleanString(item.type) !== "dynamicToolCall" || cleanString(item.tool) !== "exec") return undefined;
   const input = dynamicToolInput(item.arguments);
   const calls = execCommandCalls(input);
   if (calls.length !== 1) return undefined;
-  const command = stringValue(calls[0].cmd);
+  const command = cleanString(calls[0].cmd);
   if (command === "") return undefined;
   const output = dynamicToolOutput(item.contentItems);
   const exitCode = dynamicToolExitCode(item, output);
@@ -27,10 +29,10 @@ export function codexDynamicExecObservation(item: Record<string, unknown>): Code
   return {
     aggregatedOutput: output,
     command,
-    cwd: stringValue(calls[0].workdir) || ".",
+    cwd: cleanString(calls[0].workdir) || ".",
     durationMs: nonNegativeInteger(item.durationMs),
     exitCode,
-    id: stringValue(item.id),
+    id: cleanString(item.id),
     status: exitCode === 0 ? "completed" : "failed",
     type: "commandExecution"
   };
@@ -39,7 +41,7 @@ export function codexDynamicExecObservation(item: Record<string, unknown>): Code
 function dynamicToolInput(value: unknown): string {
   if (typeof value === "string") return value;
   const record = objectValue(value);
-  return stringValue(record.input) || stringValue(record.code);
+  return cleanString(record.input) || cleanString(record.code);
 }
 
 function execCommandCalls(input: string): Record<string, unknown>[] {
@@ -91,7 +93,7 @@ function dynamicToolOutput(value: unknown): string {
   if (!Array.isArray(value)) return "";
   return value.map((entry) => {
     const item = objectValue(entry);
-    return stringValue(item.text);
+    return cleanString(item.text);
   }).filter(Boolean).join("\n");
 }
 
@@ -99,7 +101,7 @@ function dynamicToolExitCode(item: Record<string, unknown>, output: string): num
   if (typeof item.exitCode === "number" && Number.isSafeInteger(item.exitCode)) return item.exitCode;
   if (/^Script completed(?:\r?\n|$)/.test(output)) return 0;
   if (/^Script (?:failed|terminated)(?:\r?\n|$)/.test(output)) return 1;
-  if (item.success === false || stringValue(item.status) === "failed") return 1;
+  if (item.success === false || cleanString(item.status) === "failed") return 1;
   return undefined;
 }
 
@@ -107,18 +109,4 @@ function skipWhitespace(value: string, start: number): number {
   let index = start;
   while (index < value.length && /\s/.test(value[index])) index += 1;
   return index;
-}
-
-function nonNegativeInteger(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
-}
-
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

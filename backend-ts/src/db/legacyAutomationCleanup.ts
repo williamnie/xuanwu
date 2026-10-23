@@ -19,6 +19,7 @@ import {
   LEGACY_AUTOMATION_DROP_MIGRATION_ID,
   LEGACY_AUTOMATION_DROP_TABLES
 } from "./schema/053_drop_legacy_automation_tables.ts";
+import { cleanString, errorMessage } from "../util/values.ts";
 
 const LEGACY_AUTOMATION_ARCHIVE_CONTRACT = "xw.legacy-automation-archive.v1";
 const LEGACY_AUTOMATION_CLEANUP_REPORT_CONTRACT = "xw.legacy-automation-cleanup-report.v1";
@@ -84,7 +85,7 @@ export function cleanupLegacyAutomationSchema(input: LegacyAutomationCleanupInpu
       audit_ref: authorization.auditRef,
       backup_path: backupPath,
       backup_sha256: backup.sha256,
-      release_ref: clean(input.releaseRef),
+      release_ref: cleanString(input.releaseRef),
       tables: [...LEGACY_AUTOMATION_DROP_TABLES]
     };
     const apply = sqlite.transaction(() => {
@@ -177,8 +178,8 @@ function cleanupGate(dbPath: string, sourceRoot: string, releaseRef: string | un
     }) as Record<string, any>;
     const exactConsumers = exactSourceConsumerAudit(sourceRoot);
     const release = {
-      passed: clean(releaseRef) !== "" && consolidation.consumer_zero?.compatibility_usage_since_cutover === 0,
-      ref: clean(releaseRef),
+      passed: cleanString(releaseRef) !== "" && consolidation.consumer_zero?.compatibility_usage_since_cutover === 0,
+      ref: cleanString(releaseRef),
       usage_since_cutover: consolidation.consumer_zero?.compatibility_usage_since_cutover ?? null
     };
     const blockers = [
@@ -364,11 +365,11 @@ function authorize(input: LegacyAutomationCleanupInput): Authorization {
 function requireConfirmations(input: LegacyAutomationCleanupInput): void {
   if (!input.confirmBackupTested) throw new Error("--confirm-backup-tested is required for apply mode");
   if (!input.confirmNoActiveWriters) throw new Error("--confirm-no-active-writers is required for apply mode");
-  if (clean(input.releaseRef) === "") throw new Error("--release-ref is required for apply mode");
+  if (cleanString(input.releaseRef) === "") throw new Error("--release-ref is required for apply mode");
 }
 
 function requireExactTables(value: string | undefined): void {
-  const actual = clean(value).split(",").map((item) => item.trim()).filter(Boolean).sort();
+  const actual = cleanString(value).split(",").map((item) => item.trim()).filter(Boolean).sort();
   const expected = [...LEGACY_AUTOMATION_DROP_TABLES].sort();
   if (actual.length !== expected.length || actual.some((table, index) => table !== expected[index])) {
     throw new Error(`--confirm-tables must exactly equal ${expected.join(",")}`);
@@ -448,15 +449,7 @@ function resolveRequired(value: string | undefined, flag: string): string {
 }
 
 function required(value: string | undefined, flag: string): string {
-  const text = clean(value);
+  const text = cleanString(value);
   if (text === "") throw new Error(`${flag} is required`);
   return text;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

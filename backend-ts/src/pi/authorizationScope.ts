@@ -1,6 +1,7 @@
 import type { PiActionEnvelope, PiAuthorizationScope, PiGatePolicy } from "./actionGate.ts";
 import { piActionContract } from "./actionContracts.ts";
 import { SUPERVISOR_CONTROL_READ_ACTION_TYPES } from "./supervisorControlContracts.ts";
+import { cleanString } from "../util/values.ts";
 
 type PiAuthorizationScopeMatch = { matched: boolean; reason: string };
 
@@ -225,8 +226,4 @@ function denied(reason: string): PiAuthorizationScopeMatch {
 function withRuntimeReason(result: PiAuthorizationScopeMatch, runtimeReason: string): PiAuthorizationScopeMatch {
   if (!result.matched || runtimeReason === "") return result;
   return matched(`${result.reason}; ${runtimeReason}`);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

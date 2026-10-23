@@ -13,6 +13,7 @@ import {
   verifyEventArchive,
   vacuumEventDatabase
 } from "./maintenanceService.ts";
+import { sha256 } from "../util/values.ts";
 
 const roots: string[] = [];
 const NOW = "2026-07-16T00:00:00Z";
@@ -288,14 +289,10 @@ function readEventRows(path: string): Array<{ created_at: string; id: number; is
   try {
     return sqlite.query<{ created_at: string; id: number; issue_id: number; payload: string; type: string }, []>(
       "select id, issue_id, type, payload, created_at from issue_events order by id"
-    ).all().map(({ payload, ...row }) => ({ ...row, payload_sha256: hash(payload) }));
+    ).all().map(({ payload, ...row }) => ({ ...row, payload_sha256: sha256(payload) }));
   } finally {
     sqlite.close();
   }
-}
-
-function hash(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
 }
 
 function rewindCheckpoint(path: string): void {

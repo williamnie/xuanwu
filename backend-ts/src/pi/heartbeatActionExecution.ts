@@ -1,6 +1,7 @@
 import type { PiActionMode, PiAuthorizationScope, PiGatePolicy } from "./actionGate.ts";
 import type { heartbeatContext } from "./heartbeatOrchestratorSupport.ts";
 import type { HeartbeatInput } from "./heartbeatTypes.ts";
+import { cleanString } from "../util/values.ts";
 
 type HeartbeatContext = ReturnType<typeof heartbeatContext>;
 
@@ -82,8 +83,4 @@ function stringList(value: unknown): string[] {
     if (Array.isArray(parsed)) return parsed.map(cleanString).filter(Boolean);
   } catch {}
   return text.split(/\n|,/).map(cleanString).filter(Boolean);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

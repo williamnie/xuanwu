@@ -2,13 +2,14 @@ import { redactSensitiveText } from "../../util/redact.ts";
 import { normalizedRunEvent, providerEventSourceRef, providerRunCost, unknownRunEvent } from "../runEvents.ts";
 import type { NormalizedRunEvent, ProviderEvent, SessionRef } from "../types.ts";
 import { codexDynamicExecObservation } from "./dynamicExec.ts";
+import { objectValue } from "../../util/values.ts";
 
 type CodexWireNotification = { method: string; params?: unknown };
 
 export function normalizeCodexEvent(notification: CodexWireNotification): ProviderEvent {
   const method = notification.method.trim();
   const payload = redactPayload(notification.params);
-  const raw = recordValue(payload);
+  const raw = objectValue(payload);
   const event: ProviderEvent = {
     provider: "codex",
     type: eventType(method, raw),
@@ -237,7 +238,7 @@ function commandLifecycleText(method: string, item: Record<string, unknown>): st
 
 function patchText(raw: Record<string, unknown>): string {
   return arrayField(raw, "changes").map((item) => {
-    const change = recordValue(item);
+    const change = objectValue(item);
     const path = stringField(change, "path");
     const diff = stringField(change, "diff");
     return path || diff ? `--- ${path}\n${diff}\n` : "";
@@ -253,7 +254,7 @@ function pathFromPayload(raw: Record<string, unknown>): string {
   if (direct !== "") return direct;
   const itemPath = stringField(recordField(raw, "item"), "path");
   if (itemPath !== "") return itemPath;
-  const firstChange = recordValue(arrayField(raw, "changes")[0]);
+  const firstChange = objectValue(arrayField(raw, "changes")[0]);
   return stringField(firstChange, "path");
 }
 
@@ -274,7 +275,7 @@ function sessionRef(raw: Record<string, unknown>): SessionRef | undefined {
 function redactPayload(value: unknown): unknown {
   if (typeof value === "string") return redactSensitiveText(value);
   if (Array.isArray(value)) return value.map(redactPayload);
-  const raw = recordValue(value);
+  const raw = objectValue(value);
   if (Object.keys(raw).length === 0) return value;
   return Object.fromEntries(Object.entries(raw).map(([key, item]) => [key, isSensitiveKey(key) ? "[redacted]" : redactPayload(item)]));
 }
@@ -304,11 +305,7 @@ function stableJSON(value: unknown): string {
 }
 
 function recordField(raw: Record<string, unknown>, key: string): Record<string, unknown> {
-  return recordValue(raw[key]);
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return objectValue(raw[key]);
 }
 
 function arrayField(raw: Record<string, unknown>, key: string): unknown[] {

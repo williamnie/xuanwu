@@ -13,6 +13,7 @@ import {
   type WorkID
 } from "../../xuanwu/coreDomainContracts.ts";
 import type { RunAttemptID } from "../run/contracts.ts";
+import { isRecord } from "../../util/values.ts";
 
 export { EVIDENCE_STATUSES, type EvidenceID, type RunID, type RunAttemptID, type WorkID };
 
@@ -369,8 +370,4 @@ function isIsoTimestamp(value: unknown): value is string {
   if (typeof value !== "string") return false;
   const time = Date.parse(value);
   return Number.isFinite(time) && new Date(time).toISOString() === value;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

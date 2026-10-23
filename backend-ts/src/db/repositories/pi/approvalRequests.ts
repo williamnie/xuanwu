@@ -13,6 +13,7 @@ import {
   type PatchInput
 } from "./common.ts";
 import { redactAuditJsonText, redactAuditText } from "./auditRedaction.ts";
+import { placeholders } from "../../sql.ts";
 
 export type PiApprovalRequest = {
   approval_id: string;
@@ -293,8 +294,4 @@ function mustGetPiApprovalRequest(db: RunnerDatabase, id: string): PiApprovalReq
   const request = getPiApprovalRequest(db, id);
   if (!request) throw new Error("PI approval request missing after write");
   return request;
-}
-
-function placeholders(count: number): string {
-  return Array.from({ length: count }, () => "?").join(", ");
 }

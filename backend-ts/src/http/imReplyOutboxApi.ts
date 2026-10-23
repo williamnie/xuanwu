@@ -13,6 +13,7 @@ import type { ImChannelRegistry } from "../integrations/imChannelContracts.ts";
 import { dispatchImOutbox } from "../pi/imReplyOutboxDispatcher.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { cleanString } from "../util/values.ts";
 
 type ImReplyOutboxContext = {
   config?: FeishuConnectorConfig;
@@ -107,10 +108,6 @@ function outboxHttpError(error: unknown): HttpError {
   if (error instanceof Error && error.message.includes("not found")) return new HttpError(404, error.message);
   if (error instanceof Error) return new HttpError(409, error.message);
   return new HttpError(400, "im reply outbox operation failed");
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function positiveNumber(value: unknown): number | undefined {

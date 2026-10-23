@@ -20,6 +20,7 @@ import {
   type TelegramProjectSelectionResolver
 } from "./telegramInteractionAdapter.ts";
 import type { TelegramBotIdentity, TelegramConnectorConfig, TelegramUpdate } from "./telegramTypes.ts";
+import { sha256 } from "../util/values.ts";
 
 export type TelegramInboundHandler = (input: {
   externalEventId: number;
@@ -252,7 +253,7 @@ export function createTelegramReceiverManager(options: Options) {
   }
 
   async function getBotIdentity(telegramClient: TelegramBotClient, config: TelegramConnectorConfig): Promise<TelegramBotIdentity> {
-    const tokenKey = tokenFingerprint(config.botToken);
+    const tokenKey = sha256(config.botToken);
     if (botCache && botCache.tokenKey === tokenKey && botCache.expiresAt > Date.now()) return botCache.identity;
     const identity = await telegramClient.getMe({ signal: abortSignal(generation) });
     botCache = { expiresAt: Date.now() + config.getMeCacheTtlSeconds * 1000, identity, tokenKey };
@@ -297,8 +298,4 @@ function safeOffset(value: string): number {
 function updateID(value: unknown): string {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) throw new TelegramClientError("Telegram update_id is invalid", { kind: "permanent" });
   return String(value);
-}
-
-function tokenFingerprint(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
 }

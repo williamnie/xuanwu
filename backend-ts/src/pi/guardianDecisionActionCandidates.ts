@@ -1,5 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import type { PiGuardianEvent } from "../db/repositories/pi.ts";
+import { cleanString } from "../util/values.ts";
 
 export function guardianDecisionActionsJson(
   event: PiGuardianEvent,
@@ -13,7 +14,7 @@ export function guardianDecisionActionsJson(
 }
 
 function heartbeatActionJson(event: PiGuardianEvent, payload: Record<string, unknown>): string {
-  const actionType = clean(payload.action_type);
+  const actionType = cleanString(payload.action_type);
   const original = jsonRecord(payload.original_payload);
   if (event.event_type !== "guardian.heartbeat.action_candidate" || actionType === "" ||
     Object.keys(original).length === 0) {
@@ -24,8 +25,8 @@ function heartbeatActionJson(event: PiGuardianEvent, payload: Record<string, unk
     issue_id: event.issue_id,
     payload: original,
     project_id: event.project_id,
-    rationale: clean(payload.rationale),
-    risk_level: clean(payload.risk_level)
+    rationale: cleanString(payload.rationale),
+    risk_level: cleanString(payload.risk_level)
   }]);
 }
 
@@ -43,8 +44,4 @@ function jsonRecord(value: unknown): Record<string, unknown> {
     }
   }
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

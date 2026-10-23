@@ -6,6 +6,7 @@ import { getProject } from "../db/repositories/projects.ts";
 import { getAgentSession, listAgentSessions, type AgentSession } from "../db/repositories/agentSessions.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { issueStateSnapshot, type IssueStateSnapshot } from "./issueStateSnapshot.ts";
+import { cleanString, isoSeconds } from "../util/values.ts";
 export { applyIssueStateRepair } from "./issueStateRepairExecutor.ts";
 
 type IssueStateEvidence = {
@@ -43,7 +44,7 @@ export function diagnoseIssueState(db: RunnerDatabase, options: IssueStateManage
   return {
     batch_targets: batchProgress(issues, normalizedBatchTargets(options)),
     diagnostics: diagnosticIssues.flatMap((issue) => diagnoseOne(db, issue, options, now)),
-    generated_at: iso(now)
+    generated_at: isoSeconds(now)
   };
 }
 
@@ -196,7 +197,7 @@ function projectRunnerEvidence(db: RunnerDatabase, issue: Issue, now: Date): Iss
   const project = getProject(db, issue.project_id);
   if (!project) return undefined;
   const busy = hasActiveExecutorWork(db) ? 1 : 0;
-  return { ref: `project:${project.id}:runner`, source: "project", summary: `project auto_run=${project.auto_run}; runner executor_busy=${busy}`, timestamp: iso(now) };
+  return { ref: `project:${project.id}:runner`, source: "project", summary: `project auto_run=${project.auto_run}; runner executor_busy=${busy}`, timestamp: isoSeconds(now) };
 }
 function runEvidence(run: IssueRun | undefined): IssueStateEvidence | undefined {
   return run ? { ref: `run:${run.id}`, source: "run", summary: safeText(`attempt ${run.attempt} ${run.status}; ended_at=${run.ended_at}`), timestamp: run.ended_at || run.started_at } : undefined;
@@ -232,5 +233,3 @@ function finiteTime(value: number, fallback: number): number { return Number.isF
 function duration(ms: number): string { const minutes = Math.max(0, Math.round(ms / 60_000)); return minutes < 120 ? `${minutes}m` : `${Math.round(minutes / 60)}h`; }
 function normalize(value: string): string { return value.toLowerCase().replace(/[_\s-]/g, ""); }
 function safeText(value: string): string { return redactSensitiveText(value).replace(ABSOLUTE_PATH_PATTERN, "[redacted-path]"); }
-function cleanString(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
-function iso(date: Date): string { return date.toISOString().replace(/\.\d{3}Z$/, "Z"); }

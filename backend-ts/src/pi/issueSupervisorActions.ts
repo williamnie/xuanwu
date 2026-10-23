@@ -12,6 +12,7 @@ import {
   type PiSupervisorDecisionJson
 } from "./issueSupervisorRecovery.ts";
 import { recordSupervisorRecoveryAttempt } from "./issueSupervisorRecoveryAttemptRecorder.ts";
+import { cleanString } from "../util/values.ts";
 
 export type IssueSupervisorActionInput = {
   bus?: Pick<EventBus, "publish">;
@@ -66,7 +67,7 @@ function actionRequests(input: IssueSupervisorActionInput): PiActionRequest[] {
 }
 
 function actionTypes(decision: PiSupervisorDecisionJson): string[] {
-  const key = clean(decision.decision);
+  const key = cleanString(decision.decision);
   return isSupervisorDecision(key) ? PI_SUPERVISOR_DECISION_ACTION_TYPES[key] : ["issue.supervisor_decision"];
 }
 
@@ -89,8 +90,8 @@ function actionPayload(input: IssueSupervisorActionInput, actionType: string): R
 }
 
 function stateRepairPayload(input: IssueSupervisorActionInput): Record<string, unknown> {
-  const diagnosisCode = clean(input.decision.repair_diagnosis_code);
-  const operation = clean(input.decision.repair_operation);
+  const diagnosisCode = cleanString(input.decision.repair_diagnosis_code);
+  const operation = cleanString(input.decision.repair_operation);
   const diagnostic = (input.context.state_diagnostics ?? [])
     .find((item) => item.code === diagnosisCode);
   const action = diagnostic?.recommended_actions
@@ -114,16 +115,16 @@ function preconditionPayload(input: IssueSupervisorActionInput): Record<string, 
   return compact({
     decision_id: decisionID(input),
     diagnosis_code: primaryDiagnosis(context),
-    expected_issue_status: clean(context.issue.status),
-    expected_issue_updated_at: clean(context.issue.updated_at),
-    expected_provider_session_id: clean(context.latest_run?.provider_session_id),
-    expected_provider_turn_id: clean(context.latest_run?.provider_turn_id),
-    expected_run_ended_at: clean(context.latest_run?.ended_at),
-    expected_run_id: clean(context.latest_run?.id),
-    expected_run_status: clean(context.latest_run?.status),
-    expected_session_status: clean(context.session.raw_status),
-    expected_session_turn_id: clean(context.session.provider_turn_id),
-    expected_session_updated_at: clean(context.session.updated_at),
+    expected_issue_status: cleanString(context.issue.status),
+    expected_issue_updated_at: cleanString(context.issue.updated_at),
+    expected_provider_session_id: cleanString(context.latest_run?.provider_session_id),
+    expected_provider_turn_id: cleanString(context.latest_run?.provider_turn_id),
+    expected_run_ended_at: cleanString(context.latest_run?.ended_at),
+    expected_run_id: cleanString(context.latest_run?.id),
+    expected_run_status: cleanString(context.latest_run?.status),
+    expected_session_status: cleanString(context.session.raw_status),
+    expected_session_turn_id: cleanString(context.session.provider_turn_id),
+    expected_session_updated_at: cleanString(context.session.updated_at),
     issue_id: issueID(context)
   });
 }
@@ -132,9 +133,9 @@ function sessionPayload(input: IssueSupervisorActionInput): Record<string, unkno
   const context = input.context;
   return compact({
     ...preconditionPayload(input),
-    provider: clean(context.session.provider) || clean(context.provider_error?.provider) || "codex",
-    provider_session_id: clean(context.session.provider_session_id),
-    provider_turn_id: clean(context.session.provider_turn_id)
+    provider: cleanString(context.session.provider) || cleanString(context.provider_error?.provider) || "codex",
+    provider_session_id: cleanString(context.session.provider_session_id),
+    provider_turn_id: cleanString(context.session.provider_turn_id)
   });
 }
 
@@ -184,7 +185,7 @@ function supervisorGatePolicy(input: IssueSupervisorActionInput): PiGatePolicy {
     "issue.supervisor_decision",
     "needs_user.escalate"
   ])];
-  const autonomous = clean(input.context.policy.mode) === "autonomous";
+  const autonomous = cleanString(input.context.policy.mode) === "autonomous";
   const allowedActions = autonomous && configured.length === 0
     ? ["issue.supervisor_decision", "needs_user.escalate"]
     : allowed;
@@ -208,12 +209,12 @@ function recordDecisionEvent(input: IssueSupervisorActionInput): void {
     issue_id: issueID(input.context),
     payload_json: { decision: input.decision },
     project_id: projectID(input.context),
-    provider: clean(input.context.session.provider) || clean(input.context.provider_error?.provider),
-    provider_error_category: clean(input.context.provider_error?.category),
-    provider_session_id: clean(input.context.session.provider_session_id),
-    provider_turn_id: clean(input.context.session.provider_turn_id),
+    provider: cleanString(input.context.session.provider) || cleanString(input.context.provider_error?.provider),
+    provider_error_category: cleanString(input.context.provider_error?.category),
+    provider_session_id: cleanString(input.context.session.provider_session_id),
+    provider_turn_id: cleanString(input.context.session.provider_turn_id),
     retry_after_at: waitUntil(input),
-    run_id: clean(input.context.latest_run?.id)
+    run_id: cleanString(input.context.latest_run?.id)
   });
 }
 
@@ -240,10 +241,10 @@ function recordResultEvent(input: IssueSupervisorActionInput, action: PiAction, 
     issue_id: action.issue_id,
     payload_json: result,
     project_id: action.project_id,
-    provider: clean(input.context.session.provider) || clean(input.context.provider_error?.provider),
-    provider_session_id: clean(input.context.session.provider_session_id),
-    provider_turn_id: clean(input.context.session.provider_turn_id),
-    run_id: clean(input.context.latest_run?.id)
+    provider: cleanString(input.context.session.provider) || cleanString(input.context.provider_error?.provider),
+    provider_session_id: cleanString(input.context.session.provider_session_id),
+    provider_turn_id: cleanString(input.context.session.provider_turn_id),
+    run_id: cleanString(input.context.latest_run?.id)
   });
 }
 
@@ -261,7 +262,7 @@ function budgetRemaining(context: IssueSupervisorRecoveryContext): number | unde
 }
 
 function cooldownUntil(input: IssueSupervisorActionInput): string {
-  const last = Date.parse(clean(input.context.recovery_history.last_action_at));
+  const last = Date.parse(cleanString(input.context.recovery_history.last_action_at));
   const seconds = numberValue(input.context.policy.cooldown_seconds) ?? 0;
   if (!Number.isFinite(last) || seconds <= 0) return "";
   const until = new Date(last + seconds * 1_000);
@@ -269,12 +270,12 @@ function cooldownUntil(input: IssueSupervisorActionInput): string {
 }
 
 function waitUntil(input: IssueSupervisorActionInput): string {
-  return clean(input.decision.wait_until) || clean(input.context.candidates[0]?.wait_until) ||
-    clean(input.context.provider_error?.retry_after_at);
+  return cleanString(input.decision.wait_until) || cleanString(input.context.candidates[0]?.wait_until) ||
+    cleanString(input.context.provider_error?.retry_after_at);
 }
 
 function requiredRecoveryMessage(input: IssueSupervisorActionInput): string {
-  return clean(input.decision.recovery_message);
+  return cleanString(input.decision.recovery_message);
 }
 
 function decisionID(input: IssueSupervisorActionInput): string {
@@ -282,7 +283,7 @@ function decisionID(input: IssueSupervisorActionInput): string {
 }
 
 function primaryDiagnosis(context: IssueSupervisorRecoveryContext): string {
-  return clean(context.candidates[0]?.diagnosis_code) || clean(context.provider_error?.diagnosis_code);
+  return cleanString(context.candidates[0]?.diagnosis_code) || cleanString(context.provider_error?.diagnosis_code);
 }
 
 function issueID(context: IssueSupervisorRecoveryContext): number {
@@ -290,11 +291,11 @@ function issueID(context: IssueSupervisorRecoveryContext): number {
 }
 
 function projectID(context: IssueSupervisorRecoveryContext): string {
-  return clean(context.project.id);
+  return cleanString(context.project.id);
 }
 
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(clean).filter(Boolean) : [];
+  return Array.isArray(value) ? value.map(cleanString).filter(Boolean) : [];
 }
 
 function numberValue(value: unknown): number | undefined {
@@ -303,10 +304,6 @@ function numberValue(value: unknown): number | undefined {
 
 function compact<T extends Record<string, unknown>>(input: T): T {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== "" && value !== undefined)) as T;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function safeError(error: unknown): string {

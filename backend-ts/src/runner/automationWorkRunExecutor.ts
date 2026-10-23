@@ -14,6 +14,7 @@ import type { AutomationDefinition } from "../domain/automation/contracts.ts";
 import type { AutomationExecutor } from "./automationScheduler.ts";
 import type { WorkflowRegistry, WorkflowResolution } from "../workflows/registry.ts";
 import { requestIssuePiAcceptance } from "./piAcceptanceRequest.ts";
+import { cleanString } from "../util/values.ts";
 
 type AutomationWorkflowDispatchResult = {
   detail?: string;
@@ -87,7 +88,7 @@ export function createAutomationWorkRunExecutor(options: AutomationWorkRunExecut
         work,
         workflow: resolved.resolution
       });
-      const detail = clean(output.detail) || `workflow ${automation.workflow_ref} ${output.outcome}`;
+      const detail = cleanString(output.detail) || `workflow ${automation.workflow_ref} ${output.outcome}`;
       persistOutcome(database, link, automation, run.run_id, run.attempt_count, now, output.outcome, detail, preparation.context);
       return { detail: `${detail}; work=${link.work_id}; run=${link.run_id}`, outcome: output.outcome };
     } catch (error) {
@@ -238,5 +239,4 @@ function issueRunStorageID(runID: string): string {
 }
 
 function digest(value: string): string { return createHash("sha256").update(value).digest("hex").slice(0, 24); }
-function clean(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
-function safeError(error: unknown): string { return clean(error instanceof Error ? error.message : String(error)) || "automation workflow dispatch failed"; }
+function safeError(error: unknown): string { return cleanString(error instanceof Error ? error.message : String(error)) || "automation workflow dispatch failed"; }

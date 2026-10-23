@@ -10,6 +10,7 @@ import type { PiRuntimeContextEnvelope } from "../pi/runtimeContextEnvelope.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { RuntimeSessionInput } from "./piRuntime.ts";
 import type { PiRuntimeResourceSnapshot } from "./piRuntimeResources.ts";
+import { cleanString, sha256 } from "../util/values.ts";
 
 const PI_CONTEXT_BUDGET_OBSERVATION_SCHEMA = "xw.pi-context-budget-observation.v1" as const;
 export const PI_CONTEXT_BUDGET_OBSERVATION_EVENT = "runtime_context_budget_observed" as const;
@@ -85,7 +86,7 @@ export function buildPiCompactionObservation(
   const usage = event.result?.usage;
   return {
     aborted: event.aborted,
-    error_present: clean(event.errorMessage) !== "",
+    error_present: cleanString(event.errorMessage) !== "",
     observe_only: true,
     phase: "compaction_end",
     profile: input.promptProfile,
@@ -128,7 +129,7 @@ function buildPiContextBudgetPreflight(
     }))
     .sort((left, right) => left.name.localeCompare(right.name)));
   const effectiveSystemPrompt = options.session.systemPrompt;
-  const currentUserPrompt = clean(input.sourceTurn?.userPrompt);
+  const currentUserPrompt = cleanString(input.sourceTurn?.userPrompt);
   const baseSystem = measuredText(options.baseSystemPrompt);
   const effectiveSystem = measuredText(effectiveSystemPrompt);
   const toolDefinitions = measuredText(serializedTools);
@@ -183,9 +184,9 @@ function buildPiContextBudgetPreflight(
     },
     model: {
       context_window: contextWindow,
-      id: clean(options.session.model?.id),
+      id: cleanString(options.session.model?.id),
       max_tokens: positiveInteger(options.session.model?.maxTokens),
-      provider: clean(options.session.model?.provider)
+      provider: cleanString(options.session.model?.provider)
     },
     observe_only: true,
     phase: "preflight",
@@ -196,7 +197,7 @@ function buildPiContextBudgetPreflight(
     },
     schema_version: PI_CONTEXT_BUDGET_OBSERVATION_SCHEMA,
     subsets: {
-      channel_context: measuredText(clean(input.channelContext)),
+      channel_context: measuredText(cleanString(input.channelContext)),
       durable_memory: measuredText(JSON.stringify(options.runtimeContextEnvelope.durable_context)),
       supervisor_context: measuredText(JSON.stringify(input.supervisorContext ?? {}))
     },
@@ -249,8 +250,8 @@ function buildPiContextBudgetPostflight(
 
 export function piRuntimeSurface(input: Pick<ObservationInput, "conversationID" | "promptProfile" | "source">): PiRuntimeSurface {
   if (input.promptProfile !== "chat") return "internal";
-  const source = clean(input.source).toLowerCase();
-  const conversationID = clean(input.conversationID).toLowerCase();
+  const source = cleanString(input.source).toLowerCase();
+  const conversationID = cleanString(input.conversationID).toLowerCase();
   if (source.includes("feishu") || conversationID.startsWith("feishu-")) return "feishu";
   if (source.includes("telegram") || conversationID.startsWith("telegram-")) return "telegram";
   return "runner_chat";
@@ -264,18 +265,18 @@ function recordObservation(
   providerCallIndex: number
 ): void {
   try {
-    const turnID = clean(input.sourceTurn?.id) || "runtime";
+    const turnID = cleanString(input.sourceTurn?.id) || "runtime";
     createPiActionEvent(db, {
       action_id: `context-budget:${input.conversationID}:${turnID}:${phase}:${providerCallIndex}:${crypto.randomUUID()}`,
       actor: "pi_context_budget_observer",
       conversation_id: input.conversationID,
-      delegation_id: clean(input.delegationID),
+      delegation_id: cleanString(input.delegationID),
       decision: "observed",
       event_type: PI_CONTEXT_BUDGET_OBSERVATION_EVENT,
-      heartbeat_id: clean(input.heartbeatID),
+      heartbeat_id: cleanString(input.heartbeatID),
       issue_id: positiveInteger(input.issueID),
       payload_json: JSON.stringify(payload),
-      project_id: clean(input.projectID),
+      project_id: cleanString(input.projectID),
       reason: `observe-only PI context budget ${phase}`
     });
   } catch (error) {
@@ -328,14 +329,6 @@ function nullablePositiveInteger(value: unknown): number | null {
 
 function positiveInteger(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function sha256(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
 }
 
 function safeError(error: unknown): string {

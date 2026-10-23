@@ -15,6 +15,7 @@ import {
   deriveRunGroupReportView,
   isRunGroupItemReportable
 } from "../../../pi/runGroupReportStatus.ts";
+import { placeholders } from "../../sql.ts";
 
 export type PiRunGroup = {
   completed_at: string; created_at: string; deadline_at: string; digest_flush_sequence: number;
@@ -335,10 +336,6 @@ function requirePiRunGroupItem(db: RunnerDatabase, runGroupID: string, issueID: 
 
 function assignments(columns: readonly string[]): string {
   return columns.map((column) => `${column}=?`).join(", ");
-}
-
-function placeholders(count: number): string {
-  return Array.from({ length: count }, () => "?").join(", ");
 }
 
 function jsonPayload(value: unknown): string {

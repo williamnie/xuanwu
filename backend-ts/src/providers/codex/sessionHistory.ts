@@ -1,5 +1,6 @@
 import { providerSessionDetail, providerSessionSummary, type ProviderSessionDetailView, type ProviderSessionView } from "../core/sessionView.ts";
 import type { ThreadSummary } from "./threadLifecycle.ts";
+import { cleanString, isRecord, numberValue, objectValue } from "../../util/values.ts";
 
 const PROVIDER = "codex" as const;
 
@@ -14,14 +15,14 @@ export function publicCodexSessionDetail(thread: ThreadSummary): ProviderSession
 function candidate(thread: ThreadSummary) {
   return {
     sessionRef: thread.provider_session_id,
-    name: stringValue(thread.name),
-    preview: stringValue(thread.preview),
-    cwd: stringValue(thread.cwd),
+    name: cleanString(thread.name),
+    preview: cleanString(thread.preview),
+    cwd: cleanString(thread.cwd),
     status: thread.status,
     isRunning: thread.isRunning === true,
     createdAt: numberValue(thread.createdAt),
     updatedAt: numberValue(thread.updatedAt),
-    model: stringValue(thread.model),
+    model: cleanString(thread.model),
     turns: arrayValue(thread.turns),
     extensions: thread
   };
@@ -33,24 +34,8 @@ function arrayValue(value: unknown): Array<{ id: string; items: Array<Record<str
     const record = objectValue(turn);
     return {
       ...record,
-      id: stringValue(record.id) || `turn-${index + 1}`,
+      id: cleanString(record.id) || `turn-${index + 1}`,
       items: Array.isArray(record.items) ? record.items.filter(isRecord) : []
     };
   });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function objectValue(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function numberValue(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }

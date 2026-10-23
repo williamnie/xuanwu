@@ -6,6 +6,7 @@ import {
 } from "./imConversationContext.ts";
 import { FEISHU_CONNECTOR_ID } from "./feishuChannelConnector.ts";
 import type { FeishuNormalizedMessageEvent } from "./feishu.ts";
+import { cleanString } from "../util/values.ts";
 
 /**
  * Feishu adapter shim over the provider-neutral context projector. The generic
@@ -40,8 +41,4 @@ export function buildFeishuConversationPromptProjection(
       threadId: cleanString(input.event.thread_id) || cleanString(input.event.root_id)
     }
   });
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

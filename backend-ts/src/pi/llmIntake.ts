@@ -12,6 +12,7 @@ import {
 import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import { assertIntakeSourcePolicy, type IntakeSourcePolicy } from "./intakeSourcePolicy.ts";
 import { buildIntakeSkillInput, buildIntakeSkillPrompt, type IntakeSkillInput } from "./intakeSkillInput.ts";
+import { arrayValue, cleanString, errorMessage } from "../util/values.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -220,12 +221,12 @@ function itemInput(
 
 function intakeSkill(options: LlmIntakeOptions): IntakeSkillRuntime & { id: string } {
   const skill = options.skill ?? {};
-  const id = clean(options.skillId) || clean(skill.id) || DEFAULT_INTAKE_SKILL_ID;
-  if (clean(skill.kind) !== "" && clean(skill.kind) !== "intake") throw new Error("intake skill kind must be intake");
-  if (clean(skill.input_object) !== "" && clean(skill.input_object) !== "context_bundle") {
+  const id = cleanString(options.skillId) || cleanString(skill.id) || DEFAULT_INTAKE_SKILL_ID;
+  if (cleanString(skill.kind) !== "" && cleanString(skill.kind) !== "intake") throw new Error("intake skill kind must be intake");
+  if (cleanString(skill.input_object) !== "" && cleanString(skill.input_object) !== "context_bundle") {
     throw new Error("intake skill input_object must be context_bundle");
   }
-  const outputs = Array.isArray(skill.output_objects) ? skill.output_objects.map(clean).filter(Boolean) : [];
+  const outputs = Array.isArray(skill.output_objects) ? skill.output_objects.map(cleanString).filter(Boolean) : [];
   if (outputs.length > 0 && (!outputs.includes("inbox_items") || !outputs.includes("ignored_groups"))) {
     throw new Error("intake skill must output inbox_items and ignored_groups");
   }
@@ -233,15 +234,11 @@ function intakeSkill(options: LlmIntakeOptions): IntakeSkillRuntime & { id: stri
 }
 
 function intakeModelName(options: LlmIntakeOptions): string {
-  return clean(options.model) || clean(options.modelPolicy?.intake_model);
+  return cleanString(options.model) || cleanString(options.modelPolicy?.intake_model);
 }
 
 function modelPolicyId(options: LlmIntakeOptions, skill: IntakeSkillRuntime): string {
-  return clean(options.modelPolicyId) || clean(skill.model_policy_id);
-}
-
-function arrayValue(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
+  return cleanString(options.modelPolicyId) || cleanString(skill.model_policy_id);
 }
 
 function extractJson(raw: string): string {
@@ -258,12 +255,4 @@ function literalUnion<const T extends readonly [string, string, ...string[]]>(va
     ReturnType<typeof Type.Literal>,
     ...Array<ReturnType<typeof Type.Literal>>
   ]);
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

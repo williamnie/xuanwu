@@ -5,6 +5,7 @@ import type { RuntimeSessionInput } from "../http/piRuntime.ts";
 import { retrievePiMemoryContext } from "./memoryContext.ts";
 import { listIssueRuns } from "../db/repositories/issues.ts";
 import { projectRunMemoryContext, RUN_MEMORY_RULES } from "./runMemoryContext.ts";
+import { cleanString, errorMessage, positiveInteger } from "../util/values.ts";
 
 const PI_RUNTIME_CONTEXT_SCHEMA_VERSION = "xw.pi-runtime-context.v1" as const;
 
@@ -131,18 +132,6 @@ export function recordPiRuntimeContextEnvelopeAudit(
       reason: "projected shared PI identity, exact target, and durable context into a profile-scoped runtime"
     });
   } catch (error) {
-    console.warn("[pi-runtime] failed to audit runtime context projection:", safeError(error));
+    console.warn("[pi-runtime] failed to audit runtime context projection:", errorMessage(error));
   }
-}
-
-function positiveInteger(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function safeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

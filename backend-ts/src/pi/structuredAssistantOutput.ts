@@ -1,4 +1,5 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
+import { cleanString } from "../util/values.ts";
 
 type StructuredAssistantOutputSource = "none" | "text" | "thinking_compat";
 
@@ -59,8 +60,4 @@ function lastCompletedAssistantThinking(session: StructuredOutputSession): strin
     .filter((item) => item.type === "thinking")
     .map((item) => item.type === "thinking" ? cleanString(item.thinking) : "")
     .filter(Boolean);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

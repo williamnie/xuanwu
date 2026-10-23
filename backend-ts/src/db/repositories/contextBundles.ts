@@ -1,4 +1,6 @@
 import type { RunnerDatabase } from "../database.ts";
+import { lastInsertID } from "../sql.ts";
+import { cleanString, positiveInteger } from "../../util/values.ts";
 
 type SQLValue = number | string;
 type JsonObject = Record<string, unknown>;
@@ -255,19 +257,7 @@ function requiredString(value: unknown, label: string): string {
   return text;
 }
 
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function integerValue(value: unknown, label: string): number {
   if (typeof value !== "number" || !Number.isInteger(value)) throw new Error(`${label} must be an integer`);
   return value;
-}
-
-function positiveInteger(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
-}
-
-function lastInsertID(db: RunnerDatabase): number {
-  return db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get()?.id ?? 0;
 }

@@ -3,6 +3,7 @@ import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns, listIssues, type Issue, type IssueRun } from "../db/repositories/issues.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { readIssueDecisionProjection } from "../domain/review/humanReview.ts";
+import { cleanString } from "../util/values.ts";
 
 const DEFAULT_ISSUE_LIST_LIMIT = 50;
 const MAX_ISSUE_LIST_LIMIT = 50;
@@ -231,8 +232,4 @@ function jsonObject(value: string): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

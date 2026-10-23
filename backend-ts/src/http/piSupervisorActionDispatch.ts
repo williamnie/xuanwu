@@ -36,6 +36,7 @@ import {
 import type { EventBus } from "../events/bus.ts";
 import { reconcileCurrentProviderTurn } from "../runner/providerSessionReconciliation.ts";
 import { recoverSupervisorIssue } from "./piSupervisorProviderRecovery.ts";
+import { cleanString, errorMessage, objectValue } from "../util/values.ts";
 
 type ProjectLoopStarter = (
   runtime: ProjectLoopRuntime,
@@ -130,7 +131,7 @@ async function resumeSessionFollowup(
     });
   } catch (error) {
     if (!started) failRunAttemptStart(context.database, resumeLifecycleEventID(action), error);
-    updatePiRecoveryAttemptStatus(context.database, prepared.attempt.id, { error: safeError(error), status: "failed" });
+    updatePiRecoveryAttemptStatus(context.database, prepared.attempt.id, { error: errorMessage(error), status: "failed" });
     throw error;
   }
   const turnID = cleanString(result.turn_id);
@@ -240,7 +241,7 @@ async function retryIssueNow(
     if (progress && issue.status === "todo") startRetriedProjectLoop(context, issue.project_id);
     return issue;
   } catch (error) {
-    updatePiRecoveryAttemptStatus(context.database, attempt.id, { error: safeError(error), status: "failed" });
+    updatePiRecoveryAttemptStatus(context.database, attempt.id, { error: errorMessage(error), status: "failed" });
     throw error;
   }
 }
@@ -288,7 +289,7 @@ function scheduleRetryAfter(
     recordSupervisorResult(context.database, action, payload, { outcome: "scheduled", retry_after_at: retryAfterAt });
     return issue;
   } catch (error) {
-    updatePiRecoveryAttemptStatus(context.database, attempt.id, { error: safeError(error), status: "failed" });
+    updatePiRecoveryAttemptStatus(context.database, attempt.id, { error: errorMessage(error), status: "failed" });
     throw error;
   }
 }
@@ -376,7 +377,7 @@ function sessionProviderSessionID(payload: Record<string, unknown>): string {
 function decisionText(payload: Record<string, unknown>): string {
   const direct = cleanString(payload.decision);
   if (direct !== "") return direct;
-  return cleanString(objectPayload(payload.decision).decision);
+  return cleanString(objectValue(payload.decision).decision);
 }
 
 function positivePayloadID(payload: Record<string, unknown>, key: string): number {
@@ -406,16 +407,4 @@ function requiredTime(value: unknown, key: string): string {
 function sessionIDFromKey(sessionKey: string): string {
   const separator = sessionKey.indexOf(":");
   return separator < 0 ? sessionKey : sessionKey.slice(separator + 1).trim();
-}
-
-function objectPayload(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function safeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

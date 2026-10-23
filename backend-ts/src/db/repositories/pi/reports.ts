@@ -11,6 +11,7 @@ import {
   requiredString,
   type PatchInput
 } from "./common.ts";
+import { lastInsertID, placeholders } from "../../sql.ts";
 
 type PiReportRecord = {
   id: number; project_id: string; type: string; status: string; source: string;
@@ -102,15 +103,7 @@ function mustGetPiReportRecord(db: RunnerDatabase, id: number): PiReportRecord {
   return record;
 }
 
-function lastInsertID(db: RunnerDatabase): number {
-  return db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get()?.id ?? 0;
-}
-
 function insertColumns(): string {
   return `project_id, type, status, source, since_at, until_at, delegation_id,
     heartbeat_id, issue_ids_json, summary_json, body_json, generated_at, created_at, updated_at`;
-}
-
-function placeholders(count: number): string {
-  return Array.from({ length: count }, () => "?").join(", ");
 }

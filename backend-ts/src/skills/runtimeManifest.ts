@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 
 import type { SkillRegistryDiagnostic } from "./registry.ts";
+import { cleanString, errorMessage, isRecord, objectValue } from "../util/values.ts";
 
 type SkillRuntimeKind = "intake" | "domain";
 type SkillRuntimeSandbox = "capability";
@@ -97,7 +98,7 @@ function readManifestJSON(
   try {
     return JSON.parse(readFileSync(path, "utf8")) as unknown;
   } catch (error) {
-    diagnostics.push(diagnostic("manifest_invalid", sourcePath, safeMessage(error)));
+    diagnostics.push(diagnostic("manifest_invalid", sourcePath, errorMessage(error)));
     return undefined;
   }
 }
@@ -115,7 +116,7 @@ function validateSkillManifest(value: unknown): ValidationIssue[] {
   recordValue(issues, value.input_schema, "input_schema");
   recordValue(issues, value.output_schema, "output_schema");
   recordValue(issues, value.permissions, "permissions");
-  permissionValue(issues, recordOrEmpty(value.permissions).max_tool_permission);
+  permissionValue(issues, objectValue(value.permissions).max_tool_permission);
   executionValue(issues, value.execution);
   stageContract(issues, value);
   return issues;
@@ -265,10 +266,6 @@ function uniqueStrings(value: unknown): string[] {
   return [...new Set(values.map((item) => String(item).trim()).filter(Boolean))];
 }
 
-function recordOrEmpty(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
-}
-
 function isToolPermission(value: unknown): value is SkillToolPermission {
   return typeof value === "string" && (TOOL_PERMISSIONS as string[]).includes(value);
 }
@@ -287,16 +284,4 @@ function diagnostic(
   message: string
 ): SkillRegistryDiagnostic {
   return { code, message, severity: "warning", source_path };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function safeMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

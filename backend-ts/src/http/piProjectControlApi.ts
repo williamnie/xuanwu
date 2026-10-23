@@ -29,6 +29,7 @@ import {
 } from "./piRuntime.ts";
 import { publishPiSessionEvent } from "./piSessionEvents.ts";
 import type { Router } from "./router.ts";
+import { cleanString } from "../util/values.ts";
 
 type PiProjectControlContext = { agenticClient?: AgenticWorkerClient; bus?: EventBus; database: RunnerDatabase };
 type ProjectPiCycleInput = { maxActions?: number; projectId: string };
@@ -262,8 +263,4 @@ function projectID(request: Request): string {
   const value = parts[parts.indexOf("projects") + 1]?.trim() ?? "";
   if (value === "") throw new HttpError(400, "project id 不能为空");
   return decodeURIComponent(value);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

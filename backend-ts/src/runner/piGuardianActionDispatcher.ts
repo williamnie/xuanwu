@@ -10,6 +10,7 @@ import {
   type PiActionDispatchContext
 } from "../http/piActionDispatch.ts";
 import { recordPiActionAuditEvent } from "../pi/actionEngine.ts";
+import { errorMessage } from "../util/values.ts";
 
 type PiGuardianActionDispatchInput = {
   bus?: PiActionDispatchContext["bus"];
@@ -53,8 +54,8 @@ async function dispatchOne(
     recordPiActionAuditEvent(input.database, completed, "execution_result", { actor: "executor", result });
     return "completed";
   } catch (error) {
-    const failed = updatePiAction(input.database, action.id, { result_json: JSON.stringify({ error: safeError(error) }), status: "failed" });
-    recordPiActionAuditEvent(input.database, failed, "execution_error", { actor: "executor", error: safeError(error) });
+    const failed = updatePiAction(input.database, action.id, { result_json: JSON.stringify({ error: errorMessage(error) }), status: "failed" });
+    recordPiActionAuditEvent(input.database, failed, "execution_error", { actor: "executor", error: errorMessage(error) });
     return "failed";
   }
 }
@@ -77,8 +78,4 @@ function dispatchContext(input: PiGuardianActionDispatchInput): PiActionDispatch
 
 function boundedLimit(value: number): number {
   return Math.min(Math.max(Number.isFinite(value) ? Math.round(value) : DEFAULT_LIMIT, 1), DEFAULT_LIMIT);
-}
-
-function safeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

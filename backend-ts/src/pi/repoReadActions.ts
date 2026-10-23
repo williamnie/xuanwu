@@ -2,6 +2,7 @@ import { closeSync, constants, fstatSync, lstatSync, openSync, opendirSync, read
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { Project } from "../db/repositories/projects.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { cleanString } from "../util/values.ts";
 
 export type RepoReadExcerptInput = { max_bytes?: number; max_lines?: number; path: string; start_line?: number };
 export type RepoSearchInput = { max_results?: number; path?: string; query: string };
@@ -370,8 +371,4 @@ function boundedInteger(value: unknown, min: number, max: number, fallback: numb
 
 function truncate(state: { truncated: boolean }): void {
   state.truncated = true;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

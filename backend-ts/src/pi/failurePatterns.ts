@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { listPiMemoryItems } from "../db/repositories/pi.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { ProjectFindingCategory } from "./projectFindings.ts";
+import { cleanString } from "../util/values.ts";
 
 type FailurePatternMatch = {
   category: ProjectFindingCategory;
@@ -49,8 +50,4 @@ function parseJsonObject(content: string): Record<string, unknown> | undefined {
 function categoryValue(value: unknown): ProjectFindingCategory {
   const text = cleanString(value);
   return VALID_CATEGORIES.has(text) ? text as ProjectFindingCategory : "blocked";
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

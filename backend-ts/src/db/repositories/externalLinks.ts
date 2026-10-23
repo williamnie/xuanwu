@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../database.ts";
 import { getExternalEvent } from "./externalEvents.ts";
 import { getIssue } from "./issues.ts";
+import { cleanString, positiveInteger } from "../../util/values.ts";
 
 type SQLValue = number | string;
 type FilterParts = { args: SQLValue[]; conditions: string[] };
@@ -195,10 +196,6 @@ function listLimit(value: unknown): number {
   return Math.min(value, MAX_LIST_LIMIT);
 }
 
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function optionalString(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (typeof value !== "string") throw new Error("expected string row value");
@@ -214,8 +211,4 @@ function requiredString(value: unknown, label: string): string {
 function integerValue(value: unknown, label: string): number {
   if (typeof value !== "number" || !Number.isInteger(value)) throw new Error(`${label} must be an integer`);
   return value;
-}
-
-function positiveInteger(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
 }

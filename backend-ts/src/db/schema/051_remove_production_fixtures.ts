@@ -1,5 +1,6 @@
 import type { Database as SQLiteDatabase } from "bun:sqlite";
 import type { SqlMigration } from "../migrations.ts";
+import { cleanString, positiveInteger } from "../../util/values.ts";
 
 type LegacyDomainEvent = {
   action_id: string;
@@ -129,14 +130,6 @@ function objectValue(value: unknown): JsonObject {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
 }
 
-function positiveInteger(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
-}
-
 function normalizeID(value: unknown): string {
   return cleanString(value).toLowerCase().replace(/[^a-z0-9_:-]+/g, "-").replace(/^-+|-+$/g, "");
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

@@ -10,6 +10,7 @@ import type { MemoryScope } from "./memoryRetrieval.ts";
 import { MEMORY_EXPERIENCE_INSTRUCTIONS, MEMORY_EXPERIENCE_SOURCE_INSTRUCTIONS, parseMemoryExperience } from "./memoryExperience.ts";
 import { memoryEvidenceRejection } from "./memoryEvidence.ts";
 import { PiMemoryWriteError } from "../db/repositories/pi/memoryHistory.ts";
+import { cleanString } from "../util/values.ts";
 
 export const PI_MEMORY_TOOL_NAMES = ["memory_search", "memory_remember"] as const;
 
@@ -279,8 +280,4 @@ function toolResult(details: unknown): AgentToolResult<unknown> {
     content: [{ type: "text", text: formatModelVisibleToolOutput(details, { source: "memory" }) }],
     details
   };
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

@@ -11,6 +11,7 @@ import {
   requiredString,
   type PatchInput
 } from "./common.ts";
+import { placeholders } from "../../sql.ts";
 
 export type PiNotificationIntent = {
   ack_deadline_at: string; ack_required: number; ack_retry_count: number;
@@ -241,8 +242,4 @@ function findExistingIntent(db: RunnerDatabase, record: PiNotificationIntent): P
 function payloadText(value: unknown): string {
   if (typeof value === "string") return jsonText(value, "{}");
   return JSON.stringify(value ?? {});
-}
-
-function placeholders(count: number): string {
-  return Array.from({ length: count }, () => "?").join(", ");
 }

@@ -22,6 +22,7 @@ import {
   type WorkTransitionCommand,
   type WorkTransitionGate
 } from "./contracts.ts";
+import { unique } from "../../util/values.ts";
 
 export const WORK_EVENT_TYPES = {
   created: "work.created.v1",
@@ -616,8 +617,4 @@ function stableJson(value: unknown): string {
       .join(",")}}`;
   }
   return JSON.stringify(value ?? null);
-}
-
-function unique(values: string[]): string[] {
-  return [...new Set(values)];
 }

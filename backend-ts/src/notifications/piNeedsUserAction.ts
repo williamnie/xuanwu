@@ -11,6 +11,7 @@ import { composePiNeedsUserMessage } from "./piNeedsUserMessageComposer.ts";
 import { publishPiNeedsUserNotification } from "./piNotifier.ts";
 import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
 import { applyPiSemanticIssueStatus } from "../runner/piIssueLifecycle.ts";
+import { cleanString } from "../util/values.ts";
 
 type PiNeedsUserActionContext = {
   bus?: Pick<EventBus, "publish">;
@@ -231,8 +232,4 @@ function redactActionID(value: unknown): string {
 
 function redactCommentText(value: unknown): string {
   return redactedUserVisibleText(cleanString(value));
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

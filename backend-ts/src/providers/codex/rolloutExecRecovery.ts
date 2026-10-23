@@ -5,6 +5,7 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { ProviderEvent } from "../types.ts";
 import { normalizeCodexEvent } from "./events.ts";
 import type { ThreadSummary } from "./threadLifecycle.ts";
+import { cleanString, objectValue } from "../../util/values.ts";
 
 const MAX_ROLLOUT_BYTES = 32 * 1024 * 1024;
 
@@ -335,14 +336,4 @@ function parsedObject(value: string): Record<string, unknown> | undefined {
   } catch {
     return undefined;
   }
-}
-
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

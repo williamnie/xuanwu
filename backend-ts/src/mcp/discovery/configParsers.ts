@@ -1,5 +1,6 @@
 import { normalizeID } from "../../db/repositories/piMcpServers.ts";
 import type { McpDiscoveryServer } from "./types.ts";
+import { cleanString } from "../../util/values.ts";
 
 type RawServer = Record<string, unknown>;
 
@@ -36,27 +37,27 @@ export function parseCodexTomlMcpServers(text: string, sourcePath: string): McpD
 }
 
 function serversFromValue(value: unknown, source: string, sourcePath: string): McpDiscoveryServer[] {
-  if (Array.isArray(value)) return value.map((item) => serverFromRaw(clean(record(item).name), record(item), source, sourcePath)).filter(Boolean) as McpDiscoveryServer[];
+  if (Array.isArray(value)) return value.map((item) => serverFromRaw(cleanString(record(item).name), record(item), source, sourcePath)).filter(Boolean) as McpDiscoveryServer[];
   if (!isRecord(value)) return [];
   return Object.entries(value).map(([name, raw]) => serverFromRaw(name, record(raw), source, sourcePath)).filter(Boolean) as McpDiscoveryServer[];
 }
 
 function serverFromRaw(name: string, raw: RawServer, source: string, sourcePath: string): McpDiscoveryServer | null {
-  const id = normalizeID(`${source}-${clean(raw.id) || name}`);
-  const command = clean(raw.command ?? raw.executable);
-  const url = clean(raw.url ?? raw.endpoint);
+  const id = normalizeID(`${source}-${cleanString(raw.id) || name}`);
+  const command = cleanString(raw.command ?? raw.executable);
+  const url = cleanString(raw.url ?? raw.endpoint);
   if (!id || (!command && !url)) return null;
   const transport = command ? {
-    args: stringList(raw.args), command, cwd: clean(raw.cwd) || undefined,
+    args: stringList(raw.args), command, cwd: cleanString(raw.cwd) || undefined,
     env: stringRecord(raw.env), type: "stdio" as const
   } : {
     headers: stringRecord(raw.headers), type: httpType(raw.transport ?? raw.type), url
   };
-  return { description: clean(raw.description), id, name: clean(raw.name) || name, source, source_path: sourcePath, transport };
+  return { description: cleanString(raw.description), id, name: cleanString(raw.name) || name, source, source_path: sourcePath, transport };
 }
 
 function httpType(value: unknown): "http" | "sse" | "streamable_http" {
-  const text = clean(value).toLowerCase();
+  const text = cleanString(value).toLowerCase();
   if (text === "sse" || text === "streamable_http") return text;
   return "http";
 }
@@ -76,13 +77,13 @@ function parseInlineTable(value: string): Record<string, string> {
   const body = value.replace(/^\{/, "").replace(/}$/, "");
   return Object.fromEntries(body.split(",").map((part) => part.trim()).filter(Boolean).map((part) => {
     const [key, ...rest] = part.split("=");
-    return [clean(key), parseString(rest.join("="))];
+    return [cleanString(key), parseString(rest.join("="))];
   }).filter(([key]) => key));
 }
 
 function parseString(value: string): string {
   const match = /^"((?:\\.|[^"])*)"$/.exec(value.trim());
-  return match ? unescape(match[1]) : clean(value);
+  return match ? unescape(match[1]) : cleanString(value);
 }
 
 function stripComment(value: string): string {
@@ -94,12 +95,12 @@ function json(text: string): unknown {
 }
 
 function stringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(clean).filter(Boolean) : [];
+  return Array.isArray(value) ? value.map(cleanString).filter(Boolean) : [];
 }
 
 function stringRecord(value: unknown): Record<string, string> | undefined {
   if (!isRecord(value)) return undefined;
-  const entries = Object.entries(value).map(([key, child]) => [clean(key), clean(child)]).filter(([key]) => key);
+  const entries = Object.entries(value).map(([key, child]) => [cleanString(key), cleanString(child)]).filter(([key]) => key);
   return entries.length ? Object.fromEntries(entries) : undefined;
 }
 
@@ -109,10 +110,6 @@ function record(value: unknown): RawServer {
 
 function isRecord(value: unknown): value is RawServer {
   return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function unescape(value: string): string {

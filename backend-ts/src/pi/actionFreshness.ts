@@ -6,6 +6,7 @@ import { readIssueDecisionProjection, type HumanReviewRequest } from "../domain/
 import { readRunRevision } from "../domain/run/service.ts";
 import type { RunID } from "../domain/run/contracts.ts";
 import { getIssueAsWork, workIDToIssueID } from "../domain/work/issueAdapter.ts";
+import { cleanString, objectValue, positiveInteger } from "../util/values.ts";
 
 type PiActionFreshness =
   | { fresh: true }
@@ -136,7 +137,7 @@ function evaluateIssueBatchFreshness(db: RunnerDatabase, action: PiAction): PiAc
     if (action.project_id !== "" && issue.project_id !== action.project_id) {
       return { fresh: false, reason: `target_project_changed:${id}:${issue.project_id}` };
     }
-    const snapshot = expectedIssues.find((item) => positiveID(item.issue_id) === id);
+    const snapshot = expectedIssues.find((item) => positiveInteger(item.issue_id) === id);
     if (snapshot) {
       const result = compareExpectedIssueState(issue, snapshot);
       if (!result.fresh) return { fresh: false, reason: `target_issue_${id}:${result.reason}` };
@@ -154,7 +155,7 @@ function evaluateIssueBatchFreshness(db: RunnerDatabase, action: PiAction): PiAc
 
 function evaluateHumanReviewFreshness(db: RunnerDatabase, action: PiAction): PiActionFreshness {
   const payload = parseObject(action.payload_json);
-  const issueID = action.issue_id || positiveID(payload.issue_id);
+  const issueID = action.issue_id || positiveInteger(payload.issue_id);
   const issue = getIssue(db, issueID);
   if (!issue) return { fresh: false, reason: "target_issue_missing" };
   if (action.project_id !== "" && issue.project_id !== action.project_id) {
@@ -162,7 +163,7 @@ function evaluateHumanReviewFreshness(db: RunnerDatabase, action: PiAction): PiA
   }
   const request = readIssueDecisionProjection(db, issue.id).request;
   const expectedID = cleanString(payload.review_request_id);
-  const expectedRevision = positiveID(payload.review_revision);
+  const expectedRevision = positiveInteger(payload.review_revision);
   if (!request || request.status !== "open") return { fresh: false, reason: "human_review_not_open" };
   if (request.id !== expectedID || request.revision !== expectedRevision) {
     return { fresh: false, reason: `human_review_changed:${request.id}:${request.revision}` };
@@ -176,7 +177,7 @@ function evaluateHumanReviewFreshness(db: RunnerDatabase, action: PiAction): PiA
   const reviewState = objectValue(expected.review);
   if (Object.keys(reviewState).length > 0 && (
     cleanString(reviewState.id) !== request.id ||
-    positiveID(reviewState.revision) !== request.revision ||
+    positiveInteger(reviewState.revision) !== request.revision ||
     cleanString(reviewState.status) !== request.status
   )) {
     return { fresh: false, reason: `human_review_snapshot_changed:${request.id}:${request.revision}:${request.status}` };
@@ -282,7 +283,7 @@ function legacySessionFreshness(
 }
 
 function compareExpectedIssueState(issue: Issue, expected: Record<string, unknown>): PiActionFreshness {
-  const expectedID = positiveID(expected.issue_id);
+  const expectedID = positiveInteger(expected.issue_id);
   if (expectedID > 0 && expectedID !== issue.id) {
     return { fresh: false, reason: `target_issue_changed:${issue.id}` };
   }
@@ -321,7 +322,7 @@ function newerCompletedEnqueue(db: RunnerDatabase, action: PiAction): string {
 }
 
 function issueIDFromPayload(value: string): number {
-  return positiveID(parseObject(value).issue_id);
+  return positiveInteger(parseObject(value).issue_id);
 }
 
 function parseObject(value: string): Record<string, unknown> {
@@ -335,19 +336,13 @@ function parseObject(value: string): Record<string, unknown> {
   }
 }
 
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-}
-
 function arrayObjects(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value) ? value.map(objectValue).filter((item) => Object.keys(item).length > 0) : [];
 }
 
 function numberList(value: unknown): number[] {
   if (Array.isArray(value)) return value.flatMap(numberList);
-  return [positiveID(value)].filter((id) => id > 0);
+  return [positiveInteger(value)].filter((id) => id > 0);
 }
 
 function uniquePositiveIDs(values: number[]): number[] {
@@ -375,12 +370,4 @@ function timestampAfter(left: string, right: string): boolean {
   const leftMs = Date.parse(left);
   const rightMs = Date.parse(right);
   return Number.isFinite(leftMs) && Number.isFinite(rightMs) && leftMs > rightMs;
-}
-
-function positiveID(value: unknown): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

@@ -2,6 +2,7 @@ import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { chmod, mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { dirname } from "node:path";
 import { jsonError } from "./errors.ts";
+import { cleanString } from "../util/values.ts";
 
 type AuthConfig = {
   authToken?: string;
@@ -22,23 +23,23 @@ export type AuthTokenManager = {
 };
 
 export async function createAuthTokenManager(config: AuthConfig): Promise<AuthTokenManager> {
-  const configured = clean(config.authToken);
+  const configured = cleanString(config.authToken);
   if (configured !== "") return fixedTokenManager(configured);
-  const file = clean(config.authTokenFile);
+  const file = cleanString(config.authTokenFile);
   if (file === "") throw new Error("remote access authentication is not configured");
   return await fileTokenManager(file, await loadOrCreateAuthTokenFile(file));
 }
 
 export async function loadAuthToken(config: AuthConfig): Promise<string> {
-  const configured = clean(config.authToken);
+  const configured = cleanString(config.authToken);
   if (configured !== "") return configured;
-  const file = clean(config.authTokenFile);
+  const file = cleanString(config.authTokenFile);
   if (file === "") return "";
   return await readAuthTokenFile(file);
 }
 
 export function requireBearerAuth(request: Request, authToken: string): Response | undefined {
-  const configured = clean(authToken);
+  const configured = cleanString(authToken);
   if (configured === "" || !isApiRequest(request) || isPublicIntegrationCallback(request)) return undefined;
   if (constantTimeEqual(requestToken(request), configured)) return undefined;
   return jsonError(401, "unauthorized");
@@ -46,7 +47,7 @@ export function requireBearerAuth(request: Request, authToken: string): Response
 
 async function readAuthTokenFile(path: string): Promise<string> {
   try {
-    return clean(await readFile(path, "utf8"));
+    return cleanString(await readFile(path, "utf8"));
   } catch (error) {
     if (isMissingFile(error)) return "";
     throw new Error("failed to read auth token file");
@@ -55,7 +56,7 @@ async function readAuthTokenFile(path: string): Promise<string> {
 
 async function loadOrCreateAuthTokenFile(path: string): Promise<string> {
   try {
-    const existing = clean(await readFile(path, "utf8"));
+    const existing = cleanString(await readFile(path, "utf8"));
     if (existing === "") throw new Error("auth token file is empty");
     await chmod(path, 0o600);
     return existing;
@@ -87,7 +88,7 @@ async function loadOrCreateAuthTokenFile(path: string): Promise<string> {
 
 async function readConcurrentlyCreatedToken(path: string): Promise<string> {
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const existing = clean(await readFile(path, "utf8"));
+    const existing = cleanString(await readFile(path, "utf8"));
     if (existing !== "") return existing;
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
@@ -108,7 +109,7 @@ async function fileTokenManager(path: string, initial: string): Promise<AuthToke
   let rotation: Promise<string> | undefined;
   const refresh = async () => {
     try {
-      const next = clean(await readFile(path, "utf8"));
+      const next = cleanString(await readFile(path, "utf8"));
       if (next === "") throw new Error("empty token");
       current = next;
       return current;
@@ -179,16 +180,16 @@ function requestToken(request: Request): string {
 }
 
 function requestBearerToken(request: Request): string {
-  const header = clean(request.headers.get("authorization") ?? "");
+  const header = cleanString(request.headers.get("authorization") ?? "");
   if (!header.toLowerCase().startsWith("bearer ")) return "";
-  return clean(header.slice("bearer ".length));
+  return cleanString(header.slice("bearer ".length));
 }
 
 function requestCookieToken(request: Request): string {
   const cookie = request.headers.get("cookie") ?? "";
   for (const part of cookie.split(";")) {
     const [rawName, ...rawValue] = part.split("=");
-    if (clean(rawName) !== "xuanwu_token") continue;
+    if (cleanString(rawName) !== "xuanwu_token") continue;
     return decodeCookieToken(rawValue.join("="));
   }
   return "";
@@ -196,14 +197,10 @@ function requestCookieToken(request: Request): string {
 
 function decodeCookieToken(value: string): string {
   try {
-    return clean(decodeURIComponent(value));
+    return cleanString(decodeURIComponent(value));
   } catch {
-    return clean(value);
+    return cleanString(value);
   }
-}
-
-function clean(value: string | undefined): string {
-  return value?.trim() ?? "";
 }
 
 function constantTimeEqual(value: string, expected: string): boolean {

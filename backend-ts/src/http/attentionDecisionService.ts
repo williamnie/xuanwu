@@ -15,6 +15,7 @@ import { executeApprovedPiAction, resolvePiActionDecision } from "./piActionDeci
 import { approveAndExecuteActionProposal } from "./piActionProposalExecution.ts";
 import type { ProjectLoopStarter } from "./piActionDispatch.ts";
 import { HttpError } from "./errors.ts";
+import { cleanString } from "../util/values.ts";
 
 type AttentionDecisionContext = {
   bus?: EventBus;
@@ -234,8 +235,4 @@ function inboxItemID(value: string): number {
 
 function objectValue(value: unknown): DecisionBody {
   return value && typeof value === "object" && !Array.isArray(value) ? value as DecisionBody : {};
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

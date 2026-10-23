@@ -4,6 +4,7 @@ import {
   latestPiRecoveryAttemptInWindow,
   type PiRecoveryAttemptStatus
 } from "../db/repositories/pi/recoveryAttempts.ts";
+import { cleanString } from "../util/values.ts";
 
 type PiRecoveryBudgetInput = {
   actionType: string;
@@ -116,13 +117,13 @@ export function applyRecoveryBudgetToHistory(
 }
 
 export function recoveryBudgetCandidate(history: RecoveryHistoryBudgetInput): RecoveryBudgetCandidate | null {
-  const diagnosis = clean(history.budget_diagnosis_code);
+  const diagnosis = cleanString(history.budget_diagnosis_code);
   if (diagnosis !== "recovery_budget_exhausted" && diagnosis !== "session_recovery_exhausted") return null;
   return {
     diagnosis_code: diagnosis,
     evidence_refs: ["recovery_budget"],
     exhausted: true,
-    reason: clean(history.budget_reason) || "automatic recovery budget exhausted"
+    reason: cleanString(history.budget_reason) || "automatic recovery budget exhausted"
   };
 }
 
@@ -201,7 +202,7 @@ function withLastAttempt(
 }
 
 function sessionResumeAttempts(db: RunnerDatabase, input: PiRecoveryBudgetInput, since: string): number {
-  const sessionID = clean(input.sessionID);
+  const sessionID = cleanString(input.sessionID);
   if (sessionID === "") return 0;
   return countPiRecoveryAttempts(db, {
     actionType: "session.resume_followup",
@@ -228,7 +229,7 @@ function budgetReason(budget: PiRecoveryBudgetDecision): string {
 }
 
 function isSessionResume(actionType: string): boolean {
-  return clean(actionType) === "session.resume_followup";
+  return cleanString(actionType) === "session.resume_followup";
 }
 
 function remaining(limit: number, count: number): number {
@@ -237,10 +238,6 @@ function remaining(limit: number, count: number): number {
 
 function positiveInt(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : fallback;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function iso(value: number): string {

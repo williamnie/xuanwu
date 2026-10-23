@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../database.ts";
+import { cleanString } from "../../util/values.ts";
 
 export type IssueFilter = {
   cursorIssueId?: number;
@@ -128,7 +129,6 @@ const ISSUE_COLUMNS = `id, project_id, title, description, status, priority,
   workflow_snapshot_json, auto_retry_next_at, auto_retry_reason, error,
   created_at, updated_at`;
 
-
 const ISSUE_RUN_COLUMNS = `ir.id, ir.issue_id, ir.attempt, ir.status, ir.provider,
   ir.provider_session_id, ir.provider_turn_id, ir.codex_thread_id, ir.codex_turn_id,
   ir.started_at, ir.ended_at, ir.exit_reason, ir.error, ir.agent_profile_id,
@@ -184,10 +184,10 @@ function buildIssueListQuery(filter: IssueFilter): { args: Array<number | string
 function buildIssueWhere(filter: IssueFilter): { args: Array<number | string>; where: string } {
   const conditions: string[] = [];
   const args: Array<number | string> = [];
-  const projectId = cleanOptionalString(filter.projectId);
-  const status = cleanOptionalString(filter.status);
+  const projectId = cleanString(filter.projectId);
+  const status = cleanString(filter.status);
   const statuses = uniqueStrings([status, ...(filter.statuses ?? [])]);
-  const query = cleanOptionalString(filter.query);
+  const query = cleanString(filter.query);
   const sourceSessionId = normalizeSourceSessionID(filter.sourceSessionId);
   addFilter(conditions, args, "project_id = ?", projectId);
   if (statuses.length > 0) {
@@ -212,7 +212,7 @@ function buildIssueWhere(filter: IssueFilter): { args: Array<number | string>; w
     conditions.push(filter.source === "github" ? githubSource : `not ${githubSource}`);
   }
   if (filter.cursorUpdatedAt !== undefined || filter.cursorIssueId !== undefined) {
-    const cursorUpdatedAt = cleanOptionalString(filter.cursorUpdatedAt);
+    const cursorUpdatedAt = cleanString(filter.cursorUpdatedAt);
     const cursorIssueID = filter.cursorIssueId;
     if (!cursorUpdatedAt || !Number.isSafeInteger(cursorIssueID) || Number(cursorIssueID) <= 0) {
       throw new Error("issue list cursor is invalid");
@@ -256,7 +256,7 @@ function nonNegativeInteger(value: number | undefined, field: string, positive: 
 }
 
 function uniqueStrings(values: Array<string | undefined>): string[] {
-  return [...new Set(values.map(cleanOptionalString).filter(Boolean))];
+  return [...new Set(values.map(cleanString).filter(Boolean))];
 }
 
 function attachLatestRuns(db: RunnerDatabase, issues: Issue[]): Issue[] {
@@ -343,17 +343,13 @@ function mapIssueRunRow(row: IssueRunRow): IssueRun {
 }
 
 function normalizeSourceSessionID(value: string | undefined): string {
-  const text = cleanOptionalString(value);
+  const text = cleanString(value);
   if (!text) return "";
   const separator = text.indexOf(":");
   if (separator < 0) return text;
   const provider = text.slice(0, separator).trim().toLowerCase();
   const sessionID = text.slice(separator + 1).trim();
   return provider === "codex" ? sessionID : text;
-}
-
-function cleanOptionalString(value: string | undefined): string {
-  return value?.trim() ?? "";
 }
 
 function requiredString(value: unknown, label: string): string {

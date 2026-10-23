@@ -1,5 +1,6 @@
 import type { RunnerDatabase } from "../../db/database.ts";
 import { listIssueEvents, recordIssueEvent } from "../../db/repositories/issueEvents.ts";
+import { cleanString } from "../../util/values.ts";
 
 const PI_ACCEPTANCE_ACTIVITY_EVENT_TYPES = {
   queued: "issue.pi_acceptance_queued.v1",
@@ -99,8 +100,4 @@ function objectPayload(value: string): Record<string, unknown> {
 
 function positiveInteger(value: unknown): number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 1;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

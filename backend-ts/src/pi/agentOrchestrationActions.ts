@@ -18,6 +18,7 @@ import {
   type ExecutorAssignmentInput,
   type NeedsUserEscalationInput
 } from "./agentOrchestration.ts";
+import { objectValue } from "../util/values.ts";
 
 export type PiAgentOrchestrationActionLayer = {
   assignExecutorProfileProposal(input: ExecutorAssignmentInput): unknown;
@@ -113,7 +114,7 @@ function assignExecutorProfileProposal(
     db,
     actionContext,
     { ...proposal, actionType: "agent.executor_assign" },
-    () => updateIssue(db, input.issue_id, objectPayload(proposal.payload.patch))
+    () => updateIssue(db, input.issue_id, objectValue(proposal.payload.patch))
   );
 }
 
@@ -151,7 +152,7 @@ function activeRoleWorkflow(
   return listIssues(db, { projectId: projectID }).find((issue) => {
     if (issue.status !== "triage" && issue.status !== "todo" && issue.status !== "in_progress" &&
       issue.status !== "needs_user") return false;
-    const snapshot = objectPayload(parseJSON(issue.workflow_snapshot_json));
+    const snapshot = objectValue(parseJSON(issue.workflow_snapshot_json));
     return snapshot.agent_role === role && snapshot.parent_issue_id === parentIssueID;
   }) ?? null;
 }
@@ -179,10 +180,6 @@ function safeRecommendExecutorProfile(
     projectID: result.project_id,
     execute: () => result
   });
-}
-
-function objectPayload(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function parseJSON(value: string): unknown {

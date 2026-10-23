@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getPiGuardianWatchdogStatus } from "../db/repositories/pi.ts";
 import { issueCompletionAutomationCounts } from "../pi/issueCompletionAutomation.ts";
+import { isoSeconds } from "../util/values.ts";
 
 const PI_GUARDIAN_WATCHDOG_STALE_AFTER_MS = 120_000;
 
@@ -57,9 +58,5 @@ function isWatchdogStale(lastSeen: string, now: Date): boolean {
 function staleAfter(lastSeen: string): string {
   const seenAt = Date.parse(lastSeen);
   if (!Number.isFinite(seenAt)) return "";
-  return iso(new Date(seenAt + PI_GUARDIAN_WATCHDOG_STALE_AFTER_MS));
-}
-
-function iso(value: Date): string {
-  return value.toISOString().replace(/\.\d{3}Z$/, "Z");
+  return isoSeconds(new Date(seenAt + PI_GUARDIAN_WATCHDOG_STALE_AFTER_MS));
 }

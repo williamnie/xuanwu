@@ -1,5 +1,6 @@
 import { redactSensitiveText } from "../util/redact.ts";
 import { resolve } from "node:path";
+import { cleanString, objectValue } from "../util/values.ts";
 
 export type ApprovalSafetyInput = {
   method: string;
@@ -79,7 +80,7 @@ function firstReviewRuleMatch(context: ApprovalSafetyContext): RuleMatch | null 
 
 function approvalSafetyContext(input: ApprovalSafetyInput): ApprovalSafetyContext {
   const params = input.params ?? {};
-  const item = recordValue(params.item);
+  const item = objectValue(params.item);
   const paths = [cleanString(params.path ?? item.path), ...changesPaths(params), ...changesPaths(item)].filter(Boolean);
   return {
     command: cleanString(params.command ?? item.command),
@@ -182,15 +183,7 @@ function truncateReason(text: string): string {
   return text.length > REASON_MAX_LENGTH ? `${text.slice(0, REASON_MAX_LENGTH - 1)}…` : text;
 }
 
-function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 function changesPaths(raw: Record<string, unknown>): string[] {
   const changes = Array.isArray(raw.changes) ? raw.changes : [];
-  return changes.map((value) => cleanString(recordValue(value).path)).filter(Boolean);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return changes.map((value) => cleanString(objectValue(value).path)).filter(Boolean);
 }

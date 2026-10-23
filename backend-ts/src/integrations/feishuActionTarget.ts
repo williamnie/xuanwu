@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { readIssueDecisionProjection } from "../domain/review/humanReview.ts";
 import type { FeishuNormalizedMessageEvent } from "./feishu.ts";
+import { cleanString } from "../util/values.ts";
 
 type FeishuActionTarget = {
   issueID: number;
@@ -100,10 +101,6 @@ function target(row: TargetRow, source: Exclude<FeishuActionTarget["source"], "n
 
 function emptyTarget(): FeishuActionTarget {
   return { issueID: 0, projectID: "", source: "none", sourceRef: "" };
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function looksLikeActionableReply(value: unknown): boolean {

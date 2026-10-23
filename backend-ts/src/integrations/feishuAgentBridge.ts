@@ -21,6 +21,7 @@ import { createImConversationCoordinator } from "./imConversationCoordinator.ts"
 import type { ChannelConnector } from "./channelConnectorContracts.ts";
 import { deliverImOutboundNow } from "./imOutboundDelivery.ts";
 import { notificationPresentation } from "../notifications/notificationPresentation.ts";
+import { cleanString } from "../util/values.ts";
 
 export type FeishuConversationRunner = (input: FeishuRunnerInput) => Promise<FeishuRunnerResult>;
 type FeishuRunnerInput = {
@@ -339,8 +340,4 @@ function fallbackConversationID(event: FeishuNormalizedMessageEvent): string {
 function safeError(error: unknown): string {
   return redactSensitiveText(error instanceof Error ? error.message : String(error))
     .replace(/(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g, "[redacted-path]");
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

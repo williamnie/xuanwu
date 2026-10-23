@@ -18,6 +18,7 @@ import { dirname } from "node:path";
 import { executeSkillRuntime, type ExecuteSkillRuntimeInput, type SkillRuntimeRun } from "../skills/runtime.ts";
 import { retrievePiMemoryContext, type PiMemoryRetrievalResult } from "./memoryContext.ts";
 import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
+import { cleanString, numberValue } from "../util/values.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -129,7 +130,7 @@ function domainContextRetrieval(
 function confidentProjectID(item: AttentionInboxItemRecord): string {
   const hints = item.target_hints
     .filter((hint) => hint.kind === "project" && cleanString(hint.id) !== "");
-  if (hints.length !== 1 || confidence(hints[0].confidence) < 0.8) return "";
+  if (hints.length !== 1 || numberValue(hints[0].confidence) < 0.8) return "";
   return cleanString(hints[0].id);
 }
 
@@ -186,12 +187,4 @@ function safeID(value: string): string {
 
 function normalizeSkillID(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9_:-]+/g, "-").replace(/^-+|-+$/g, "");
-}
-
-function confidence(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

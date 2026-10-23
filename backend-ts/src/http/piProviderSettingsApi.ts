@@ -16,6 +16,7 @@ import type { Router } from "./router.ts";
 import { registerSecretForRedaction } from "../security/redactionRegistry.ts";
 import { SecretStoreError } from "../security/secrets/contracts.ts";
 import { createDatabaseSecretService, type SecretService } from "../security/secrets/service.ts";
+import { cleanString, isRecord } from "../util/values.ts";
 
 type PiProviderSettingsContext = {
   database: RunnerDatabase;
@@ -375,16 +376,16 @@ async function discoveredModelIDs(response: Response): Promise<string[]> {
 function modelIDsFromPayload(raw: unknown): string[] {
   const values = Array.isArray(raw)
     ? raw
-    : isObject(raw) && Array.isArray(raw.data)
+    : isRecord(raw) && Array.isArray(raw.data)
       ? raw.data
-      : isObject(raw) && Array.isArray(raw.models)
+      : isRecord(raw) && Array.isArray(raw.models)
         ? raw.models
         : [];
   return [...new Set(values.map((item) => discoveredModelID(item)).filter(Boolean))].slice(0, 200);
 }
 
 function discoveredModelID(value: unknown): string {
-  const raw = isObject(value) ? cleanString(value.id) || cleanString(value.name) : cleanString(value);
+  const raw = isRecord(value) ? cleanString(value.id) || cleanString(value.name) : cleanString(value);
   const id = raw.replace(/^models\//, "");
   return id.length <= 256 ? id : "";
 }
@@ -405,11 +406,11 @@ async function writeModelsConfig(path: string, config: ModelsConfig): Promise<vo
 }
 
 function normalizeModelsConfig(value: unknown): ModelsConfig {
-  const raw = isObject(value) ? value : {};
-  const providers = isObject(raw.providers) ? raw.providers : {};
+  const raw = isRecord(value) ? value : {};
+  const providers = isRecord(raw.providers) ? raw.providers : {};
   const normalized: ModelsConfig = { providers: {} };
   for (const [id, provider] of Object.entries(providers)) {
-    if (!isObject(provider)) continue;
+    if (!isRecord(provider)) continue;
     normalized.providers[id] = stripUndefined({
       ...provider,
       api: cleanString(provider.api),
@@ -463,7 +464,7 @@ function normalizeModelSelection(
   const models: ProviderModelConfig[] = [];
   const modelOverrides: Record<string, ProviderModelOverrideConfig> = {};
   for (const item of modelItems(value)) {
-    const id = cleanString(isObject(item) ? item.id : item);
+    const id = cleanString(isRecord(item) ? item.id : item);
     if (!id) continue;
     if (knownModel(providerID, id)) modelOverrides[id] = normalizeModelOverride(item);
     else models.push(normalizeModel(providerID, item) ?? { id });
@@ -477,28 +478,28 @@ function modelItems(value: unknown): unknown[] {
 }
 
 function normalizeModel(providerID: string, value: unknown): ProviderModelConfig | undefined {
-  const id = cleanString(isObject(value) ? value.id : value);
+  const id = cleanString(isRecord(value) ? value.id : value);
   if (!id) return undefined;
   return stripUndefined({
     ...modelConfig(providerID, id),
-    ...(isObject(value) ? value : {}),
+    ...(isRecord(value) ? value : {}),
     id
   });
 }
 
 function normalizeModelOverrides(value: unknown): Record<string, ProviderModelOverrideConfig> {
-  if (!isObject(value)) return {};
+  if (!isRecord(value)) return {};
   return Object.fromEntries(Object.entries(value)
     .map(([id, override]) => [cleanString(id), normalizeModelOverride(override)])
     .filter(([id]) => id !== ""));
 }
 
 function normalizeModelOverride(value: unknown): ProviderModelOverrideConfig {
-  if (!isObject(value)) return {};
+  if (!isRecord(value)) return {};
   return stripUndefined({
     name: typeof value.name === "string" ? value.name : undefined,
     reasoning: typeof value.reasoning === "boolean" ? value.reasoning : undefined,
-    thinkingLevelMap: isObject(value.thinkingLevelMap)
+    thinkingLevelMap: isRecord(value.thinkingLevelMap)
       ? value.thinkingLevelMap as Record<string, string | null>
       : undefined,
     input: Array.isArray(value.input) ? value.input.filter(isModelInput) : undefined,
@@ -506,7 +507,7 @@ function normalizeModelOverride(value: unknown): ProviderModelOverrideConfig {
     contextWindow: typeof value.contextWindow === "number" ? value.contextWindow : undefined,
     maxTokens: typeof value.maxTokens === "number" ? value.maxTokens : undefined,
     headers: isStringRecord(value.headers) ? value.headers : undefined,
-    compat: isObject(value.compat) ? value.compat : undefined
+    compat: isRecord(value.compat) ? value.compat : undefined
   });
 }
 
@@ -585,7 +586,7 @@ function userAgentFromHeaders(headers: Record<string, string> | undefined): stri
 async function parseObjectBody(request: Request): Promise<Record<string, unknown>> {
   try {
     const body = await parseJsonBody(request);
-    return isObject(body) ? body : {};
+    return isRecord(body) ? body : {};
   } catch (error) {
     if (error instanceof HttpError) throw new HttpError(400, "请求体不是合法 JSON");
     throw error;
@@ -601,10 +602,6 @@ function providerID(request: Request): string {
 
 function modelsPath(db: RunnerDatabase): string {
   return join(dirname(db.path), "pi-runtime", "agent", "models.json");
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function publicModelIDs(provider: ProviderConfig): string[] {
@@ -715,7 +712,7 @@ function isModelInput(value: unknown): value is "text" | "image" {
 }
 
 function isModelCost(value: unknown): value is ProviderModelConfig["cost"] {
-  return isObject(value) &&
+  return isRecord(value) &&
     typeof value.input === "number" &&
     typeof value.output === "number" &&
     typeof value.cacheRead === "number" &&
@@ -723,7 +720,7 @@ function isModelCost(value: unknown): value is ProviderModelConfig["cost"] {
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {
-  return isObject(value) && Object.values(value).every((item) => typeof item === "string");
+  return isRecord(value) && Object.values(value).every((item) => typeof item === "string");
 }
 
 function stripUndefined<T extends Record<string, unknown>>(value: T): T {
@@ -732,10 +729,6 @@ function stripUndefined<T extends Record<string, unknown>>(value: T): T {
 
 function hasOwn(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function isMissingFileError(error: unknown): boolean {

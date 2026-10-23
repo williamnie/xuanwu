@@ -1,4 +1,5 @@
 import type { ExecutorProviderId } from "../types.ts";
+import { cleanString } from "../../util/values.ts";
 
 export const PROVIDER_SESSION_VIEW_CONTRACT = "xw.provider-session.v1" as const;
 
@@ -90,8 +91,8 @@ export function assertProviderSessionView(
   value: Record<string, unknown>,
   options: { detail?: boolean; expectedSessionRef?: string } = {}
 ): asserts value is ProviderSessionView | ProviderSessionDetailView {
-  const sessionRef = stringValue(value.provider_session_id);
-  const expectedSessionRef = stringValue(options.expectedSessionRef);
+  const sessionRef = cleanString(value.provider_session_id);
+  const expectedSessionRef = cleanString(options.expectedSessionRef);
   const expectedID = sessionRef ? `${provider}:${sessionRef}` : "";
   const valid = value.session_contract === PROVIDER_SESSION_VIEW_CONTRACT &&
     value.provider === provider &&
@@ -120,10 +121,6 @@ function finiteTimestamp(value: number | undefined): number {
 
 function finiteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function validTurns(value: unknown): value is ProviderSessionTurn[] {

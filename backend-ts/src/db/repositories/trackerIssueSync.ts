@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../database.ts";
 import { getIssue } from "./issues.ts";
 import { getProject } from "./projects.ts";
+import { cleanString } from "../../util/values.ts";
 
 const TRACKER_ISSUE_PROVIDERS = ["fake", "github", "gitlab", "linear"] as const;
 export type TrackerIssueProvider = typeof TRACKER_ISSUE_PROVIDERS[number];
@@ -88,8 +89,8 @@ export function upsertTrackerIssueLink(
     last_synced_issue_updated_at=excluded.last_synced_issue_updated_at,
     updated_at=excluded.updated_at`, [
     provider, externalID, issue.project_id, issueID,
-    optionalText(input.last_external_updated_at) || existing?.last_external_updated_at || "",
-    optionalText(input.last_synced_issue_updated_at) || existing?.last_synced_issue_updated_at || "",
+    cleanString(input.last_external_updated_at) || existing?.last_external_updated_at || "",
+    cleanString(input.last_synced_issue_updated_at) || existing?.last_synced_issue_updated_at || "",
     existing?.created_at ?? now, now
   ]);
   const saved = getTrackerIssueLink(db, provider, externalID);
@@ -113,7 +114,7 @@ export function saveTrackerCursor(db: RunnerDatabase, input: { position: string;
 export function recordTrackerSyncAudit(db: RunnerDatabase, input: TrackerSyncAudit, timestamp = new Date()): void {
   db.sqlite.run(`insert into tracker_sync_events (provider, external_id, project_id, issue_id, action, correlation_id, detail_json, created_at)
     values (?, ?, ?, ?, ?, ?, ?, ?)`, [
-    trackerIssueProvider(input.provider), optionalText(input.external_id), optionalText(input.project_id),
+    trackerIssueProvider(input.provider), cleanString(input.external_id), cleanString(input.project_id),
     input.issue_id ? positiveInteger(input.issue_id, "issue_id") : 0, text(input.action, "action"),
     text(input.correlation_id, "correlation_id"), JSON.stringify(input.detail ?? {}), timestamp.toISOString()
   ]);
@@ -121,7 +122,6 @@ export function recordTrackerSyncAudit(db: RunnerDatabase, input: TrackerSyncAud
 
 export function trackerScope(value: unknown): string { return text(value, "scope").toLowerCase(); }
 function mapProject(row: Record<string, unknown>): TrackerProjectMapping { return { provider: trackerIssueProvider(row.provider), scope: trackerScope(row.scope), project_id: text(row.project_id, "project_id"), created_at: text(row.created_at, "created_at"), updated_at: text(row.updated_at, "updated_at") }; }
-function mapLink(row: Record<string, unknown>): TrackerIssueLink { return { provider: trackerIssueProvider(row.provider), external_id: text(row.external_id, "external_id"), project_id: text(row.project_id, "project_id"), issue_id: positiveInteger(row.issue_id, "issue_id"), last_external_updated_at: optionalText(row.last_external_updated_at), last_synced_issue_updated_at: optionalText(row.last_synced_issue_updated_at), created_at: text(row.created_at, "created_at"), updated_at: text(row.updated_at, "updated_at") }; }
-function text(value: unknown, label: string): string { const output = optionalText(value); if (!output) throw new Error(`${label} is required`); if (output.length > 4096 || /[\0\r\n]/.test(output)) throw new Error(`${label} is invalid`); return output; }
-function optionalText(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
+function mapLink(row: Record<string, unknown>): TrackerIssueLink { return { provider: trackerIssueProvider(row.provider), external_id: text(row.external_id, "external_id"), project_id: text(row.project_id, "project_id"), issue_id: positiveInteger(row.issue_id, "issue_id"), last_external_updated_at: cleanString(row.last_external_updated_at), last_synced_issue_updated_at: cleanString(row.last_synced_issue_updated_at), created_at: text(row.created_at, "created_at"), updated_at: text(row.updated_at, "updated_at") }; }
+function text(value: unknown, label: string): string { const output = cleanString(value); if (!output) throw new Error(`${label} is required`); if (output.length > 4096 || /[\0\r\n]/.test(output)) throw new Error(`${label} is invalid`); return output; }
 function positiveInteger(value: unknown, label: string): number { if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) throw new Error(`${label} must be a positive integer`); return value; }

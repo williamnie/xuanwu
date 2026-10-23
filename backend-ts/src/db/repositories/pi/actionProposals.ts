@@ -13,6 +13,7 @@ import {
   normalizedConfidence,
   type ActionProposalAction
 } from "./actionProposalValidation.ts";
+import { placeholders } from "../../sql.ts";
 
 type ActionProposalStatus = "approved" | "proposed" | "rejected";
 
@@ -241,8 +242,4 @@ function sourceItemIDs(value: unknown): string[] {
 function sourceItemID(value: unknown): string {
   if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return String(value);
   return cleanString(value);
-}
-
-function placeholders(count: number): string {
-  return Array.from({ length: count }, () => "?").join(", ");
 }

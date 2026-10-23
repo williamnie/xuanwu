@@ -9,6 +9,7 @@ import {
   type WorkRelation,
   type WorkTransitionGate
 } from "../../domain/work/contracts.ts";
+import { errorMessage } from "../../util/values.ts";
 
 type WorkRow = {
   acceptance_json: unknown;
@@ -335,8 +336,4 @@ function nonNegativeInteger(value: unknown, field: string): number {
     throw new Error(`${field} must be a non-negative integer`);
   }
   return value;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

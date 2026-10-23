@@ -4,6 +4,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import type { SessionCreateInput, SessionMessageInput } from "../providers/types.ts";
 import { executionPolicyRequest, type ExecutionPolicyRequest } from "../providers/core/policyContracts.ts";
+import { cleanString } from "../util/values.ts";
 
 type RuntimeSettings = {
   approval_policy?: string;
@@ -21,7 +22,7 @@ export async function withSessionRuntimeSettings(
 ): Promise<Record<string, unknown>> {
   const settings = {
     ...runtimeSettingsFromAgentSession(db, sessionId, provider),
-    ...(provider === "codex" ? await runtimeSettingsFromRolloutPath(stringValue(detail.path)) : {}),
+    ...(provider === "codex" ? await runtimeSettingsFromRolloutPath(cleanString(detail.path)) : {}),
     ...runtimeSettings(detail)
   };
   if (!hasRuntimeSettings(settings)) return detail;
@@ -79,7 +80,7 @@ export function correctedRuntimeRawRef(
   if (Object.keys(raw).length === 0) return null;
   const next = { ...raw };
   let changed = false;
-  const sourceProvider = stringValue(raw.settings_provider);
+  const sourceProvider = cleanString(raw.settings_provider);
   if (sourceProvider && sourceProvider !== provider) {
     for (const key of ["model", "reasoning_effort", "service_tier"]) {
       if (key in next) {
@@ -129,21 +130,21 @@ function mergeTurnContextSettings(settings: RuntimeSettings, line: string): void
 
 function runtimeSettings(input: Record<string, unknown>): RuntimeSettings {
   return compactRuntimeSettings({
-    model: stringValue(input.model),
+    model: cleanString(input.model),
     reasoning_effort: firstNonEmpty(
-      stringValue(input.reasoning_effort),
-      stringValue(input.reasoningEffort),
-      stringValue(input.effort)
+      cleanString(input.reasoning_effort),
+      cleanString(input.reasoningEffort),
+      cleanString(input.effort)
     ),
-    service_tier: firstNonEmpty(stringValue(input.service_tier), stringValue(input.serviceTier)),
-    approval_policy: firstNonEmpty(stringValue(input.approval_policy), stringValue(input.approvalPolicy)),
-    sandbox: firstNonEmpty(stringValue(input.sandbox), sandboxFromPolicy(input.sandbox_policy ?? input.sandboxPolicy))
+    service_tier: firstNonEmpty(cleanString(input.service_tier), cleanString(input.serviceTier)),
+    approval_policy: firstNonEmpty(cleanString(input.approval_policy), cleanString(input.approvalPolicy)),
+    sandbox: firstNonEmpty(cleanString(input.sandbox), sandboxFromPolicy(input.sandbox_policy ?? input.sandboxPolicy))
   });
 }
 
 function providerScopedRuntimeSettings(raw: Record<string, unknown>, provider: string): RuntimeSettings {
   const settings = runtimeSettings(raw);
-  const sourceProvider = stringValue(raw.settings_provider);
+  const sourceProvider = cleanString(raw.settings_provider);
   if (sourceProvider && sourceProvider !== provider) {
     delete settings.model;
     delete settings.reasoning_effort;
@@ -158,7 +159,7 @@ function collaborationSettings(context: Record<string, unknown>): Record<string,
 }
 
 function sandboxFromPolicy(value: unknown): string {
-  const raw = typeof value === "string" ? value : stringValue(jsonRecord(value).type);
+  const raw = typeof value === "string" ? value : cleanString(jsonRecord(value).type);
   switch (raw) {
     case "dangerFullAccess": return "danger-full-access";
     case "workspaceWrite": return "workspace-write";
@@ -186,10 +187,6 @@ function jsonRecord(value: unknown): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function firstNonEmpty(...values: string[]): string {

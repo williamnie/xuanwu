@@ -3,6 +3,7 @@ import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { getProject, ProjectNotFoundError } from "../db/repositories/projects.ts";
 import { mergeSkillIntents, parseSkillIntentList, parseSkillPolicy } from "./intents.ts";
+import { cleanString } from "../util/values.ts";
 
 type SkillIntentAudit = {
   allowed_skill_intents: string[];
@@ -89,20 +90,20 @@ function mustGetAudit(db: RunnerDatabase, id: number): SkillIntentAudit {
 function mapAudit(row: AuditRow): SkillIntentAudit {
   return {
     allowed_skill_intents: jsonList(row.allowed_skill_intents_json),
-    created_at: stringValue(row.created_at),
+    created_at: cleanString(row.created_at),
     expected_skill_intents: jsonList(row.expected_skill_intents_json),
     id: numberValue(row.id),
     issue_id: numberValue(row.issue_id),
-    issue_run_id: stringValue(row.issue_run_id),
+    issue_run_id: cleanString(row.issue_run_id),
     missing_skill_intents: jsonList(row.missing_skill_intents_json),
-    status: stringValue(row.status) === "ok" ? "ok" : "mismatch",
+    status: cleanString(row.status) === "ok" ? "ok" : "mismatch",
     unauthorized_skill_intents: jsonList(row.unauthorized_skill_intents_json),
     used_skill_intents: jsonList(row.used_skill_intents_json)
   };
 }
 
 function jsonList(value: unknown): string[] {
-  return parseSkillIntentList(stringValue(value));
+  return parseSkillIntentList(cleanString(value));
 }
 
 function lastInsertID(db: RunnerDatabase): number {
@@ -111,10 +112,6 @@ function lastInsertID(db: RunnerDatabase): number {
 
 function now(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function numberValue(value: unknown): number {

@@ -38,6 +38,7 @@ import { redactSensitiveText } from "../util/redact.ts";
 import { json } from "./errors.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import type { Router } from "./router.ts";
+import { cleanString } from "../util/values.ts";
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
@@ -77,11 +78,11 @@ export function slowRunListLogEntry(
     event: "runner.run_list_slow",
     page: safePositiveInteger(params.get("page"), 1),
     page_size: safePositiveInteger(params.get("page_size"), DEFAULT_PAGE_SIZE),
-    project_filter: Boolean(optionalString(params.get("project_id"))),
+    project_filter: Boolean(cleanString(params.get("project_id"))),
     provider_filter_count: params.getAll("provider").filter(Boolean).length,
     status,
     status_filter_count: params.getAll("status").filter(Boolean).length,
-    work_filter: Boolean(optionalString(params.get("work_id")))
+    work_filter: Boolean(cleanString(params.get("work_id")))
   };
 }
 
@@ -93,11 +94,11 @@ function safePositiveInteger(value: string | null, fallback: number): number {
 function listResponse(context: ReadApiContext, request: Request): Record<string, unknown> {
   const database = context.readDatabase ?? context.database;
   const params = new URL(request.url).searchParams;
-  const projectID = optionalString(params.get("project_id"));
+  const projectID = cleanString(params.get("project_id"));
   if (projectID && !getProject(database, projectID)) {
     throw runError(404, "project_not_found", "Project not found");
   }
-  const workIDValue = optionalString(params.get("work_id"));
+  const workIDValue = cleanString(params.get("work_id"));
   const workIDFilter = workIDValue ? canonicalWorkID(workIDValue) : undefined;
   const providers = stringParams(params, "provider");
   const statuses = enumParams(params, "status", RUN_STATUSES);
@@ -146,7 +147,7 @@ function transcriptResponse(context: ReadApiContext, request: Request): Record<s
   const database = context.readDatabase ?? context.database;
   const run = requireRun(context, runID(request), database);
   const params = new URL(request.url).searchParams;
-  const requestedAttemptID = optionalString(params.get("attempt_id"));
+  const requestedAttemptID = cleanString(params.get("attempt_id"));
   const attempt = requestedAttemptID
     ? run.attempts.find((candidate) => candidate.id === requestedAttemptID)
     : run.attempts.at(-1);
@@ -186,11 +187,11 @@ function transcriptMessage(row: RunTranscriptRow, fallbackTurnID: string): Recor
   const correlation = safeRecord(body.runtime_evidence_correlation);
   return {
     created_at: row.created_at,
-    id: optionalString(snapshot.item_id) || `issue-event:${row.id}`,
-    phase: optionalString(snapshot.phase) || "commentary",
-    provider_turn_id: optionalString(correlation.provider_turn_id) || fallbackTurnID,
+    id: cleanString(snapshot.item_id) || `issue-event:${row.id}`,
+    phase: cleanString(snapshot.phase) || "commentary",
+    provider_turn_id: cleanString(correlation.provider_turn_id) || fallbackTurnID,
     source_event_id: row.id,
-    text: optionalString(body.text),
+    text: cleanString(body.text),
     type: "agentMessage"
   };
 }
@@ -272,7 +273,7 @@ async function resumeRun(
   let turnID: string;
   try {
     const result = await provider.sendSessionMessage?.({ prompt, sessionId: sessionID }) as SessionMessageResult;
-    providerSessionID = optionalString(result.provider_session_id) || optionalString(result.sessionId) || sessionID;
+    providerSessionID = cleanString(result.provider_session_id) || cleanString(result.sessionId) || sessionID;
     turnID = requiredString(result.turn_id, "provider turn id");
   } catch (error) {
     failRunAttemptStart(context.database, audit.event_id, sanitizedError(error));
@@ -497,7 +498,7 @@ function pageInput(params: URLSearchParams): PageInput {
 }
 
 function positiveIntegerParam(value: string | null, field: string, fallback: number, maximum?: number): number {
-  const raw = optionalString(value);
+  const raw = cleanString(value);
   if (raw === "") return fallback;
   if (!/^[0-9]+$/.test(raw)) throw runError(400, "invalid_request", `${field} must be a positive integer`);
   const parsed = Number(raw);
@@ -511,7 +512,7 @@ function positiveIntegerParam(value: string | null, field: string, fallback: num
 }
 
 function optionalPositiveInteger(value: string | null, field: string): number | undefined {
-  const raw = optionalString(value);
+  const raw = cleanString(value);
   if (raw === "") return undefined;
   if (!/^[1-9][0-9]*$/.test(raw)) throw runError(400, "invalid_request", `${field} must be a positive integer`);
   const parsed = Number(raw);
@@ -540,7 +541,7 @@ function enumParam<const T extends readonly string[]>(
   fallback: T[number],
   field: string
 ): T[number] {
-  const requested = optionalString(value);
+  const requested = cleanString(value);
   if (requested === "") return fallback;
   if (!values.includes(requested as T[number])) throw runError(400, "invalid_request", `${field} is invalid`);
   return requested as T[number];
@@ -574,19 +575,15 @@ function objectValue(value: unknown, field: string): Record<string, unknown> {
 }
 
 function requiredString(value: unknown, field: string): string {
-  const text = optionalString(value);
+  const text = cleanString(value);
   if (text === "") throw runError(400, "invalid_request", `${field} is required`);
   return text;
 }
 
 function requiredControlRef(value: unknown, message: string): string {
-  const text = optionalString(value);
+  const text = cleanString(value);
   if (!text) throw runError(409, "provider_control_unavailable", message);
   return text;
-}
-
-function optionalString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function safeJSONRecord(value: string): Record<string, unknown> {

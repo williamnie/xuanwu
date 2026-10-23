@@ -5,6 +5,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import type { ProviderErrorSignal } from "./providerErrorParser.ts";
 import type { SupervisorCandidate } from "./issueSupervisorContextSupport.ts";
+import { cleanString, isoSeconds } from "../util/values.ts";
 
 type ProviderOutageDiagnosisInput = {
   events: IssueEvent[];
@@ -44,7 +45,7 @@ export function providerDeferredCount(db: RunnerDatabase, input: {
       and e.type in ('issue.provider_deferred', 'issue.recovery_deferred')
       and e.created_at>=?
       and (?='' or coalesce(latest_run.provider, 'codex')=?)
-  `).get(input.projectID, iso(input.since), clean(input.provider), clean(input.provider));
+  `).get(input.projectID, isoSeconds(input.since), cleanString(input.provider), cleanString(input.provider));
   return row?.count ?? 0;
 }
 
@@ -56,14 +57,14 @@ export function providerOutageCandidate(input: ProviderOutageDiagnosisInput): Su
     diagnosis_code: "provider_runtime_unavailable",
     evidence_refs: evidence.refs,
     reason: outageReason(evidence.reason),
-    ...(clean(input.providerError?.retry_after_at) === ""
+    ...(cleanString(input.providerError?.retry_after_at) === ""
       ? {}
-      : { wait_until: clean(input.providerError?.retry_after_at) })
+      : { wait_until: cleanString(input.providerError?.retry_after_at) })
   };
 }
 
 function hardOutageProviderError(providerError: ProviderErrorSignal | null): boolean {
-  return OUTAGE_DIAGNOSES.has(clean(providerError?.diagnosis_code));
+  return OUTAGE_DIAGNOSES.has(cleanString(providerError?.diagnosis_code));
 }
 
 function outageEvidence(input: ProviderOutageDiagnosisInput): {
@@ -107,15 +108,7 @@ function outageReason(reason: string): string {
   return redactAuditText(reason || "provider runtime is unavailable");
 }
 
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function eventMs(event: IssueEvent): number {
   const ms = Date.parse(event.created_at);
   return Number.isFinite(ms) ? ms : 0;
-}
-
-function iso(value: Date): string {
-  return value.toISOString().replace(/\.\d{3}Z$/, "Z");
 }

@@ -7,6 +7,7 @@ import {
 import { issueTimestamp } from "./issueCreate.ts";
 import { listIssueRuns, type IssueRun } from "./issues.ts";
 import { assertWorkspaceWaitCanStart, readWorkspaceWait } from "./workspaceWaits.ts";
+import { cleanString } from "../../util/values.ts";
 
 type IssueRunRuntimeInput = {
   agent_profile_id?: string;
@@ -235,5 +236,3 @@ function mustFindIssueRun(db: RunnerDatabase, issueID: number, id: string): Issu
   if (!run) throw new Error("issue run missing after write");
   return run;
 }
-
-function cleanString(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }

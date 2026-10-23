@@ -39,6 +39,7 @@ import {
 import { requestPiAcceptanceCycle } from "../runner/piAcceptanceCoordinator.ts";
 import { publishPiNeedsUserNotification } from "../notifications/piNotifier.ts";
 import { checkProjectPath } from "./projectPathCheck.ts";
+import { cleanString } from "../util/values.ts";
 
 type IssueListFilter = {
   projectId: string;
@@ -152,7 +153,7 @@ async function updateIssueAndKickLoop(
   validateAgentProfileReference(context.database, body, "agent_profile_id");
   if (Object.hasOwn(body, "status")) assertExecutorDoesNotOwnLifecycle(context, current, actor, "status_update");
   if (isStartIssuePatch(body)) return startIssueFromPatch(context, id, body, actor);
-  const requestedStatus = stringBody(body.status);
+  const requestedStatus = cleanString(body.status);
   if (requestedStatus === "failed" || requestedStatus === "needs_user") {
     throw new Error(`${requestedStatus} 只能由 PI 语义决策写入`);
   }
@@ -464,8 +465,8 @@ function publicIssueRun(run: IssueRun): PublicIssueRunView {
   return {
     ...publicRun,
     runtime_metadata: metadata,
-    service_tier: stringFromMetadata(metadata.service_tier),
-    service_tier_source: stringFromMetadata(metadata.service_tier_source)
+    service_tier: cleanString(metadata.service_tier),
+    service_tier_source: cleanString(metadata.service_tier_source)
   };
 }
 
@@ -481,7 +482,7 @@ function mustGetProject(db: RunnerDatabase, id: string): Project {
 
 function actionOptions(body: Record<string, unknown>): IssueActionOptions {
   return Object.hasOwn(body, "service_tier")
-    ? { serviceTier: stringBody(body.service_tier), serviceTierProvided: true }
+    ? { serviceTier: cleanString(body.service_tier), serviceTierProvided: true }
     : {};
 }
 
@@ -500,14 +501,6 @@ function parseRuntimeMetadata(value: string): PublicIssueRunMetadata {
   } catch {
     return {};
   }
-}
-
-function stringFromMetadata(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function stringBody(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 const LOOP_RELEASE_STATUSES = new Set(["cancelled", "done", "failed", "todo"]);

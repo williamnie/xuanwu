@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { readIssueDecisionProjection } from "../domain/review/humanReview.ts";
+import { cleanString } from "../util/values.ts";
 
 type ImActionTarget = {
   issueID: number;
@@ -17,7 +18,7 @@ export function resolveImActionTarget(db: RunnerDatabase, input: {
   repliedMessageId?: string;
   text: string;
 }): ImActionTarget {
-  const replyRef = clean(input.repliedMessageId);
+  const replyRef = cleanString(input.repliedMessageId);
   if (replyRef) {
     const rows = db.sqlite.query<TargetRow, [string, string]>(
       `select o.issue_id, coalesce(i.project_id, '') as project_id,
@@ -25,7 +26,7 @@ export function resolveImActionTarget(db: RunnerDatabase, input: {
          from sync_outbox o left join issues i on i.id=o.issue_id
         where o.source=? and o.status='sent' and o.issue_id>0 and o.provider_request_ref=?
         order by o.created_at desc, o.id desc`
-    ).all(clean(input.connectorId), replyRef);
+    ).all(cleanString(input.connectorId), replyRef);
     const exact = uniqueOpen(db, rows);
     if (exact.length === 1) return target(exact[0]!, "replied_notification");
     if (exact.length > 1) return empty();
@@ -37,7 +38,7 @@ export function resolveImActionTarget(db: RunnerDatabase, input: {
       where n.target_channel=? and n.target_chat_id=? and n.requires_user=1
         and n.state='sent' and n.issue_id>0
       order by n.created_at desc, n.id desc limit 32`
-  ).all(clean(input.connectorId), clean(input.conversationId)));
+  ).all(cleanString(input.connectorId), cleanString(input.conversationId)));
   return open.length === 1 ? target(open[0]!, "single_open_actionable_notification") : empty();
 }
 
@@ -58,7 +59,7 @@ function uniqueOpen(db: RunnerDatabase, rows: TargetRow[]): TargetRow[] {
 }
 
 function target(row: TargetRow, source: Exclude<ImActionTarget["source"], "none">): ImActionTarget {
-  return { issueID: row.issue_id, projectID: clean(row.project_id), source, sourceRef: clean(row.ref) };
+  return { issueID: row.issue_id, projectID: cleanString(row.project_id), source, sourceRef: cleanString(row.ref) };
 }
 
 function empty(): ImActionTarget {
@@ -66,10 +67,6 @@ function empty(): ImActionTarget {
 }
 
 function looksActionable(value: string): boolean {
-  const text = clean(value);
+  const text = cleanString(value);
   return text.length > 0 && text.length <= 160 && /(?:接受|同意|批准|通过|确认|完成|不用管|不阻塞|继续|调整|修改|拒绝|驳回|accept|approve|confirm|complete|continue|adjust|reject)/i.test(text);
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

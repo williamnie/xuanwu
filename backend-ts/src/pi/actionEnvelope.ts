@@ -1,4 +1,5 @@
 import { classifyPiActionRisk, type PiActionEnvelope, type PiRiskLevel } from "./actionGate.ts";
+import { cleanString } from "../util/values.ts";
 
 type RiskInput = { level?: unknown; requires_confirmation?: unknown; requiresConfirmation?: unknown };
 
@@ -133,8 +134,4 @@ function booleanInput(value: unknown): boolean | undefined {
 function riskLevelInput(value: unknown): PiRiskLevel | undefined {
   const text = cleanString(value);
   return text === "low" || text === "medium" || text === "high" ? text : undefined;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

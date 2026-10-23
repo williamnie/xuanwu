@@ -13,6 +13,7 @@ import { readMcpResourceWithAdapter } from "./mcpResourceRead.ts";
 import { callMcpTool } from "./mcpToolCall.ts";
 import { mcpToolProviderID } from "./mcpToolProvider.ts";
 import { resolveMcpInvocationApproval } from "../mcp/approvalPolicy.ts";
+import { cleanString } from "../util/values.ts";
 
 export type PiMcpActionLayer = {
   callMcpTool(input: McpToolCallInput): unknown;
@@ -199,8 +200,4 @@ function auditContext(context: McpActionContext) {
 function publicMcpCapability(capability: McpCapability | null): McpCapability | null {
   if (!capability) return null;
   return capability;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

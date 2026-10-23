@@ -28,6 +28,7 @@ import { formatModelVisibleToolOutput } from "../security/promptInjectionDefense
 import { createPendingPiAction } from "./actionEngine.ts";
 import { scopedRunnerChatActionContext } from "./runnerChatAuthorization.ts";
 import type { PiRunnerActionContext } from "./runnerActions.ts";
+import { cleanString } from "../util/values.ts";
 
 export const PI_LOCAL_WORKSPACE_TOOL_NAMES = [
   "project_create",
@@ -447,8 +448,4 @@ function backupStamp(): string {
 
 function isMissingError(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

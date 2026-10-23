@@ -17,6 +17,7 @@ import type {
   SQLValue,
   SyncOutboxRecord
 } from "./imReplyOutboxTypes.ts";
+import { lastInsertID } from "../sql.ts";
 
 export type { SyncOutboxRecord };
 
@@ -258,8 +259,4 @@ function draftInsertColumns(): string {
   return `source, external_event_id, issue_id, target_chat_id, target_thread_id,
     target_message_id, content, status, risk, created_by, approval_action_id,
     rejection_reason, created_at, updated_at`;
-}
-
-function lastInsertID(db: RunnerDatabase): number {
-  return db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get()?.id ?? 0;
 }

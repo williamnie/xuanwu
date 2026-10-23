@@ -6,6 +6,7 @@ import type { AssistantTool, ToolProvider } from "./toolProviderEnvelope.ts";
 import { formatModelVisibleToolOutput } from "../security/promptInjectionDefense.ts";
 import type { PiGatePolicy } from "./actionGate.ts";
 import { jevAvailableForContext } from "../skills/jev/policy.ts";
+import { cleanString } from "../util/values.ts";
 
 type RuntimeReadOnlyToolContext = {
   authorization?: PiGatePolicy;
@@ -130,8 +131,4 @@ function recordValue(value: unknown): Record<string, unknown> {
 
 function sortedUnique(values: string[]): string[] {
   return [...new Set(values.map(cleanString).filter(Boolean))].sort((left, right) => left.localeCompare(right));
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

@@ -11,6 +11,7 @@ import {
   type GuardianDecisionPlan,
   type GuardianDecisionCandidate
 } from "./guardianDecisionMerge.ts";
+import { isRecord, isoSeconds } from "../util/values.ts";
 
 type GuardianDecisionRateLimitResult =
   | { allowed: true }
@@ -92,7 +93,7 @@ export function createDeferredGuardianDecision(input: DeferredGuardianDecisionIn
 }
 
 export function rescheduleDeferredGuardianDecisions(db: RunnerDatabase, now: Date): number {
-  const timestamp = iso(now);
+  const timestamp = isoSeconds(now);
   let rescheduled = 0;
   for (const decision of listPiGuardianDecisions(db, { state: "deferred" })) {
     if (decision.cooldown_until === "" || decision.cooldown_until > timestamp) continue;
@@ -139,7 +140,7 @@ function rescheduleDeferredDecision(db: RunnerDatabase, decision: PiGuardianDeci
   db.sqlite.run(`update pi_guardian_decisions set state='proposed', rationale=?, cooldown_until='', updated_at=?
     where id=? and state='deferred'`, [
     "backpressure_deferred cooldown elapsed; rescheduled",
-    iso(now),
+    isoSeconds(now),
     decision.id
   ]);
 }
@@ -172,7 +173,7 @@ function globalLimit(db: RunnerDatabase, now: Date): GuardianDecisionRateLimitRe
 }
 
 function recentDecisions(db: RunnerDatabase, now: Date, windowMs: number): RecentDecision[] {
-  const start = iso(new Date(now.getTime() - windowMs));
+  const start = isoSeconds(new Date(now.getTime() - windowMs));
   return db.sqlite.query<RecentDecision, [string]>(
     `select id, decision_kind, evidence_json, issue_id, project_id, run_group_id, state, created_at
       from pi_guardian_decisions where created_at>=? order by created_at asc, id asc`
@@ -228,7 +229,7 @@ function limited(
 function retryAt(recent: RecentDecision[], windowMs: number, now: Date): string {
   const oldest = Date.parse(recent[0]?.created_at ?? "");
   const retry = Number.isFinite(oldest) ? oldest + windowMs : now.getTime() + windowMs;
-  return iso(new Date(Math.max(retry, now.getTime() + 1_000)));
+  return isoSeconds(new Date(Math.max(retry, now.getTime() + 1_000)));
 }
 
 function bypassesRateLimit(candidate: GuardianDecisionCandidate): boolean {
@@ -242,12 +243,4 @@ function jsonEvidence(value: string): Array<Record<string, unknown>> {
   } catch {
     return [];
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function iso(value: Date): string {
-  return value.toISOString().replace(/\.\d{3}Z$/, "Z");
 }

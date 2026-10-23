@@ -3,6 +3,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { listPiMcpCapabilities } from "../db/repositories/piMcpCapabilities.ts";
 import { listPiMcpServers } from "../db/repositories/piMcpServers.ts";
 import { optionalJevMcpServers } from "../skills/jev/registry.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 export type McpRiskLevel = "low" | "medium" | "high";
 type McpCapabilityKind = "resource" | "tool";
@@ -384,10 +385,6 @@ function tokenize(text: string): string[] {
   return cleanString(text).toLowerCase().split(/[^a-z0-9_:-]+/).filter((term) => term.length >= 3);
 }
 
-function objectValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 function jsonSchema(value: unknown, fallback: Record<string, unknown>): Record<string, unknown> {
   const schema = objectValue(value);
   return Object.keys(schema).length > 0 ? schema : fallback;
@@ -429,8 +426,4 @@ function normalizeID(value: unknown): string {
 
 function normalizeName(value: unknown): string {
   return cleanString(value).toLowerCase().replace(/[^a-z0-9_.:-]+/g, "-").replace(/^-+|-+$/g, "");
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

@@ -14,6 +14,7 @@ import { SecretStoreError } from "../security/secrets/contracts.ts";
 import { createDatabaseSecretService, type SecretService } from "../security/secrets/service.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { cleanString, objectValue } from "../util/values.ts";
 
 type PiConnectorHealthContext = {
   config?: RunnerConfig;
@@ -60,10 +61,10 @@ async function testConnectionResponse(context: PiConnectorHealthContext, request
   const result = await probeByID(context, id);
   createPiActionEvent(context.database, {
     action_id: `connector-test:${id}:${crypto.randomUUID()}`,
-    actor: text(body.actor) || "user",
+    actor: cleanString(body.actor) || "user",
     event_type: "connector.tested",
     payload_json: JSON.stringify({ connector_id: id }),
-    reason: text(body.reason) || "user requested connector test",
+    reason: cleanString(body.reason) || "user requested connector test",
     result_json: JSON.stringify({ ...result, duration_ms: Math.max(0, Date.now() - started) }),
     error: result.error?.code ?? ""
   });
@@ -73,8 +74,8 @@ async function testConnectionResponse(context: PiConnectorHealthContext, request
 async function revokeResponse(context: PiConnectorHealthContext, request: Request): Promise<Response> {
   const id = connectorID(request);
   const body = await objectBody(request);
-  const ref = text(body.secret_ref ?? body.secretRef);
-  const reason = text(body.reason);
+  const ref = cleanString(body.secret_ref ?? body.secretRef);
+  const reason = cleanString(body.reason);
   if (ref === "") throw new HttpError(400, "secret_ref is required");
   if (reason === "") throw new HttpError(400, "reason is required");
   const connector = staticConnector(context, id);
@@ -82,7 +83,7 @@ async function revokeResponse(context: PiConnectorHealthContext, request: Reques
   if (!secret) throw new HttpError(400, "secret_ref is not declared by this connector");
   if (secret.revocable !== true) throw new HttpError(400, "secret_ref is not revocable by Runner");
   try {
-    const metadata = context.secrets!.revoke(ref, text(body.actor) || "user", reason);
+    const metadata = context.secrets!.revoke(ref, cleanString(body.actor) || "user", reason);
     clearRuntimeSecret(context.config, id, String(secret.name ?? ""));
     return json({ connector_id: id, secret: metadata, health: staticConnector(context, id) });
   } catch (error) {
@@ -135,14 +136,14 @@ async function probeByID(context: PiConnectorHealthContext, id: string): Promise
 }
 
 function cliProbeResult(connector: Record<string, unknown>, now: Date): ConnectorProbeResult {
-  const health = object(connector.health);
-  const error = object(health.error);
+  const health = objectValue(connector.health);
+  const error = objectValue(health.error);
   const ok = health.ok === true;
   return {
-    checked_at: text(health.checked_at) || now.toISOString(),
-    ...(ok ? {} : { error: { code: text(error.code) || "connector_test_failed", message: text(error.message) || "CLI connector test failed" } }),
+    checked_at: cleanString(health.checked_at) || now.toISOString(),
+    ...(ok ? {} : { error: { code: cleanString(error.code) || "connector_test_failed", message: cleanString(error.message) || "CLI connector test failed" } }),
     ok,
-    state: ok ? "healthy" : text(error.exit_category) === "auth_required" ? "degraded" : "failed"
+    state: ok ? "healthy" : cleanString(error.exit_category) === "auth_required" ? "degraded" : "failed"
   };
 }
 
@@ -155,7 +156,7 @@ function staticConnector(context: PiConnectorHealthContext, id: string): Record<
 
 function secretReference(connector: Record<string, unknown>, ref: string): Record<string, unknown> | null {
   const refs = Array.isArray(connector.secret_refs) ? connector.secret_refs : [];
-  return refs.find((item) => object(item).ref === ref) as Record<string, unknown> | undefined ?? null;
+  return refs.find((item) => objectValue(item).ref === ref) as Record<string, unknown> | undefined ?? null;
 }
 
 function clearRuntimeSecret(config: RunnerConfig | undefined, connectorID: string, name: string): void {
@@ -175,11 +176,11 @@ function clearRuntimeSecret(config: RunnerConfig | undefined, connectorID: strin
 }
 
 function withAuditBackoff(context: PiConnectorHealthContext, connector: Record<string, unknown>): Record<string, unknown> {
-  const history = connectorTestHistory(context.database, text(connector.id), context.now?.() ?? new Date());
+  const history = connectorTestHistory(context.database, cleanString(connector.id), context.now?.() ?? new Date());
   return {
     ...connector,
     health: {
-      ...object(connector.health),
+      ...objectValue(connector.health),
       backoff: { attempt: history.attempts, blocked: history.blocked, retry_at: history.retry_at }
     }
   };
@@ -208,12 +209,4 @@ function connectorID(request: Request): string {
 
 function unavailable(code: string, message: string, now: Date): ConnectorProbeResult {
   return { checked_at: now.toISOString(), error: { code, message }, ok: false, state: "unconfigured" };
-}
-
-function object(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function text(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

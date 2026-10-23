@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import type { PiAction } from "../db/repositories/pi.ts";
 import { evaluatePiActionFreshness } from "./actionFreshness.ts";
+import { cleanString } from "../util/values.ts";
 
 type PiGateLayer =
   | "action_gate"
@@ -153,8 +154,4 @@ function compact(value: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => (
     item !== undefined && item !== "" && (!Array.isArray(item) || item.length > 0)
   )));
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

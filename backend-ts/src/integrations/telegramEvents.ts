@@ -19,6 +19,7 @@ import type {
   TelegramMessageEntity,
   TelegramUpdate
 } from "./telegramTypes.ts";
+import { cleanString } from "../util/values.ts";
 
 export type TelegramNormalizedMessage = {
   attention: PiAttentionDecision;
@@ -66,11 +67,11 @@ function telegramImInboundMessage(
   const entities = source.text ? source.entities ?? [] : source.caption_entities ?? [];
   const sender = source.from ? {
     id: telegramNumericId(source.from.id, "sender id", false),
-    display_name: [source.from.first_name, source.from.last_name].map(clean).filter(Boolean).join(" ") || clean(source.from.username),
+    display_name: [source.from.first_name, source.from.last_name].map(cleanString).filter(Boolean).join(" ") || cleanString(source.from.username),
     kind: source.from.is_bot ? "bot" as const : "user" as const
   } : source.sender_chat ? {
     id: telegramNumericId(source.sender_chat.id, "sender chat id", true),
-    display_name: clean(source.sender_chat.title) || clean(source.sender_chat.username),
+    display_name: cleanString(source.sender_chat.title) || cleanString(source.sender_chat.username),
     kind: "chat" as const
   } : { id: "unknown", kind: "unknown" as const };
   const chatId = telegramNumericId(source.chat.id, "chat id", true);
@@ -127,8 +128,8 @@ export function telegramRawEventRef(value: unknown): string {
 }
 
 export function telegramPrompt(text: string, botUsername?: string): string {
-  let prompt = clean(text);
-  const username = clean(botUsername).replace(/^@/, "");
+  let prompt = cleanString(text);
+  const username = cleanString(botUsername).replace(/^@/, "");
   if (username) {
     prompt = prompt.replace(new RegExp(`^/(new)(?:@${escapeRegExp(username)})?(?=\\s|$)`, "i"), "/$1");
     prompt = prompt.replace(new RegExp(`^@${escapeRegExp(username)}(?:[:,]?\\s*)`, "i"), "");
@@ -138,7 +139,7 @@ export function telegramPrompt(text: string, botUsername?: string): string {
 
 function mentions(text: string, entities: TelegramMessageEntity[], bot: TelegramBotIdentity) {
   const botId = telegramNumericId(bot.id, "bot id", false);
-  const username = clean(bot.username).toLowerCase().replace(/^@/, "");
+  const username = cleanString(bot.username).toLowerCase().replace(/^@/, "");
   return entities.flatMap((entity) => {
     if (!Number.isInteger(entity.offset) || !Number.isInteger(entity.length) || entity.offset < 0 || entity.length <= 0) return [];
     const visible = text.slice(entity.offset, entity.offset + entity.length);
@@ -173,8 +174,8 @@ function pushFile(target: ImInboundMessageV1["attachments"], file: TelegramFile 
   target.push({
     id: boundedMetadata(file.file_id, `${kind} file id`, 512),
     kind,
-    ...(clean(file.file_name) ? { name: clean(file.file_name).slice(0, 512) } : {}),
-    ...(clean(file.mime_type) ? { mime_type: clean(file.mime_type).slice(0, 256) } : {}),
+    ...(cleanString(file.file_name) ? { name: cleanString(file.file_name).slice(0, 512) } : {}),
+    ...(cleanString(file.mime_type) ? { mime_type: cleanString(file.mime_type).slice(0, 256) } : {}),
     ...optionalSize(file.file_size)
   });
 }
@@ -217,13 +218,13 @@ function validUnixSeconds(value: unknown): number {
 }
 
 function boundedMessageText(value: unknown): string {
-  const text = clean(value);
+  const text = cleanString(value);
   if ([...text].length > 30_000) throw permanent("telegram message text exceeds 30000 characters");
   return text;
 }
 
 function boundedMetadata(value: unknown, label: string, maximum: number): string {
-  const text = clean(value);
+  const text = cleanString(value);
   if (text === "" || text.length > maximum) throw permanent(`telegram ${label} is invalid`);
   return text;
 }
@@ -237,17 +238,13 @@ function permanent(message: string): Error & { kind: "permanent" } {
 }
 
 function telegramNumericId(value: unknown, label: string, allowNegative: boolean, allowZero = false): string {
-  const text = typeof value === "number" && Number.isSafeInteger(value) ? String(value) : clean(value);
+  const text = typeof value === "number" && Number.isSafeInteger(value) ? String(value) : cleanString(value);
   if (!/^-?(?:0|[1-9]\d*)$/.test(text)) throw permanent(`telegram ${label} is invalid`);
   const number = Number(text);
   if (!Number.isSafeInteger(number) || (!allowZero && number === 0) || (!allowNegative && number < 0)) {
     throw permanent(`telegram ${label} is invalid`);
   }
   return text;
-}
-
-function clean(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function escapeRegExp(value: string): string {

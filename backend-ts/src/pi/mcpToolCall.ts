@@ -14,6 +14,7 @@ import type { ToolPermission, ToolResult, ToolResultError } from "./toolProvider
 import type { PiGatePolicy } from "./actionGate.ts";
 import { JEV_CAPABILITY_ID } from "../skills/jev/config.ts";
 import { invokeJevSkill } from "../skills/jev/invoke.ts";
+import { cleanString } from "../util/values.ts";
 
 const MCP_TOOL_ERROR_CODES = {
   capabilityNotTool: "mcp_capability_not_tool",
@@ -205,8 +206,4 @@ function assistantPermission(capability: McpCapability): ToolPermission {
 
 function permissionAllows(max: ToolPermission, required: ToolPermission): boolean {
   return PERMISSION_LEVEL[max] >= PERMISSION_LEVEL[required];
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

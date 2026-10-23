@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 import { recordMaintenanceAudit } from "./repositories/eventMaintenance.ts";
 import { runMigrations, type SqlMigration } from "./migrations.ts";
 import { migrations as currentMigrations } from "./schema/index.ts";
+import { errorMessage } from "../util/values.ts";
 
 export const STORAGE_COMPAT_VERSION = "xuanwu.storage-compat.v1" as const;
 const MIGRATION_REHEARSAL_REPORT_SCHEMA_VERSION = "xuanwu.db-migration-rehearsal-report.v1" as const;
@@ -303,8 +304,4 @@ function required(value: string | undefined, flag: string): string {
   const clean = value?.trim() ?? "";
   if (!clean) throw new Error(`${flag} is required`);
   return clean;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

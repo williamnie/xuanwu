@@ -5,6 +5,7 @@ import type { GuardianAlertDelivery } from "./guardianAlertDelivery.ts";
 import { ROUTABLE_INTENT_SQL, suppressUnroutableLifecycleIntents } from "./guardianWatchdogMaintenance.ts";
 import { writeGuardianWatchdogAlerts, type WatchdogAlertWriteResult } from "./guardianWatchdogAlerts.ts";
 import { expirePendingPiActionApprovals } from "./mcpApprovalExpiry.ts";
+import { isoSeconds } from "../util/values.ts";
 
 export type PiGuardianWatchdogComponent =
   "approval" | "coordinator" | "digest" | "inbox" | "outbox" | "pi_runtime" | "scheduler";
@@ -162,11 +163,11 @@ function watchdogContext(db: RunnerDatabase, input: PiGuardianWatchdogInput): Pi
   const staleAfterMs = positiveMs(input.staleAfterMs, DEFAULT_STALE_AFTER_MS);
   const previousStatus = getPiGuardianWatchdogStatus(db);
   return {
-    cutoffText: iso(new Date(now.getTime() - staleAfterMs)),
+    cutoffText: isoSeconds(new Date(now.getTime() - staleAfterMs)),
     db,
     limit: positiveLimit(input.limit),
     now,
-    nowText: iso(now),
+    nowText: isoSeconds(now),
     previousLastSeenAt: previousStatus?.last_seen_at ?? "",
     previousLastSuccessAt: previousStatus?.last_success_at ?? "",
     schedulerStaleAfterMs: positiveMs(input.schedulerStaleAfterMs, DEFAULT_SCHEDULER_STALE_AFTER_MS),
@@ -366,10 +367,6 @@ function asArray(value: PiGuardianWatchdogCheck | PiGuardianWatchdogCheck[]): Pi
 }
 
 function safeError(error: unknown): string { return redactAuditText(error instanceof Error ? error.message : String(error)); }
-
-function iso(value: Date): string {
-  return value.toISOString().replace(/\.\d{3}Z$/, "Z");
-}
 
 function positiveLimit(value: unknown): number {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? Math.min(value, 100) : DEFAULT_LIMIT;

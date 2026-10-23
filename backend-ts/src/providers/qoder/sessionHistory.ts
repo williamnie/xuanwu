@@ -17,6 +17,7 @@ import {
   type ProviderSessionTurn,
   type ProviderSessionView
 } from "../core/sessionView.ts";
+import { cleanString, objectValue } from "../../util/values.ts";
 
 const PROVIDER = "qoder" as const;
 const QODER_HISTORY_PAGE_SIZE = 100;
@@ -118,7 +119,7 @@ export function assertQoderSessionHistoryIdentity(
     throw new Error(`Qoder session ${expected} resolved to mismatched history ${info.sessionId}`);
   }
   for (const message of messages) {
-    const observed = stringValue(recordValue(message).session_id);
+    const observed = cleanString(objectValue(message).session_id);
     if (observed && observed !== expected) {
       throw new Error(`Qoder session ${expected} transcript contains mismatched history ${observed}`);
     }
@@ -128,12 +129,12 @@ export function assertQoderSessionHistoryIdentity(
 export function qoderTranscriptTurns(messages: SessionMessage[]): ProviderSessionTurn[] {
   const turns: ProviderSessionTurn[] = [];
   messages.forEach((entry, entryIndex) => {
-    const raw = recordValue(entry);
+    const raw = objectValue(entry);
     const items = transcriptItems(raw, entryIndex);
     if (items.length === 0) return;
-    const startsUserTurn = stringValue(raw.type) === "user" && items.some((item) => item.type === "userMessage");
+    const startsUserTurn = cleanString(raw.type) === "user" && items.some((item) => item.type === "userMessage");
     if (startsUserTurn || turns.length === 0) {
-      turns.push({ id: stringValue(raw.uuid) || `turn-${turns.length + 1}`, items: [] });
+      turns.push({ id: cleanString(raw.uuid) || `turn-${turns.length + 1}`, items: [] });
     }
     turns.at(-1)!.items.push(...items);
   });
@@ -141,12 +142,12 @@ export function qoderTranscriptTurns(messages: SessionMessage[]): ProviderSessio
 }
 
 function transcriptItems(entry: Record<string, unknown>, entryIndex: number): Array<Record<string, unknown>> {
-  const type = stringValue(entry.type);
-  const message = recordValue(entry.message);
+  const type = cleanString(entry.type);
+  const message = objectValue(entry.message);
   const content = typeof message.content === "string"
     ? [{ type: "text", text: message.content }]
     : Array.isArray(message.content) ? message.content : [];
-  const items = content.flatMap((value, index) => contentItem(entry, recordValue(value), `${entryID(entry, entryIndex)}:${index}`));
+  const items = content.flatMap((value, index) => contentItem(entry, objectValue(value), `${entryID(entry, entryIndex)}:${index}`));
   if (type === "user" && entry.tool_use_result !== undefined && !items.some((item) => item.type === "custom_tool_call_output")) {
     items.push(toolResultItem(entryID(entry, entryIndex), entry.tool_use_result));
   }
@@ -164,19 +165,19 @@ function contentItem(
   block: Record<string, unknown>,
   fallbackID: string
 ): Array<Record<string, unknown>> {
-  const entryType = stringValue(entry.type);
-  const blockType = stringValue(block.type);
-  const id = stringValue(block.id) || stringValue(block.tool_use_id) || fallbackID;
-  const agentID = stringValue(entry.parent_agent_id);
+  const entryType = cleanString(entry.type);
+  const blockType = cleanString(block.type);
+  const id = cleanString(block.id) || cleanString(block.tool_use_id) || fallbackID;
+  const agentID = cleanString(entry.parent_agent_id);
   if (blockType === "text") {
-    const text = redactSensitiveText(stringValue(block.text));
+    const text = redactSensitiveText(cleanString(block.text));
     if (!text) return [];
     return [entryType === "assistant"
       ? compactObject({ id, type: "agentMessage", text, subagent_id: agentID })
       : { id, type: "userMessage", content: [{ type: "input_text", text }] }];
   }
   if (["thinking", "reasoning"].includes(blockType)) {
-    const text = redactSensitiveText(firstNonEmpty(stringValue(block.thinking), stringValue(block.text), historyText(block.content)));
+    const text = redactSensitiveText(firstNonEmpty(cleanString(block.thinking), cleanString(block.text), historyText(block.content)));
     return text ? [{ id, type: "reasoning", content: [{ type: "text", text }] }] : [];
   }
   if (blockType === "tool_use") return [toolUseItem(id, block)];
@@ -185,14 +186,14 @@ function contentItem(
 }
 
 function toolUseItem(id: string, block: Record<string, unknown>): Record<string, unknown> {
-  const name = stringValue(block.name) || "tool";
-  const input = recordValue(redactRegisteredSecrets(recordValue(block.input)));
+  const name = cleanString(block.name) || "tool";
+  const input = objectValue(redactRegisteredSecrets(objectValue(block.input)));
   if (name === "Bash") {
     return {
       id,
       type: "commandExecution",
-      command: redactSensitiveText(firstNonEmpty(stringValue(input.command), stringValue(input.cmd))),
-      cwd: redactSensitiveText(stringValue(input.cwd)),
+      command: redactSensitiveText(firstNonEmpty(cleanString(input.command), cleanString(input.cmd))),
+      cwd: redactSensitiveText(cleanString(input.cwd)),
       text: "",
       status: "completed"
     };
@@ -201,7 +202,7 @@ function toolUseItem(id: string, block: Record<string, unknown>): Record<string,
     return {
       id,
       type: "fileChange",
-      path: redactSensitiveText(firstNonEmpty(stringValue(input.file_path), stringValue(input.path), stringValue(input.notebook_path))),
+      path: redactSensitiveText(firstNonEmpty(cleanString(input.file_path), cleanString(input.path), cleanString(input.notebook_path))),
       text: safeHistoryJSON(input),
       status: "completed"
     };
@@ -219,9 +220,9 @@ function toolUseItem(id: string, block: Record<string, unknown>): Record<string,
 }
 
 function toolResultItem(id: string, value: unknown): Record<string, unknown> {
-  const record = recordValue(value);
+  const record = objectValue(value);
   return {
-    id: stringValue(record.tool_use_id) || id,
+    id: cleanString(record.tool_use_id) || id,
     type: "custom_tool_call_output",
     output: historyText(record.content ?? value),
     status: record.is_error === true ? "failed" : "completed"
@@ -229,27 +230,27 @@ function toolResultItem(id: string, value: unknown): Record<string, unknown> {
 }
 
 function systemItem(entry: Record<string, unknown>, entryIndex: number): Record<string, unknown> | null {
-  const subtype = stringValue(entry.subtype);
+  const subtype = cleanString(entry.subtype);
   const id = entryID(entry, entryIndex);
   if (subtype.startsWith("task_")) {
     return compactObject({
       id,
       type: "subagent",
-      name: firstNonEmpty(stringValue(entry.subagent_type), "Qoder subagent"),
-      task_id: stringValue(entry.task_id),
-      status: firstNonEmpty(stringValue(entry.status), stringValue(recordValue(entry.patch).status), "running"),
-      text: redactSensitiveText(firstNonEmpty(stringValue(entry.summary), stringValue(entry.description), stringValue(recordValue(entry.patch).error))),
-      usage: redactRegisteredSecrets(recordValue(entry.usage))
+      name: firstNonEmpty(cleanString(entry.subagent_type), "Qoder subagent"),
+      task_id: cleanString(entry.task_id),
+      status: firstNonEmpty(cleanString(entry.status), cleanString(objectValue(entry.patch).status), "running"),
+      text: redactSensitiveText(firstNonEmpty(cleanString(entry.summary), cleanString(entry.description), cleanString(objectValue(entry.patch).error))),
+      usage: redactRegisteredSecrets(objectValue(entry.usage))
     });
   }
   if (subtype === "permission_denied") {
     return compactObject({
       id,
       type: "permission",
-      name: stringValue(entry.tool_name),
+      name: cleanString(entry.tool_name),
       status: "denied",
-      text: redactSensitiveText(firstNonEmpty(stringValue(entry.message), stringValue(entry.decision_reason))),
-      tool_use_id: stringValue(entry.tool_use_id)
+      text: redactSensitiveText(firstNonEmpty(cleanString(entry.message), cleanString(entry.decision_reason))),
+      tool_use_id: cleanString(entry.tool_use_id)
     });
   }
   if (["init", "status", "session_state_changed", "session_title_changed"].includes(subtype)) return null;
@@ -260,8 +261,8 @@ function unknownItem(entry: Record<string, unknown>, entryIndex: number, explici
   return {
     id: explicitID || entryID(entry, entryIndex),
     type: "qoderNative",
-    native_type: stringValue(entry.type) || "unknown",
-    native_subtype: stringValue(entry.subtype),
+    native_type: cleanString(entry.type) || "unknown",
+    native_subtype: cleanString(entry.subtype),
     text: safeHistoryJSON(entry)
   };
 }
@@ -276,18 +277,18 @@ function qoderHistoryExtensions(messages: SessionMessage[]): Record<string, unkn
   let sessionCredits: number | undefined;
   let lastRequestCredits: number | undefined;
   for (const entry of messages) {
-    const raw = recordValue(entry);
-    qodercliVersion = stringValue(raw.qodercli_version) || qodercliVersion;
-    protocolVersion = stringValue(raw.protocol_version) || protocolVersion;
-    const usage = recordValue(recordValue(raw.message).usage);
-    const resultUsage = recordValue(raw.usage);
+    const raw = objectValue(entry);
+    qodercliVersion = cleanString(raw.qodercli_version) || qodercliVersion;
+    protocolVersion = cleanString(raw.protocol_version) || protocolVersion;
+    const usage = objectValue(objectValue(raw.message).usage);
+    const resultUsage = objectValue(raw.usage);
     const assistantCredits = finiteNumber(usage.credits);
     if (assistantCredits !== undefined) {
       requestCredits += assistantCredits;
       requestCreditCount += 1;
       lastRequestCredits = assistantCredits;
     }
-    if (stringValue(raw.type) === "result") {
+    if (cleanString(raw.type) === "result") {
       sessionCredits = finiteNumber(raw.total_credits) ?? sessionCredits;
       lastRequestCredits = finiteNumber(resultUsage.credits) ?? lastRequestCredits;
     }
@@ -345,17 +346,17 @@ function sessionInfoExtensions(info: SDKSessionInfo | undefined): Record<string,
 function latestModel(messages: SessionMessage[]): string {
   let model = "";
   for (const entry of messages) {
-    const raw = recordValue(entry);
-    model = stringValue(recordValue(raw.message).model) || stringValue(raw.model) || model;
+    const raw = objectValue(entry);
+    model = cleanString(objectValue(raw.message).model) || cleanString(raw.model) || model;
   }
   return model;
 }
 
 function firstUserText(messages: SessionMessage[]): string {
   for (const entry of messages) {
-    const raw = recordValue(entry);
-    if (stringValue(raw.type) !== "user") continue;
-    const text = historyText(recordValue(raw.message).content);
+    const raw = objectValue(entry);
+    if (cleanString(raw.type) !== "user") continue;
+    const text = historyText(objectValue(raw.message).content);
     if (text) return text;
   }
   return "";
@@ -365,8 +366,8 @@ function historyText(value: unknown): string {
   if (typeof value === "string") return redactSensitiveText(value);
   if (Array.isArray(value)) {
     return value.map((item) => {
-      const record = recordValue(item);
-      return firstNonEmpty(stringValue(record.text), historyText(record.content));
+      const record = objectValue(item);
+      return firstNonEmpty(cleanString(record.text), historyText(record.content));
     }).filter(Boolean).join("\n");
   }
   if (value && typeof value === "object") return safeHistoryJSON(value);
@@ -382,7 +383,7 @@ function safeHistoryJSON(value: unknown): string {
 }
 
 function entryID(entry: Record<string, unknown>, index: number): string {
-  return stringValue(entry.uuid) || `qoder-history-${index + 1}`;
+  return cleanString(entry.uuid) || `qoder-history-${index + 1}`;
 }
 
 function tokenNumbers(value: Record<string, unknown>): Record<string, number> {
@@ -400,14 +401,6 @@ function millisecondsToSeconds(value: unknown): number {
 
 function finiteNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function firstNonEmpty(...values: string[]): string {

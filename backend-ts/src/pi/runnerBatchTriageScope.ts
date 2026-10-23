@@ -1,3 +1,5 @@
+import { cleanString } from "../util/values.ts";
+
 type BatchTriageScopeKind = "all" | "issue_refs";
 export type BatchTriageScope = {
   issueIds: number[];
@@ -50,8 +52,4 @@ function unique(values: number[]): number[] {
 
 function scope(kind: BatchTriageScopeKind, issueIds: number[]): BatchTriageScope {
   return { issueIds, kind };
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

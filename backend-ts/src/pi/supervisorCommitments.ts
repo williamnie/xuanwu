@@ -14,6 +14,7 @@ import {
 } from "./issueCompletionAutomation.ts";
 import { createNotification } from "../db/repositories/notifications.ts";
 import { getIssueAsWork } from "../domain/work/issueAdapter.ts";
+import { cleanString, unique } from "../util/values.ts";
 
 const SUPERVISOR_COMMITMENT_SCHEMA_VERSION = "xw.supervisor-commitment.v1" as const;
 export const SUPERVISOR_COMMITMENT_RETENTION = "operational_not_memory" as const;
@@ -107,7 +108,7 @@ export function createSupervisorCommitment(
     throw new Error(`completion watch ${watch.id} conflicts with a non-commitment watch`);
   }
   recordCommitmentEventOnce(db, watch, {
-    actor: cleanText(input.requested_by) || "supervisor",
+    actor: cleanString(input.requested_by) || "supervisor",
     conversationID: originConversationID,
     decision: "active",
     eventType: "supervisor_commitment_created",
@@ -129,11 +130,11 @@ export function cancelSupervisorCommitment(
   const write = db.transaction(() => {
     const cancelled = cancelPiIssueCompletionWatch(db, watch.id, marker);
     recordCommitmentEventOnce(db, cancelled, {
-      actor: cleanText(input.actor) || "user",
-      conversationID: cleanText(input.conversationID) || watch.origin_conversation_id,
+      actor: cleanString(input.actor) || "user",
+      conversationID: cleanString(input.conversationID) || watch.origin_conversation_id,
       decision: forgotten ? "forgotten" : "cancelled",
       eventType,
-      reason: cleanText(input.reason) || marker
+      reason: cleanString(input.reason) || marker
     });
     return mutationResult(db, watch.id);
   });
@@ -153,11 +154,11 @@ function resumeSupervisorCommitment(
   const conversationID = requiredText(input.conversationID, "conversationID");
   if (!getPiConversation(db, conversationID)) throw new Error(`PI conversation ${conversationID} not found`);
   recordCommitmentEventOnce(db, watch, {
-    actor: cleanText(input.actor) || "user",
+    actor: cleanString(input.actor) || "user",
     conversationID,
     decision: "active",
     eventType: "supervisor_commitment_resumed",
-    reason: cleanText(input.reason) || "Continue unfinished Work in this conversation"
+    reason: cleanString(input.reason) || "Continue unfinished Work in this conversation"
   });
   return projectSupervisorCommitment(db, watch);
 }
@@ -167,7 +168,7 @@ export function linkSupervisorCommitmentsForConversation(
   input: { conversationID: string; projectID?: string; workIDs: string[] }
 ): SupervisorCommitment[] {
   const conversationID = requiredText(input.conversationID, "conversationID");
-  const targetWorkIDs = new Set(input.workIDs.map(cleanText).filter(Boolean));
+  const targetWorkIDs = new Set(input.workIDs.map(cleanString).filter(Boolean));
   if (targetWorkIDs.size === 0) return [];
   const linked: SupervisorCommitment[] = [];
   for (const commitment of listSupervisorCommitments(db, {
@@ -193,7 +194,7 @@ function expireSupervisorCommitmentIfDue(
   watchID: string,
   currentTime = new Date()
 ): SupervisorCommitmentMutationResult | null {
-  const watch = getPiIssueCompletionWatch(db, cleanText(watchID));
+  const watch = getPiIssueCompletionWatch(db, cleanString(watchID));
   if (!watch || watch.status !== "active" || !isSupervisorCommitmentWatch(watch)) return null;
   const dueAt = commitmentMetadata(watch.condition)?.due_at ?? "";
   if (dueAt === "" || Date.parse(dueAt) > currentTime.getTime()) return null;
@@ -228,7 +229,7 @@ export function recordSupervisorCommitmentTerminalOutcome(
   db: RunnerDatabase,
   watchID: string
 ): SupervisorCommitment | null {
-  const watch = getPiIssueCompletionWatch(db, cleanText(watchID));
+  const watch = getPiIssueCompletionWatch(db, cleanString(watchID));
   if (!watch || !isSupervisorCommitmentWatch(watch)) return null;
   const commitment = projectSupervisorCommitment(db, watch);
   if (!["cancelled", "completed", "failed"].includes(commitment.status)) return commitment;
@@ -247,8 +248,8 @@ export function listSupervisorCommitments(
   db: RunnerDatabase,
   input: SupervisorCommitmentListInput = {}
 ): SupervisorCommitment[] {
-  const projectID = cleanText(input.projectID);
-  const conversationID = cleanText(input.conversationID);
+  const projectID = cleanString(input.projectID);
+  const conversationID = cleanString(input.conversationID);
   const statuses = new Set(input.statuses ?? []);
   const limit = boundedLimit(input.limit);
   return listPiIssueCompletionWatches(db, { limit: 100, projectId: projectID })
@@ -457,8 +458,8 @@ function mutationResult(db: RunnerDatabase, watchID: string): SupervisorCommitme
 }
 
 function requireCommitmentWatch(db: RunnerDatabase, watchID: string): PiIssueCompletionWatch {
-  const watch = getPiIssueCompletionWatch(db, cleanText(watchID));
-  if (!watch) throw new Error(`PI issue completion watch ${cleanText(watchID)} not found`);
+  const watch = getPiIssueCompletionWatch(db, cleanString(watchID));
+  if (!watch) throw new Error(`PI issue completion watch ${cleanString(watchID)} not found`);
   if (!isSupervisorCommitmentWatch(watch)) throw new Error(`completion watch ${watch.id} is not a Supervisor commitment`);
   return watch;
 }
@@ -498,14 +499,14 @@ function objectValue(value: unknown): Record<string, unknown> {
 }
 
 function optionalTimestamp(value: unknown, field: string): string {
-  const text = cleanText(value);
+  const text = cleanString(value);
   if (text === "") return "";
   if (!Number.isFinite(Date.parse(text))) throw new Error(`${field} must be an RFC3339 timestamp`);
   return new Date(text).toISOString();
 }
 
 function requiredText(value: unknown, field: string): string {
-  const text = cleanText(value);
+  const text = cleanString(value);
   if (text === "") throw new Error(`${field} is required for a Supervisor commitment`);
   return text;
 }
@@ -514,12 +515,4 @@ function boundedLimit(value: unknown): number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0
     ? Math.min(value, MAX_LIMIT)
     : DEFAULT_LIMIT;
-}
-
-function unique(values: string[]): string[] {
-  return [...new Set(values)];
-}
-
-function cleanText(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

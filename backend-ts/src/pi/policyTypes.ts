@@ -1,3 +1,5 @@
+import { cleanString } from "../util/values.ts";
+
 export const PI_WORK_MODES = ["manual", "attended", "delegated", "autonomous"] as const;
 export const PI_RISK_LEVELS = ["safe", "confirm", "high", "forbidden"] as const;
 export const PI_GATE_DECISIONS = ["execute", "ask", "deny", "snooze"] as const;
@@ -115,8 +117,4 @@ function timeMs(value: unknown): number | undefined {
   if (text === "") return undefined;
   const ms = Date.parse(text);
   return Number.isFinite(ms) ? ms : undefined;
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
