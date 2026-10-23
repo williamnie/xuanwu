@@ -8,9 +8,9 @@ import {
   completeRunAttemptStart,
   failRunAttemptStart,
   prepareRunAttempt,
-  readRunRevision,
-  type PreparedProviderMutation
+  readRunRevision
 } from "../../domain/run/service.ts";
+import type { PreparedProviderMutation } from "../../domain/run/lifecycleStore.ts";
 import { createIssueSupervisorEvent, type PiAction } from "../../db/repositories/pi.ts";
 import { getProject } from "../../db/repositories/projects.ts";
 import { updatePiRecoveryAttemptStatus } from "../../db/repositories/pi/recoveryAttempts.ts";

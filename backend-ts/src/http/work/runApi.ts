@@ -16,11 +16,13 @@ import {
   failRunInterrupt,
   prepareRunAttempt,
   prepareRunInterrupt,
-  requestNewRun,
+  requestNewRun
+} from "../../domain/run/service.ts";
+import {
   RunCommandConflictError,
   RunCommandValidationError,
   type PreparedProviderMutation
-} from "../../domain/run/service.ts";
+} from "../../domain/run/lifecycleStore.ts";
 import {
   RUN_STATUSES,
   type RunID,

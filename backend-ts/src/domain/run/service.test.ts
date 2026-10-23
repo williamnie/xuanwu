@@ -7,8 +7,8 @@ import { createIssueRun, updateIssueRuntime } from "../../db/repositories/issueR
 import { projectNormalizedRunEvent } from "../../db/repositories/runAttemptEvents.ts";
 import { normalizedRunEvent, providerRunCost } from "../../providers/runEvents.ts";
 import type { RunTransitionAudit } from "./contracts.ts";
+import { RUN_LIFECYCLE_EVENT_TYPES } from "./lifecycleStore.ts";
 import {
-  RUN_LIFECYCLE_EVENT_TYPES,
   auditRunRevisionIssueScope,
   completeRunAttemptStart,
   completeRunInterrupt,

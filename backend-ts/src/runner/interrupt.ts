@@ -9,9 +9,9 @@ import {
   completeRunInterrupt,
   failRunInterrupt,
   prepareRunInterrupt,
-  readRunRevision,
-  type PreparedProviderMutation
+  readRunRevision
 } from "../domain/run/service.ts";
+import type { PreparedProviderMutation } from "../domain/run/lifecycleStore.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { issueTimestamp } from "../db/repositories/issueCreate.ts";
 import { getIssue, listIssueRuns, listIssues, type Issue } from "../db/repositories/issues.ts";
