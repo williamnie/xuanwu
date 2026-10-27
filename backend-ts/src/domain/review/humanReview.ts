@@ -26,6 +26,7 @@ import {
   type PiAcceptanceActivity
 } from "./piAcceptanceActivity.ts";
 import { cleanString, errorMessage, objectValue, stringList } from "../../util/values.ts";
+import { providersForProjectID } from "../../nodes/remoteExecution.ts";
 
 export const HUMAN_REVIEW_EVENT_TYPES = {
   requested: "issue.human_review_requested.v1",
@@ -437,7 +438,7 @@ async function resumeRevisionInSameSession(
   if (!previousRun) throw new Error("无法继续原 Session：未找到带 provider_session_id 的历史 Run");
   const providerID = cleanString(previousRun.provider);
   if (!isExecutorProviderId(providerID)) throw new Error(`无法继续原 Session：provider "${providerID}" 不受支持`);
-  const provider = runtime.providers?.[providerID];
+  const provider = providersForProjectID(db, runtime.providers, issue.project_id)?.[providerID];
   if (!provider?.sendSessionMessage || !provider.capabilities.includes("resume_session")) {
     throw new Error(`provider "${providerID}" 不支持在原 Session 中继续调整`);
   }

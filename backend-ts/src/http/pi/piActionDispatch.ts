@@ -57,6 +57,7 @@ import { registerRunRoutes } from "../work/runApi.ts";
 import { registerWorkRoutes } from "../work/workApi.ts";
 import { createRouter } from "../router.ts";
 import { cleanString, objectValue } from "../../util/values.ts";
+import { providersForProjectID } from "../../nodes/remoteExecution.ts";
 
 export type ProjectLoopStarter = (
   runtime: ProjectLoopRuntime,
@@ -566,7 +567,7 @@ function startProjectLoopWhenAllowed(
   const project = getProject(context.database, projectID);
   const providerID = project?.provider ?? "";
   if (!project || !isExecutorProviderId(providerID)) return;
-  if (!context.providers?.[providerID]?.capabilities.includes("issue_execution")) return;
+  if (!providersForProjectID(context.database, context.providers, project.id)?.[providerID]?.capabilities.includes("issue_execution")) return;
   if (!shouldStartProjectLoop(project, options)) return;
   const starter = context.startProjectLoop ?? defaultStartProjectLoop;
   starter({ bus: context.bus, database: context.database, providers: context.providers }, project.id, options);
@@ -628,9 +629,10 @@ async function steerSession(
   const sessionID = sessionProviderSessionID(payload);
   const prompt = cleanString(payload.prompt);
   if (prompt === "") throw new Error("prompt is required");
-  const provider = context.providers?.[providerID];
-  if (!provider?.sendSessionMessage) throw new Error(`provider "${providerID}" 不支持 capability "resume_session"`);
   const session = getAgentSession(context.database, `${providerID}:${sessionID}`);
+  const sessionIssue = session?.issue_id ? getIssue(context.database, session.issue_id) : null;
+  const provider = providersForProjectID(context.database, context.providers, sessionIssue?.project_id ?? "")?.[providerID];
+  if (!provider?.sendSessionMessage) throw new Error(`provider "${providerID}" 不支持 capability "resume_session"`);
   assertWorkspaceWaitSessionControl(context.database, providerID, sessionID);
   const run = session?.issue_id ? listIssueRuns(context.database, session.issue_id).at(-1) : undefined;
   const memoryPrompt = run?.ended_at === "" && run.provider === providerID && run.provider_session_id === sessionID

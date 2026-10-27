@@ -30,6 +30,7 @@ import { githubWorkAcceptanceProblem, githubWorkExecutionContext } from "../inte
 import { assertPriorEvidenceReferences, assertPriorExecutionEvidenceFresh, assertPriorExecutionEvidenceLedgerFresh } from "../domain/acceptance/priorExecutionEvidence.ts";
 import { issueExecutionContext } from "../domain/work/issueExecutionAuthority.ts";
 import { cleanString, errorMessage, nonNegativeInteger, objectValue } from "../util/values.ts";
+import { providersForProjectID } from "../nodes/remoteExecution.ts";
 
 const PI_ACCEPTANCE_DECISION_EVENT = "issue.pi_acceptance_decision.v1";
 const PI_ACCEPTANCE_APPLIED_EVENT = "issue.pi_acceptance_applied.v1";
@@ -228,7 +229,8 @@ async function continueSameSession(
   }
   const providerID = previousRun.provider;
   if (!isExecutorProviderId(providerID)) throw new Error(`unsupported provider for same-session continuation: ${providerID}`);
-  const provider = runtime.providers?.[providerID];
+  // 远程项目在其节点上续跑。
+  const provider = providersForProjectID(db, runtime.providers, issue.project_id)?.[providerID];
   if (!provider?.recover || !provider.capabilities.includes("resume_session")) {
     return requestUser(runtime, card, {
       ...decision,
@@ -339,7 +341,8 @@ async function retryInNewSession(
   const previousRun = listIssueRuns(db, issue.id).find((run) => run.id === card.run.id);
   const providerID = previousRun?.provider || project.provider;
   if (!isExecutorProviderId(providerID)) throw new Error(`unsupported provider for retry: ${providerID}`);
-  const provider = runtime.providers?.[providerID];
+  // 远程项目的重试同样派回其节点。
+  const provider = providersForProjectID(db, runtime.providers, issue.project_id)?.[providerID];
   if (!provider?.capabilities.includes("issue_execution")) {
     return requestUser(runtime, card, {
       ...decision,

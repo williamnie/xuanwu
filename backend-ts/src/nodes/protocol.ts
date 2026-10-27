@@ -1,5 +1,5 @@
 import type { NodeInfo } from "../db/repositories/nodes.ts";
-import type { ApprovalDecision, InterruptInput, ProviderEvent, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
+import type { ApprovalDecision, InterruptInput, ProviderEvent, ProviderRunInput, ProviderRunResult, SessionRef } from "../providers/types.ts";
 
 /** 节点主动发起的三条通道；中心不回连节点。 */
 export const NODE_HELLO_PATH = "/api/nodes/agent/hello";
@@ -36,8 +36,11 @@ export type NodeFilePayload = { data: string; path: string };
 export type NodeRunStartParams = {
   images?: Array<{ data: string; detail?: "high" | "original"; name: string }>;
   input: Omit<ProviderRunInput, "images" | "onEvent" | "skillPackages">;
+  /** recover：在原会话中续跑（ExecutorProvider.recover），需携带 session。 */
+  mode?: "recover" | "run";
   providerId: string;
   runRef: string;
+  session?: SessionRef;
   skillPackages?: Array<{ directory: string; files: NodeFilePayload[] }>;
 };
 export type NodeRunInterruptParams = { input: InterruptInput; providerId: string };

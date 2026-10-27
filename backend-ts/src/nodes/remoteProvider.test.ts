@@ -38,7 +38,7 @@ describe("remote executor provider", () => {
     const { remote } = await connectNode();
     expect(remote.id).toBe(asProviderId("codex"));
     // 会话类能力 v1 不经节点开放。
-    expect(remote.capabilities).toEqual(["issue_execution", "interrupt", "approvals", "model_list"]);
+    expect(remote.capabilities).toEqual(["issue_execution", "interrupt", "approvals", "model_list", "resume_session"]);
     expect(remote.interruptScope).toBe("turn");
     expect(remote.manifest?.id).toBe(asProviderId("codex"));
     expect(remote.policyAdapter).toBeDefined();

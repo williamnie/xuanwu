@@ -10,6 +10,7 @@ import {
   asProviderId,
   ProviderInterruptedError,
   type ExecutorProvider,
+  type ProviderRecoveryInput,
   type ProviderRunInput,
   type SessionRef
 } from "../providers/types.ts";
@@ -25,40 +26,49 @@ export const TEST_ADMIN_TOKEN = "admin";
 /** 可控的节点本机 provider：记录收到的输入；prompt 含 [[fail]] 时报错，含 [[wait]] 时挂起直到被中断，含 [[late]] 时先返回再推送后续事件，含 [[edit]] 时在工作区写 edited.txt。 */
 export function fakeNodeProvider() {
   const received: ProviderRunInput[] = [];
+  const recovered: ProviderRecoveryInput[] = [];
   const approvals: Array<[string, unknown]> = [];
   let interruptActive: (() => void) | undefined;
+  /** run 与 recover 共用的脚本：按 prompt 里的标记决定行为。 */
+  const execute = async (input: ProviderRunInput, session: SessionRef) => {
+    input.onEvent?.({ type: "turn.started", provider: "codex", session });
+    input.onEvent?.({ type: "agent.message", provider: "codex", session, text: "hello from node" });
+    if (input.prompt.includes("[[fail]]")) throw new Error("model exploded");
+    // 模拟编程工具在节点的工作区里改文件。
+    if (input.prompt.includes("[[edit]]")) await writeFile(join(input.cwd, "edited.txt"), "made on the node\n");
+    if (input.prompt.includes("[[late]]") || input.prompt.includes("[[slow]]")) {
+      // 模拟 Codex：run() 在一轮开始时返回，消息与完成信号随后才推送（[[slow]] 推迟到 1.5s 后）。
+      setTimeout(() => {
+        input.onEvent?.({ type: "agent.message", provider: "codex", session, text: "late message" });
+        input.onEvent?.({
+          type: "turn.completed",
+          provider: "codex",
+          session,
+          status: "completed",
+          raw: { method: "turn/completed" },
+          runEvent: normalizedRunEvent({ kind: "completed", method: "turn/completed", outcome: "succeeded", provider: "codex", session })
+        });
+      }, input.prompt.includes("[[slow]]") ? 1_500 : 50);
+    }
+    if (input.prompt.includes("[[wait]]")) {
+      await new Promise<void>((_resolve, reject) => {
+        interruptActive = () => reject(new ProviderInterruptedError("interrupted by user"));
+      });
+    }
+    return { runId: `run-on-node-${input.issueId}`, session };
+  };
   const provider: ExecutorProvider = {
     id: asProviderId("codex"),
-    capabilities: ["issue_execution", "interrupt", "approvals", "sessions", "model_list"],
+    capabilities: ["issue_execution", "interrupt", "approvals", "sessions", "model_list", "resume_session"],
     interruptScope: "turn",
     run: async (input) => {
       received.push(input);
-      const session: SessionRef = { provider: "codex", sessionId: `thread-${input.issueId}`, turnId: `turn-${input.issueId}` };
-      input.onEvent?.({ type: "turn.started", provider: "codex", session });
-      input.onEvent?.({ type: "agent.message", provider: "codex", session, text: "hello from node" });
-      if (input.prompt.includes("[[fail]]")) throw new Error("model exploded");
-      // 模拟编程工具在节点的工作区里改文件。
-      if (input.prompt.includes("[[edit]]")) await writeFile(join(input.cwd, "edited.txt"), "made on the node\n");
-      if (input.prompt.includes("[[late]]") || input.prompt.includes("[[slow]]")) {
-        // 模拟 Codex：run() 在一轮开始时返回，消息与完成信号随后才推送（[[slow]] 推迟到 1.5s 后）。
-        setTimeout(() => {
-          input.onEvent?.({ type: "agent.message", provider: "codex", session, text: "late message" });
-          input.onEvent?.({
-            type: "turn.completed",
-            provider: "codex",
-            session,
-            status: "completed",
-            raw: { method: "turn/completed" },
-            runEvent: normalizedRunEvent({ kind: "completed", method: "turn/completed", outcome: "succeeded", provider: "codex", session })
-          });
-        }, input.prompt.includes("[[slow]]") ? 1_500 : 50);
-      }
-      if (input.prompt.includes("[[wait]]")) {
-        await new Promise<void>((_resolve, reject) => {
-          interruptActive = () => reject(new ProviderInterruptedError("interrupted by user"));
-        });
-      }
-      return { runId: `run-on-node-${input.issueId}`, session };
+      return await execute(input, { provider: "codex", sessionId: `thread-${input.issueId}`, turnId: `turn-${input.issueId}` });
+    },
+    // 原会话续跑：沿用会话，开新的一轮。
+    recover: async (input) => {
+      recovered.push(input);
+      return await execute(input, { ...input.session, turnId: `turn-${input.issueId}-r${recovered.length}` });
     },
     interrupt: async () => interruptActive?.(),
     listModels: async () => [{ id: "node-model", display_name: "Node model" }],
@@ -68,7 +78,7 @@ export function fakeNodeProvider() {
     },
     runtimeStatus: () => ({ active_sessions: 0, api_key_configured: true, mode: "rpc", ready: true, version: "0.99.0" })
   };
-  return { approvals, provider, received };
+  return { approvals, provider, received, recovered };
 }
 
 export type TestNodeHub = {

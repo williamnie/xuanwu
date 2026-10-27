@@ -15,8 +15,10 @@ import {
   ProviderInterruptedError,
   type ExecutorCapability,
   type ExecutorProvider,
+  type ProviderRecoveryInput,
   type ProviderRunInput,
   type ProviderRunResult,
+  type SessionRef,
   type SessionListResult,
   type SessionTurnsListResult
 } from "../providers/types.ts";
@@ -80,6 +82,8 @@ export function createRemoteExecutorProvider(options: RemoteProviderOptions): Ex
     ...(policy ?? {}),
     ...(provider.interrupt_scope ? { interruptScope: provider.interrupt_scope } : {}),
     run: (input) => runRemote(options, input),
+    // 原会话续跑：与 run 同一条事件链路，只是节点调用 provider.recover。
+    ...(capabilities.includes("resume_session") ? { recover: (input: ProviderRecoveryInput) => runRemote(options, input, input.session) } : {}),
     runtimeStatus: () => ({
       active_sessions: 0,
       api_key_configured: false,
@@ -111,7 +115,7 @@ export function createRemoteExecutorProvider(options: RemoteProviderOptions): Ex
   return remote;
 }
 
-function runRemote(options: RemoteProviderOptions, input: ProviderRunInput): Promise<ProviderRunResult> {
+function runRemote(options: RemoteProviderOptions, input: ProviderRunInput, session?: SessionRef): Promise<ProviderRunResult> {
   const { hub, nodeId, provider } = options;
   const runRef = `rr_${randomUUID()}`;
   const graceMs = options.offlineGraceMs ?? DEFAULT_OFFLINE_GRACE_MS;
@@ -159,7 +163,8 @@ function runRemote(options: RemoteProviderOptions, input: ProviderRunInput): Pro
         settle(new NodeOfflineError(`node ${nodeId} stayed offline for ${graceMs}ms during the run`));
       }, graceMs);
     });
-    const { images: _images, onEvent: _onEvent, skillPackages: _skillPackages, ...remoteInput } = input;
+    const { images: _images, onEvent: _onEvent, skillPackages: _skillPackages, ...remoteFields } = input;
+    const { session: _session, ...remoteInput } = remoteFields as typeof remoteFields & { session?: SessionRef };
     // 中心内部以 node:// 形式标识远程项目，发往节点时换成节点上的真实路径；
     // 中心本机的图片与托管 Skill 目录改为随指令下发内容。
     packRunAttachments(input).then((attachments) => {
@@ -167,7 +172,8 @@ function runRemote(options: RemoteProviderOptions, input: ProviderRunInput): Pro
         ...attachments,
         input: { ...remoteInput, cwd: projectLocation(remoteInput.cwd).path },
         providerId: provider.id,
-        runRef
+        runRef,
+        ...(session ? { mode: "recover" as const, session } : {})
       };
       return hub.request(nodeId, "run.start", params, RUN_START_TIMEOUT_MS);
     }).then(() => {

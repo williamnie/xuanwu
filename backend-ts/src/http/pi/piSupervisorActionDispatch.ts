@@ -37,6 +37,8 @@ import type { EventBus } from "../../events/bus.ts";
 import { reconcileCurrentProviderTurn } from "../../runner/providerSessionReconciliation.ts";
 import { recoverSupervisorIssue } from "./piSupervisorProviderRecovery.ts";
 import { cleanString, errorMessage, objectValue } from "../../util/values.ts";
+import { getIssue } from "../../db/repositories/issues.ts";
+import { providersForProjectID } from "../../nodes/remoteExecution.ts";
 
 type ProjectLoopStarter = (
   runtime: ProjectLoopRuntime,
@@ -72,7 +74,7 @@ async function resumeSessionFollowup(
   const providerID = sessionProviderID(payload);
   const sessionID = sessionProviderSessionID(payload);
   const prompt = requiredText(payload.prompt, "prompt");
-  const provider = context.providers?.[providerID];
+  const provider = providersForProjectID(context.database, context.providers, getIssue(context.database, issueID)?.project_id ?? "")?.[providerID];
   assertWorkspaceWaitSessionControl(context.database, providerID, sessionID);
   if (!provider?.recover) throw new Error(`provider "${providerID}" 不支持 managed recovery`);
   const replay = await resolveResumeFollowupReplay(context.database, { action, issueID, payload, provider, providerID, sessionID });
@@ -248,7 +250,7 @@ async function retryIssueNow(
 
 function startRetriedProjectLoop(context: SupervisorDispatchContext, projectID: string): void {
   const project = getProject(context.database, projectID);
-  const provider = project ? context.providers?.[project.provider as ExecutorProviderId] : undefined;
+  const provider = project ? providersForProjectID(context.database, context.providers, project.id)?.[project.provider as ExecutorProviderId] : undefined;
   if (!project || project.auto_run !== 1 || !provider?.capabilities.includes("issue_execution")) return;
   const starter = context.startProjectLoop ?? defaultStartProjectLoop;
   starter({ bus: context.bus, database: context.database, providers: context.providers }, project.id);

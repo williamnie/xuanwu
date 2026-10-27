@@ -13,7 +13,7 @@ import {
 } from "./protocol.ts";
 
 /** 节点向中心开放的能力；会话的创建与续写不开放，只开放读取。 */
-const REMOTE_CAPABILITIES = ["issue_execution", "interrupt", "approvals", "model_list"] as const;
+const REMOTE_CAPABILITIES = ["issue_execution", "interrupt", "approvals", "model_list", "resume_session"] as const;
 type ReadMethod = (typeof NODE_PROVIDER_READ_METHODS)[number];
 
 type ProviderSource = () => Record<string, ExecutorProvider>;
@@ -28,10 +28,11 @@ export function nodeExecutionHandlers(
   const activeRuns = new Set<string>();
   return {
     "run.start": async (params, agent) => {
-      const { images, input, providerId, runRef, skillPackages } = parseRunStart(params);
+      const { images, input, mode, providerId, runRef, session, skillPackages } = parseRunStart(params);
       // 中心可能因超时重发同一指令；运行已在进行时直接确认，不重复启动。
       if (activeRuns.has(runRef)) return { accepted: true };
-      const provider = requireProvider(providers, providerId, "issue_execution");
+      const provider = requireProvider(providers, providerId, mode === "recover" ? "resume_session" : "issue_execution");
+      if (mode === "recover" && !session) throw new Error("run.start recover needs a session");
       const cwd = await agent.resolveAllowedPath(input.cwd);
       const attachments = await materializeRunAttachments(workDir, runRef, { images, skillPackages }, input);
       activeRuns.add(runRef);
@@ -55,7 +56,8 @@ export function nodeExecutionHandlers(
         terminal = true;
         if (returned) finish();
       };
-      void provider.run({ ...input, cwd, onEvent, prompt: attachments.prompt, ...(attachments.images ? { images: attachments.images } : {}) })
+      const runInput = { ...input, cwd, onEvent, prompt: attachments.prompt, ...(attachments.images ? { images: attachments.images } : {}) };
+      void (mode === "recover" ? provider.recover!({ ...runInput, session: session! }) : provider.run(runInput))
         .then((result) => {
           emit({ type: "result", result });
           returned = true;
@@ -116,6 +118,7 @@ function supports(provider: ExecutorProvider, capability: (typeof REMOTE_CAPABIL
   if (capability === "interrupt") return typeof provider.interrupt === "function";
   if (capability === "approvals") return typeof provider.resolveApproval === "function";
   if (capability === "model_list") return typeof provider.listModels === "function";
+  if (capability === "resume_session") return typeof provider.recover === "function";
   return true;
 }
 
@@ -143,6 +146,8 @@ function parseRunStart(params: unknown): NodeRunStartParams {
     providerId,
     runRef,
     ...(Array.isArray(value.images) ? { images: value.images } : {}),
-    ...(Array.isArray(value.skillPackages) ? { skillPackages: value.skillPackages } : {})
+    ...(Array.isArray(value.skillPackages) ? { skillPackages: value.skillPackages } : {}),
+    ...(value.mode === "recover" ? { mode: "recover" as const } : {}),
+    ...(value.session && typeof value.session.sessionId === "string" ? { session: value.session } : {})
   };
 }

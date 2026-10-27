@@ -24,7 +24,7 @@ export type NodeProviderInfo = {
   version?: string;
 };
 
-const NODE_PROVIDER_CAPABILITIES = new Set(["issue_execution", "interrupt", "approvals", "model_list"]);
+const NODE_PROVIDER_CAPABILITIES = new Set(["issue_execution", "interrupt", "approvals", "model_list", "resume_session"]);
 export const NODE_PROVIDER_READ_METHODS = ["listModels", "listSessionTurns", "listSessions", "readSession"] as const;
 const INTERRUPT_SCOPES = new Set(["active", "session", "turn"]);
 
