@@ -9,9 +9,21 @@ export type NodeInfo = {
   allowed_roots: string[];
   hostname: string;
   os: string;
-  providers: Array<{ id: string; ready: boolean; reason?: string; version?: string }>;
+  providers: NodeProviderInfo[];
   version: string;
 };
+
+export type NodeProviderInfo = {
+  capabilities: string[];
+  id: string;
+  interrupt_scope?: "active" | "session" | "turn";
+  ready: boolean;
+  reason?: string;
+  version?: string;
+};
+
+const NODE_PROVIDER_CAPABILITIES = new Set(["issue_execution", "interrupt", "approvals"]);
+const INTERRUPT_SCOPES = new Set(["active", "session", "turn"]);
 
 export type RemoteNode = {
   created_at: string;
@@ -99,8 +111,13 @@ export function normalizeNodeInfo(value: unknown): NodeInfo {
     allowed_roots: roots.map(cleanString).filter((root) => root !== "").slice(0, 32).map((root) => root.slice(0, 1024)),
     hostname: cleanString(source.hostname).slice(0, 255),
     os: cleanString(source.os).slice(0, 64),
-    providers: providers.filter(isRecord).slice(0, 16).map((provider) => ({
+    providers: providers.filter(isRecord).slice(0, 16).map((provider): NodeProviderInfo => ({
+      capabilities: (Array.isArray(provider.capabilities) ? provider.capabilities : [])
+        .filter((capability): capability is string => NODE_PROVIDER_CAPABILITIES.has(String(capability))),
       id: cleanString(provider.id).slice(0, 64),
+      ...(INTERRUPT_SCOPES.has(String(provider.interrupt_scope))
+        ? { interrupt_scope: provider.interrupt_scope as NodeProviderInfo["interrupt_scope"] }
+        : {}),
       ready: provider.ready === true,
       ...(cleanString(provider.reason) === "" ? {} : { reason: cleanString(provider.reason).slice(0, 512) }),
       ...(cleanString(provider.version) === "" ? {} : { version: cleanString(provider.version).slice(0, 64) })

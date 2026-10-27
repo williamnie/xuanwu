@@ -1,4 +1,5 @@
 import type { NodeInfo } from "../db/repositories/nodes.ts";
+import type { ApprovalDecision, InterruptInput, ProviderEvent, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
 
 /** 节点主动发起的三条通道；中心不回连节点。 */
 export const NODE_HELLO_PATH = "/api/nodes/agent/hello";
@@ -24,3 +25,18 @@ export type NodeUpstreamMessage = NodeResponseMessage | NodeEventMessage;
 export type NodeMessagesRequest = { messages: NodeUpstreamMessage[] };
 
 export const NODE_MESSAGES_MAX_BATCH = 256;
+
+/** run.start 的参数：ProviderRunInput 去掉回调与中心本地路径（图片）。 */
+export type NodeRunStartParams = {
+  input: Omit<ProviderRunInput, "images" | "onEvent">;
+  providerId: string;
+  runRef: string;
+};
+export type NodeRunInterruptParams = { input: InterruptInput; providerId: string };
+export type NodeApprovalResolveParams = { decision: ApprovalDecision; providerId: string; requestId: string };
+
+/** 一次远程运行经 event 通道回传的内容：若干 provider 事件，最后以 result 或 error 收尾。 */
+export type NodeRunEvent =
+  | { type: "event"; event: ProviderEvent }
+  | { type: "result"; result: ProviderRunResult }
+  | { type: "error"; interrupted: boolean; message: string };

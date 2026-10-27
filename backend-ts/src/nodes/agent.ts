@@ -50,7 +50,7 @@ export class NodeAgent {
   private readonly hubUrl: string;
   private readonly log: (event: Record<string, unknown>) => void;
   private readonly responses: NodeResponseMessage[] = [];
-  private readonly runEvents = new Map<string, { nextSeq: number; pending: NodeEventMessage[] }>();
+  private readonly runEvents = new Map<string, { finished: boolean; nextSeq: number; pending: NodeEventMessage[] }>();
   private flushing: Promise<void> | undefined;
   private flushAgain = false;
   private flushRetry: ReturnType<typeof setTimeout> | undefined;
@@ -99,7 +99,7 @@ export class NodeAgent {
 
   /** 供命令处理器上报某次运行的事件；seq 在节点内按 runRef 单调递增。 */
   emitRunEvent(runRef: string, event: unknown): void {
-    const run = this.runEvents.get(runRef) ?? { nextSeq: 1, pending: [] };
+    const run = this.runEvents.get(runRef) ?? { finished: false, nextSeq: 1, pending: [] };
     this.runEvents.set(runRef, run);
     run.pending.push({ type: "event", runRef, seq: run.nextSeq, event });
     run.nextSeq += 1;
@@ -107,10 +107,12 @@ export class NodeAgent {
     void this.flush();
   }
 
-  /** 运行结束且事件全部确认后释放缓冲。 */
-  forgetRun(runRef: string): void {
+  /** 标记运行已发出最后一个事件；全部确认后释放缓冲。 */
+  finishRun(runRef: string): void {
     const run = this.runEvents.get(runRef);
-    if (run && run.pending.length === 0) this.runEvents.delete(runRef);
+    if (!run) return;
+    run.finished = true;
+    if (run.pending.length === 0) this.runEvents.delete(runRef);
   }
 
   /** cwd 必须解析（含符号链接）后落在某个 allowedRoot 之内。 */
@@ -226,7 +228,9 @@ export class NodeAgent {
       this.responses.splice(0, responses.length);
       for (const [runRef, seq] of Object.entries(body.acks ?? {})) {
         const run = this.runEvents.get(runRef);
-        if (run) run.pending = run.pending.filter((event) => event.seq > seq);
+        if (!run) continue;
+        run.pending = run.pending.filter((event) => event.seq > seq);
+        if (run.finished && run.pending.length === 0) this.runEvents.delete(runRef);
       }
       if (events.length > 0 && Object.keys(body.acks ?? {}).length === 0) return;
     }

@@ -2,7 +2,10 @@ import { readFile } from "node:fs/promises";
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 import { bunBuildInfo } from "../buildInfo.ts";
+import type { ExecutorProvider } from "../providers/types.ts";
 import { NodeAgent, NodeAgentFatalError, type NodeAgentOptions } from "./agent.ts";
+import { nodeExecutionHandlers, nodeProviderInfo } from "./nodeExecutor.ts";
+import { startNodeProviders } from "./nodeProviders.ts";
 
 export type NodeCliConfig = { allowedRoots: string[]; hubUrl: string; token: string };
 
@@ -26,7 +29,8 @@ export async function runNodeCommand(args: string[], env: Record<string, string 
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n\n${USAGE}`);
     return 2;
   }
-  const agent = new NodeAgent(nodeAgentOptions(config));
+  const registry = await startNodeProviders();
+  const agent = new NodeAgent(nodeAgentOptions(config, () => registry.readyProviders()));
   process.once("SIGINT", () => agent.stop());
   process.once("SIGTERM", () => agent.stop());
   try {
@@ -38,6 +42,8 @@ export async function runNodeCommand(args: string[], env: Record<string, string 
       return 1;
     }
     throw error;
+  } finally {
+    await registry.stopAll();
   }
 }
 
@@ -57,13 +63,14 @@ export async function resolveNodeCliConfig(args: string[], env: Record<string, s
   return { allowedRoots, hubUrl, token };
 }
 
-function nodeAgentOptions(config: NodeCliConfig): NodeAgentOptions {
+function nodeAgentOptions(config: NodeCliConfig, providers: () => Record<string, ExecutorProvider>): NodeAgentOptions {
   if (config.allowedRoots.length === 0) {
     console.warn(JSON.stringify({ event: "node.no_allowed_roots", message: "no --root configured; the hub cannot run agents on this node" }));
   }
   return {
     ...config,
-    info: () => ({ hostname: hostname(), os: process.platform, providers: [], version: bunBuildInfo().version })
+    handlers: nodeExecutionHandlers(providers),
+    info: () => ({ hostname: hostname(), os: process.platform, providers: nodeProviderInfo(providers()), version: bunBuildInfo().version })
   };
 }
 

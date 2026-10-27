@@ -90,6 +90,14 @@
 
 后续版本再引入受限的 `workspace.*` RPC（只读 git 状态、diff）来恢复验收与交付能力。
 
+### 5.5 里程碑 2 实现要点
+
+- 节点握手上报每个 provider 的 `capabilities`（仅 `issue_execution / interrupt / approvals`）、`interrupt_scope`、就绪状态与版本。
+- 中心的 `RemoteExecutorProvider` 使用内置 provider 的**静态** manifest 与策略适配器（`nodes/remoteProvider.ts`），所以执行策略照常在中心解析并记录元数据，即使中心本机没启用该 provider。
+- 节点在执行前再次用 `allowedRoots` 校验 cwd（解析符号链接后判断）。
+- `images` 不发往节点（是中心本地路径），v1 远程运行不带图片。
+- 已知限制：中心进程重启会丢失在途远程运行的 Promise，节点上的运行继续但结果无人接收，由现有 stale 对账判失败；后续版本处理。
+
 ## 6. 内网提醒
 
 中心在节点握手时检查对端地址：
