@@ -26,6 +26,8 @@ export type NodeUpstreamMessage = NodeResponseMessage | NodeEventMessage;
 export type NodeMessagesRequest = { messages: NodeUpstreamMessage[] };
 
 export const NODE_MESSAGES_MAX_BATCH = 256;
+/** 节点会话级事件的保留 runRef：送往中心事件总线，而不是某次运行。 */
+export const NODE_APP_EVENT_STREAM = "app";
 
 /** 远程项目提示里托管 Skill 目录的占位符，节点替换为本机缓存根目录。 */
 export const NODE_SKILL_ROOT_TOKEN = "{{xuanwu-node-skills}}";

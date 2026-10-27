@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { NodeCommand, NodeUpstreamMessage } from "./protocol.ts";
+import { NODE_APP_EVENT_STREAM, type NodeCommand, type NodeUpstreamMessage } from "./protocol.ts";
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
@@ -19,6 +19,7 @@ type PendingRequest = {
 type RunEventListener = (event: unknown, seq: number) => void;
 type StatusListener = (nodeID: string, online: boolean) => void;
 type HelloListener = (nodeID: string, activeRuns: string[]) => void;
+type AppEventListener = (nodeID: string, event: unknown) => void;
 
 export class NodeOfflineError extends Error {
   override readonly name = "NodeOfflineError";
@@ -35,6 +36,7 @@ export class NodeHub {
   private readonly runSeq = new Map<string, number>();
   private readonly statusListeners = new Set<StatusListener>();
   private readonly helloListeners = new Set<HelloListener>();
+  private readonly appEventListeners = new Set<AppEventListener>();
 
   attach(nodeID: string, channel: NodeChannel): () => void {
     const previous = this.channels.get(nodeID);
@@ -83,6 +85,12 @@ export class NodeHub {
     };
   }
 
+  /** 节点的会话级事件（审批请求、会话更新），按节点去重后交给监听者。 */
+  onAppEvent(listener: AppEventListener): () => void {
+    this.appEventListeners.add(listener);
+    return () => this.appEventListeners.delete(listener);
+  }
+
   /** 节点握手时上报其在途运行；中心据此重新接上或收口。 */
   onHello(listener: HelloListener): () => void {
     this.helloListeners.add(listener);
@@ -118,12 +126,16 @@ export class NodeHub {
         this.settle(message.id, message.ok ? undefined : new Error(message.error), message.ok ? message.result : undefined);
         continue;
       }
-      const last = this.runSeq.get(message.runRef) ?? 0;
+      // 会话事件流按节点区分序号，运行事件按全局唯一的 runRef 区分。
+      const appStream = message.runRef === NODE_APP_EVENT_STREAM;
+      const seqKey = appStream ? `${NODE_APP_EVENT_STREAM}:${nodeID}` : message.runRef;
+      const last = this.runSeq.get(seqKey) ?? 0;
       if (message.seq > last) {
-        this.runListeners.get(message.runRef)?.(message.event, message.seq);
-        this.runSeq.set(message.runRef, message.seq);
+        if (appStream) this.emitAppEvent(nodeID, message.event);
+        else this.runListeners.get(message.runRef)?.(message.event, message.seq);
+        this.runSeq.set(seqKey, message.seq);
       }
-      acks[message.runRef] = Math.max(acks[message.runRef] ?? 0, this.runSeq.get(message.runRef) ?? message.seq);
+      acks[message.runRef] = Math.max(acks[message.runRef] ?? 0, this.runSeq.get(seqKey) ?? message.seq);
     }
     return acks;
   }
@@ -150,6 +162,16 @@ export class NodeHub {
     clearTimeout(request.timer);
     if (error) request.reject(error);
     else request.resolve(result);
+  }
+
+  private emitAppEvent(nodeID: string, event: unknown): void {
+    for (const listener of this.appEventListeners) {
+      try {
+        listener(nodeID, event);
+      } catch (error) {
+        console.warn(JSON.stringify({ event: "nodes.app_event_listener_failed", error: String(error) }));
+      }
+    }
   }
 
   private emitStatus(nodeID: string, online: boolean): void {

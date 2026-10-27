@@ -161,7 +161,13 @@
 
 关键端到端测试（`backend-ts/src/nodes/`）：`remoteAcceptance`（节点执行 → 中心经节点取证据与会话 → 自动验收为完成；重试与续跑都回到原节点）、`remoteRecovery`（中心重启接回、节点重启立即失败、节点不归宽限期收口）、`multiNode`（中心 + 两个节点同时执行，各守名额）、`remoteGit`（验收卡看到节点上的改动）。
 
-仍不支持：向进行中的会话追加消息（`sendSessionMessage`，用于人工审核后在原会话调整与 PI steer）——一轮结束后 Codex 的新事件不经原运行的转发链路，需要独立的会话事件通道；对话页在节点上新建会话同理。二者都不在无人值守主流程上。
+### 交互式会话（v2.1）
+
+- **会话事件通道**：节点的 Codex `appEventSink`（审批请求、会话改名）与 Claude 会话事件经保留的 `app` 事件流送回中心，按节点确认与补发，进入中心事件总线——前端会话页实时展示与飞书审批通知与本机一致。
+- **新建与续写**：节点 `provider.session`（`createSession` / `sendSessionMessage`，cwd 校验在 allowedRoots 内）；远程 provider 声明 `sessions` 能力。会话接口按所选项目（新建、列表）或会话所属项目（读取、续写、中断）路由到节点。
+- **回合结束**：与本机一致，续写回合不经运行通道，由监督模块经节点轮询 `listSessionTurns` 发现。
+- **审批**：交互式会话的审批请求不入库，中心在收到节点的 `approval/requested` 事件时记下来源节点，审批按此路由回节点。
+- 测试：`remoteSessions`（对话页在节点新建/列出/续写会话；节点会话的审批进入总线并在节点处理）、`remoteAcceptance`（人工审核要求修改后在节点原会话续写）。
 
 ## 10. 已确认的决定
 

@@ -29,6 +29,23 @@ export function providersForProjectCwd<T extends AnyProviderMap>(providers: T, c
   return (resolver?.(nodeId) ?? {}) as NonNullable<T>;
 }
 
+/** 交互式会话的审批请求不入库，记下它来自哪个节点，审批时据此路由。 */
+const approvalNodes = new Map<string, string>();
+const APPROVAL_ROUTES_LIMIT = 2_000;
+
+export function rememberRemoteApproval(requestId: string, nodeId: string): void {
+  if (requestId === "" || nodeId === "") return;
+  approvalNodes.delete(requestId);
+  approvalNodes.set(requestId, nodeId);
+  if (approvalNodes.size > APPROVAL_ROUTES_LIMIT) approvalNodes.delete(approvalNodes.keys().next().value!);
+}
+
+/** 来自远程节点会话的审批请求返回该节点的 provider；否则原样返回中心的 provider。 */
+export function providersForApprovalRequest<T extends AnyProviderMap>(providers: T, requestId: string): NonNullable<T> | T {
+  const nodeId = approvalNodes.get(requestId);
+  return nodeId ? (resolver?.(nodeId) ?? {}) as NonNullable<T> : providers;
+}
+
 /** 某个节点上报的远程 provider（节点未知或已吊销时为空）。 */
 export function providersForNode(nodeId: string): ProviderMap {
   return resolver?.(nodeId) ?? {};

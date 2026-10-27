@@ -283,11 +283,13 @@ the same node or continues the same session as acceptance decides, unattended. T
 every node have their own concurrency slots. After a hub or node restart, runs still going
 on the node are reattached and runs the node lost are closed at once.
 
+When a human review asks for changes, the task continues in the original session on its node,
+and the chat page can start and continue sessions on remote projects; approval requests from a
+node session appear in the hub's UI and Feishu notifications and are resolved on that node.
+
 The preview targets LAN / Tailscale and is not hardened for the public internet; the UI warns
-when a node connects from a non-private address or runs a different version than the hub.
-Remote projects cannot yet receive extra messages into an ongoing session (adjusting after a
-human review), and the chat page cannot start sessions on a node. See the
-[remote node design](docs/design/remote-agent-plan.md).
+when a node connects from a non-private address or runs a different version than the hub. See
+the [remote node design](docs/design/remote-agent-plan.md).
 
 ## Runtime resource limits
 

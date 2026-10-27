@@ -22,7 +22,7 @@ import { HttpError } from "../errors.ts";
 import { searchProjectReferences } from "./projectReferences.ts";
 import { previewCodexProjects, syncCodexProjects } from "./projectSync.ts";
 import { cleanString } from "../../util/values.ts";
-import { providersForProjectCwd, providersForProjectID } from "../../nodes/remoteExecution.ts";
+import { providersForApprovalRequest, providersForProjectCwd, providersForProjectID } from "../../nodes/remoteExecution.ts";
 
 export type FrontendCompatContext = {
   bus?: EventBus;
@@ -190,7 +190,10 @@ async function resolveApproval(
   const boundProvider = request?.provider.trim() ?? "";
   const target = boundProvider !== "" ? boundProvider : "codex"; // 旧前端无绑定记录的请求按 codex 兼容
   // 远程项目的审批由其节点上的 provider 处理。
-  const providers = providersForProjectID(context.database, context.providers, request?.project_id ?? "");
+  // 交互式会话的审批不入库：按审批事件记下的来源节点路由。
+  const providers = request
+    ? providersForProjectID(context.database, context.providers, request.project_id)
+    : providersForApprovalRequest(context.providers, id);
   const instance = providers?.[target as ExecutorProviderId];
   if (!instance?.resolveApproval) {
     if (boundProvider === "") return { ok: true }; // 兼容：无绑定记录且无 codex provider 时静默成功

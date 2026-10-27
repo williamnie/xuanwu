@@ -1,5 +1,11 @@
-import { NODE_PROVIDER_READ_METHODS, type NodeProviderInfo } from "../db/repositories/nodes.ts";
-import { isProviderInterruptedError, type ExecutorProvider, type ProviderEvent } from "../providers/types.ts";
+import { NODE_PROVIDER_READ_METHODS, NODE_PROVIDER_SESSION_METHODS, type NodeProviderInfo } from "../db/repositories/nodes.ts";
+import {
+  isProviderInterruptedError,
+  type ExecutorProvider,
+  type ProviderEvent,
+  type SessionCreateInput,
+  type SessionMessageInput
+} from "../providers/types.ts";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { NodeCommandHandler } from "./agent.ts";
@@ -12,8 +18,8 @@ import {
   type NodeRunStartParams
 } from "./protocol.ts";
 
-/** 节点向中心开放的能力；会话的创建与续写不开放，只开放读取。 */
-const REMOTE_CAPABILITIES = ["issue_execution", "interrupt", "approvals", "model_list", "resume_session"] as const;
+/** 节点向中心开放的能力。会话事件（审批请求、会话更新）经 NodeAgent.emitAppEvent 送回中心。 */
+const REMOTE_CAPABILITIES = ["issue_execution", "interrupt", "approvals", "model_list", "resume_session", "sessions"] as const;
 type ReadMethod = (typeof NODE_PROVIDER_READ_METHODS)[number];
 
 type ProviderSource = () => Record<string, ExecutorProvider>;
@@ -88,6 +94,19 @@ export function nodeExecutionHandlers(
       if (!provider || typeof fn !== "function") throw new Error(`provider ${String(providerId)} does not support ${String(method)}`);
       return await fn.apply(provider, Array.isArray(args) ? args.slice(0, 2) : []);
     },
+    // 对话页新建会话、人工审核后在原会话续写；cwd 必须落在 allowedRoots 内。
+    "provider.session": async (params, agent) => {
+      const { input, method, providerId } = params as { input?: Record<string, unknown>; method?: string; providerId?: string };
+      if (method !== "createSession" && method !== "sendSessionMessage") throw new Error(`provider.session ${String(method)} is not allowed`);
+      const provider = requireProvider(providers, String(providerId ?? ""), method === "createSession" ? "sessions" : "resume_session");
+      if (typeof provider[method] !== "function" || !input || typeof input !== "object") throw new Error(`provider ${String(providerId)} does not support ${method}`);
+      const cwd = typeof input.cwd === "string" && input.cwd !== "" ? await agent.resolveAllowedPath(input.cwd) : undefined;
+      if (method === "createSession") {
+        if (!cwd) throw new Error("createSession needs a cwd on the node");
+        return await provider.createSession!({ ...(input as unknown as SessionCreateInput), cwd });
+      }
+      return await provider.sendSessionMessage!({ ...(input as unknown as SessionMessageInput), ...(cwd ? { cwd } : {}) });
+    },
     "approval.resolve": async (params) => {
       const { decision, providerId, requestId } = params as NodeApprovalResolveParams;
       const provider = requireProvider(providers, String(providerId ?? ""), "approvals");
@@ -106,6 +125,7 @@ export function nodeProviderInfo(providers: Record<string, ExecutorProvider>): N
       id: provider.id,
       ...(provider.interruptScope ? { interrupt_scope: provider.interruptScope } : {}),
       read_methods: NODE_PROVIDER_READ_METHODS.filter((method) => typeof provider[method] === "function"),
+      session_methods: NODE_PROVIDER_SESSION_METHODS.filter((method) => typeof provider[method] === "function"),
       ready: status?.ready ?? true,
       ...(status?.reason ? { reason: status.reason } : {}),
       ...(status?.version ? { version: status.version } : {})
@@ -119,6 +139,7 @@ function supports(provider: ExecutorProvider, capability: (typeof REMOTE_CAPABIL
   if (capability === "approvals") return typeof provider.resolveApproval === "function";
   if (capability === "model_list") return typeof provider.listModels === "function";
   if (capability === "resume_session") return typeof provider.recover === "function";
+  if (capability === "sessions") return typeof provider.createSession === "function";
   return true;
 }
 

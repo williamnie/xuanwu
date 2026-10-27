@@ -37,21 +37,22 @@ describe("remote executor provider", () => {
   test("mirrors the node's provider capabilities, policy manifest and status", async () => {
     const { remote } = await connectNode();
     expect(remote.id).toBe(asProviderId("codex"));
-    // 会话类能力 v1 不经节点开放。
-    expect(remote.capabilities).toEqual(["issue_execution", "interrupt", "approvals", "model_list", "resume_session"]);
+    expect(remote.capabilities).toEqual(["issue_execution", "interrupt", "approvals", "model_list", "resume_session", "sessions"]);
     expect(remote.interruptScope).toBe("turn");
     expect(remote.manifest?.id).toBe(asProviderId("codex"));
     expect(remote.policyAdapter).toBeDefined();
     expect(remote.runtimeStatus?.()).toMatchObject({ mode: "remote", ready: true, version: "0.99.0" });
   });
 
-  test("reads sessions and models on the node but never creates sessions there", async () => {
-    const { remote } = await connectNode();
+  test("reads, creates and continues sessions on the node", async () => {
+    const { allowed, fake, remote } = await connectNode();
     expect(await remote.readSession!("thread-7")).toMatchObject({ provider_session_id: "thread-7", turns: [{ id: "turn-on-node", status: "completed" }] });
     expect(await remote.listModels!()).toEqual([{ display_name: "Node model", id: "node-model" }]);
-    expect(remote.listSessions).toBeUndefined();
-    expect(remote.createSession).toBeUndefined();
-    expect(remote.sendSessionMessage).toBeUndefined();
+    expect((await remote.listSessions!({})).data).toHaveLength(1);
+    expect(await remote.createSession!({ cwd: join(allowed, "repo"), prompt: "hi" })).toMatchObject({ provider_session_id: "chat-1" });
+    expect(await remote.sendSessionMessage!({ prompt: "more", sessionId: "chat-1" })).toMatchObject({ turn_id: "msg-turn-1" });
+    await expect(remote.createSession!({ cwd: "/etc", prompt: "hi" })).rejects.toThrow("outside the node's allowed roots");
+    expect(fake.createdSessions).toHaveLength(1);
   });
 
   test("runs on the node and streams provider events back in order", async () => {

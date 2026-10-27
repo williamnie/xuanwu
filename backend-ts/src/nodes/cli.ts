@@ -38,8 +38,11 @@ export async function runNodeCommand(args: string[], env: Record<string, string 
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n\n${USAGE}`);
     return 2;
   }
-  const { registry, stateDir } = await startNodeProviders();
+  // provider 在 NodeAgent 之前启动，会话事件经这个转发口在 agent 创建后送达。
+  const appEvents: { forward?: (event: unknown) => void } = {};
+  const { registry, stateDir } = await startNodeProviders((event) => appEvents.forward?.(event));
   const agent = new NodeAgent(nodeAgentOptions(config, () => registry.readyProviders(), join(stateDir, "node")));
+  appEvents.forward = (event) => agent.emitAppEvent(event);
   process.once("SIGINT", () => agent.stop());
   process.once("SIGTERM", () => agent.stop());
   try {

@@ -127,7 +127,7 @@ async function listSessions(context: SessionApiContext, request: Request) {
 async function createSession(context: SessionApiContext, body: Record<string, unknown>) {
   const project = projectForSession(context, stringBody(body, "project_id"));
   const providerID = firstNonEmpty(stringBody(body, "provider"), project?.provider ?? "codex");
-  const provider = capableProvider(context, providerID, "sessions", "createSession");
+  const provider = capableProvider(context, providerID, "sessions", "createSession", "", project?.id ?? "");
   const input = withSessionPolicy(provider, sessionCreateInput(body, project, provider.id), "local-user");
   const result = await provider.createSession!(input);
   assertProviderResult(provider.id, result.provider);
@@ -231,14 +231,18 @@ function capableProvider(
   rawProviderID: string,
   capability: ExecutorCapability,
   method: "createSession" | "listSessions" | "readSession" | "sendSessionMessage",
-  sessionKey = ""
+  sessionKey = "",
+  projectID = ""
 ): ExecutorProvider {
   const providerID = rawProviderID.trim();
   if (!isExecutorProviderId(providerID)) throw new Error(`session provider "${providerID}" 当前 runner 未注册`);
-  const providers = sessionProviders(context, sessionKey);
+  // 新建会话按所选项目、其余操作按会话所属项目找到它所在的节点。
+  const providers = projectID !== ""
+    ? providersForProjectID(context.database, context.providers, projectID)
+    : sessionProviders(context, sessionKey);
   const provider = providers?.[providerID];
   if (!provider) throw new Error(`provider "${providerID}" 当前 runner 未注册`);
-  // 远程节点只开放会话读取：不声明 sessions 能力，但读取方法可用。
+  // 只开放读取的节点不声明 sessions 能力，但读取方法可用。
   const remoteRead = providers !== context.providers && method === "readSession";
   if (!provider.capabilities.includes(capability) && !remoteRead) {
     throw new Error(`provider "${providerID}" 不支持 capability "${capability}"`);
@@ -259,7 +263,8 @@ function sessionProviders(context: SessionApiContext, sessionKey: string): Sessi
 
 function providersForList(context: SessionApiContext, filter: { projectId: string; provider: string }): ExecutorProvider[] {
   const wanted = filter.provider || (filter.projectId ? getProject(context.database, filter.projectId)?.provider ?? "" : "");
-  return Object.values(context.providers ?? {}).filter((provider): provider is ExecutorProvider => {
+  const providers = filter.projectId ? providersForProjectID(context.database, context.providers, filter.projectId) : context.providers;
+  return Object.values(providers ?? {}).filter((provider): provider is ExecutorProvider => {
     if (!provider || (wanted && provider.id !== wanted)) return false;
     if (!provider.capabilities.includes("sessions") || typeof provider.listSessions !== "function") return false;
     return wanted !== "" || provider.runtimeStatus?.().ready !== false;

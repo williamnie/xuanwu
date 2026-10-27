@@ -4,7 +4,7 @@ import { listIssueRuns } from "../db/repositories/issues.ts";
 import { getRemoteNode } from "../db/repositories/nodes.ts";
 import { listProjects } from "../db/repositories/projects.ts";
 import { finishRemoteRun, listActiveRemoteRuns, recordRemoteRunStart, type RemoteRun } from "../db/repositories/remoteRuns.ts";
-import type { EventBus } from "../events/bus.ts";
+import type { AppEvent, EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { reconcileProviderOutcome } from "../runner/providerOutcome.ts";
 import { reattachProviderEventSink } from "../runner/providerRuntime.ts";
@@ -12,11 +12,26 @@ import { NodeHub } from "./hub.ts";
 import type { NodeGitRunResult } from "./nodeGit.ts";
 import { projectLocation } from "./projectLocation.ts";
 import { isTerminalProviderEvent, type NodeRunEvent } from "./protocol.ts";
-import { installRemoteProviderResolver } from "./remoteExecution.ts";
+import { installRemoteProviderResolver, rememberRemoteApproval } from "./remoteExecution.ts";
 import { installRemoteGitRunner } from "./remoteGit.ts";
 import { remoteProvidersForNode, type RemoteRunLedger } from "./remoteProvider.ts";
 
 type ProviderMap = Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+
+/** 与 providerApprovalRequests 相同的审批 ID 取值顺序。 */
+function approvalRequestId(event: AppEvent): string {
+  const raw = event.raw_payload ?? event.payload;
+  let payload: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = typeof raw === "string" ? JSON.parse(raw) : raw;
+    payload = parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : {};
+  } catch {
+    return "";
+  }
+  const params = (payload.params ?? {}) as Record<string, unknown>;
+  const id = payload.id ?? params.approvalId ?? params.itemId ?? params.callId;
+  return typeof id === "string" || typeof id === "number" ? String(id) : "";
+}
 
 /** 中心启动后等待节点重连、接回在途运行的时长；超时仍未回来的运行按丢失收口。 */
 const DEFAULT_REATTACH_GRACE_MS = 10 * 60_000;
@@ -68,6 +83,16 @@ export function startNodeHubRuntime(options: HubRuntimeOptions): { hub: NodeHub;
       .filter((project) => projectLocation(project.cwd).nodeId === nodeId)
       .map((project) => project.id);
     if (projectIds.length > 0) options.onNodeOnline(projectIds);
+  });
+  // 节点的会话事件进入中心总线：前端会话页实时展示、飞书审批通知与本机会话一致；
+  // 审批请求记下来源节点，审批时路由回该节点。
+  const stopAppEvents = hub.onAppEvent((nodeId, payload) => {
+    if (!payload || typeof payload !== "object") return;
+    const event = payload as AppEvent;
+    if (event.method === "approval/requested" || event.raw_method === "approval/requested") {
+      rememberRemoteApproval(approvalRequestId(event), nodeId);
+    }
+    options.bus?.publish(event);
   });
   const stopHello = hub.onHello((nodeId, activeRuns) => {
     const reported = new Set(activeRuns);
@@ -130,6 +155,7 @@ export function startNodeHubRuntime(options: HubRuntimeOptions): { hub: NodeHub;
     hub,
     stop() {
       clearTimeout(graceTimer);
+      stopAppEvents();
       stopHello();
       stopWatching();
       uninstallGit();

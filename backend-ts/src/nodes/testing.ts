@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { EventBus } from "../events/bus.ts";
 import { createRemoteNode } from "../db/repositories/nodes.ts";
 import { recordRequestPeerAddress } from "../http/peerAddress.ts";
 import { createDefaultRouter, createRequestHandler } from "../http/server.ts";
@@ -13,9 +14,11 @@ import {
   type ExecutorProviderId,
   type ProviderRecoveryInput,
   type ProviderRunInput,
+  type SessionCreateInput,
+  type SessionMessageInput,
   type SessionRef
 } from "../providers/types.ts";
-import { providerSessionDetail } from "../providers/core/sessionView.ts";
+import { providerSessionDetail, providerSessionSummary, type ProviderSessionTurn } from "../providers/core/sessionView.ts";
 import { normalizedRunEvent } from "../providers/runEvents.ts";
 import { NodeAgent } from "./agent.ts";
 import type { NodeHub } from "./hub.ts";
@@ -29,6 +32,8 @@ export const TEST_ADMIN_TOKEN = "admin";
 export function fakeNodeProvider() {
   const received: ProviderRunInput[] = [];
   const recovered: ProviderRecoveryInput[] = [];
+  const createdSessions: SessionCreateInput[] = [];
+  const sessionMessages: SessionMessageInput[] = [];
   const approvals: Array<[string, unknown]> = [];
   let interruptActive: (() => void) | undefined;
   /** run 与 recover 共用的脚本：按 prompt 里的标记决定行为。 */
@@ -73,17 +78,27 @@ export function fakeNodeProvider() {
       return await execute(input, { ...input.session, turnId: `turn-${input.issueId}-r${recovered.length}` });
     },
     interrupt: async () => interruptActive?.(),
+    createSession: async (input) => {
+      createdSessions.push(input);
+      const id = `chat-${createdSessions.length}`;
+      return { id: `codex:${id}`, provider: "codex", provider_session_id: id, provider_turn_id: "chat-turn-1", thread_id: id, turn_id: "chat-turn-1" };
+    },
+    sendSessionMessage: async (input) => {
+      sessionMessages.push(input);
+      return { provider: "codex", provider_session_id: input.sessionId, sessionId: input.sessionId, turn_id: `msg-turn-${sessionMessages.length}` };
+    },
+    listSessions: async () => ({ data: [providerSessionSummary(asProviderId("codex"), { name: "node chat", sessionRef: "chat-1" })] }),
     listModels: async () => [{ id: "node-model", display_name: "Node model" }],
     readSession: async (sessionId) => providerSessionDetail(asProviderId("codex"), {
       sessionRef: sessionId,
-      turns: [{ id: "turn-on-node", items: [], status: "completed" }]
+      turns: [{ id: "turn-on-node", items: [], status: "completed" } as ProviderSessionTurn]
     }),
     resolveApproval: async (requestId, decision) => {
       approvals.push([requestId, decision]);
     },
     runtimeStatus: () => ({ active_sessions: 0, api_key_configured: true, mode: "rpc", ready: true, version: "0.99.0" })
   };
-  return { approvals, provider, received, recovered };
+  return { approvals, createdSessions, provider, received, recovered, sessionMessages };
 }
 
 export type TestNodeHub = {
@@ -95,6 +110,8 @@ export type TestNodeHub = {
   fake: ReturnType<typeof fakeNodeProvider>;
   hub: NodeHub;
   nodeId: string;
+  /** 中心事件总线上发布过的事件（含节点送回的会话事件）。 */
+  published: unknown[];
 };
 
 /** 每个测试一套：真实数据库 + 完整路由的中心 HTTP 服务 + 已连上的 NodeAgent（使用假 provider）。 */
@@ -110,9 +127,16 @@ export function useTestNodeHub(): () => Promise<TestNodeHub> {
     await mkdir(join(allowed, "repo"), { recursive: true });
     const database = await openDatabase({ stateDir: join(root, "state") });
     cleanups.push(() => database.close());
-    const runtime = startNodeHubRuntime({ database });
+    const published: unknown[] = [];
+    const bus = new EventBus();
+    const subscription = bus.subscribe();
+    void (async () => {
+      for (let event = await subscription.next(); event; event = await subscription.next()) published.push(event);
+    })();
+    cleanups.push(() => subscription.close());
+    const runtime = startNodeHubRuntime({ bus, database });
     cleanups.push(() => runtime.stop());
-    const handle = createRequestHandler(createDefaultRouter({ database, nodeHub: runtime.hub, providers: {} }), TEST_ADMIN_TOKEN);
+    const handle = createRequestHandler(createDefaultRouter({ bus, database, nodeHub: runtime.hub, providers: {} }), TEST_ADMIN_TOKEN);
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -140,7 +164,7 @@ export function useTestNodeHub(): () => Promise<TestNodeHub> {
       await running;
     });
     await waitUntil(() => runtime.hub.isOnline(node.id));
-    return { agent, allowed, baseUrl, database, fake, hub: runtime.hub, nodeId: node.id };
+    return { agent, allowed, baseUrl, database, fake, hub: runtime.hub, nodeId: node.id, published };
   };
 }
 

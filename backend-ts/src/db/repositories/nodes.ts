@@ -21,13 +21,16 @@ export type NodeProviderInfo = {
   interrupt_scope?: "active" | "session" | "turn";
   /** 中心可经 provider.read 调用的只读方法。 */
   read_methods?: string[];
+  /** 中心可经 provider.session 调用的会话方法（新建、续写）。 */
+  session_methods?: string[];
   ready: boolean;
   reason?: string;
   version?: string;
 };
 
-const NODE_PROVIDER_CAPABILITIES = new Set(["issue_execution", "interrupt", "approvals", "model_list", "resume_session"]);
+const NODE_PROVIDER_CAPABILITIES = new Set(["issue_execution", "interrupt", "approvals", "model_list", "resume_session", "sessions"]);
 export const NODE_PROVIDER_READ_METHODS = ["listModels", "listSessionTurns", "listSessions", "readSession"] as const;
+export const NODE_PROVIDER_SESSION_METHODS = ["createSession", "sendSessionMessage"] as const;
 const INTERRUPT_SCOPES = new Set(["active", "session", "turn"]);
 
 export type RemoteNode = {
@@ -125,6 +128,9 @@ export function normalizeNodeInfo(value: unknown): NodeInfo {
       id: cleanString(provider.id).slice(0, 64),
       ...(INTERRUPT_SCOPES.has(String(provider.interrupt_scope))
         ? { interrupt_scope: provider.interrupt_scope as NodeProviderInfo["interrupt_scope"] }
+        : {}),
+      ...(Array.isArray(provider.session_methods)
+        ? { session_methods: provider.session_methods.filter((method): method is string => (NODE_PROVIDER_SESSION_METHODS as readonly string[]).includes(String(method))) }
         : {}),
       ...(Array.isArray(provider.read_methods)
         ? { read_methods: provider.read_methods.filter((method): method is string => (NODE_PROVIDER_READ_METHODS as readonly string[]).includes(String(method))) }

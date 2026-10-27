@@ -19,7 +19,9 @@ import {
   type ProviderRunInput,
   type ProviderRunResult,
   type SessionRef,
+  type SessionCreateResult,
   type SessionListResult,
+  type SessionMessageResult,
   type SessionTurnsListResult
 } from "../providers/types.ts";
 import { NodeOfflineError, type NodeHub } from "./hub.ts";
@@ -102,17 +104,37 @@ export function createRemoteExecutorProvider(options: RemoteProviderOptions): Ex
   const read = (method: string, args: unknown[]) => hub.request(nodeId, "provider.read", { args, method, providerId: provider.id });
   const readMethods = new Set(provider.read_methods ?? []);
   if (readMethods.has("readSession")) remote.readSession = async (sessionId, input) => await read("readSession", [sessionId, input]) as Record<string, unknown>;
-  if (readMethods.has("listSessions")) remote.listSessions = async (input) => await read("listSessions", [input]) as SessionListResult;
+  // 会话列表按项目 cwd 过滤时，换成节点上的路径。
+  if (readMethods.has("listSessions")) {
+    remote.listSessions = async (input) => await read("listSessions", [nodePathInput(input)]) as SessionListResult;
+  }
   if (readMethods.has("listSessionTurns")) {
     remote.listSessionTurns = async (sessionId, input) => await read("listSessionTurns", [sessionId, input]) as SessionTurnsListResult;
   }
   if (readMethods.has("listModels")) remote.listModels = async () => await read("listModels", []);
+  // 新建与续写会话：回合事件不经运行通道，审批请求等由节点的会话事件通道送回中心总线，
+  // 回合结束由监督模块经节点轮询 listSessionTurns 发现，与本机一致。
+  const sessionMethods = new Set(provider.session_methods ?? []);
+  const session = (method: string, input: Record<string, unknown>) => hub.request(nodeId, "provider.session", { input: nodePathInput(input), method, providerId: provider.id });
+  if (sessionMethods.has("createSession") && capabilities.includes("sessions")) {
+    remote.createSession = async (input) => await session("createSession", input) as SessionCreateResult;
+  }
+  if (sessionMethods.has("sendSessionMessage")) {
+    remote.sendSessionMessage = async (input) => await session("sendSessionMessage", input) as SessionMessageResult;
+  }
   if (capabilities.includes("approvals")) {
     remote.resolveApproval = async (requestId, decision) => {
       await hub.request(nodeId, "approval.resolve", { decision, providerId: provider.id, requestId });
     };
   }
   return remote;
+}
+
+/** 中心内部的 node:// cwd 发往节点前换成节点上的真实路径。 */
+function nodePathInput<T>(input: T): T {
+  if (!input || typeof input !== "object") return input;
+  const cwd = (input as { cwd?: unknown }).cwd;
+  return typeof cwd === "string" && cwd !== "" ? { ...input, cwd: projectLocation(cwd).path } : input;
 }
 
 function runRemote(options: RemoteProviderOptions, input: ProviderRunInput, session?: SessionRef): Promise<ProviderRunResult> {

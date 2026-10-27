@@ -3,6 +3,7 @@ import { hostname as osHostname } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { NodeInfo } from "../db/repositories/nodes.ts";
 import {
+  NODE_APP_EVENT_STREAM,
   NODE_HELLO_PATH,
   NODE_MESSAGES_MAX_BATCH,
   NODE_MESSAGES_PATH,
@@ -97,6 +98,14 @@ export class NodeAgent {
     this.abort.abort();
   }
 
+  /**
+   * 会话级事件（审批请求、会话改名、Claude 会话事件）经保留通道 app 送回中心的事件总线。
+   * 与运行事件共用按 seq 确认与补发的机制，但不会结束，也不出现在握手的在途运行里。
+   */
+  emitAppEvent(event: unknown): void {
+    this.emitRunEvent(NODE_APP_EVENT_STREAM, event);
+  }
+
   /** 运行被接受即登记：握手时上报未结束（或事件未确认完）的运行，供中心重新接上。 */
   trackRun(runRef: string): void {
     if (!this.runEvents.has(runRef)) this.runEvents.set(runRef, { finished: false, nextSeq: 1, pending: [] });
@@ -136,7 +145,7 @@ export class NodeAgent {
     const info = this.options.info?.() ?? { hostname: osHostname(), os: process.platform, providers: [], version: "" };
     const response = await this.post(NODE_HELLO_PATH, {
       ...info,
-      active_runs: [...this.runEvents.keys()],
+      active_runs: [...this.runEvents.keys()].filter((runRef) => runRef !== NODE_APP_EVENT_STREAM),
       allowed_roots: this.allowedRoots,
       protocol: NODE_PROTOCOL_VERSION
     });

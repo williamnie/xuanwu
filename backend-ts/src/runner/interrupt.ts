@@ -107,6 +107,8 @@ export async function interruptSession(
     const interrupted = await interruptLinkedIssue(db, linked, SESSION_INTERRUPT_REASON, issueProjectRuntime(db, linked, runtime));
     return { interrupted };
   }
+  // 远程项目的交互式会话在其节点上中断。
+  runtime = sessionProjectRuntime(db, session, runtime);
   // P5：无 turn（messageRef）时无法定位 active invocation；仅当 Provider 声明 session-level
   // interrupt（interrupt 方法存在）才继续，否则 fail closed 跳过（避免误中断）。
   const provider = runtime.providers?.[session.provider];
@@ -122,6 +124,12 @@ export async function interruptSession(
 /** 远程项目的运行在节点上，中断要发给该节点的 provider。 */
 function issueProjectRuntime(db: RunnerDatabase, issue: Issue, runtime: InterruptRuntime): InterruptRuntime {
   const providers = providersForProjectID(db, runtime.providers, issue.project_id);
+  return providers === runtime.providers ? runtime : { ...runtime, providers };
+}
+
+function sessionProjectRuntime(db: RunnerDatabase, session: SessionRef, runtime: InterruptRuntime): InterruptRuntime {
+  const projectID = getAgentSession(db, `${session.provider}:${session.sessionId}`)?.project_id ?? "";
+  const providers = providersForProjectID(db, runtime.providers, projectID);
   return providers === runtime.providers ? runtime : { ...runtime, providers };
 }
 

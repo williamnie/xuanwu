@@ -5,6 +5,7 @@ import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import type { CompletionCard } from "../domain/acceptance/completionCard.ts";
 import type { PiAcceptanceRuntimeResult } from "../pi/issues/issueAcceptance.ts";
+import { readIssueDecisionProjection, reviewHumanIssue } from "../domain/review/humanReview.ts";
 import { runPiAcceptanceCoordinatorOnce } from "../runner/piAcceptanceCoordinator.ts";
 import { runProjectLoopOnce } from "../runner/projectLoop.ts";
 import { FIXTURE_TIME, insertIssue } from "../testing/harness.ts";
@@ -16,12 +17,13 @@ function accept(): PiAcceptanceRuntimeResult {
   return decide("accept");
 }
 
-function decide(decision: "accept" | "continue_same_session" | "retry", followUp?: string): PiAcceptanceRuntimeResult {
+function decide(decision: "accept" | "continue_same_session" | "needs_user" | "retry", followUp?: string): PiAcceptanceRuntimeResult {
   return {
     decision: {
       confidence: "high",
       decision,
       ...(followUp ? { follow_up_prompt: followUp } : {}),
+      ...(decision === "needs_user" ? { human_review_kind: "acceptance" as const } : {}),
       evidence_refs: ["run:remote"],
       progress: { evidence_refs: ["run:remote"], made_progress: true, summary: "节点上有实质进展。" },
       rationale: decision === "accept" ? "节点上的改动满足任务。" : "还需要继续处理。",
@@ -113,5 +115,25 @@ describe("unattended acceptance of remote work", () => {
     await waitForAcceptanceRequests(database, issueId, 2);
     await runPiAcceptanceCoordinatorOnce({ database, decideIssueAcceptance: async () => accept(), providers: {} });
     expect(getIssue(database, issueId)?.status).toBe("done");
+  });
+
+  test("a human's requested changes continue the original session on the node", async () => {
+    const { database, fake, issueId } = await remoteIssueAwaitingAcceptance(startNodeHub, "[[late]] needs a human look");
+    await runPiAcceptanceCoordinatorOnce({ database, decideIssueAcceptance: async () => decide("needs_user"), providers: {} });
+    const request = readIssueDecisionProjection(database, issueId).request!;
+    expect(getIssue(database, issueId)?.status).toBe("needs_user");
+
+    const result = await reviewHumanIssue(database, issueId, {
+      action: "request_changes",
+      comment: "把按钮文案改成「保存」",
+      review_request_id: request.id,
+      review_revision: request.revision
+    }, { providers: {} });
+
+    expect(result.status).toBe("in_progress");
+    expect(fake.sessionMessages).toHaveLength(1);
+    expect(fake.sessionMessages[0]).toMatchObject({ sessionId: `thread-${issueId}` });
+    expect(fake.sessionMessages[0]!.prompt).toContain("把按钮文案改成「保存」");
+    expect(listIssueRuns(database, issueId).at(-1)).toMatchObject({ provider_turn_id: "msg-turn-1" });
   });
 });
