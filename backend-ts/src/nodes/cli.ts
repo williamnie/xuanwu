@@ -30,8 +30,8 @@ export async function runNodeCommand(args: string[], env: Record<string, string 
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n\n${USAGE}`);
     return 2;
   }
-  const registry = await startNodeProviders();
-  const agent = new NodeAgent(nodeAgentOptions(config, () => registry.readyProviders()));
+  const { registry, stateDir } = await startNodeProviders();
+  const agent = new NodeAgent(nodeAgentOptions(config, () => registry.readyProviders(), join(stateDir, "node")));
   process.once("SIGINT", () => agent.stop());
   process.once("SIGTERM", () => agent.stop());
   try {
@@ -64,13 +64,17 @@ export async function resolveNodeCliConfig(args: string[], env: Record<string, s
   return { allowedRoots, hubUrl, token };
 }
 
-function nodeAgentOptions(config: NodeCliConfig, providers: () => Record<string, ExecutorProvider>): NodeAgentOptions {
+function nodeAgentOptions(
+  config: NodeCliConfig,
+  providers: () => Record<string, ExecutorProvider>,
+  workDir: string
+): NodeAgentOptions {
   if (config.allowedRoots.length === 0) {
     console.warn(JSON.stringify({ event: "node.no_allowed_roots", message: "no --root configured; the hub cannot run agents on this node" }));
   }
   return {
     ...config,
-    handlers: { ...nodeExecutionHandlers(providers), ...nodeGitHandlers },
+    handlers: { ...nodeExecutionHandlers(providers, { workDir }), ...nodeGitHandlers },
     info: () => ({ hostname: hostname(), os: process.platform, providers: nodeProviderInfo(providers()), version: bunBuildInfo().version })
   };
 }

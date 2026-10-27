@@ -22,10 +22,13 @@ import {
 } from "../providers/types.ts";
 import { NodeOfflineError, type NodeHub } from "./hub.ts";
 import { projectLocation } from "./projectLocation.ts";
+import { packRunAttachments } from "./runAttachments.ts";
 import { isTerminalProviderEvent, type NodeRunEvent, type NodeRunStartParams } from "./protocol.ts";
 
 /** 节点断线后，在途运行等待其重连的时长；超时按节点离线失败。 */
 const DEFAULT_OFFLINE_GRACE_MS = 10 * 60_000;
+/** run.start 可能附带较大的 Skill 与图片内容，给上传与落盘留足时间。 */
+const RUN_START_TIMEOUT_MS = 120_000;
 
 /** 内置 provider 的 manifest 与策略适配器是静态的：中心即使未启用该 provider，也能为远程运行解析执行策略。 */
 const BUILTIN_POLICY: Record<string, () => { manifest: ExecutorProviderManifest; policyAdapter: ProviderPolicyAdapter }> = {
@@ -142,14 +145,18 @@ function runRemote(options: RemoteProviderOptions, input: ProviderRunInput): Pro
         settle(new NodeOfflineError(`node ${nodeId} stayed offline for ${graceMs}ms during the run`));
       }, graceMs);
     });
-    const { images: _images, onEvent: _onEvent, ...remoteInput } = input;
-    // 中心内部以 node:// 形式标识远程项目，发往节点时换成节点上的真实路径。
-    const params: NodeRunStartParams = {
-      input: { ...remoteInput, cwd: projectLocation(remoteInput.cwd).path },
-      providerId: provider.id,
-      runRef
-    };
-    hub.request(nodeId, "run.start", params).catch((error: unknown) => {
+    const { images: _images, onEvent: _onEvent, skillPackages: _skillPackages, ...remoteInput } = input;
+    // 中心内部以 node:// 形式标识远程项目，发往节点时换成节点上的真实路径；
+    // 中心本机的图片与托管 Skill 目录改为随指令下发内容。
+    packRunAttachments(input).then((attachments) => {
+      const params: NodeRunStartParams = {
+        ...attachments,
+        input: { ...remoteInput, cwd: projectLocation(remoteInput.cwd).path },
+        providerId: provider.id,
+        runRef
+      };
+      return hub.request(nodeId, "run.start", params, RUN_START_TIMEOUT_MS);
+    }).catch((error: unknown) => {
       unsubscribe();
       settle(error instanceof Error ? error : new Error(String(error)));
     });

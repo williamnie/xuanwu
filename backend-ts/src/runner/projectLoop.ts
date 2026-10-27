@@ -36,6 +36,7 @@ import { issueExecutionContext } from "../domain/work/issueExecutionAuthority.ts
 import { cleanString } from "../util/values.ts";
 import { providersForProjectCwd } from "../nodes/remoteExecution.ts";
 import { isRemoteProjectCwd } from "../nodes/projectLocation.ts";
+import { NODE_SKILL_ROOT_TOKEN } from "../nodes/protocol.ts";
 
 export type ProjectLoopInput = {
   bus?: Pick<EventBus, "publish">;
@@ -135,6 +136,7 @@ async function runClaimedIssue(
       projectId: project.id,
       cwd: project.cwd,
       images: issuePromptImages(input.database, prompt),
+      ...(isRemoteProjectCwd(project.cwd) ? { skillPackages: remoteSkillPackages(project, issue, input.database) } : {}),
       prompt,
       model: selection.model,
       onProjectSlotReleased: input.onProjectSlotReleased,
@@ -364,8 +366,7 @@ function boundedPromptText(value: unknown, limit: number): string {
 function withSkillIntentContext(project: Project, issue: Issue, prompt: string, database?: RunnerDatabase): string {
   if (!hasSkillIntentContext(project, issue)) return prompt.trim();
   const policy = parseSkillPolicy(project.default_skill_policy);
-  // 托管 Skill 的元数据指向中心本机路径，远程节点读不到，v1 只给出意图不附元数据。
-  const metadata = isRemoteProjectCwd(project.cwd) ? [] : matchedSkillMetadata(issue, policy, database, project);
+  const metadata = matchedSkillMetadata(issue, policy, database, project);
   const skillContext = [
     "",
     "## Skill Intent Context",
@@ -377,7 +378,32 @@ function withSkillIntentContext(project: Project, issue: Issue, prompt: string, 
   return `${prompt.trim()}${skillContext}`.trim();
 }
 
+/** 远程项目引用的托管 Skill 版本：随运行下发到节点，节点按版本缓存。 */
+function remoteSkillPackages(project: Project, issue: Issue, database: RunnerDatabase): Array<{ directory: string; path: string }> {
+  if (!hasSkillIntentContext(project, issue)) return [];
+  return matchedManagedSkills(issue, parseSkillPolicy(project.default_skill_policy), database, project)
+    .flatMap(({ installed }) => installed ? [{
+      directory: currentSkillRevision(installed).directory,
+      path: revisionPath(dirname(database.path), currentSkillRevision(installed))
+    }] : []);
+}
+
 function matchedSkillMetadata(issue: Issue, policy: ReturnType<typeof parseSkillPolicy>, database?: RunnerDatabase, project?: Project) {
+  // 远程项目的 Skill 目录在节点上，以占位符引用，节点下发后替换成本机缓存路径。
+  const remote = project ? isRemoteProjectCwd(project.cwd) : false;
+  return matchedManagedSkills(issue, policy, database, project).map(({ installed, skill }) => ({
+    ...skillSummary(skill),
+    ...(installed && database ? {
+      revision: installed.revision,
+      base_directory: remote
+        ? `${NODE_SKILL_ROOT_TOKEN}/${currentSkillRevision(installed).directory}`
+        : revisionPath(dirname(database.path), currentSkillRevision(installed)),
+      usage: "Read SKILL.md and its referenced resources. Keep this version immutable; write outputs and install dependencies in the task workspace."
+    } : {})
+  }));
+}
+
+function matchedManagedSkills(issue: Issue, policy: ReturnType<typeof parseSkillPolicy>, database?: RunnerDatabase, project?: Project) {
   const requested = new Set(mergeSkillIntents(
     issue.required_skill_intents,
     issue.recommended_skill_intents,
@@ -390,14 +416,7 @@ function matchedSkillMetadata(issue: Issue, policy: ReturnType<typeof parseSkill
   return listSkillRegistry(database ? libraryRegistryOptions(database, project) : {})
     .filter((skill) => requested.has(skill.id) || requested.has(skill.name))
     .filter(skill => !disabled.includes(skill.id))
-    .map(skill => {
-      const installed = managed.find(item => item.id === skill.id);
-      return { ...skillSummary(skill), ...(installed && database ? {
-        revision: installed.revision,
-        base_directory: revisionPath(dirname(database.path), currentSkillRevision(installed)),
-        usage: "Read SKILL.md and its referenced resources. Keep this version immutable; write outputs and install dependencies in the task workspace."
-      } : {}) };
-    });
+    .map(skill => ({ installed: managed.find(item => item.id === skill.id), skill }));
 }
 
 function hasSkillIntentContext(project: Project, issue: Issue): boolean {

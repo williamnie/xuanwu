@@ -26,11 +26,18 @@ export type NodeMessagesRequest = { messages: NodeUpstreamMessage[] };
 
 export const NODE_MESSAGES_MAX_BATCH = 256;
 
-/** run.start 的参数：ProviderRunInput 去掉回调与中心本地路径（图片）。 */
+/** 远程项目提示里托管 Skill 目录的占位符，节点替换为本机缓存根目录。 */
+export const NODE_SKILL_ROOT_TOKEN = "{{xuanwu-node-skills}}";
+
+export type NodeFilePayload = { data: string; path: string };
+
+/** run.start 的参数：ProviderRunInput 去掉回调；中心本机的图片与 Skill 目录改为随指令下发文件内容。 */
 export type NodeRunStartParams = {
-  input: Omit<ProviderRunInput, "images" | "onEvent">;
+  images?: Array<{ data: string; detail?: "high" | "original"; name: string }>;
+  input: Omit<ProviderRunInput, "images" | "onEvent" | "skillPackages">;
   providerId: string;
   runRef: string;
+  skillPackages?: Array<{ directory: string; files: NodeFilePayload[] }>;
 };
 export type NodeRunInterruptParams = { input: InterruptInput; providerId: string };
 export type NodeApprovalResolveParams = { decision: ApprovalDecision; providerId: string; requestId: string };

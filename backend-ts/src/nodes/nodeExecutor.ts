@@ -1,6 +1,9 @@
 import { NODE_PROVIDER_READ_METHODS, type NodeProviderInfo } from "../db/repositories/nodes.ts";
 import { isProviderInterruptedError, type ExecutorProvider, type ProviderEvent } from "../providers/types.ts";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { NodeCommandHandler } from "./agent.ts";
+import { materializeRunAttachments } from "./runAttachments.ts";
 import {
   isTerminalProviderEvent,
   type NodeApprovalResolveParams,
@@ -16,15 +19,21 @@ type ReadMethod = (typeof NODE_PROVIDER_READ_METHODS)[number];
 type ProviderSource = () => Record<string, ExecutorProvider>;
 
 /** 节点上真实执行 provider 的命令处理器：run.start / run.interrupt / approval.resolve。 */
-export function nodeExecutionHandlers(providers: ProviderSource): Record<string, NodeCommandHandler> {
+/** workDir：节点缓存托管 Skill、存放运行附件的目录。 */
+export function nodeExecutionHandlers(
+  providers: ProviderSource,
+  options: { workDir?: string } = {}
+): Record<string, NodeCommandHandler> {
+  const workDir = options.workDir ?? join(tmpdir(), "xuanwu-node");
   const activeRuns = new Set<string>();
   return {
     "run.start": async (params, agent) => {
-      const { input, providerId, runRef } = parseRunStart(params);
+      const { images, input, providerId, runRef, skillPackages } = parseRunStart(params);
       // 中心可能因超时重发同一指令；运行已在进行时直接确认，不重复启动。
       if (activeRuns.has(runRef)) return { accepted: true };
       const provider = requireProvider(providers, providerId, "issue_execution");
       const cwd = await agent.resolveAllowedPath(input.cwd);
+      const attachments = await materializeRunAttachments(workDir, runRef, { images, skillPackages }, input);
       activeRuns.add(runRef);
       const emit = (event: NodeRunEvent) => agent.emitRunEvent(runRef, event);
       // run() 返回后 provider 仍可能推送事件；返回且见到终止事件（或失败）才结束转发。
@@ -36,6 +45,7 @@ export function nodeExecutionHandlers(providers: ProviderSource): Record<string,
         finished = true;
         activeRuns.delete(runRef);
         agent.finishRun(runRef);
+        void attachments.cleanup();
       };
       const onEvent = (event: ProviderEvent) => {
         if (finished) return;
@@ -44,7 +54,7 @@ export function nodeExecutionHandlers(providers: ProviderSource): Record<string,
         terminal = true;
         if (returned) finish();
       };
-      void provider.run({ ...input, cwd, onEvent })
+      void provider.run({ ...input, cwd, onEvent, prompt: attachments.prompt, ...(attachments.images ? { images: attachments.images } : {}) })
         .then((result) => {
           emit({ type: "result", result });
           returned = true;
@@ -127,5 +137,11 @@ function parseRunStart(params: unknown): NodeRunStartParams {
     throw new Error("invalid run.start params");
   }
   if (typeof value.input.cwd !== "string" || typeof value.input.prompt !== "string") throw new Error("run.start input needs cwd and prompt");
-  return { input: value.input, providerId, runRef };
+  return {
+    input: value.input,
+    providerId,
+    runRef,
+    ...(Array.isArray(value.images) ? { images: value.images } : {}),
+    ...(Array.isArray(value.skillPackages) ? { skillPackages: value.skillPackages } : {})
+  };
 }

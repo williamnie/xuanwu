@@ -413,6 +413,7 @@ function providerInput(input: RunnerIssueExecutionInput, onEvent: ProviderRunInp
     approvalPolicy: input.approvalPolicy,
     sandbox: input.sandbox,
     policy: input.policy,
+    ...(input.skillPackages?.length ? { skillPackages: input.skillPackages } : {}),
     onEvent
   };
 }

@@ -12,7 +12,7 @@ import { qoderFactory } from "../providers/qoder/factory.ts";
  * 按与中心相同的环境变量配置启动本机 provider，但不打开数据库：
  * 会话命名、应用事件等依赖中心数据的旁路功能在节点上关闭。
  */
-export async function startNodeProviders(): Promise<ProviderRegistry> {
+export async function startNodeProviders(): Promise<{ registry: ProviderRegistry; stateDir: string }> {
   const config = loadConfig([]);
   await mkdir(config.stateDir, { recursive: true });
   const ownershipFile = join(config.stateDir, "node-codex-process-ownership.json");
@@ -25,5 +25,5 @@ export async function startNodeProviders(): Promise<ProviderRegistry> {
   }
   if (config.providers.qoder) registry.registerFactory(qoderFactory({}));
   await registry.startConfigured(config.providers as Record<string, { enabled?: boolean } & Record<string, unknown>>);
-  return registry;
+  return { registry, stateDir: config.stateDir };
 }

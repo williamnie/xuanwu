@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { realpath } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getRemoteNode } from "../db/repositories/nodes.ts";
@@ -10,6 +10,7 @@ import {
   type ProviderRunInput
 } from "../providers/types.ts";
 import { NodeOfflineError } from "./hub.ts";
+import { NODE_SKILL_ROOT_TOKEN } from "./protocol.ts";
 import { remoteProvidersForNode } from "./remoteProvider.ts";
 import { useTestNodeHub, waitUntil as waitFor } from "./testing.ts";
 
@@ -24,7 +25,6 @@ async function connectNode(options: { offlineGraceMs?: number } = {}) {
 function runInput(cwd: string, prompt: string, events: ProviderEvent[]): ProviderRunInput {
   return {
     cwd,
-    images: [{ path: "/hub/only/image.png", type: "localImage" }],
     issueId: 7,
     onEvent: (event) => events.push(event),
     projectId: "proj",
@@ -63,8 +63,6 @@ describe("remote executor provider", () => {
     expect(events[1]?.text).toBe("hello from node");
     expect(fake.received).toHaveLength(1);
     expect(fake.received[0]!.cwd).toBe(await realpath(join(allowed, "repo")));
-    // 中心本地图片路径不发往节点。
-    expect(fake.received[0]!.images).toBeUndefined();
   });
 
   test("keeps streaming events that arrive after run() returns until a terminal event", async () => {
@@ -73,6 +71,35 @@ describe("remote executor provider", () => {
     await remote.run(runInput(join(allowed, "repo"), "[[late]]", events));
     await waitFor(() => events.some((event) => event.type === "turn.completed"));
     expect(events.map((event) => event.text ?? event.type)).toEqual(["turn.started", "hello from node", "late message", "turn.completed"]);
+  });
+
+  test("ships hub-local images and managed skill packages to the node", async () => {
+    const { allowed, fake, remote } = await connectNode();
+    const hubFiles = await mkdtemp(join(tmpdir(), "xuanwu-hub-files-"));
+    const image = join(hubFiles, "screenshot.png");
+    await writeFile(image, "png-bytes");
+    const skill = join(hubFiles, "skill");
+    await mkdir(join(skill, "refs"), { recursive: true });
+    await writeFile(join(skill, "SKILL.md"), "# Skill\n");
+    await writeFile(join(skill, "refs", "guide.md"), "guide\n");
+    const directory = `${"a".repeat(24)}/12345678-1234-1234-1234-123456789abc/demo-skill`;
+    const input: ProviderRunInput = {
+      ...runInput(join(allowed, "repo"), `Read ${NODE_SKILL_ROOT_TOKEN}/${directory}/SKILL.md`, []),
+      images: [{ detail: "high", path: image, type: "localImage" }],
+      skillPackages: [{ directory, path: skill }]
+    };
+
+    await remote.run(input);
+
+    const received = fake.received[0]!;
+    expect(received.skillPackages).toBeUndefined();
+    const skillPath = /Read (\S+)\/SKILL\.md/.exec(received.prompt)![1]!;
+    expect(skillPath).not.toContain(NODE_SKILL_ROOT_TOKEN);
+    expect(await readFile(join(skillPath, "refs", "guide.md"), "utf8")).toBe("guide\n");
+    expect(received.images).toHaveLength(1);
+    expect(received.images![0]).toMatchObject({ detail: "high", type: "localImage" });
+    expect(received.images![0]!.path).not.toBe(image);
+    await rm(hubFiles, { force: true, recursive: true });
   });
 
   test("surfaces provider failures and refuses paths outside the node's roots", async () => {
