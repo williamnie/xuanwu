@@ -41,6 +41,8 @@ import {
 import type { ReadApiContext } from "../readApiContext.ts";
 import type { Router } from "../router.ts";
 import { cleanString } from "../../util/values.ts";
+import { providersForProjectCwd } from "../../nodes/remoteExecution.ts";
+import { isRemoteProjectCwd } from "../../nodes/projectLocation.ts";
 
 const WORK_HTTP_POLICY_REF = "xuanwu-work-http-authenticated-write-v1";
 const DEFAULT_PAGE_SIZE = 50;
@@ -173,12 +175,13 @@ function validateWorkExecutionSelection(
     throw workError(409, "provider_unavailable", `provider "${providerID}" is not registered`);
   }
   if (!context.providers) return;
-  const provider = context.providers[providerID];
+  const provider = providersForProjectCwd(context.providers, project.cwd)[providerID];
   if (!provider || !provider.capabilities.includes("issue_execution")) {
     throw workError(409, "provider_unavailable", `provider "${providerID}" does not support issue_execution`);
   }
   const status = provider.runtimeStatus?.();
-  if (status?.ready === false) {
+  // 远程节点离线时允许先建任务，节点上线后再执行。
+  if (status?.ready === false && !isRemoteProjectCwd(project.cwd)) {
     throw workError(409, "provider_not_ready", `provider "${providerID}" is not ready: ${status.reason || "configuration required"}`);
   }
 }

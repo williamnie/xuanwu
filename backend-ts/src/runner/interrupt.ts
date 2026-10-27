@@ -18,6 +18,7 @@ import { getIssue, listIssueRuns, listIssues, type Issue } from "../db/repositor
 import type { RunnerDatabase } from "../db/database.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
+import { providersForProjectID } from "../nodes/remoteExecution.ts";
 import { asProviderId, type ExecutorProvider, type ExecutorProviderId, type InterruptInput, type SessionRef } from "../providers/types.ts";
 
 type InterruptRuntime = {
@@ -39,9 +40,10 @@ const SESSION_INTERRUPT_REASON = "session_interrupt";
 export async function cancelIssueWithInterrupt(
   db: RunnerDatabase,
   issueID: number,
-  runtime: InterruptRuntime = {}
+  projectRuntime: InterruptRuntime = {}
 ): Promise<Issue> {
   const issue = issueWithLatestRun(db, mustGetIssue(db, issueID));
+  const runtime = issueProjectRuntime(db, issue, projectRuntime);
   if (shouldInterruptIssue(issue, runtime)) {
     await interruptLinkedIssue(db, issue, ISSUE_CANCEL_REASON, runtime);
   }
@@ -52,9 +54,10 @@ export async function interruptIssueForStatusTransition(
   db: RunnerDatabase,
   issueID: number,
   reason: string,
-  runtime: InterruptRuntime = {}
+  projectRuntime: InterruptRuntime = {}
 ): Promise<Issue> {
   const issue = issueWithLatestRun(db, mustGetIssue(db, issueID));
+  const runtime = issueProjectRuntime(db, issue, projectRuntime);
   if (!shouldInterruptIssue(issue, runtime)) return issue;
   const interrupted = await interruptLinkedIssue(db, issue, reason, runtime);
   if (!interrupted) throw new Error("旧 Session 中断失败，Issue 状态未更新");
@@ -65,9 +68,10 @@ export async function retryIssueWithInterrupt(
   db: RunnerDatabase,
   issueID: number,
   options: IssueActionOptions = {},
-  runtime: InterruptRuntime = {}
+  projectRuntime: InterruptRuntime = {}
 ): Promise<Issue> {
   const issue = issueWithLatestRun(db, mustGetIssue(db, issueID));
+  const runtime = issueProjectRuntime(db, issue, projectRuntime);
   if (!isOpenRunningIssue(issue)) return retryIssue(db, issueID, options);
   if (linkedSessionIsTerminal(db, issue)) {
     reconcileTerminalSessionForRetry(db, issue, runtime);
@@ -100,7 +104,8 @@ export async function interruptSession(
   const session = sessionRef(rawSessionID, latestTurnID(db, rawSessionID));
   const linked = linkedRunningIssue(db, session);
   if (linked) {
-    return { interrupted: await interruptLinkedIssue(db, linked, SESSION_INTERRUPT_REASON, runtime) };
+    const interrupted = await interruptLinkedIssue(db, linked, SESSION_INTERRUPT_REASON, issueProjectRuntime(db, linked, runtime));
+    return { interrupted };
   }
   // P5：无 turn（messageRef）时无法定位 active invocation；仅当 Provider 声明 session-level
   // interrupt（interrupt 方法存在）才继续，否则 fail closed 跳过（避免误中断）。
@@ -112,6 +117,12 @@ export async function interruptSession(
   }
   const error = await interruptProviderTurn(db, 0, session, SESSION_INTERRUPT_REASON, runtime);
   return { interrupted: !error };
+}
+
+/** 远程项目的运行在节点上，中断要发给该节点的 provider。 */
+function issueProjectRuntime(db: RunnerDatabase, issue: Issue, runtime: InterruptRuntime): InterruptRuntime {
+  const providers = providersForProjectID(db, runtime.providers, issue.project_id);
+  return providers === runtime.providers ? runtime : { ...runtime, providers };
 }
 
 function shouldInterruptIssue(issue: Issue, runtime: InterruptRuntime): boolean {

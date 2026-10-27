@@ -7,6 +7,7 @@ import {
 import { observeGitWorkspaceBaseline } from "./gitWorkspaceObservation.ts";
 import { captureExecutionEvidenceContext, recordExecutionEvidenceContext } from "../acceptance/executionEvidenceContext.ts";
 import { validateReacquiredWorkspace } from "../review/workspaceWait.ts";
+import { isRemoteProjectCwd } from "../../nodes/projectLocation.ts";
 
 export async function prepareReservedIssueRun(
   db: RunnerDatabase,
@@ -14,7 +15,8 @@ export async function prepareReservedIssueRun(
   observe: typeof observeGitWorkspaceBaseline = observeGitWorkspaceBaseline
 ): Promise<RunPreparationResult> {
   const context = captureExecutionEvidenceContext(db, reservation.issue_id);
-  const baseline = reservation.project_cwd
+  // 远程项目的工作区在节点上，v1 不观察 git 基线。
+  const baseline = reservation.project_cwd && !isRemoteProjectCwd(reservation.project_cwd)
     ? await observe({ project_cwd: reservation.project_cwd, run_id: reservation.run_id })
     : null;
   if (!await validateReacquiredWorkspace(db, reservation.issue_id, reservation.run_id)) {

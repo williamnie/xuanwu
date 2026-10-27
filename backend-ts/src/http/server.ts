@@ -94,6 +94,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
   if (runtime.config) setProjectLoopMaxParallelProjects(runtime.config.runner.maxParallelProjects);
   const router = createRouter();
   const bus = runtime.bus ?? new EventBus();
+  const nodeHub = runtime.nodeHub ?? new NodeHub();
   router.get("/health", () => json({ status: "ok" }));
   router.get("/api/health", () => json({ role: "core", status: "ok" }));
   if (runtime.authTokenManager) registerAuthTokenRoutes(router, { manager: runtime.authTokenManager });
@@ -168,7 +169,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
       providers: runtime.providers
     });
     registerI18nRoutes(router, { database: runtime.database });
-    registerNodesRoutes(router, { database: runtime.database, hub: runtime.nodeHub ?? new NodeHub() });
+    registerNodesRoutes(router, { database: runtime.database, hub: nodeHub });
     registerExternalEventRoutes(router, { database: runtime.database });
     registerWebhookEventRoutes(router, {
       database: runtime.database,
@@ -185,6 +186,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
     });
     registerReadApiRoutes(router, {
       agenticClient: runtime.agenticClient,
+      nodeHub,
       auditSystemRestart: runtime.auditSystemRestart,
       bus,
       codexSessionsDir: runtime.codexSessionsDir,

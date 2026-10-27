@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { realpath } from "node:fs/promises";
 import { resolve } from "node:path";
 import { runBoundedProcess } from "../../util/boundedProcess.ts";
+import { isRemoteProjectCwd } from "../../nodes/projectLocation.ts";
 import type { CapturedGitWorkspaceBaseline, WorkspaceEntry } from "../evidence/runGitWorkspaceBaseline.ts";
 
 class Semaphore {
@@ -82,6 +83,8 @@ export async function withGitWorkspaceObservation<T>(
   projectCwd: string,
   capture: (cwd: string, deadline: number) => Promise<T>
 ): Promise<T | null> {
+  // 远程项目的工作区在节点上，中心不观察（v1 降级）。
+  if (isRemoteProjectCwd(projectCwd)) return outcome("invalid_input");
   const deadline = performance.now() + OBSERVATION_DEADLINE_MS;
   const cwd = await canonicalCwd(projectCwd);
   if (!cwd) return outcome("invalid_input");

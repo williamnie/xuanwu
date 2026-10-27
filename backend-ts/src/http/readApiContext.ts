@@ -6,6 +6,7 @@ import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts
 import type { ProviderRegistry } from "../providers/core/registry.ts";
 import type { PiOpenAICodexModelDiscovery, PiOpenAICodexOAuthLogin } from "./pi/piOAuthApi.ts";
 import type { SystemRestartAuditEvent } from "./system/systemRestartApi.ts";
+import type { NodeHub } from "../nodes/hub.ts";
 
 export type ReadApiContext = {
   agenticClient?: AgenticWorkerClient;
@@ -16,6 +17,7 @@ export type ReadApiContext = {
   database: RunnerDatabase;
   readDatabase?: RunnerDatabase;
   interruptTimeoutMs?: number;
+  nodeHub?: NodeHub;
   piOpenAICodexModelDiscovery?: PiOpenAICodexModelDiscovery;
   piOpenAICodexOAuthLogin?: PiOpenAICodexOAuthLogin;
   piOAuthLoginTimeoutMs?: number;

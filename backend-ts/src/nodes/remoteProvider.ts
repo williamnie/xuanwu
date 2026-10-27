@@ -19,6 +19,7 @@ import {
   type ProviderRunResult
 } from "../providers/types.ts";
 import { NodeOfflineError, type NodeHub } from "./hub.ts";
+import { projectLocation } from "./projectLocation.ts";
 import type { NodeRunEvent, NodeRunStartParams } from "./protocol.ts";
 
 /** 节点断线后，在途运行等待其重连的时长；超时按节点离线失败。 */
@@ -122,7 +123,12 @@ function runRemote(options: RemoteProviderOptions, input: ProviderRunInput): Pro
       }, graceMs);
     });
     const { images: _images, onEvent: _onEvent, ...remoteInput } = input;
-    const params: NodeRunStartParams = { input: remoteInput, providerId: provider.id, runRef };
+    // 中心内部以 node:// 形式标识远程项目，发往节点时换成节点上的真实路径。
+    const params: NodeRunStartParams = {
+      input: { ...remoteInput, cwd: projectLocation(remoteInput.cwd).path },
+      providerId: provider.id,
+      runRef
+    };
     hub.request(nodeId, "run.start", params).catch((error: unknown) => {
       finish(error instanceof Error ? error : new Error(String(error)));
     });

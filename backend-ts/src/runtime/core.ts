@@ -38,6 +38,7 @@ import {
   type PiAutoManageSchedulerInput
 } from "../runner/piAutoManageScheduler.ts";
 import { setProjectLoopMaxParallelProjects, startProjectLoop } from "../runner/projectLoopManager.ts";
+import { startNodeHubRuntime } from "../nodes/hubRuntime.ts";
 import { recoverInProgressIssues } from "../runner/recovery.ts";
 import { reconcileStaleAgentSessions } from "../runner/staleSessionReconciler.ts";
 import { assertInternalCoreAddress } from "../serverRole.ts";
@@ -190,11 +191,18 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
     }));
   });
   primeProviderStatus(config);
+  const nodeHubRuntime = startNodeHubRuntime({
+    database,
+    onNodeOnline: (projectIds) => {
+      for (const projectId of projectIds) startProjectLoop({ bus, database, providers, onError: logProjectLoopError }, projectId);
+    }
+  });
   const server = await startServer(config, {
     agenticClient,
     authTokenManager,
     bus,
     database,
+    nodeHub: nodeHubRuntime.hub,
     readDatabase,
     feishuAgentBridge: feishuModule.agentBridge,
     feishuReceiverStatus: () => feishuModule.receiverStatus(),

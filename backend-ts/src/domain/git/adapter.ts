@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import { spawn } from "node:child_process";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { redactEvidenceText } from "../evidence/contracts.ts";
+import { isRemoteProjectCwd } from "../../nodes/projectLocation.ts";
 
 type LocalGitCommandResult = {
   code: number;
@@ -44,7 +45,10 @@ export function createLocalGitAdapter(options: LocalGitAdapterOptions = {}): Loc
 
   return {
     async run(input) {
-      const repositoryPath = resolve(requiredText(input.repository_path, "Git repository path"));
+      const requestedPath = requiredText(input.repository_path, "Git repository path");
+      // 远程项目的仓库在节点上；绝不能让 resolve() 把 node:// 路径解析成中心本机的相对目录。
+      if (isRemoteProjectCwd(requestedPath)) throw new Error("remote project workspaces are not available on the hub");
+      const repositoryPath = resolve(requestedPath);
       const allowedExitCodes = input.allowed_exit_codes ?? [0];
       if (allowedExitCodes.length === 0 || allowedExitCodes.some((code) => !Number.isInteger(code))) {
         throw new Error("allowed Git exit codes must be integers");

@@ -34,6 +34,8 @@ import { prepareReservedIssueRun } from "../domain/run/runPreparation.ts";
 import { refreshSafeWorkspaceWaits } from "../domain/review/workspaceWait.ts";
 import { issueExecutionContext } from "../domain/work/issueExecutionAuthority.ts";
 import { cleanString } from "../util/values.ts";
+import { providersForProjectCwd } from "../nodes/remoteExecution.ts";
+import { isRemoteProjectCwd } from "../nodes/projectLocation.ts";
 
 export type ProjectLoopInput = {
   bus?: Pick<EventBus, "publish">;
@@ -57,8 +59,9 @@ export type ProjectLoopDecision = {
   scope: string;
 };
 
-export async function runProjectLoopOnce(input: ProjectLoopInput): Promise<ProjectLoopResult> {
-  const project = mustGetProject(input.database, input.projectId);
+export async function runProjectLoopOnce(loopInput: ProjectLoopInput): Promise<ProjectLoopResult> {
+  const project = mustGetProject(loopInput.database, loopInput.projectId);
+  const input = withProjectProviders(loopInput, project);
   const decision = projectLoopDecision(input, true);
   if (!decision.allowed) {
     recordProjectLoopDecision(input.database, decision);
@@ -78,8 +81,9 @@ export async function runProjectLoopOnce(input: ProjectLoopInput): Promise<Proje
   return { claimed: true, issue, run };
 }
 
-export function projectLoopDecision(input: ProjectLoopInput, forceOnce: boolean): ProjectLoopDecision {
-  const project = mustGetProject(input.database, input.projectId);
+export function projectLoopDecision(loopInput: ProjectLoopInput, forceOnce: boolean): ProjectLoopDecision {
+  const project = mustGetProject(loopInput.database, loopInput.projectId);
+  const input = withProjectProviders(loopInput, project);
   const firstQueued = peekNextTodoIssue(input.database, project.id);
   const firstReady = peekNextReadyIssue(input.database, project.id);
   const projectReasons = evaluateQueueCandidate({ project, forceOnce });
@@ -170,6 +174,12 @@ async function runClaimedIssue(
     }
     return { runId: "provider_terminal" };
   }
+}
+
+/** 远程项目改用其节点上的 provider；节点离线时这些 provider 报告未就绪，任务排队等待。 */
+function withProjectProviders(input: ProjectLoopInput, project: Project): ProjectLoopInput {
+  const providers = providersForProjectCwd(input.providers, project.cwd);
+  return providers === input.providers ? input : { ...input, providers };
 }
 
 function publishIssueStatus(input: ProjectLoopInput, issue: Issue): void {
@@ -354,7 +364,8 @@ function boundedPromptText(value: unknown, limit: number): string {
 function withSkillIntentContext(project: Project, issue: Issue, prompt: string, database?: RunnerDatabase): string {
   if (!hasSkillIntentContext(project, issue)) return prompt.trim();
   const policy = parseSkillPolicy(project.default_skill_policy);
-  const metadata = matchedSkillMetadata(issue, policy, database, project);
+  // 托管 Skill 的元数据指向中心本机路径，远程节点读不到，v1 只给出意图不附元数据。
+  const metadata = isRemoteProjectCwd(project.cwd) ? [] : matchedSkillMetadata(issue, policy, database, project);
   const skillContext = [
     "",
     "## Skill Intent Context",

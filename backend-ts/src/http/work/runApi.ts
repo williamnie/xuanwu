@@ -41,6 +41,7 @@ import { json } from "../errors.ts";
 import type { ReadApiContext } from "../readApiContext.ts";
 import type { Router } from "../router.ts";
 import { cleanString } from "../../util/values.ts";
+import { providersForProjectID } from "../../nodes/remoteExecution.ts";
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
@@ -208,7 +209,7 @@ async function interruptRun(
   const expectedRevision = revisionInput(body.expected_revision, "expected_revision");
   const expectedAttemptRevision = revisionInput(body.expected_attempt_revision, "expected_attempt_revision");
   const audit = auditInput(body.audit);
-  const provider = controlProvider(context, attempt, "interrupt");
+  const provider = controlProvider(context, attempt, "interrupt", run.project_id);
   const sessionID = requiredControlRef(attempt.provider_ref.session_ref, "interrupt requires provider session ref");
   const turnID = requiredControlRef(attempt.provider_ref.turn_ref, "interrupt requires provider turn ref");
   const prepared = prepareRunInterrupt(context.database, {
@@ -254,7 +255,7 @@ async function resumeRun(
   const expectedAttemptRevision = revisionInput(body.expected_attempt_revision, "expected_attempt_revision");
   const prompt = requiredString(body.prompt, "prompt");
   const audit = auditInput(body.audit);
-  const provider = controlProvider(context, attempt, "resume_session");
+  const provider = controlProvider(context, attempt, "resume_session", run.project_id);
   const sessionID = requiredControlRef(attempt.provider_ref.session_ref, "resume requires provider session ref");
   const prepared = prepareRunAttempt(context.database, {
     audit,
@@ -398,13 +399,14 @@ function persistResumeRuntime(
 function controlProvider(
   context: ReadApiContext,
   attempt: RunAttemptView,
-  capability: "interrupt" | "resume_session"
+  capability: "interrupt" | "resume_session",
+  projectID: string
 ): ExecutorProvider {
   const providerID = attempt.provider_ref.provider;
   if (!isExecutorProviderId(providerID)) {
     throw runError(409, "provider_control_unavailable", `Provider ${providerID} is not controllable`);
   }
-  const provider = context.providers?.[providerID];
+  const provider = providersForProjectID(context.database, context.providers, projectID)?.[providerID];
   const supported = capability === "interrupt" ? provider?.interrupt : provider?.sendSessionMessage;
   if (!provider || !supported || !provider.capabilities.includes(capability)) {
     throw runError(409, "provider_control_unavailable", `Provider ${providerID} does not support ${capability}`);

@@ -1,7 +1,8 @@
 import type { IssueActionOptions } from "../db/repositories/issueActions.ts";
 import type { ListIssueEventsOptions } from "../db/repositories/issueEvents.ts";
 import type { IssueFilter } from "../db/repositories/issues.ts";
-import { ProjectNotFoundError } from "../db/repositories/projects.ts";
+import { getProject, ProjectNotFoundError, type Project } from "../db/repositories/projects.ts";
+import { checkRemoteProjectPath, prepareRemoteProjectBody } from "../nodes/remoteProjects.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import {
   createReadApiDomainHandlers,
@@ -22,7 +23,7 @@ export function registerCoreReadRoutes(router: Router, context: ReadApiContext):
     : handlers;
   router.get("/api/system/delivery-effectiveness", async request => json(await readDeliveryEffectiveness(context.readDatabase ?? context.database, request)));
   registerIssuesPageAuxRoutes(router, readHandlers);
-  registerProjectRoutes(router, handlers, readHandlers);
+  registerProjectRoutes(router, context, handlers, readHandlers);
   registerIssueCollectionRoutes(router, handlers, readHandlers);
   registerIssueItemRoutes(router, handlers, readHandlers);
 }
@@ -31,18 +32,46 @@ function registerIssuesPageAuxRoutes(router: Router, handlers: ReadApiDomainHand
   router.get("/api/agent-profiles", () => json(handlers.auxiliary.listAgentProfiles()));
 }
 
-function registerProjectRoutes(router: Router, handlers: ReadApiDomainHandlers, readHandlers = handlers): void {
+function registerProjectRoutes(
+  router: Router,
+  context: ReadApiContext,
+  handlers: ReadApiDomainHandlers,
+  readHandlers = handlers
+): void {
   router.get("/api/projects", () => json(readHandlers.projects.list()));
-  router.get("/api/projects/path-check", async request => json(await readHandlers.projects.checkPath(new URL(request.url).searchParams.get("cwd"))));
+  router.get("/api/projects/path-check", async (request) => {
+    const params = new URL(request.url).searchParams;
+    const nodeID = cleanString(params.get("node_id"));
+    if (nodeID !== "") {
+      if (!context.nodeHub) throw new HttpError(409, "远程节点不可用");
+      return json(await checkRemoteProjectPath(context.database, context.nodeHub, nodeID, params.get("cwd") ?? ""));
+    }
+    return json(await readHandlers.projects.checkPath(params.get("cwd")));
+  });
   router.get("/api/projects/:id", (request) => readResponse(() => readHandlers.projects.read(projectID(request))));
   router.post("/api/projects", async (request) => {
-    const body = await parseObjectBody(request);
+    const body = await remoteProjectBody(context, await parseObjectBody(request));
     return writeResponse(() => handlers.projects.create(body), 201);
   });
   router.patch("/api/projects/:id", async (request) => {
-    const body = await parseObjectBody(request);
+    const current = getProject(context.database, projectID(request)) ?? undefined;
+    const body = await remoteProjectBody(context, await parseObjectBody(request), current);
     return writeResponse(() => handlers.projects.update(projectID(request), body));
   });
+}
+
+/** 远程项目的路径要经节点检查，再转成 node:// 形式的 cwd。 */
+async function remoteProjectBody(
+  context: ReadApiContext,
+  body: Record<string, unknown>,
+  current?: Project
+): Promise<Record<string, unknown>> {
+  if (!context.nodeHub) {
+    if (cleanString(body.node_id) !== "") throw new HttpError(409, "远程节点不可用");
+    const { node_id: _ignored, ...rest } = body;
+    return rest;
+  }
+  return await prepareRemoteProjectBody(context.database, context.nodeHub, body, current);
 }
 
 function registerIssueCollectionRoutes(router: Router, handlers: ReadApiDomainHandlers, readHandlers = handlers): void {

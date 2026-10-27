@@ -59,8 +59,10 @@
 ### 5.1 数据（迁移 `092_remote_nodes`）
 
 - 新表 `nodes`：`id, name, token_hash, status(online/offline), last_seen_at, last_remote_addr, info_json(版本/OS/providers/allowedRoots), created_at, updated_at, revoked_at`
-- `projects` 新增 `node_id text not null default ''`（空 = 本机，兼容所有现存数据）
-- `projects.cwd` 的 `unique` 改为 `unique(node_id, cwd)`（不同机器可以有相同路径）
+- **不改 `projects` 表**：它被十余张表以 `on delete cascade` 外键引用，且迁移在事务内执行、无法临时关闭外键，重建表有级联删除风险。远程项目的 `cwd` 改存为 `node://<节点ID>:<节点上的绝对路径>`（`nodes/projectLocation.ts`）：
+  - 沿用 `cwd` 的唯一约束，天然按「节点 + 路径」唯一；
+  - 中心上直接读写目录的代码遇到该前缀只会找不到目录，不会误操作中心本机的同名目录；git 适配器与工作区观察处另有显式拦截；
+  - 项目 API 对远程项目额外返回 `node_id` 与 `node_path`；创建/更新时传 `node_id` + 节点上的 `cwd`，由节点 `path.check` 校验后再转换。
 
 ### 5.2 密钥与配对
 
