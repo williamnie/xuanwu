@@ -73,7 +73,8 @@
     "pages/SkillLibraryPanel.css",
     "pages/SkillsRuntimePanel.css",
     "pages/SourcePoliciesPanel.css",
-    "pages/TelegramSettingsPanel.css"
+    "pages/TelegramSettingsPanel.css",
+    "pages/RemoteNodesPanel.css"
   ],
   "panelPadding": [
     {

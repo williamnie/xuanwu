@@ -3,7 +3,7 @@ import { request } from './base.js';
 export const projectsApi = {
   getProjects: () => request('/api/projects'),
 
-  checkPath: (cwd, { signal } = {}) => request(`/api/projects/path-check?${new URLSearchParams({ cwd })}`, { signal }),
+  checkPath: (cwd, { nodeId = '', signal } = {}) => request(`/api/projects/path-check?${new URLSearchParams(nodeId ? { cwd, node_id: nodeId } : { cwd })}`, { signal }),
 
   getAgentProfiles: () => request('/api/agent-profiles'),
 

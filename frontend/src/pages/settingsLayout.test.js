@@ -52,6 +52,8 @@ test('Settings Projects owns the complete project list and editor flow; preferen
   assert.match(chromeSource, /title = 'Settings'/);
   assert.match(chromeSource, /settings-eyebrow">SETTINGS/);
   assert.match(sectionsSource, /activeTab === 'general' && <Projects \/>/);
+  // 远程节点与项目同属“项目”分区：项目落在哪台机器上在这里管理。
+  assert.match(sectionsSource, /activeTab === 'general' && <RemoteNodesPanel \/>/);
   assert.doesNotMatch(sectionsSource, /ProjectSettingsEditor|selectProjects|settings-project-select/);
   assert.match(projectsSource, /projects\.map\(proj =>/);
   assert.match(projectsSource, /handleOpenCreateModal/);

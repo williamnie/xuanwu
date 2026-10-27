@@ -4,6 +4,8 @@ import { buildProviderModelOptions, normalizeProviderModel } from './projectMode
 import { useImmer } from 'use-immer';
 import { systemApi } from '../api/system.js';
 import { projectsApi } from '../api/projects.js';
+import { nodesApi } from '../api/nodes.js';
+import { nodeReadyProviders, nodeStatus } from './remoteNodesModel.js';
 import { message } from '../store/toastStore.js';
 import { serviceTierOptions } from '../utils/serviceTier.js';
 import { availableAgentProfiles, codeAgentLabel } from '../utils/codeAgents.js';
@@ -36,7 +38,9 @@ function projectForm(project) {
   return {
     formAgentProfileId: project?.default_agent_profile_id || '',
     formApproval: project?.approval_policy || 'never',
-    formCwd: project?.cwd || '',
+    // 远程项目的 cwd 是 node:// 形式，表单里只编辑节点上的路径。
+    formCwd: project?.node_id ? project.node_path || '' : project?.cwd || '',
+    formNodeId: project?.node_id || '',
     formModel: normalizeProviderModel(project?.provider || DEFAULT_PROVIDER, project?.model),
     formProvider: project?.provider || DEFAULT_PROVIDER,
     formProviderConfig: project?.provider_config_json || '{}',
@@ -53,6 +57,7 @@ function initialEditorState(project) {
     codexModelsError: '',
     codexModelsLoading: false,
     formError: '',
+    nodes: [],
     profileError: '',
     profiles: [],
     profilesLoading: false,
@@ -69,6 +74,18 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
   const [ui, updateUi] = useImmer(() => initialEditorState(project));
   const projectID = project?.id || '';
   const modelRequest = useRef(0);
+  const selectedNode = ui.nodes.find(node => node.id === ui.formNodeId) || null;
+  const remote = ui.formNodeId !== '';
+
+  useEffect(() => {
+    let cancelled = false;
+    nodesApi.listNodes()
+      .then(result => {
+        if (!cancelled) updateUi(draft => { draft.nodes = Array.isArray(result?.nodes) ? result.nodes : []; });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [updateUi]);
 
   const loadAgentProfiles = useCallback(async () => {
     updateUi(draft => {
@@ -91,8 +108,17 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
     }
   }, [updateUi]);
 
-  const loadProviderModels = useCallback(async (provider = DEFAULT_PROVIDER) => {
+  const loadProviderModels = useCallback(async (provider = DEFAULT_PROVIDER, onNode = false) => {
     const request = ++modelRequest.current;
+    // 远程节点的模型列表暂不经中心读取，使用编程工具默认模型。
+    if (onNode) {
+      updateUi(draft => {
+        draft.codexModels = [];
+        draft.codexModelsError = '';
+        draft.codexModelsLoading = false;
+      });
+      return;
+    }
     updateUi(draft => {
       draft.codexModels = [];
       draft.codexModelsLoading = true;
@@ -139,7 +165,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
           draft.formModel = normalizeProviderModel(selectedProvider, '');
         }
       });
-      if (selectedProvider) await loadProviderModels(selectedProvider);
+      if (selectedProvider) await loadProviderModels(selectedProvider, Boolean(project?.node_id));
     } catch (error) {
       updateUi(draft => {
         draft.providerCatalog = [];
@@ -147,7 +173,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
         draft.providerCatalogLoading = false;
       });
     }
-  }, [loadProviderModels, mode, project?.provider, updateUi]);
+  }, [loadProviderModels, mode, project?.node_id, project?.provider, updateUi]);
 
   useEffect(() => {
     loadProviderCatalog();
@@ -177,7 +203,19 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
       draft.formModel = normalizeProviderModel(value, '');
       draft.formServiceTier = '';
     });
-    loadProviderModels(value);
+    loadProviderModels(value, remote);
+  };
+
+  const setProjectNode = (nodeId) => {
+    const node = ui.nodes.find(item => item.id === nodeId) || null;
+    const provider = node ? (nodeReadyProviders(node)[0] || '') : (providerOptionsFromCatalog(ui.providerCatalog)[0]?.value || DEFAULT_PROVIDER);
+    updateUi(draft => {
+      draft.formNodeId = nodeId;
+      draft.formProvider = provider;
+      draft.formModel = normalizeProviderModel(provider, '');
+      draft.formServiceTier = '';
+    });
+    loadProviderModels(provider, Boolean(node));
   };
 
   const handleSubmit = async (event) => {
@@ -214,6 +252,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
       execution_policy: executionPolicyPayload(ui.formExecutionPolicy),
       default_service_tier: ui.formServiceTier,
       default_agent_profile_id: ui.formAgentProfileId,
+      ...(remote ? { node_id: ui.formNodeId } : {}),
     };
 
     updateUi(draft => {
@@ -221,11 +260,14 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
       draft.saving = true;
     });
     try {
-      const preview = await systemApi.resolveProviderExecutionPolicy(ui.formProvider, {
-        project_id: projectID,
-        policy: executionPolicyPayload(ui.formExecutionPolicy),
-      });
-      if (preview?.supported === false) throw new Error(preview.reason || '当前编程工具不支持所选执行策略');
+      // 远程项目的编程工具在节点上，执行策略在运行时由中心按内置能力解析。
+      if (!remote) {
+        const preview = await systemApi.resolveProviderExecutionPolicy(ui.formProvider, {
+          project_id: projectID,
+          policy: executionPolicyPayload(ui.formExecutionPolicy),
+        });
+        if (preview?.supported === false) throw new Error(preview.reason || '当前编程工具不支持所选执行策略');
+      }
       const saved = mode === 'create'
         ? await projectsApi.createProject({ id: projectIdFromPath(ui.formCwd), ...payload })
         : await projectsApi.updateProject(projectID, payload);
@@ -243,7 +285,9 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
   };
 
   const discoveredProviderOptions = providerOptionsFromCatalog(ui.providerCatalog);
-  const providerOptions = discoveredProviderOptions;
+  const providerOptions = remote
+    ? nodeReadyProviders(selectedNode).map(id => ({ value: id, label: codeAgentLabel(id, ui.providerCatalog) }))
+    : discoveredProviderOptions;
   const availableProfiles = availableAgentProfiles(ui.profiles, ui.providerCatalog);
   const modelOptions = buildProviderModelOptions(ui.formProvider, ui.codexModels, [ui.formModel], language);
   const modal = layout === 'modal';
@@ -255,19 +299,45 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
       <div className={modal ? 'project-config-modal-body' : 'project-settings-editor-body'}>
         {ui.formError && <div className="project-settings-error" role="alert">{ui.formError}</div>}
 
+        {ui.nodes.length > 0 || remote ? (
+          <div className="form-group">
+            <label><span className="ds-mono-label">运行位置</span></label>
+            <select
+              aria-label="运行位置"
+              className="form-control"
+              disabled={mode === 'edit'}
+              onChange={event => setProjectNode(event.target.value)}
+              value={ui.formNodeId}
+            >
+              <option value="">本机（玄武所在服务器）</option>
+              {ui.nodes.map(node => (
+                <option key={node.id} value={node.id}>{node.name}（{nodeStatus(node).label}）</option>
+              ))}
+              {remote && !selectedNode ? <option value={ui.formNodeId}>{ui.formNodeId}（读取中）</option> : null}
+            </select>
+            <span className="project-settings-hint">
+              {mode === 'edit'
+                ? '项目创建后不能更换运行位置。'
+                : remote
+                  ? '任务会在该节点上执行。远程项目暂不支持 Git 验收与交付。'
+                  : '选择远程节点后，任务在那台机器上执行。'}
+            </span>
+          </div>
+        ) : null}
+
         <div className="form-group">
           <label><span className="ds-mono-label">项目路径 *</span></label>
           <input
             autoFocus={mode === 'create'}
             className="form-control"
             onChange={event => setFormField('formCwd', event.target.value)}
-            placeholder="/Users/username/projects/project-name"
+            placeholder={remote ? '节点上的绝对路径，例如 /home/me/code/project' : '/Users/username/projects/project-name'}
             required
             type="text"
             value={ui.formCwd}
           />
           <span className="project-settings-hint">
-            填写项目根目录的绝对路径。项目名称会自动识别为：{ui.formCwd.trim() ? projectNameFromPath(ui.formCwd) : '—'}
+            {remote ? '填写节点上项目根目录的绝对路径，需位于节点 --root 允许的目录内。' : '填写项目根目录的绝对路径。'}项目名称会自动识别为：{ui.formCwd.trim() ? projectNameFromPath(ui.formCwd) : '—'}
           </span>
         </div>
 

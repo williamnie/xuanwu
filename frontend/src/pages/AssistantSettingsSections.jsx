@@ -9,6 +9,7 @@ import SourcePoliciesPanel from './SourcePoliciesPanel';
 import Projects from './Projects';
 import ExecutionPresetsPanel from './ExecutionPresetsPanel';
 import RemoteAccessTokenPanel from './RemoteAccessTokenPanel';
+import RemoteNodesPanel from './RemoteNodesPanel';
 import PiAgentSettingsPanel from './PiAgentSettingsPanel';
 import PersonaSettingsPanel from './PersonaSettingsPanel';
 import PiMcpManagementPanel from './PiMcpManagementPanel';
@@ -34,6 +35,7 @@ export default function SettingsTabContent({ activeTab, advancedSection, navigat
   return (
     <>
       {activeTab === 'general' && <Projects />}
+      {activeTab === 'general' && <RemoteNodesPanel />}
       {activeTab === 'ai' && <AiConnectionsTab />}
       {activeTab === 'notifications' && <NotificationsTab />}
       {activeTab === 'preferences' && <PreferencesTab theme={theme} toggleTheme={toggleTheme} />}

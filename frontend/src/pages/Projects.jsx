@@ -1,6 +1,8 @@
 import { appHashForRoute } from '../appRouteModel.js';
 import { useI18n } from '../i18n/context.js';
 import { projectsApi } from '../api/projects.js';
+import { nodesApi } from '../api/nodes.js';
+import { useEffect, useState } from 'react';
 import { useImmer } from 'use-immer';
 import './Projects.css';
 import { message } from '../store/toastStore';
@@ -34,8 +36,30 @@ function compactPath(cwd = '') {
   return `…/${parts.slice(-2).join('/')}`;
 }
 
+/** 远程项目显示「节点名:路径」，本机项目只显示路径。 */
+function projectLocationText(project, nodesById) {
+  if (!project.node_id) return compactPath(project.cwd);
+  const node = nodesById.get(project.node_id);
+  return `${node?.name || project.node_id}:${compactPath(project.node_path)}`;
+}
+
+function useRemoteNodes() {
+  const [nodesById, setNodesById] = useState(() => new Map());
+  useEffect(() => {
+    let cancelled = false;
+    nodesApi.listNodes()
+      .then(result => {
+        if (!cancelled) setNodesById(new Map((result?.nodes || []).map(node => [node.id, node])));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  return nodesById;
+}
+
 export default function Projects() {
   const { t } = useI18n();
+  const nodesById = useRemoteNodes();
   const projects = useDataStore(selectProjects);
   const workSummary = useDataStore(selectWorkSummary);
   const backendOnline = useDataStore(selectBackendOnline);
@@ -247,6 +271,7 @@ export default function Projects() {
 
               const isHeld = Boolean(proj.hold);
               const isLoopActive = !isHeld && (proj.loop_status === 'running' || proj.auto_run === 1);
+              const nodeOffline = Boolean(proj.node_id) && nodesById.size > 0 && !nodesById.get(proj.node_id)?.online;
 
               return (
                 <div key={proj.id} className="glass-card project-card">
@@ -261,16 +286,16 @@ export default function Projects() {
                         <h3 title={proj.name}>
                           {proj.name}
                         </h3>
-                        <code title={proj.cwd}>
-                          {compactPath(proj.cwd)}
+                        <code title={proj.node_id ? `${proj.node_id}:${proj.node_path}` : proj.cwd}>
+                          {projectLocationText(proj, nodesById)}
                         </code>
                       </div>
                     </div>
 
                     <div className="project-status-pill">
-                      <span className={`status-dot ${activeCount > 0 ? 'running' : isLoopActive ? 'active' : 'idle'}`}></span>
+                      <span className={`status-dot ${nodeOffline ? 'idle' : activeCount > 0 ? 'running' : isLoopActive ? 'active' : 'idle'}`}></span>
                       <span>
-                        {isHeld ? 'Hold' : activeCount > 0 ? '运行中' : isLoopActive ? '监听中' : '已暂停'}
+                        {isHeld ? 'Hold' : nodeOffline ? '节点离线' : activeCount > 0 ? '运行中' : isLoopActive ? '监听中' : '已暂停'}
                       </span>
                     </div>
                   </div>
@@ -375,7 +400,7 @@ export default function Projects() {
 
             <div className="project-delete-modal-project">
               <span>项目路径</span>
-              <code>{deleteProject.cwd}</code>
+              <code>{deleteProject.node_id ? `${nodesById.get(deleteProject.node_id)?.name || deleteProject.node_id}:${deleteProject.node_path}` : deleteProject.cwd}</code>
             </div>
 
             <div className="project-delete-modal-actions">
