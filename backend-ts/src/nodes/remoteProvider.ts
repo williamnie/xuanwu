@@ -20,7 +20,7 @@ import {
 } from "../providers/types.ts";
 import { NodeOfflineError, type NodeHub } from "./hub.ts";
 import { projectLocation } from "./projectLocation.ts";
-import type { NodeRunEvent, NodeRunStartParams } from "./protocol.ts";
+import { isTerminalProviderEvent, type NodeRunEvent, type NodeRunStartParams } from "./protocol.ts";
 
 /** 节点断线后，在途运行等待其重连的时长；超时按节点离线失败。 */
 const DEFAULT_OFFLINE_GRACE_MS = 10 * 60_000;
@@ -97,21 +97,29 @@ function runRemote(options: RemoteProviderOptions, input: ProviderRunInput): Pro
   return new Promise<ProviderRunResult>((resolve, reject) => {
     let offlineTimer: ReturnType<typeof setTimeout> | undefined;
     let settled = false;
-    const finish = (error: Error | undefined, result?: ProviderRunResult) => {
+    let terminal = false;
+    // 与本地 provider 一致：run() 可在一轮开始时就返回，之后的事件继续交给 onEvent，直到终止事件。
+    const settle = (error: Error | undefined, result?: ProviderRunResult) => {
       if (settled) return;
       settled = true;
       clearTimeout(offlineTimer);
-      unsubscribe();
       stopWatching();
+      if (error || terminal) unsubscribe();
       if (error) reject(error);
       else resolve(result!);
     };
     const unsubscribe = hub.subscribeRun(runRef, (payload) => {
       const message = payload as NodeRunEvent;
-      if (message.type === "event") input.onEvent?.(message.event);
-      else if (message.type === "result") finish(undefined, message.result);
-      else if (message.type === "error") {
-        finish(message.interrupted ? new ProviderInterruptedError(message.message) : new Error(message.message));
+      if (message.type === "event") {
+        input.onEvent?.(message.event);
+        if (!isTerminalProviderEvent(message.event)) return;
+        terminal = true;
+        if (settled) unsubscribe();
+      } else if (message.type === "result") {
+        settle(undefined, message.result);
+      } else if (message.type === "error") {
+        unsubscribe();
+        settle(message.interrupted ? new ProviderInterruptedError(message.message) : new Error(message.message));
       }
     });
     // 节点断线不立刻判失败：节点上的运行仍在继续，重连后会补发事件。
@@ -119,7 +127,8 @@ function runRemote(options: RemoteProviderOptions, input: ProviderRunInput): Pro
       if (changedNodeId !== nodeId) return;
       clearTimeout(offlineTimer);
       offlineTimer = online ? undefined : setTimeout(() => {
-        finish(new NodeOfflineError(`node ${nodeId} stayed offline for ${graceMs}ms during the run`));
+        unsubscribe();
+        settle(new NodeOfflineError(`node ${nodeId} stayed offline for ${graceMs}ms during the run`));
       }, graceMs);
     });
     const { images: _images, onEvent: _onEvent, ...remoteInput } = input;
@@ -130,7 +139,8 @@ function runRemote(options: RemoteProviderOptions, input: ProviderRunInput): Pro
       runRef
     };
     hub.request(nodeId, "run.start", params).catch((error: unknown) => {
-      finish(error instanceof Error ? error : new Error(String(error)));
+      unsubscribe();
+      settle(error instanceof Error ? error : new Error(String(error)));
     });
   });
 }

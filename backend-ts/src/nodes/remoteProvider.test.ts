@@ -58,6 +58,14 @@ describe("remote executor provider", () => {
     expect(fake.received[0]!.images).toBeUndefined();
   });
 
+  test("keeps streaming events that arrive after run() returns until a terminal event", async () => {
+    const { allowed, remote } = await connectNode();
+    const events: ProviderEvent[] = [];
+    await remote.run(runInput(join(allowed, "repo"), "[[late]]", events));
+    await waitFor(() => events.some((event) => event.type === "turn.completed"));
+    expect(events.map((event) => event.text ?? event.type)).toEqual(["turn.started", "hello from node", "late message", "turn.completed"]);
+  });
+
   test("surfaces provider failures and refuses paths outside the node's roots", async () => {
     const { allowed, fake, remote } = await connectNode();
     await expect(remote.run(runInput(join(allowed, "repo"), "[[fail]]", []))).rejects.toThrow("model exploded");

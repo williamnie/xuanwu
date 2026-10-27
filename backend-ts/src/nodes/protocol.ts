@@ -40,3 +40,11 @@ export type NodeRunEvent =
   | { type: "event"; event: ProviderEvent }
   | { type: "result"; result: ProviderRunResult }
   | { type: "error"; interrupted: boolean; message: string };
+
+/**
+ * 运行是否已到终点。不少 provider（如 Codex）的 run() 在一轮开始时就返回，
+ * 之后的消息、审批与完成信号仍经 onEvent 推送，所以远程运行要转发到终止事件为止。
+ */
+export function isTerminalProviderEvent(event: ProviderEvent): boolean {
+  return event.type === "error" || event.runEvent?.terminal === true;
+}

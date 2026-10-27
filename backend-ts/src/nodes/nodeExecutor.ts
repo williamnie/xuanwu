@@ -1,7 +1,13 @@
 import type { NodeProviderInfo } from "../db/repositories/nodes.ts";
-import { isProviderInterruptedError, type ExecutorProvider } from "../providers/types.ts";
+import { isProviderInterruptedError, type ExecutorProvider, type ProviderEvent } from "../providers/types.ts";
 import type { NodeCommandHandler } from "./agent.ts";
-import type { NodeApprovalResolveParams, NodeRunEvent, NodeRunInterruptParams, NodeRunStartParams } from "./protocol.ts";
+import {
+  isTerminalProviderEvent,
+  type NodeApprovalResolveParams,
+  type NodeRunEvent,
+  type NodeRunInterruptParams,
+  type NodeRunStartParams
+} from "./protocol.ts";
 
 /** 节点向中心开放的能力；会话类能力 v1 不开放。 */
 const REMOTE_CAPABILITIES = ["issue_execution", "interrupt", "approvals"] as const;
@@ -20,16 +26,36 @@ export function nodeExecutionHandlers(providers: ProviderSource): Record<string,
       const cwd = await agent.resolveAllowedPath(input.cwd);
       activeRuns.add(runRef);
       const emit = (event: NodeRunEvent) => agent.emitRunEvent(runRef, event);
-      void provider.run({ ...input, cwd, onEvent: (event) => emit({ type: "event", event }) })
-        .then((result) => emit({ type: "result", result }))
-        .catch((error: unknown) => emit({
-          type: "error",
-          interrupted: isProviderInterruptedError(error),
-          message: error instanceof Error ? error.message : String(error)
-        }))
-        .finally(() => {
-          activeRuns.delete(runRef);
-          agent.finishRun(runRef);
+      // run() 返回后 provider 仍可能推送事件；返回且见到终止事件（或失败）才结束转发。
+      let returned = false;
+      let terminal = false;
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        activeRuns.delete(runRef);
+        agent.finishRun(runRef);
+      };
+      const onEvent = (event: ProviderEvent) => {
+        if (finished) return;
+        emit({ type: "event", event });
+        if (!isTerminalProviderEvent(event)) return;
+        terminal = true;
+        if (returned) finish();
+      };
+      void provider.run({ ...input, cwd, onEvent })
+        .then((result) => {
+          emit({ type: "result", result });
+          returned = true;
+          if (terminal) finish();
+        })
+        .catch((error: unknown) => {
+          emit({
+            type: "error",
+            interrupted: isProviderInterruptedError(error),
+            message: error instanceof Error ? error.message : String(error)
+          });
+          finish();
         });
       return { accepted: true };
     },

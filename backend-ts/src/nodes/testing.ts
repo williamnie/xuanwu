@@ -13,6 +13,7 @@ import {
   type ProviderRunInput,
   type SessionRef
 } from "../providers/types.ts";
+import { normalizedRunEvent } from "../providers/runEvents.ts";
 import { NodeAgent } from "./agent.ts";
 import type { NodeHub } from "./hub.ts";
 import { startNodeHubRuntime } from "./hubRuntime.ts";
@@ -20,7 +21,7 @@ import { nodeExecutionHandlers, nodeProviderInfo } from "./nodeExecutor.ts";
 
 export const TEST_ADMIN_TOKEN = "admin";
 
-/** 可控的节点本机 provider：记录收到的输入；prompt 含 [[fail]] 时报错，含 [[wait]] 时挂起直到被中断。 */
+/** 可控的节点本机 provider：记录收到的输入；prompt 含 [[fail]] 时报错，含 [[wait]] 时挂起直到被中断，含 [[late]] 时先返回再推送后续事件。 */
 export function fakeNodeProvider() {
   const received: ProviderRunInput[] = [];
   const approvals: Array<[string, unknown]> = [];
@@ -35,6 +36,20 @@ export function fakeNodeProvider() {
       input.onEvent?.({ type: "turn.started", provider: "codex", session });
       input.onEvent?.({ type: "agent.message", provider: "codex", session, text: "hello from node" });
       if (input.prompt.includes("[[fail]]")) throw new Error("model exploded");
+      if (input.prompt.includes("[[late]]")) {
+        // 模拟 Codex：run() 在一轮开始时返回，消息与完成信号随后才推送。
+        setTimeout(() => {
+          input.onEvent?.({ type: "agent.message", provider: "codex", session, text: "late message" });
+          input.onEvent?.({
+            type: "turn.completed",
+            provider: "codex",
+            session,
+            status: "completed",
+            raw: { method: "turn/completed" },
+            runEvent: normalizedRunEvent({ kind: "completed", method: "turn/completed", outcome: "succeeded", provider: "codex", session })
+          });
+        }, 50);
+      }
       if (input.prompt.includes("[[wait]]")) {
         await new Promise<void>((_resolve, reject) => {
           interruptActive = () => reject(new ProviderInterruptedError("interrupted by user"));

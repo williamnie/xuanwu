@@ -77,6 +77,17 @@ describe("remote projects", () => {
     expect(JSON.stringify(published)).toContain("hello from node");
   });
 
+  test("a run whose provider returns early still finishes from the node's later terminal event", async () => {
+    const { allowed, baseUrl, database, nodeId } = await startNodeHub();
+    await createRemoteProject(baseUrl, nodeId, join(allowed, "repo"));
+    const issueId = addTodo(database, "[[late]] like codex");
+
+    await runProjectLoopOnce({ database, projectId: "remote-repo", providers: {} });
+
+    await waitUntil(() => listIssueRuns(database, issueId)[0]?.ended_at !== "");
+    expect(listIssueRuns(database, issueId)[0]?.status).toBe("succeeded");
+  });
+
   test("cancelling a running remote issue interrupts it on the node", async () => {
     const { allowed, baseUrl, database, fake, nodeId } = await startNodeHub();
     await createRemoteProject(baseUrl, nodeId, join(allowed, "repo"));
