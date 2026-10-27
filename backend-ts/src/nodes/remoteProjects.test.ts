@@ -7,6 +7,7 @@ import { projectLoopDecision, runProjectLoopOnce } from "../runner/projectLoop.t
 import { FIXTURE_TIME, insertIssue } from "../testing/harness.ts";
 import { adminFetch, useTestNodeHub, waitUntil } from "./testing.ts";
 import { providersForProjectCwd } from "./remoteExecution.ts";
+import { asProviderId } from "../providers/types.ts";
 
 const startNodeHub = useTestNodeHub();
 
@@ -116,7 +117,7 @@ describe("remote projects", () => {
   });
 
   test("local projects keep using the hub's own providers", () => {
-    const local = { codex: { id: "codex" } } as never;
+    const local: Parameters<typeof providersForProjectCwd>[0] = { codex: { id: asProviderId("codex") } };
     expect(providersForProjectCwd(local, "/srv/local-repo")).toBe(local);
     expect(providersForProjectCwd(local, "node://node_unknown:/srv/repo")).toEqual({});
   });

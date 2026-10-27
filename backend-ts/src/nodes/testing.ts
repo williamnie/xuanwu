@@ -1,5 +1,5 @@
 import { afterEach } from "bun:test";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
@@ -18,10 +18,11 @@ import { NodeAgent } from "./agent.ts";
 import type { NodeHub } from "./hub.ts";
 import { startNodeHubRuntime } from "./hubRuntime.ts";
 import { nodeExecutionHandlers, nodeProviderInfo } from "./nodeExecutor.ts";
+import { nodeGitHandlers } from "./nodeGit.ts";
 
 export const TEST_ADMIN_TOKEN = "admin";
 
-/** 可控的节点本机 provider：记录收到的输入；prompt 含 [[fail]] 时报错，含 [[wait]] 时挂起直到被中断，含 [[late]] 时先返回再推送后续事件。 */
+/** 可控的节点本机 provider：记录收到的输入；prompt 含 [[fail]] 时报错，含 [[wait]] 时挂起直到被中断，含 [[late]] 时先返回再推送后续事件，含 [[edit]] 时在工作区写 edited.txt。 */
 export function fakeNodeProvider() {
   const received: ProviderRunInput[] = [];
   const approvals: Array<[string, unknown]> = [];
@@ -36,6 +37,8 @@ export function fakeNodeProvider() {
       input.onEvent?.({ type: "turn.started", provider: "codex", session });
       input.onEvent?.({ type: "agent.message", provider: "codex", session, text: "hello from node" });
       if (input.prompt.includes("[[fail]]")) throw new Error("model exploded");
+      // 模拟编程工具在节点的工作区里改文件。
+      if (input.prompt.includes("[[edit]]")) await writeFile(join(input.cwd, "edited.txt"), "made on the node\n");
       if (input.prompt.includes("[[late]]")) {
         // 模拟 Codex：run() 在一轮开始时返回，消息与完成信号随后才推送。
         setTimeout(() => {
@@ -108,7 +111,7 @@ export function useTestNodeHub(): () => Promise<TestNodeHub> {
     const providers = () => ({ codex: fake.provider });
     const agent = new NodeAgent({
       allowedRoots: [allowed],
-      handlers: nodeExecutionHandlers(providers),
+      handlers: { ...nodeExecutionHandlers(providers), ...nodeGitHandlers },
       hubUrl: baseUrl,
       info: () => ({ hostname: "laptop", os: "linux", providers: nodeProviderInfo(providers()), version: "test" }),
       log: () => {},

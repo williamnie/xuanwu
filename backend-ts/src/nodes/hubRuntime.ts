@@ -5,6 +5,8 @@ import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts
 import { NodeHub } from "./hub.ts";
 import { projectLocation } from "./projectLocation.ts";
 import { installRemoteProviderResolver } from "./remoteExecution.ts";
+import { installRemoteGitRunner } from "./remoteGit.ts";
+import type { NodeGitRunResult } from "./nodeGit.ts";
 import { remoteProvidersForNode } from "./remoteProvider.ts";
 
 type ProviderMap = Partial<Record<ExecutorProviderId, ExecutorProvider>>;
@@ -31,6 +33,10 @@ export function startNodeHubRuntime(options: HubRuntimeOptions): { hub: NodeHub;
     cache.set(nodeId, { providers, version: node.updated_at });
     return providers;
   });
+  // 中心验收链路的只读 git 经节点执行；给节点留出网络往返余量。
+  const uninstallGit = installRemoteGitRunner(async (nodeId, input) => (
+    await hub.request(nodeId, "git.run", input, input.timeoutMs + 5_000) as NodeGitRunResult
+  ));
   const stopWatching = hub.onStatusChange((nodeId, online) => {
     if (!online || !options.onNodeOnline) return;
     const projectIds = listProjects(options.database)
@@ -42,6 +48,7 @@ export function startNodeHubRuntime(options: HubRuntimeOptions): { hub: NodeHub;
     hub,
     stop() {
       stopWatching();
+      uninstallGit();
       uninstall();
     }
   };

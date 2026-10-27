@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { redactEvidenceText } from "../evidence/contracts.ts";
 import { isRemoteProjectCwd } from "../../nodes/projectLocation.ts";
+import { runRemoteGit } from "../../nodes/remoteGit.ts";
 
 type LocalGitCommandResult = {
   code: number;
@@ -34,6 +35,7 @@ type LocalGitAdapterOptions = {
 
 const DEFAULT_MAX_GIT_OUTPUT_BYTES = 16 * 1024 * 1024;
 const MAX_GIT_OUTPUT_BYTES = 128 * 1024 * 1024;
+const REMOTE_GIT_TIMEOUT_MS = 20_000;
 
 export function createLocalGitAdapter(options: LocalGitAdapterOptions = {}): LocalGitAdapter {
   const binary = requiredText(options.git_binary ?? "git", "git binary");
@@ -46,13 +48,15 @@ export function createLocalGitAdapter(options: LocalGitAdapterOptions = {}): Loc
   return {
     async run(input) {
       const requestedPath = requiredText(input.repository_path, "Git repository path");
-      // 远程项目的仓库在节点上；绝不能让 resolve() 把 node:// 路径解析成中心本机的相对目录。
-      if (isRemoteProjectCwd(requestedPath)) throw new Error("remote project workspaces are not available on the hub");
-      const repositoryPath = resolve(requestedPath);
       const allowedExitCodes = input.allowed_exit_codes ?? [0];
       if (allowedExitCodes.length === 0 || allowedExitCodes.some((code) => !Number.isInteger(code))) {
         throw new Error("allowed Git exit codes must be integers");
       }
+      // 远程项目的仓库在节点上：交给节点执行只读 git，绝不让 resolve() 把 node:// 解析成中心本机目录。
+      if (isRemoteProjectCwd(requestedPath)) {
+        return checkedResult(input.args, allowedExitCodes, await runOnNode(requestedPath, input, outputLimit));
+      }
+      const repositoryPath = resolve(requestedPath);
       const indexFile = normalizedIndexFile(input.index_file);
       const identity = normalizedIdentity(input.identity);
       const result = await spawnAndCapture(binary, [
@@ -62,15 +66,33 @@ export function createLocalGitAdapter(options: LocalGitAdapterOptions = {}): Loc
         "-C", repositoryPath,
         ...input.args
       ], safeGitEnvironment(repositoryPath, indexFile, identity), outputLimit);
-      if (!allowedExitCodes.includes(result.code)) {
-        const detail = redactEvidenceText(result.stderr.toString("utf8").trim()).slice(0, 1024);
-        throw new Error(
-          `git ${input.args[0] ?? "command"} failed with exit ${result.code}${detail ? `: ${detail}` : ""}`
-        );
-      }
-      return result;
+      return checkedResult(input.args, allowedExitCodes, result);
     }
   };
+}
+
+function checkedResult(
+  args: readonly string[],
+  allowedExitCodes: readonly number[],
+  result: LocalGitCommandResult
+): LocalGitCommandResult {
+  if (!allowedExitCodes.includes(result.code)) {
+    const detail = redactEvidenceText(result.stderr.toString("utf8").trim()).slice(0, 1024);
+    throw new Error(
+      `git ${args[0] ?? "command"} failed with exit ${result.code}${detail ? `: ${detail}` : ""}`
+    );
+  }
+  return result;
+}
+
+async function runOnNode(cwd: string, input: LocalGitRunInput, outputLimit: number): Promise<LocalGitCommandResult> {
+  if (input.index_file !== undefined || input.identity !== undefined) {
+    throw new Error("remote project git runs are read-only");
+  }
+  const result = await runRemoteGit(cwd, [...input.args], { stdoutLimit: outputLimit, timeoutMs: REMOTE_GIT_TIMEOUT_MS });
+  if (!result) throw new Error("remote node git is unavailable");
+  if (result.rejected) throw new Error(result.rejected);
+  return { code: result.status ?? -1, stderr: Buffer.from(result.stderr, "utf8"), stdout: result.stdout };
 }
 
 function spawnAndCapture(

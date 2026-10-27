@@ -5,6 +5,7 @@ import type { RunnerDatabase } from "../../db/database.ts";
 import { getIssue } from "../../db/repositories/issues.ts";
 import { getProject } from "../../db/repositories/projects.ts";
 import { recordIssueEvent } from "../../db/repositories/issueEvents.ts";
+import { isRemoteProjectCwd } from "../../nodes/projectLocation.ts";
 
 export const EXECUTION_EVIDENCE_CONTEXT_EVENT = "issue.execution_evidence_context.v1";
 // 重启后不猜测环境仍相同；HMAC 也避免把环境变量或低熵配置明文写到账本。
@@ -23,7 +24,9 @@ export function captureExecutionEvidenceContext(db: RunnerDatabase, issueID: num
   const project = issue && getProject(db, issue.project_id);
   if (!issue || !project) return null;
   let repository: string;
-  try { repository = realpathSync(project.cwd); } catch { return null; }
+  // 远程项目以 node://<节点>:<路径> 作为仓库标识，节点已在登记时规范化过路径。
+  if (isRemoteProjectCwd(project.cwd)) repository = project.cwd;
+  else try { repository = realpathSync(project.cwd); } catch { return null; }
   const profile = issue.agent_profile_id || project.default_agent_profile_id;
   const profileRow = profile ? db.sqlite.query("select * from agent_profiles where id=?").get(profile) : null;
   if (profile && !profileRow) return null;

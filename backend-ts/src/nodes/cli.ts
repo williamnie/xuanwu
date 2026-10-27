@@ -5,6 +5,7 @@ import { bunBuildInfo } from "../buildInfo.ts";
 import type { ExecutorProvider } from "../providers/types.ts";
 import { NodeAgent, NodeAgentFatalError, type NodeAgentOptions } from "./agent.ts";
 import { nodeExecutionHandlers, nodeProviderInfo } from "./nodeExecutor.ts";
+import { nodeGitHandlers } from "./nodeGit.ts";
 import { startNodeProviders } from "./nodeProviders.ts";
 
 export type NodeCliConfig = { allowedRoots: string[]; hubUrl: string; token: string };
@@ -69,7 +70,7 @@ function nodeAgentOptions(config: NodeCliConfig, providers: () => Record<string,
   }
   return {
     ...config,
-    handlers: nodeExecutionHandlers(providers),
+    handlers: { ...nodeExecutionHandlers(providers), ...nodeGitHandlers },
     info: () => ({ hostname: hostname(), os: process.platform, providers: nodeProviderInfo(providers()), version: bunBuildInfo().version })
   };
 }

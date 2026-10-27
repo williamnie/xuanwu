@@ -3,6 +3,7 @@ import { realpath } from "node:fs/promises";
 import { resolve } from "node:path";
 import { runBoundedProcess } from "../../util/boundedProcess.ts";
 import { isRemoteProjectCwd } from "../../nodes/projectLocation.ts";
+import { runRemoteGit } from "../../nodes/remoteGit.ts";
 import type { CapturedGitWorkspaceBaseline, WorkspaceEntry } from "../evidence/runGitWorkspaceBaseline.ts";
 
 class Semaphore {
@@ -83,10 +84,9 @@ export async function withGitWorkspaceObservation<T>(
   projectCwd: string,
   capture: (cwd: string, deadline: number) => Promise<T>
 ): Promise<T | null> {
-  // 远程项目的工作区在节点上，中心不观察（v1 降级）。
-  if (isRemoteProjectCwd(projectCwd)) return outcome("invalid_input");
   const deadline = performance.now() + OBSERVATION_DEADLINE_MS;
-  const cwd = await canonicalCwd(projectCwd);
+  // 远程项目保持 node:// 形式，由 runGit 交给节点执行（节点负责路径规范化与 allowedRoots 校验）。
+  const cwd = isRemoteProjectCwd(projectCwd) ? projectCwd.trim() : await canonicalCwd(projectCwd);
   if (!cwd) return outcome("invalid_input");
   const releaseGlobal = await globalSemaphore.acquire(deadline);
   if (!releaseGlobal) return outcome("queue_timeout");
@@ -150,6 +150,10 @@ async function gitText(cwd: string, args: string[], deadline: number): Promise<s
 export async function runGit(cwd: string, args: string[], deadline: number): Promise<{ stdout: Uint8Array } | null> {
   const remaining = deadline - performance.now();
   if (remaining <= 0) return null;
+  if (isRemoteProjectCwd(cwd)) {
+    const remote = await runRemoteGit(cwd, args, { stdoutLimit: OUTPUT_LIMIT_BYTES, timeoutMs: Math.min(CHILD_TIMEOUT_MS, remaining) });
+    return remote?.status === 0 ? { stdout: remote.stdout } : null;
+  }
   const result = await runBoundedProcess({
     command: "git", args, cwd, input: "", stdoutLimit: OUTPUT_LIMIT_BYTES,
     stderrLimit: OUTPUT_LIMIT_BYTES, timeoutMs: Math.min(CHILD_TIMEOUT_MS, remaining)
