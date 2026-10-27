@@ -144,6 +144,7 @@ export default function RemoteNodesPanel() {
                     <span><span className="ds-mono-label">Host</span>{node.info?.hostname || '—'}</span>
                     <span><span className="ds-mono-label">Address</span>{node.last_remote_addr || '—'}</span>
                     <span><span className="ds-mono-label">Tools</span>{nodeProviderSummary(node)}</span>
+                    <span><span className="ds-mono-label">Slots</span>{node.info?.max_parallel || 1}</span>
                   </div>
                   {node.version_mismatch && (
                     <p className="remote-nodes-warning-text">节点版本 {node.info?.version} 与中心 {node.hub_version} 不一致，请在节点上升级 xuanwu 后重启节点服务。</p>

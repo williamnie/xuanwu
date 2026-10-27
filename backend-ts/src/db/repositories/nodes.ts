@@ -7,6 +7,8 @@ const NODE_NAME_MAX_LENGTH = 64;
 
 export type NodeInfo = {
   allowed_roots: string[];
+  /** 节点同时执行的任务上限（节点 --max-parallel），默认 1。 */
+  max_parallel?: number;
   hostname: string;
   os: string;
   providers: NodeProviderInfo[];
@@ -113,6 +115,9 @@ export function normalizeNodeInfo(value: unknown): NodeInfo {
   return {
     allowed_roots: roots.map(cleanString).filter((root) => root !== "").slice(0, 32).map((root) => root.slice(0, 1024)),
     hostname: cleanString(source.hostname).slice(0, 255),
+    ...(Number.isInteger(source.max_parallel) && Number(source.max_parallel) > 0
+      ? { max_parallel: Math.min(Number(source.max_parallel), 64) }
+      : {}),
     os: cleanString(source.os).slice(0, 64),
     providers: providers.filter(isRecord).slice(0, 16).map((provider): NodeProviderInfo => ({
       capabilities: (Array.isArray(provider.capabilities) ? provider.capabilities : [])

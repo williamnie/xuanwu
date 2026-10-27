@@ -30,7 +30,12 @@ export function nodeServicePlan(
   const configPath = join(home, ".xuanwu", "node.json");
   const command = [...options.command, "--config", configPath];
   const configFile = {
-    content: `${JSON.stringify({ hub: config.hubUrl, roots: config.allowedRoots, token: config.token }, null, 2)}\n`,
+    content: `${JSON.stringify({
+      hub: config.hubUrl,
+      ...(config.maxParallel ? { max_parallel: config.maxParallel } : {}),
+      roots: config.allowedRoots,
+      token: config.token
+    }, null, 2)}\n`,
     mode: 0o600,
     path: configPath
   };

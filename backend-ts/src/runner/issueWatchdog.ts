@@ -1,6 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import {
-  countActiveExecutorWork,
+  countActiveExecutorWorkAt,
   hasActiveExecutorWorkForProject
 } from "../db/repositories/issueQueue.ts";
 import { getProject } from "../db/repositories/projects.ts";
@@ -22,6 +22,7 @@ import {
   startProjectLoop
 } from "./projectLoopManager.ts";
 import { cleanString } from "../util/values.ts";
+import { executionLocationMaximum, projectExecutionLocation } from "../nodes/capacity.ts";
 
 export type IssueWatchdogSummary = {
   attentioned: number;
@@ -100,23 +101,31 @@ export async function runAutoRunIssueWatchdogOnce(input: IssueWatchdogInput): Pr
   handleTerminalSessionMismatches(input, summary, now, cutoff);
   if (rows.length === 0) return summary;
 
-  const activeWork = countActiveExecutorWork(input.database);
-  if (activeWork >= projectLoopMaxParallelProjects()) {
-    const rootBlocker = activeCapacityBlockers(input.database);
-    for (const row of rows) {
-      handleWaiting(input, row, summary, now, waitState(row, {
+  // 名额按执行位置计算：中心本机满载不影响远程节点上的项目，反之亦然。
+  const fullLocations = new Map<string, boolean>();
+  const locationFull = (projectID: string) => {
+    const location = projectExecutionLocation(input.database, projectID);
+    if (!fullLocations.has(location)) {
+      fullLocations.set(location, countActiveExecutorWorkAt(input.database, location) >=
+        executionLocationMaximum(input.database, location, projectLoopMaxParallelProjects()));
+    }
+    return fullLocations.get(location)!;
+  };
+  let capacityBlocker: ReturnType<typeof activeCapacityBlockers> | undefined;
+
+  for (const candidate of rows) {
+    if (locationFull(candidate.project_id)) {
+      capacityBlocker ??= activeCapacityBlockers(input.database);
+      handleWaiting(input, candidate, summary, now, waitState(candidate, {
         attention: false,
         authority: "issues.status+issue_runs",
         nextCheckAt: nextCheck(now, escalateAfterMs),
         reason: "capacity_wait",
-        rootBlocker
+        rootBlocker: capacityBlocker
       }));
+      summary.skippedBusy += 1;
+      continue;
     }
-    summary.skippedBusy = rows.length;
-    return summary;
-  }
-
-  for (const candidate of rows) {
     if (hasActiveExecutorWorkForProject(input.database, candidate.project_id, now)) {
       handleWaiting(input, candidate, summary, now, waitState(candidate, {
         attention: false,

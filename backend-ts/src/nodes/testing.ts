@@ -10,6 +10,7 @@ import {
   asProviderId,
   ProviderInterruptedError,
   type ExecutorProvider,
+  type ExecutorProviderId,
   type ProviderRecoveryInput,
   type ProviderRunInput,
   type SessionRef
@@ -137,6 +138,68 @@ export function useTestNodeHub(): () => Promise<TestNodeHub> {
     await waitUntil(() => runtime.hub.isOnline(node.id));
     return { agent, allowed, baseUrl, database, fake, hub: runtime.hub, nodeId: node.id };
   };
+}
+
+/**
+ * 可停可重启的「中心进程」与「节点进程」：同一数据库与端口重启中心模拟中心崩溃，
+ * 重新创建节点等同于节点重启（内存中的在途运行全部丢失）。
+ */
+export function useNodeHubProcesses() {
+  const cleanups: Array<() => Promise<void> | void> = [];
+  afterEach(async () => {
+    while (cleanups.length > 0) await cleanups.pop()?.();
+  });
+
+  async function tempDir() {
+    const root = await mkdtemp(join(tmpdir(), "xuanwu-node-processes-"));
+    cleanups.push(() => rm(root, { force: true, recursive: true }));
+    const allowed = join(root, "code");
+    await mkdir(join(allowed, "repo"), { recursive: true });
+    const database = await openDatabase({ stateDir: join(root, "state") });
+    cleanups.push(() => database.close());
+    return { allowed, database, root };
+  }
+
+  function startHub(database: RunnerDatabase, port: number, reattachGraceMs?: number, providers: Partial<Record<ExecutorProviderId, ExecutorProvider>> = {}) {
+    const runtime = startNodeHubRuntime({ database, reattachGraceMs });
+    const handle = createRequestHandler(createDefaultRouter({ database, nodeHub: runtime.hub, providers }), TEST_ADMIN_TOKEN);
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port,
+      fetch: (request, bunServer) => {
+        recordRequestPeerAddress(request, bunServer);
+        return handle(request);
+      }
+    });
+    const stop = () => {
+      server.stop(true);
+      runtime.stop();
+    };
+    cleanups.push(stop);
+    return { baseUrl: `http://127.0.0.1:${server.port}`, hub: runtime.hub, port: server.port!, stop };
+  }
+
+  function startNode(baseUrl: string, token: string, allowed: string, maxParallel?: number) {
+    const fake = fakeNodeProvider();
+    const providers = () => ({ codex: fake.provider });
+    const agent = new NodeAgent({
+      allowedRoots: [allowed],
+      handlers: { ...nodeExecutionHandlers(providers), ...nodeGitHandlers },
+      hubUrl: baseUrl,
+      info: () => ({ hostname: "laptop", ...(maxParallel ? { max_parallel: maxParallel } : {}), os: "linux", providers: nodeProviderInfo(providers()), version: "test" }),
+      log: () => {},
+      token
+    });
+    const running = agent.run().catch(() => {});
+    const stop = async () => {
+      agent.stop();
+      await running;
+    };
+    cleanups.push(stop);
+    return { fake, stop };
+  }
+
+  return { startHub, startNode, tempDir };
 }
 
 export async function waitUntil(condition: () => boolean, timeoutMs = 2_000): Promise<void> {

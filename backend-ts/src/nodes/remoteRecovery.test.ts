@@ -1,75 +1,19 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { realpath } from "node:fs/promises";
+import type { RunnerDatabase } from "../db/database.ts";
+import { adminFetch, useNodeHubProcesses, waitUntil } from "./testing.ts";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { listIssueRuns } from "../db/repositories/issues.ts";
 import { createRemoteNode } from "../db/repositories/nodes.ts";
 import { listActiveRemoteRuns } from "../db/repositories/remoteRuns.ts";
-import { recordRequestPeerAddress } from "../http/peerAddress.ts";
-import { createDefaultRouter, createRequestHandler } from "../http/server.ts";
 import { runProjectLoopOnce } from "../runner/projectLoop.ts";
 import { FIXTURE_TIME, insertIssue } from "../testing/harness.ts";
-import { NodeAgent } from "./agent.ts";
-import { startNodeHubRuntime } from "./hubRuntime.ts";
-import { nodeExecutionHandlers, nodeProviderInfo } from "./nodeExecutor.ts";
-import { nodeGitHandlers } from "./nodeGit.ts";
-import { adminFetch, fakeNodeProvider, TEST_ADMIN_TOKEN, waitUntil } from "./testing.ts";
 
-const cleanups: Array<() => Promise<void> | void> = [];
-afterEach(async () => {
-  while (cleanups.length > 0) await cleanups.pop()?.();
-});
-
-/** 一个可停可重启的「中心进程」：同一数据库、同一端口，模拟中心崩溃后重启。 */
-function startHub(database: RunnerDatabase, port: number, reattachGraceMs?: number) {
-  const runtime = startNodeHubRuntime({ database, reattachGraceMs });
-  const handle = createRequestHandler(createDefaultRouter({ database, nodeHub: runtime.hub, providers: {} }), TEST_ADMIN_TOKEN);
-  const server = Bun.serve({
-    hostname: "127.0.0.1",
-    port,
-    fetch: (request, bunServer) => {
-      recordRequestPeerAddress(request, bunServer);
-      return handle(request);
-    }
-  });
-  const stop = () => {
-    server.stop(true);
-    runtime.stop();
-  };
-  cleanups.push(stop);
-  return { baseUrl: `http://127.0.0.1:${server.port}`, hub: runtime.hub, port: server.port!, stop };
-}
-
-/** 一个「节点进程」：重新创建即等同于节点重启（内存中的在途运行全部丢失）。 */
-function startNode(baseUrl: string, token: string, allowed: string) {
-  const fake = fakeNodeProvider();
-  const providers = () => ({ codex: fake.provider });
-  const agent = new NodeAgent({
-    allowedRoots: [allowed],
-    handlers: { ...nodeExecutionHandlers(providers), ...nodeGitHandlers },
-    hubUrl: baseUrl,
-    info: () => ({ hostname: "laptop", os: "linux", providers: nodeProviderInfo(providers()), version: "test" }),
-    log: () => {},
-    token
-  });
-  const running = agent.run().catch(() => {});
-  const stop = async () => {
-    agent.stop();
-    await running;
-  };
-  cleanups.push(stop);
-  return { fake, stop };
-}
+const { startHub, startNode, tempDir } = useNodeHubProcesses();
 
 async function setup(reattachGraceMs?: number) {
-  const root = await mkdtemp(join(tmpdir(), "xuanwu-remote-recovery-"));
-  cleanups.push(() => rm(root, { force: true, recursive: true }));
-  const allowed = join(root, "code");
-  await mkdir(join(allowed, "repo"), { recursive: true });
-  const database = await openDatabase({ stateDir: join(root, "state") });
-  cleanups.push(() => database.close());
+  const { allowed, database } = await tempDir();
   const hubA = startHub(database, 0, reattachGraceMs);
   const { node, token } = createRemoteNode(database, { name: "laptop" });
   const nodeA = startNode(hubA.baseUrl, token, allowed);

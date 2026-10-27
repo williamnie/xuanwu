@@ -9,7 +9,7 @@ import { nodeGitHandlers } from "./nodeGit.ts";
 import { startNodeProviders } from "./nodeProviders.ts";
 import { currentNodeCommand, nodeServicePlan, removeNodeService, writeNodeService } from "./service.ts";
 
-export type NodeCliConfig = { allowedRoots: string[]; hubUrl: string; token: string };
+export type NodeCliConfig = { allowedRoots: string[]; hubUrl: string; maxParallel?: number; token: string };
 
 const USAGE = `usage: xuanwu node [--hub <url>] [--token <key>] [--root <dir>]... [--config <file>]
        xuanwu node install [--hub <url>] [--token <key>] [--root <dir>]... [--start]
@@ -21,6 +21,7 @@ const USAGE = `usage: xuanwu node [--hub <url>] [--token <key>] [--root <dir>]..
   --hub      中心地址，例如 http://100.64.0.1:8787
   --token    添加节点时中心给出的密钥（也可用环境变量 XUANWU_NODE_TOKEN，避免出现在进程列表中）
   --root     允许中心在其中运行 agent 的目录，可重复；未配置时拒绝所有项目
+  --max-parallel  本节点同时执行的任务上限，默认 1
   --config   配置文件，默认 ~/.xuanwu/node.json：{"hub": "...", "token": "...", "roots": ["..."]}
 `;
 
@@ -98,7 +99,11 @@ export async function resolveNodeCliConfig(args: string[], env: Record<string, s
   if (hubUrl === "") throw new Error("missing hub address (--hub)");
   if (!/^https?:\/\//.test(hubUrl)) throw new Error("hub address must start with http:// or https://");
   if (token === "") throw new Error("missing node token (--token or XUANWU_NODE_TOKEN)");
-  return { allowedRoots, hubUrl, token };
+  const maxParallel = flags.maxParallel ?? (typeof file.max_parallel === "number" ? file.max_parallel : undefined);
+  if (maxParallel !== undefined && (!Number.isInteger(maxParallel) || maxParallel < 1 || maxParallel > 64)) {
+    throw new Error("--max-parallel must be an integer between 1 and 64");
+  }
+  return { allowedRoots, hubUrl, token, ...(maxParallel === undefined ? {} : { maxParallel }) };
 }
 
 function nodeAgentOptions(
@@ -112,12 +117,20 @@ function nodeAgentOptions(
   return {
     ...config,
     handlers: { ...nodeExecutionHandlers(providers, { workDir }), ...nodeGitHandlers },
-    info: () => ({ hostname: hostname(), os: process.platform, providers: nodeProviderInfo(providers()), version: bunBuildInfo().version })
+    info: () => ({
+      hostname: hostname(),
+      ...(config.maxParallel ? { max_parallel: config.maxParallel } : {}),
+      os: process.platform,
+      providers: nodeProviderInfo(providers()),
+      version: bunBuildInfo().version
+    })
   };
 }
 
-function parseFlags(args: string[]): { config?: string; hub?: string; roots: string[]; token?: string } {
-  const result: { config?: string; hub?: string; roots: string[]; token?: string } = { roots: [] };
+type NodeFlags = { config?: string; hub?: string; maxParallel?: number; roots: string[]; token?: string };
+
+function parseFlags(args: string[]): NodeFlags {
+  const result: NodeFlags = { roots: [] };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] ?? "";
     const [name, inline] = arg.startsWith("--") && arg.includes("=") ? [arg.slice(0, arg.indexOf("=")), arg.slice(arg.indexOf("=") + 1)] : [arg, undefined];
@@ -132,6 +145,7 @@ function parseFlags(args: string[]): { config?: string; hub?: string; roots: str
     else if (name === "--token") result.token = value();
     else if (name === "--root") result.roots.push(value());
     else if (name === "--config") result.config = value();
+    else if (name === "--max-parallel") result.maxParallel = Number(value());
     else throw new Error(`unknown option: ${arg}`);
   }
   return result;
