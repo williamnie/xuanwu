@@ -477,7 +477,7 @@ const TABLES = words(`
   feishu_conversation_state feishu_project_selections git_repo_mapping_events git_repo_mappings github_issue_cases
   im_context_cursors im_context_event_bindings im_context_rollovers im_conversation_state im_interaction_bindings
   im_project_selections im_reply_drafts intake_runs issue_events issue_runs issue_supervisor_events issues
-  notifications pi_action_events pi_action_proposals pi_actions pi_agents pi_approval_requests pi_automations
+  nodes notifications pi_action_events pi_action_proposals pi_actions pi_agents pi_approval_requests pi_automations
   pi_conversations pi_delegations pi_guardian_alerts pi_guardian_decisions pi_guardian_event_inbox
   pi_guardian_watchdog_status pi_heartbeat_controls pi_heartbeat_events pi_heartbeat_runs
   pi_issue_completion_watch_items pi_issue_completion_watches pi_mcp_approval_grants pi_mcp_capabilities
@@ -515,7 +515,7 @@ const MIGRATIONS = words(`
   079_scheduler_performance_indexes 080_execution_policy_json 081_telegram_channel_runtime 082_im_context_lifecycle
   083_attention_action_recent_index 084_supervisor_natural_instructions 085_runtime_read_indexes
   086_github_issue_cases 087_pi_memory_history 088_pi_memory_reflections 089_runtime_activity_indexes
-  090_pi_credential_source 091_hot_path_read_indexes
+  090_pi_credential_source 091_hot_path_read_indexes 092_remote_nodes
 `);
 
 /** Columns later migrations added; each table must contain at least these. */
