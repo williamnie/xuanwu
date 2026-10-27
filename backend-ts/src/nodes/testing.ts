@@ -29,7 +29,7 @@ export function fakeNodeProvider() {
   let interruptActive: (() => void) | undefined;
   const provider: ExecutorProvider = {
     id: asProviderId("codex"),
-    capabilities: ["issue_execution", "interrupt", "approvals", "sessions"],
+    capabilities: ["issue_execution", "interrupt", "approvals", "sessions", "model_list"],
     interruptScope: "turn",
     run: async (input) => {
       received.push(input);
@@ -61,6 +61,8 @@ export function fakeNodeProvider() {
       return { runId: `run-on-node-${input.issueId}`, session };
     },
     interrupt: async () => interruptActive?.(),
+    listModels: async () => [{ id: "node-model", display_name: "Node model" }],
+    readSession: async (sessionId) => ({ id: sessionId, turns: [{ id: "turn-on-node", status: "completed" }] }),
     resolveApproval: async (requestId, decision) => {
       approvals.push([requestId, decision]);
     },

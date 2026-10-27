@@ -1,4 +1,5 @@
 import { asProviderId } from "../../providers/types.ts";
+import { providersForNode } from "../../nodes/remoteExecution.ts";
 import type { ProviderRegistry } from "../../providers/core/registry.ts";
 import { catalogEntryFromRegistry } from "../../providers/core/catalog.ts";
 import { json, jsonError } from "../errors.ts";
@@ -25,9 +26,21 @@ export function registerProvidersCatalogRoute(
     return json(context.providersRegistry.list().map(catalogEntryFromRegistry));
   });
   router.get("/api/providers/:id/models", async (request: Request) => {
-    if (!context.providersRegistry) return jsonError(404, "provider catalog unavailable");
-    const parts = new URL(request.url).pathname.split("/");
+    const url = new URL(request.url);
+    const parts = url.pathname.split("/");
     const id = decodeURIComponent(parts.at(-2) ?? "");
+    // 远程项目选模型：读取节点上该编程工具的模型列表。
+    const nodeID = url.searchParams.get("node_id")?.trim() ?? "";
+    if (nodeID !== "") {
+      const remote = providersForNode(nodeID)[asProviderId(id)];
+      if (!remote?.listModels) return jsonError(409, `provider "${id}" on node ${nodeID} does not support model_list`);
+      try {
+        return json({ data: await remote.listModels() });
+      } catch (error) {
+        return jsonError(409, redactedUserVisibleText(error instanceof Error ? error.message : "node model list unavailable"));
+      }
+    }
+    if (!context.providersRegistry) return jsonError(404, "provider catalog unavailable");
     try {
       const provider = context.providersRegistry.getReady(asProviderId(id));
       if (!provider.capabilities.includes("model_list") || !provider.listModels) {

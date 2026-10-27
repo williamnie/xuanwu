@@ -17,12 +17,15 @@ export type NodeProviderInfo = {
   capabilities: string[];
   id: string;
   interrupt_scope?: "active" | "session" | "turn";
+  /** 中心可经 provider.read 调用的只读方法。 */
+  read_methods?: string[];
   ready: boolean;
   reason?: string;
   version?: string;
 };
 
-const NODE_PROVIDER_CAPABILITIES = new Set(["issue_execution", "interrupt", "approvals"]);
+const NODE_PROVIDER_CAPABILITIES = new Set(["issue_execution", "interrupt", "approvals", "model_list"]);
+export const NODE_PROVIDER_READ_METHODS = ["listModels", "listSessionTurns", "listSessions", "readSession"] as const;
 const INTERRUPT_SCOPES = new Set(["active", "session", "turn"]);
 
 export type RemoteNode = {
@@ -117,6 +120,9 @@ export function normalizeNodeInfo(value: unknown): NodeInfo {
       id: cleanString(provider.id).slice(0, 64),
       ...(INTERRUPT_SCOPES.has(String(provider.interrupt_scope))
         ? { interrupt_scope: provider.interrupt_scope as NodeProviderInfo["interrupt_scope"] }
+        : {}),
+      ...(Array.isArray(provider.read_methods)
+        ? { read_methods: provider.read_methods.filter((method): method is string => (NODE_PROVIDER_READ_METHODS as readonly string[]).includes(String(method))) }
         : {}),
       ready: provider.ready === true,
       ...(cleanString(provider.reason) === "" ? {} : { reason: cleanString(provider.reason).slice(0, 512) }),

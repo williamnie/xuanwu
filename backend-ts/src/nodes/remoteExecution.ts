@@ -29,6 +29,11 @@ export function providersForProjectCwd<T extends AnyProviderMap>(providers: T, c
   return (resolver?.(nodeId) ?? {}) as NonNullable<T>;
 }
 
+/** 某个节点上报的远程 provider（节点未知或已吊销时为空）。 */
+export function providersForNode(nodeId: string): ProviderMap {
+  return resolver?.(nodeId) ?? {};
+}
+
 export function providersForProjectID<T extends AnyProviderMap>(
   db: RunnerDatabase,
   providers: T,

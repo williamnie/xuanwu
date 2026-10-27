@@ -16,7 +16,9 @@ import {
   type ExecutorCapability,
   type ExecutorProvider,
   type ProviderRunInput,
-  type ProviderRunResult
+  type ProviderRunResult,
+  type SessionListResult,
+  type SessionTurnsListResult
 } from "../providers/types.ts";
 import { NodeOfflineError, type NodeHub } from "./hub.ts";
 import { projectLocation } from "./projectLocation.ts";
@@ -82,6 +84,15 @@ export function createRemoteExecutorProvider(options: RemoteProviderOptions): Ex
       await hub.request(nodeId, "run.interrupt", { input, providerId: provider.id });
     };
   }
+  // 只读方法经 provider.read 转发；会话的创建与续写不经节点开放。
+  const read = (method: string, args: unknown[]) => hub.request(nodeId, "provider.read", { args, method, providerId: provider.id });
+  const readMethods = new Set(provider.read_methods ?? []);
+  if (readMethods.has("readSession")) remote.readSession = async (sessionId, input) => await read("readSession", [sessionId, input]) as Record<string, unknown>;
+  if (readMethods.has("listSessions")) remote.listSessions = async (input) => await read("listSessions", [input]) as SessionListResult;
+  if (readMethods.has("listSessionTurns")) {
+    remote.listSessionTurns = async (sessionId, input) => await read("listSessionTurns", [sessionId, input]) as SessionTurnsListResult;
+  }
+  if (readMethods.has("listModels")) remote.listModels = async () => await read("listModels", []);
   if (capabilities.includes("approvals")) {
     remote.resolveApproval = async (requestId, decision) => {
       await hub.request(nodeId, "approval.resolve", { decision, providerId: provider.id, requestId });

@@ -38,11 +38,20 @@ describe("remote executor provider", () => {
     const { remote } = await connectNode();
     expect(remote.id).toBe(asProviderId("codex"));
     // 会话类能力 v1 不经节点开放。
-    expect(remote.capabilities).toEqual(["issue_execution", "interrupt", "approvals"]);
+    expect(remote.capabilities).toEqual(["issue_execution", "interrupt", "approvals", "model_list"]);
     expect(remote.interruptScope).toBe("turn");
     expect(remote.manifest?.id).toBe(asProviderId("codex"));
     expect(remote.policyAdapter).toBeDefined();
     expect(remote.runtimeStatus?.()).toMatchObject({ mode: "remote", ready: true, version: "0.99.0" });
+  });
+
+  test("reads sessions and models on the node but never creates sessions there", async () => {
+    const { remote } = await connectNode();
+    expect(await remote.readSession!("thread-7")).toEqual({ id: "thread-7", turns: [{ id: "turn-on-node", status: "completed" }] });
+    expect(await remote.listModels!()).toEqual([{ display_name: "Node model", id: "node-model" }]);
+    expect(remote.listSessions).toBeUndefined();
+    expect(remote.createSession).toBeUndefined();
+    expect(remote.sendSessionMessage).toBeUndefined();
   });
 
   test("runs on the node and streams provider events back in order", async () => {

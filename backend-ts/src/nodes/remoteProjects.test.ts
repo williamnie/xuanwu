@@ -116,6 +116,14 @@ describe("remote projects", () => {
     expect(decision).toMatchObject({ allowed: false, provider: "codex", reason: "provider_runtime" });
   });
 
+  test("model lists for a node come from that node", async () => {
+    const { baseUrl, nodeId } = await startNodeHub();
+    const response = await adminFetch(baseUrl, `/api/providers/codex/models?node_id=${nodeId}`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ data: [{ display_name: "Node model", id: "node-model" }] });
+    expect((await adminFetch(baseUrl, `/api/providers/qoder/models?node_id=${nodeId}`)).status).toBe(409);
+  });
+
   test("local projects keep using the hub's own providers", () => {
     const local: Parameters<typeof providersForProjectCwd>[0] = { codex: { id: asProviderId("codex") } };
     expect(providersForProjectCwd(local, "/srv/local-repo")).toBe(local);

@@ -108,24 +108,16 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
     }
   }, [updateUi]);
 
-  const loadProviderModels = useCallback(async (provider = DEFAULT_PROVIDER, onNode = false) => {
+  // nodeId 非空时读取该节点上编程工具的模型列表。
+  const loadProviderModels = useCallback(async (provider = DEFAULT_PROVIDER, nodeId = '') => {
     const request = ++modelRequest.current;
-    // 远程节点的模型列表暂不经中心读取，使用编程工具默认模型。
-    if (onNode) {
-      updateUi(draft => {
-        draft.codexModels = [];
-        draft.codexModelsError = '';
-        draft.codexModelsLoading = false;
-      });
-      return;
-    }
     updateUi(draft => {
       draft.codexModels = [];
       draft.codexModelsLoading = true;
       draft.codexModelsError = '';
     });
     try {
-      const result = await systemApi.getProviderModels(provider);
+      const result = await systemApi.getProviderModels(provider, { nodeId });
       if (request !== modelRequest.current) return;
       updateUi(draft => {
         const data = Array.isArray(result?.data?.data) ? result.data.data : result?.data;
@@ -165,7 +157,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
           draft.formModel = normalizeProviderModel(selectedProvider, '');
         }
       });
-      if (selectedProvider) await loadProviderModels(selectedProvider, Boolean(project?.node_id));
+      if (selectedProvider) await loadProviderModels(selectedProvider, project?.node_id || '');
     } catch (error) {
       updateUi(draft => {
         draft.providerCatalog = [];
@@ -203,7 +195,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
       draft.formModel = normalizeProviderModel(value, '');
       draft.formServiceTier = '';
     });
-    loadProviderModels(value, remote);
+    loadProviderModels(value, ui.formNodeId);
   };
 
   const setProjectNode = (nodeId) => {
@@ -215,7 +207,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
       draft.formModel = normalizeProviderModel(provider, '');
       draft.formServiceTier = '';
     });
-    loadProviderModels(provider, Boolean(node));
+    loadProviderModels(provider, node ? nodeId : '');
   };
 
   const handleSubmit = async (event) => {

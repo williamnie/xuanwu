@@ -109,7 +109,8 @@ test('project card actions share one compact control height', () => {
 
 test('project config modal reads Provider catalog and models from generic APIs', () => {
   assert.match(editorSource, /systemApi\.getProviders\(\)/);
-  assert.match(editorSource, /systemApi\.getProviderModels\(provider\)/);
+  // 远程项目读取节点上的模型列表，本机项目 nodeId 为空。
+  assert.match(editorSource, /systemApi\.getProviderModels\(provider, \{ nodeId \}\)/);
   assert.match(editorSource, /providerOptionsFromCatalog\(ui\.providerCatalog\)/);
   assert.match(editorSource, /buildProviderModelOptions\(ui\.formProvider, ui\.codexModels, \[ui\.formModel\], language\)/);
   assert.match(editorSource, /modelOptions\.map\(option =>/);
