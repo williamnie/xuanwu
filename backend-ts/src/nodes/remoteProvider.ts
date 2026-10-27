@@ -38,8 +38,15 @@ const BUILTIN_POLICY: Record<string, () => { manifest: ExecutorProviderManifest;
   qoder: () => ({ manifest: qoderManifest(), policyAdapter: qoderExecutionPolicyAdapter })
 };
 
+/** 远程运行台账：节点接受后登记，订阅结束（终止或失败）时收口。 */
+export type RemoteRunLedger = {
+  finished(runRef: string): void;
+  started(runRef: string, input: ProviderRunInput, providerId: string): void;
+};
+
 type RemoteProviderOptions = {
   hub: NodeHub;
+  ledger?: RemoteRunLedger;
   nodeId: string;
   offlineGraceMs?: number;
   provider: NodeProviderInfo;
@@ -49,11 +56,11 @@ type RemoteProviderOptions = {
 export function remoteProvidersForNode(
   hub: NodeHub,
   node: Pick<RemoteNode, "id" | "info">,
-  options: { offlineGraceMs?: number } = {}
+  options: { ledger?: RemoteRunLedger; offlineGraceMs?: number } = {}
 ): Record<string, ExecutorProvider> {
   const providers: Record<string, ExecutorProvider> = {};
   for (const provider of node.info.providers) {
-    providers[provider.id] = createRemoteExecutorProvider({ hub, nodeId: node.id, offlineGraceMs: options.offlineGraceMs, provider });
+    providers[provider.id] = createRemoteExecutorProvider({ ...options, hub, nodeId: node.id, provider });
   }
   return providers;
 }
@@ -122,7 +129,14 @@ function runRemote(options: RemoteProviderOptions, input: ProviderRunInput): Pro
       if (error) reject(error);
       else resolve(result!);
     };
-    const unsubscribe = hub.subscribeRun(runRef, (payload) => {
+    let subscribed = true;
+    const unsubscribe = () => {
+      if (!subscribed) return;
+      subscribed = false;
+      stopListening();
+      options.ledger?.finished(runRef);
+    };
+    const stopListening = hub.subscribeRun(runRef, (payload) => {
       const message = payload as NodeRunEvent;
       if (message.type === "event") {
         input.onEvent?.(message.event);
@@ -156,6 +170,8 @@ function runRemote(options: RemoteProviderOptions, input: ProviderRunInput): Pro
         runRef
       };
       return hub.request(nodeId, "run.start", params, RUN_START_TIMEOUT_MS);
+    }).then(() => {
+      if (subscribed) options.ledger?.started(runRef, input, provider.id);
     }).catch((error: unknown) => {
       unsubscribe();
       settle(error instanceof Error ? error : new Error(String(error)));

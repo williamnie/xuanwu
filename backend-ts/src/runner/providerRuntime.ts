@@ -196,6 +196,30 @@ export async function persistRecoveredProviderEvents(input: RunnerIssueExecution
   await sink.flush();
 }
 
+/**
+ * 重新接上一次已在别处启动的运行（中心重启后，远程节点上的运行仍在继续）：
+ * 用与正常执行相同的事件落库与终止收口链路处理后续事件。运行已不是当前尝试时事件被丢弃。
+ */
+export function reattachProviderEventSink(input: {
+  bus?: Pick<EventBus, "publish">;
+  database: RunnerDatabase;
+  issueId: number;
+  issueRunId: string;
+  projectId: string;
+}): { flush(): Promise<void>; push(event: ProviderEvent): void } {
+  const runtimeInput: RunnerIssueExecutionInput = {
+    bus: input.bus,
+    cwd: "",
+    database: input.database,
+    issueId: input.issueId,
+    issueRunId: input.issueRunId,
+    projectId: input.projectId,
+    prompt: ""
+  };
+  const sink = providerEventSink(runtimeInput, input.issueRunId, activeAttemptSequence(runtimeInput, input.issueRunId, 0));
+  return { flush: () => sink.flush(), push: (event) => sink.push(event) };
+}
+
 function activeAttemptSequence(input: RunnerIssueExecutionInput, runID: string, fallback: number): number {
   return input.database?.sqlite.query<{ sequence: number }, [string]>(
     "select sequence from run_attempts where issue_run_id=? order by sequence desc limit 1"

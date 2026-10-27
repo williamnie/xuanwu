@@ -39,8 +39,8 @@ export function fakeNodeProvider() {
       if (input.prompt.includes("[[fail]]")) throw new Error("model exploded");
       // 模拟编程工具在节点的工作区里改文件。
       if (input.prompt.includes("[[edit]]")) await writeFile(join(input.cwd, "edited.txt"), "made on the node\n");
-      if (input.prompt.includes("[[late]]")) {
-        // 模拟 Codex：run() 在一轮开始时返回，消息与完成信号随后才推送。
+      if (input.prompt.includes("[[late]]") || input.prompt.includes("[[slow]]")) {
+        // 模拟 Codex：run() 在一轮开始时返回，消息与完成信号随后才推送（[[slow]] 推迟到 1.5s 后）。
         setTimeout(() => {
           input.onEvent?.({ type: "agent.message", provider: "codex", session, text: "late message" });
           input.onEvent?.({
@@ -51,7 +51,7 @@ export function fakeNodeProvider() {
             raw: { method: "turn/completed" },
             runEvent: normalizedRunEvent({ kind: "completed", method: "turn/completed", outcome: "succeeded", provider: "codex", session })
           });
-        }, 50);
+        }, input.prompt.includes("[[slow]]") ? 1_500 : 50);
       }
       if (input.prompt.includes("[[wait]]")) {
         await new Promise<void>((_resolve, reject) => {

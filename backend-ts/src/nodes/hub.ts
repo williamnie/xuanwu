@@ -18,6 +18,7 @@ type PendingRequest = {
 
 type RunEventListener = (event: unknown, seq: number) => void;
 type StatusListener = (nodeID: string, online: boolean) => void;
+type HelloListener = (nodeID: string, activeRuns: string[]) => void;
 
 export class NodeOfflineError extends Error {
   override readonly name = "NodeOfflineError";
@@ -33,6 +34,7 @@ export class NodeHub {
   private readonly runListeners = new Map<string, RunEventListener>();
   private readonly runSeq = new Map<string, number>();
   private readonly statusListeners = new Set<StatusListener>();
+  private readonly helloListeners = new Set<HelloListener>();
 
   attach(nodeID: string, channel: NodeChannel): () => void {
     const previous = this.channels.get(nodeID);
@@ -79,6 +81,31 @@ export class NodeHub {
       if (this.runListeners.get(runRef) === listener) this.runListeners.delete(runRef);
       this.runSeq.delete(runRef);
     };
+  }
+
+  /** 节点握手时上报其在途运行；中心据此重新接上或收口。 */
+  onHello(listener: HelloListener): () => void {
+    this.helloListeners.add(listener);
+    return () => this.helloListeners.delete(listener);
+  }
+
+  reportHello(nodeID: string, activeRuns: string[]): void {
+    for (const listener of this.helloListeners) {
+      try {
+        listener(nodeID, activeRuns);
+      } catch (error) {
+        console.warn(JSON.stringify({ event: "nodes.hello_listener_failed", error: String(error) }));
+      }
+    }
+  }
+
+  hasRunListener(runRef: string): boolean {
+    return this.runListeners.has(runRef);
+  }
+
+  /** 节点报告已不再持有某次运行（如节点重启）时，以一条错误结束它的订阅者。 */
+  failRun(runRef: string, message: string): void {
+    this.runListeners.get(runRef)?.({ interrupted: false, message, type: "error" }, Number.MAX_SAFE_INTEGER);
   }
 
   /** 处理节点 POST 上来的一批消息，返回每个 runRef 已确认的最大 seq。 */

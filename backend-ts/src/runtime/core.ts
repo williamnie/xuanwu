@@ -192,6 +192,7 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
   });
   primeProviderStatus(config);
   const nodeHubRuntime = startNodeHubRuntime({
+    bus,
     database,
     onNodeOnline: (projectIds) => {
       for (const projectId of projectIds) startProjectLoop({ bus, database, providers, onError: logProjectLoopError }, projectId);

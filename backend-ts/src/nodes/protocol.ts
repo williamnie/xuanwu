@@ -12,7 +12,8 @@ export const NODE_PROTOCOL_VERSION = 1;
 export const NODE_HEARTBEAT_MS = 15_000;
 export const NODE_STREAM_IDLE_MS = 45_000;
 
-export type NodeHelloRequest = NodeInfo & { protocol: number };
+/** active_runs：节点上未结束或事件尚未全部确认的运行。 */
+export type NodeHelloRequest = NodeInfo & { active_runs?: string[]; protocol: number };
 export type NodeHelloResponse = { node_id: string; name: string; protocol: number; private_network: boolean };
 
 /** 中心 → 节点：经 SSE `data:` 下发的指令。 */

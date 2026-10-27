@@ -35,6 +35,7 @@ export function nodeExecutionHandlers(
       const cwd = await agent.resolveAllowedPath(input.cwd);
       const attachments = await materializeRunAttachments(workDir, runRef, { images, skillPackages }, input);
       activeRuns.add(runRef);
+      agent.trackRun(runRef);
       const emit = (event: NodeRunEvent) => agent.emitRunEvent(runRef, event);
       // run() 返回后 provider 仍可能推送事件；返回且见到终止事件（或失败）才结束转发。
       let returned = false;

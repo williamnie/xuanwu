@@ -97,6 +97,11 @@ export class NodeAgent {
     this.abort.abort();
   }
 
+  /** 运行被接受即登记：握手时上报未结束（或事件未确认完）的运行，供中心重新接上。 */
+  trackRun(runRef: string): void {
+    if (!this.runEvents.has(runRef)) this.runEvents.set(runRef, { finished: false, nextSeq: 1, pending: [] });
+  }
+
   /** 供命令处理器上报某次运行的事件；seq 在节点内按 runRef 单调递增。 */
   emitRunEvent(runRef: string, event: unknown): void {
     const run = this.runEvents.get(runRef) ?? { finished: false, nextSeq: 1, pending: [] };
@@ -129,7 +134,12 @@ export class NodeAgent {
 
   private async hello(): Promise<NodeHelloResponse> {
     const info = this.options.info?.() ?? { hostname: osHostname(), os: process.platform, providers: [], version: "" };
-    const response = await this.post(NODE_HELLO_PATH, { ...info, allowed_roots: this.allowedRoots, protocol: NODE_PROTOCOL_VERSION });
+    const response = await this.post(NODE_HELLO_PATH, {
+      ...info,
+      active_runs: [...this.runEvents.keys()],
+      allowed_roots: this.allowedRoots,
+      protocol: NODE_PROTOCOL_VERSION
+    });
     return await response.json() as NodeHelloResponse;
   }
 

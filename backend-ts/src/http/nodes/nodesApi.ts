@@ -58,6 +58,10 @@ export function registerNodesRoutes(router: Router, context: NodesApiContext): v
     }
     const remoteAddr = requestPeerAddress(request);
     const saved = recordRemoteNodeHello(context.database, node.id, { info: normalizeNodeInfo(body), remoteAddr });
+    const activeRuns = Array.isArray(body.active_runs)
+      ? body.active_runs.filter((run): run is string => typeof run === "string").slice(0, 1_000)
+      : [];
+    context.hub.reportHello(saved.id, activeRuns);
     const response: NodeHelloResponse = {
       name: saved.name,
       node_id: saved.id,

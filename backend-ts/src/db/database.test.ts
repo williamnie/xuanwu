@@ -484,7 +484,7 @@ const TABLES = words(`
   pi_mcp_servers pi_memory_history pi_memory_items pi_memory_receipts pi_memory_reflection_cursor
   pi_memory_reflection_settings pi_memory_reflections pi_memory_suppressions pi_notification_intents
   pi_notification_preferences pi_persona pi_recovery_attempts pi_reports pi_run_group_items pi_run_groups
-  pi_skill_intent_audits project_holds project_pi_policies project_pi_settings projects run_attempts
+  pi_skill_intent_audits project_holds project_pi_policies project_pi_settings projects remote_runs run_attempts
   schema_migrations session_command_events session_turn_references sqlite_sequence sqlite_stat1 sync_outbox
   tracker_issue_links tracker_project_mappings tracker_sync_cursors tracker_sync_events uploads work_events
   work_relations works
@@ -515,7 +515,7 @@ const MIGRATIONS = words(`
   079_scheduler_performance_indexes 080_execution_policy_json 081_telegram_channel_runtime 082_im_context_lifecycle
   083_attention_action_recent_index 084_supervisor_natural_instructions 085_runtime_read_indexes
   086_github_issue_cases 087_pi_memory_history 088_pi_memory_reflections 089_runtime_activity_indexes
-  090_pi_credential_source 091_hot_path_read_indexes 092_remote_nodes
+  090_pi_credential_source 091_hot_path_read_indexes 092_remote_nodes 093_remote_runs
 `);
 
 /** Columns later migrations added; each table must contain at least these. */
