@@ -15,6 +15,7 @@ import {
   type ProviderRunInput,
   type SessionRef
 } from "../providers/types.ts";
+import { providerSessionDetail } from "../providers/core/sessionView.ts";
 import { normalizedRunEvent } from "../providers/runEvents.ts";
 import { NodeAgent } from "./agent.ts";
 import type { NodeHub } from "./hub.ts";
@@ -73,7 +74,10 @@ export function fakeNodeProvider() {
     },
     interrupt: async () => interruptActive?.(),
     listModels: async () => [{ id: "node-model", display_name: "Node model" }],
-    readSession: async (sessionId) => ({ id: sessionId, turns: [{ id: "turn-on-node", status: "completed" }] }),
+    readSession: async (sessionId) => providerSessionDetail(asProviderId("codex"), {
+      sessionRef: sessionId,
+      turns: [{ id: "turn-on-node", items: [], status: "completed" }]
+    }),
     resolveApproval: async (requestId, decision) => {
       approvals.push([requestId, decision]);
     },

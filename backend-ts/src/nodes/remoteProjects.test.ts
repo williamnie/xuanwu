@@ -116,6 +116,17 @@ describe("remote projects", () => {
     expect(decision).toMatchObject({ allowed: false, provider: "codex", reason: "provider_runtime" });
   });
 
+  test("a remote task's session is read through its node", async () => {
+    const { allowed, baseUrl, database, nodeId } = await startNodeHub();
+    await createRemoteProject(baseUrl, nodeId, join(allowed, "repo"));
+    const issueId = addTodo(database, "[[late]] show me the session");
+    await runProjectLoopOnce({ database, projectId: "remote-repo", providers: {} });
+
+    const response = await adminFetch(baseUrl, `/api/sessions/codex:thread-${issueId}?include_turns=1`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ provider_session_id: `thread-${issueId}`, turns: [{ id: "turn-on-node" }] });
+  });
+
   test("model lists for a node come from that node", async () => {
     const { baseUrl, nodeId } = await startNodeHub();
     const response = await adminFetch(baseUrl, `/api/providers/codex/models?node_id=${nodeId}`);

@@ -47,7 +47,7 @@ describe("remote executor provider", () => {
 
   test("reads sessions and models on the node but never creates sessions there", async () => {
     const { remote } = await connectNode();
-    expect(await remote.readSession!("thread-7")).toEqual({ id: "thread-7", turns: [{ id: "turn-on-node", status: "completed" }] });
+    expect(await remote.readSession!("thread-7")).toMatchObject({ provider_session_id: "thread-7", turns: [{ id: "turn-on-node", status: "completed" }] });
     expect(await remote.listModels!()).toEqual([{ display_name: "Node model", id: "node-model" }]);
     expect(remote.listSessions).toBeUndefined();
     expect(remote.createSession).toBeUndefined();

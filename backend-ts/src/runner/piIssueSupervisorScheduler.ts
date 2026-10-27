@@ -27,6 +27,7 @@ import {
   supervisorResultOutcome
 } from "./issueSupervisorProgressTracker.ts";
 import { cleanString, errorMessage } from "../util/values.ts";
+import { providersForProjectID } from "../nodes/remoteExecution.ts";
 export type PiIssueSupervisorSchedulerInput = {
   bus?: Pick<EventBus, "publish">;
   database: RunnerDatabase;
@@ -88,7 +89,8 @@ export async function runPiIssueSupervisorSchedulerOnce(
         continue;
       }
       // PI 思考期间 Provider 可能已完成，不能依据旧摘要再发恢复或人工求助。
-      const provider = input.providers?.[String(target.context.latest_run?.provider) as ExecutorProviderId];
+      // 远程项目的会话在节点上，经节点读取回合状态。
+      const provider = providersForProjectID(input.database, input.providers, target.projectID)?.[String(target.context.latest_run?.provider) as ExecutorProviderId];
       const observed = await reconcileCurrentProviderTurn({
         database: input.database, issueID: target.issueID, provider, bus: input.bus
       });
@@ -133,7 +135,7 @@ async function collectTargets(
     });
     if (cleanString(context.policy.mode) === "off") continue;
     if (context.candidates.length > 0) {
-      const provider = options.providers?.[String(context.latest_run?.provider) as ExecutorProviderId];
+      const provider = providersForProjectID(db, options.providers, issue.project_id)?.[String(context.latest_run?.provider) as ExecutorProviderId];
       const observed = await reconcileCurrentProviderTurn({ database: db, issueID, provider, bus: options.bus });
       if (!["unsupported", "interrupted"].includes(observed)) continue;
     }

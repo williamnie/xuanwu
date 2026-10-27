@@ -26,6 +26,7 @@ import { parseExecutionPolicyWrite } from "../../providers/core/policyPersistenc
 import { resolveExecutionPolicy } from "../../providers/core/policyResolution.ts";
 import { translateLegacyExecutionPolicy } from "../../providers/core/legacyExecutionPolicy.ts";
 import { cleanString, isRecord } from "../../util/values.ts";
+import { providersForProjectID } from "../../nodes/remoteExecution.ts";
 
 type SessionApiContext = {
   bus?: EventBus;
@@ -137,7 +138,7 @@ async function createSession(context: SessionApiContext, body: Record<string, un
 
 async function readSession(context: SessionApiContext, rawSessionID: string, includeTurns = false) {
   const ref = parseSessionRef(rawSessionID);
-  const registeredProvider = isExecutorProviderId(ref.provider) ? context.providers?.[ref.provider] : undefined;
+  const registeredProvider = isExecutorProviderId(ref.provider) ? sessionProviders(context, ref.key)?.[ref.provider] : undefined;
   if (!registeredProvider) {
     const indexed = publicAgentSessionOrNull(getAgentSession(context.database, ref.key));
     if (!indexed) throw new Error(`session provider "${ref.provider}" 当前 runner 未注册`);
@@ -155,7 +156,7 @@ async function readSession(context: SessionApiContext, rawSessionID: string, inc
       ref.provider
     );
   }
-  const provider = capableProvider(context, ref.provider, "sessions", "readSession");
+  const provider = capableProvider(context, ref.provider, "sessions", "readSession", ref.key);
   let result: Record<string, unknown>;
   try {
     result = await provider.readSession!(ref.sessionId, { includeTurns });
@@ -196,7 +197,7 @@ async function listSessionTurns(
   input: SessionTurnsListInput
 ) {
   const ref = parseSessionRef(rawSessionID);
-  const provider = capableProvider(context, ref.provider, "sessions", "readSession");
+  const provider = capableProvider(context, ref.provider, "sessions", "readSession", ref.key);
   if (typeof provider.listSessionTurns === "function") {
     return provider.listSessionTurns(ref.sessionId, input);
   }
@@ -216,7 +217,7 @@ async function listSessionTurns(
 async function sessionMessage(context: SessionApiContext, rawSessionID: string, body: Record<string, unknown>) {
   const ref = parseSessionRef(rawSessionID);
   if (!isExecutorProviderId(ref.provider)) throw new Error(`provider "${ref.provider}" 不支持 capability "resume_session"`);
-  const provider = capableProvider(context, ref.provider, "resume_session", "sendSessionMessage");
+  const provider = capableProvider(context, ref.provider, "resume_session", "sendSessionMessage", ref.key);
   const input = withSessionPolicy(provider, sessionMessageInput(context, ref, body), "local-user");
   const result = await provider.sendSessionMessage!(input);
   assertProviderResult(provider.id, result.provider);
@@ -229,13 +230,17 @@ function capableProvider(
   context: SessionApiContext,
   rawProviderID: string,
   capability: ExecutorCapability,
-  method: "createSession" | "listSessions" | "readSession" | "sendSessionMessage"
+  method: "createSession" | "listSessions" | "readSession" | "sendSessionMessage",
+  sessionKey = ""
 ): ExecutorProvider {
   const providerID = rawProviderID.trim();
   if (!isExecutorProviderId(providerID)) throw new Error(`session provider "${providerID}" 当前 runner 未注册`);
-  const provider = context.providers?.[providerID];
+  const providers = sessionProviders(context, sessionKey);
+  const provider = providers?.[providerID];
   if (!provider) throw new Error(`provider "${providerID}" 当前 runner 未注册`);
-  if (!provider.capabilities.includes(capability)) {
+  // 远程节点只开放会话读取：不声明 sessions 能力，但读取方法可用。
+  const remoteRead = providers !== context.providers && method === "readSession";
+  if (!provider.capabilities.includes(capability) && !remoteRead) {
     throw new Error(`provider "${providerID}" 不支持 capability "${capability}"`);
   }
   if (typeof provider[method] !== "function") throw new Error(`provider "${providerID}" 未实现 ${method}`);
@@ -244,6 +249,12 @@ function capableProvider(
     throw new Error(`provider "${providerID}" 尚未就绪: ${status.reason || "configuration required"}`);
   }
   return provider;
+}
+
+/** 会话所属项目在远程节点上时，经该节点的 provider 访问会话。 */
+function sessionProviders(context: SessionApiContext, sessionKey: string): SessionApiContext["providers"] {
+  if (sessionKey === "") return context.providers;
+  return providersForProjectID(context.database, context.providers, getAgentSession(context.database, sessionKey)?.project_id ?? "");
 }
 
 function providersForList(context: SessionApiContext, filter: { projectId: string; provider: string }): ExecutorProvider[] {
