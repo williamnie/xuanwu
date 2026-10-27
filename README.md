@@ -270,14 +270,24 @@ available to the same Xuanwu:
    ```
 
    `--root` may repeat and limits where Xuanwu may run agents; with none, every project is
-   refused. `hub` / `token` / `roots` can also live in `~/.xuanwu/node.json`.
+   refused. `--max-parallel` sets how many tasks the node runs at once (default 1). For a
+   long-running node use `xuanwu node install ... --start`, which registers a systemd /
+   launchd service that starts at boot and restarts on exit; its settings, token included,
+   go to `~/.xuanwu/node.json` with mode 0600.
 3. When adding a project, pick its **location** and enter the path on the node.
 
 Nodes connect out to Xuanwu (SSE down, HTTP up), so Xuanwu never needs to reach them. Tasks,
-logs and state stay in Xuanwu's database. The preview targets LAN / Tailscale and is not
-hardened for the public internet; the UI warns when a node connects from a non-private
-address. Remote projects do not yet support Git acceptance and delivery, image attachments,
-sessions or model lists. See the [remote node design](docs/design/remote-agent-plan.md).
+logs and state stay in Xuanwu's database, and **the hub verifies all work**: it collects git
+evidence through read-only git on the node, reads the session summary there, and retries on
+the same node or continues the same session as acceptance decides, unattended. The hub and
+every node have their own concurrency slots. After a hub or node restart, runs still going
+on the node are reattached and runs the node lost are closed at once.
+
+The preview targets LAN / Tailscale and is not hardened for the public internet; the UI warns
+when a node connects from a non-private address or runs a different version than the hub.
+Remote projects cannot yet receive extra messages into an ongoing session (adjusting after a
+human review), and the chat page cannot start sessions on a node. See the
+[remote node design](docs/design/remote-agent-plan.md).
 
 ## Runtime resource limits
 

@@ -1,6 +1,6 @@
 # 远程 Agent 端（节点）设计方案 v1（测试版）
 
-> 状态：v1 测试版已实现 · 分支：`feat/remote-agent` · 2026-10-26 起草，2026-10-27 完成
+> 状态：v2 已实现（中心统一验收、无人值守） · 分支：`feat/remote-agent` · 2026-10-26 起草，2026-10-27 v1，v2 同日完成
 
 ## 1. 目标
 
@@ -142,7 +142,26 @@
 
 联调中发现并修复：Codex 的 `run()` 在一轮开始时即返回，后续消息与 `turn/completed` 经 `onEvent` 推送。远程链路最初在收到 `result` 时就退订，真实 Codex 任务会一直停在执行中；现两端都转发到终止事件为止，并有回归测试。
 
-尚未做的验收：用真实编程工具在远程节点上完整跑一次任务（会消耗模型额度，留给使用者验收）；跨机器 Tailscale 实测。
+尚未做的验收：用真实编程工具在远程节点上完整跑一次任务（会消耗模型额度，留给使用者验收）；跨机器 Tailscale 实测。v2 的真实进程冒烟（不发模型请求）已验证：节点上报名额与能力、经节点读取真实 Codex 模型列表、远程项目创建、节点重启后重新上线。
+
+## 9.2 v2：中心统一验收、无人值守
+
+目标：一个中心控制 N 个节点，节点与中心运行同一个 `xuanwu`，所有远程工作由中心验收，全程无人值守。
+
+| 能力 | 提交 | 做法 |
+|---|---|---|
+| 远程 Git 证据 | `27cacbc0` | 中心的 `runGit` / `withGitWorkspaceObservation` / 证据 git 适配器对 `node://` 项目改走节点 `git.run`；节点只执行只读子命令白名单，带与中心相同的安全参数并限定在 allowedRoots 内。基线、证据、验收卡、交付检查逻辑不变 |
+| 会话与模型只读 | `f40e1d32` | 节点 `provider.read`（readSession / listSessions / listSessionTurns / listModels）；验收协调器经节点读会话摘要；`/api/providers/:id/models?node_id=` |
+| 附件与托管 Skill | `03ac43c1` | 远程项目提示以占位符引用 Skill 版本；`run.start` 携带图片与 Skill 版本内容（上限 32 MiB）；节点按版本缓存 Skill、按运行存放附件 |
+| 重启恢复 | `f14b401a` | `remote_runs` 台账（迁移 093）；节点握手上报在途运行；中心重启后经同一落库链路接回；节点丢失的运行立即失败；节点迟迟不回来时宽限期后收口 |
+| 常驻服务与版本 | `8d999def` | `xuanwu node install/uninstall`（systemd 用户服务 / launchd，`systemd-analyze verify` 通过）；版本不一致提醒 |
+| 验收后续动作 | `932e5f25` | 节点支持原会话续跑（`run.start` 的 recover 模式）；PI 重试、续跑、supervisor 恢复、自动化分派等全部按项目路由到节点 |
+| 并发 | `c9260535` | 中心本机沿用 `maxParallelProjects`，每个节点用自己的 `--max-parallel`，互不占用 |
+| 监督与会话视图 | `5ec1eb8d` | supervisor 经节点读回合状态；会话详情经节点读取 |
+
+关键端到端测试（`backend-ts/src/nodes/`）：`remoteAcceptance`（节点执行 → 中心经节点取证据与会话 → 自动验收为完成；重试与续跑都回到原节点）、`remoteRecovery`（中心重启接回、节点重启立即失败、节点不归宽限期收口）、`multiNode`（中心 + 两个节点同时执行，各守名额）、`remoteGit`（验收卡看到节点上的改动）。
+
+仍不支持：向进行中的会话追加消息（`sendSessionMessage`，用于人工审核后在原会话调整与 PI steer）——一轮结束后 Codex 的新事件不经原运行的转发链路，需要独立的会话事件通道；对话页在节点上新建会话同理。二者都不在无人值守主流程上。
 
 ## 10. 已确认的决定
 
