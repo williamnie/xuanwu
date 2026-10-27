@@ -7,10 +7,16 @@ import { NodeAgent, NodeAgentFatalError, type NodeAgentOptions } from "./agent.t
 import { nodeExecutionHandlers, nodeProviderInfo } from "./nodeExecutor.ts";
 import { nodeGitHandlers } from "./nodeGit.ts";
 import { startNodeProviders } from "./nodeProviders.ts";
+import { currentNodeCommand, nodeServicePlan, removeNodeService, writeNodeService } from "./service.ts";
 
 export type NodeCliConfig = { allowedRoots: string[]; hubUrl: string; token: string };
 
 const USAGE = `usage: xuanwu node [--hub <url>] [--token <key>] [--root <dir>]... [--config <file>]
+       xuanwu node install [--hub <url>] [--token <key>] [--root <dir>]... [--start]
+       xuanwu node uninstall [--stop]
+
+  install    写入 ~/.xuanwu/node.json（0600）并生成 systemd 用户服务 / launchd 服务，开机自启、退出后自动拉起
+  uninstall  删除服务定义（保留 node.json）
 
   --hub      中心地址，例如 http://100.64.0.1:8787
   --token    添加节点时中心给出的密钥（也可用环境变量 XUANWU_NODE_TOKEN，避免出现在进程列表中）
@@ -23,6 +29,7 @@ export async function runNodeCommand(args: string[], env: Record<string, string 
     process.stdout.write(USAGE);
     return 0;
   }
+  if (args[0] === "install" || args[0] === "uninstall") return await runServiceCommand(args[0], args.slice(1), env);
   let config: NodeCliConfig;
   try {
     config = await resolveNodeCliConfig(args, env);
@@ -45,6 +52,36 @@ export async function runNodeCommand(args: string[], env: Record<string, string 
     throw error;
   } finally {
     await registry.stopAll();
+  }
+}
+
+async function runServiceCommand(action: "install" | "uninstall", args: string[], env: Record<string, string | undefined>): Promise<number> {
+  const run = args.includes(action === "install" ? "--start" : "--stop");
+  const rest = args.filter((arg) => arg !== "--start" && arg !== "--stop");
+  try {
+    const config = action === "install"
+      ? await resolveNodeCliConfig(rest, env)
+      : { allowedRoots: [], hubUrl: "", token: "" };
+    if (action === "install" && config.allowedRoots.length === 0) throw new Error("install needs at least one --root");
+    const plan = nodeServicePlan(config, { command: currentNodeCommand(), env: { HOME: env.HOME, PATH: env.PATH } });
+    if (action === "install") await writeNodeService(plan);
+    else await removeNodeService(plan);
+    const commands = action === "install" ? plan.start : plan.stop;
+    for (const file of action === "install" ? plan.files : plan.files.slice(1)) {
+      process.stdout.write(`${action === "install" ? "wrote" : "removed"} ${file.path}\n`);
+    }
+    if (!run) {
+      process.stdout.write(`\n${action === "install" ? "启动" : "停止"}服务：\n${commands.map((command) => `  ${command.join(" ")}`).join("\n")}\n`);
+      return 0;
+    }
+    for (const command of commands) {
+      const result = Bun.spawnSync(command, { stderr: "inherit", stdout: "inherit" });
+      if (result.exitCode !== 0 && action === "install") throw new Error(`${command.join(" ")} failed with exit ${result.exitCode}`);
+    }
+    return 0;
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    return 1;
   }
 }
 

@@ -21,6 +21,7 @@ import {
   type NodeHelloResponse,
   type NodeUpstreamMessage
 } from "../../nodes/protocol.ts";
+import { bunBuildInfo } from "../../buildInfo.ts";
 import { requestBearerToken } from "../auth.ts";
 import { createBoundedEventStream } from "../boundedEventStream.ts";
 import { HttpError, json, jsonError, parseJsonBody } from "../errors.ts";
@@ -113,9 +114,13 @@ function authenticateNode(context: NodesApiContext, request: Request): RemoteNod
 }
 
 function nodeView(context: NodesApiContext, node: RemoteNode) {
+  const hubVersion = bunBuildInfo().version;
   return {
     ...node,
+    hub_version: hubVersion,
     online: context.hub.isOnline(node.id),
+    // 节点与中心版本不同可能缺少新的协议能力，提示升级节点。
+    version_mismatch: node.info.version !== "" && node.info.version !== hubVersion,
     private_network: node.last_remote_addr === "" ? null : isPrivateNetworkAddress(node.last_remote_addr)
   };
 }

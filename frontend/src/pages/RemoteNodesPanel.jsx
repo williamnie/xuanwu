@@ -119,7 +119,7 @@ export default function RemoteNodesPanel() {
             <div><ShieldCheck size={14} /><strong>{created.name} 的密钥只显示这一次</strong></div>
             <button className="btn btn-secondary" onClick={copyCommand} type="button"><Copy size={14} />复制命令</button>
           </div>
-          <p>在节点机器上执行下面的命令，把 <code>&lt;项目所在目录&gt;</code> 换成允许玄武工作的目录（可重复 --root）。节点连上后会出现在下方列表。</p>
+          <p>在节点机器上执行下面的命令，把 <code>&lt;项目所在目录&gt;</code> 换成允许玄武工作的目录（可重复 --root）。节点连上后会出现在下方列表。长期运行时把 <code>xuanwu node</code> 换成 <code>xuanwu node install --start</code>，会注册为开机自启的服务。</p>
           <code className="remote-nodes-command">{nodeStartCommand({ hubUrl, token: created.token })}</code>
           <button className="btn btn-secondary" onClick={() => setCreated(null)} type="button"><Check size={14} />我已保存</button>
         </div>
@@ -145,6 +145,9 @@ export default function RemoteNodesPanel() {
                     <span><span className="ds-mono-label">Address</span>{node.last_remote_addr || '—'}</span>
                     <span><span className="ds-mono-label">Tools</span>{nodeProviderSummary(node)}</span>
                   </div>
+                  {node.version_mismatch && (
+                    <p className="remote-nodes-warning-text">节点版本 {node.info?.version} 与中心 {node.hub_version} 不一致，请在节点上升级 xuanwu 后重启节点服务。</p>
+                  )}
                   {node.private_network === false && (
                     <p className="remote-nodes-warning-text">该节点通过非内网地址连接，测试版未针对公网加固，建议改用 Tailscale 等内网组网。</p>
                   )}

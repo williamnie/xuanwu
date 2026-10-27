@@ -77,7 +77,13 @@ describe("nodes API", () => {
       body: JSON.stringify({ name: "laptop" }), method: "POST"
     })).json() as { node: { id: string }; token: string };
 
-    const agent = new NodeAgent({ allowedRoots: [allowed], hubUrl: baseUrl, log: () => {}, token });
+    const agent = new NodeAgent({
+      allowedRoots: [allowed],
+      hubUrl: baseUrl,
+      info: () => ({ hostname: "laptop", os: "linux", providers: [], version: "0.0.1-old" }),
+      log: () => {},
+      token
+    });
     const running = agent.run();
     cleanups.push(async () => {
       agent.stop();
@@ -87,7 +93,8 @@ describe("nodes API", () => {
 
     const listed = await (await adminFetch(baseUrl, "/api/nodes")).json() as { nodes: Array<Record<string, unknown>> };
     expect(listed.nodes).toHaveLength(1);
-    expect(listed.nodes[0]).toMatchObject({ id: node.id, last_remote_addr: "127.0.0.1", online: true, private_network: true });
+    // 节点上报的版本与中心不同即提示升级。
+    expect(listed.nodes[0]).toMatchObject({ id: node.id, last_remote_addr: "127.0.0.1", online: true, private_network: true, version_mismatch: true });
     expect((listed.nodes[0]!.info as { allowed_roots: string[] }).allowed_roots).toEqual([allowed]);
 
     expect(await hub.request(node.id, "path.check", { path: join(allowed, "repo") })).toMatchObject({ path: expect.stringContaining("repo") });
