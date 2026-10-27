@@ -255,6 +255,30 @@ For a source-built macOS background service:
 The canonical development and operational commands live in the
 [architecture index](docs/architecture/README.md) and [runbooks](docs/runbooks/).
 
+## Remote nodes (preview)
+
+By default Xuanwu only drives projects and coding tools on the machine it runs on. Run the
+agent side on another machine and its projects and Codex / Claude / Pi / Qoder become
+available to the same Xuanwu:
+
+1. In **Settings → Projects → Remote nodes**, add a node and copy the start command (the
+   token is shown once).
+2. On the node (with `xuanwu` installed and its coding tools signed in), run:
+
+   ```bash
+   XUANWU_NODE_TOKEN=<token> xuanwu node --hub http://<xuanwu-address> --root ~/code
+   ```
+
+   `--root` may repeat and limits where Xuanwu may run agents; with none, every project is
+   refused. `hub` / `token` / `roots` can also live in `~/.xuanwu/node.json`.
+3. When adding a project, pick its **location** and enter the path on the node.
+
+Nodes connect out to Xuanwu (SSE down, HTTP up), so Xuanwu never needs to reach them. Tasks,
+logs and state stay in Xuanwu's database. The preview targets LAN / Tailscale and is not
+hardened for the public internet; the UI warns when a node connects from a non-private
+address. Remote projects do not yet support Git acceptance and delivery, image attachments,
+sessions or model lists. See the [remote node design](docs/design/remote-agent-plan.md).
+
 ## Runtime resource limits
 
 Core uses indexed status reads and batch-local event projection dictionaries. Projection work
