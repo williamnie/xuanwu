@@ -3,7 +3,7 @@ import { Bot, CheckCircle2, KeyRound, MessageCircle, ScanSearch, TestTube2 } fro
 import { connectorsApi } from '../api/connectors.js';
 import { PanelLoader } from '../components/TurtleLoader';
 import { message } from '../store/toastStore';
-import TelegramProjectMappings from './TelegramProjectMappings';
+import TelegramProjectMappings from './TelegramProjectMappings.jsx';
 import './FeishuSettingsPanel.css';
 import './TelegramSettingsPanel.css';
 
