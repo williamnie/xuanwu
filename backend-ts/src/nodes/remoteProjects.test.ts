@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
+import { createProject, getProject, listProjects } from "../db/repositories/projects.ts";
 import { cancelIssueWithInterrupt } from "../runner/interrupt.ts";
 import { projectLoopDecision, runProjectLoopOnce } from "../runner/projectLoop.ts";
 import { FIXTURE_TIME, insertIssue } from "../testing/harness.ts";
@@ -52,6 +53,38 @@ describe("remote projects", () => {
     const missing = await createRemoteProject(baseUrl, nodeId, join(allowed, "missing"));
     expect(missing.status).toBe(400);
     expect(await (await adminFetch(baseUrl, "/api/projects")).json()).toHaveLength(1);
+  });
+
+  test("path-check IDs let same-name local and remote projects coexist and reuse remote registrations", async () => {
+    const { allowed, baseUrl, database, nodeId } = await startNodeHub();
+    const cwd = join(allowed, "repo");
+    const local = createProject(database, { cwd, id: "repo" });
+    const checkPath = async () => {
+      const response = await adminFetch(baseUrl, `/api/projects/path-check?${new URLSearchParams({ cwd, node_id: nodeId })}`);
+      expect(response.status).toBe(200);
+      return await response.json() as { existing_project_id: string | null; suggested_id: string };
+    };
+    const create = (id: string) => adminFetch(baseUrl, "/api/projects", {
+      body: JSON.stringify({ cwd, id, node_id: nodeId }), method: "POST"
+    });
+
+    // 旧弹窗只用目录名，虽是不同位置也会撞到本机项目的主键。
+    const duplicate = await create("repo");
+    expect(duplicate.status).toBe(400);
+    expect(await duplicate.json()).toMatchObject({ message: "UNIQUE constraint failed: projects.id" });
+
+    const checked = await checkPath();
+    expect(checked.existing_project_id).toBeNull();
+    expect(checked.suggested_id).toMatch(/^repo-[a-f0-9]{8}$/);
+    const created = await create(checked.suggested_id);
+    expect(created.status).toBe(201);
+    expect(await created.json()).toMatchObject({ id: checked.suggested_id, node_id: nodeId, node_path: await realpath(cwd) });
+
+    const repeated = await checkPath();
+    expect(repeated).toMatchObject({ existing_project_id: checked.suggested_id, suggested_id: checked.suggested_id });
+    expect((await create(repeated.suggested_id)).status).toBe(201);
+    expect(listProjects(database)).toHaveLength(2);
+    expect(getProject(database, local.id)).toEqual(local);
   });
 
   test("the project loop executes a remote issue on the node and records its events", async () => {

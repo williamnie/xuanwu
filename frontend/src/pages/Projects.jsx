@@ -283,9 +283,20 @@ export default function Projects() {
                         <Folder size={16} />
                       </div>
                       <div className="project-card-title">
-                        <h3 title={proj.name}>
-                          {proj.name}
-                        </h3>
+                        <div className="project-card-name">
+                          <h3 title={proj.name}>
+                            {proj.name}
+                          </h3>
+                          {proj.node_id ? (
+                            <span
+                              className="project-card-remote ds-mono-label"
+                              title={`远程项目 · ${nodesById.get(proj.node_id)?.name || proj.node_id}`}
+                            >
+                              <span className="status-dot" aria-hidden="true" />
+                              远程
+                            </span>
+                          ) : null}
+                        </div>
                         <code title={proj.node_id ? `${proj.node_id}:${proj.node_path}` : proj.cwd}>
                           {projectLocationText(proj, nodesById)}
                         </code>

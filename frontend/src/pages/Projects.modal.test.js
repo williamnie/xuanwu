@@ -154,3 +154,10 @@ test('new project form defaults to one required field and keeps optional control
   assert.match(managerSource, /Skill 意图/);
   assert.doesNotMatch(managerSource, /Plugin 意图|onFieldChange\('plugin_intents'/);
 });
+
+test('new project form checks the selected location and uses its collision-free project ID', () => {
+  assert.match(editorSource, /mode === 'create'\s*\? await projectsApi\.checkPath\(payload\.cwd, \{ nodeId: ui\.formNodeId \}\)\s*: null/);
+  assert.match(editorSource, /if \(pathCheck && !pathCheck\.directory\) throw new Error/);
+  assert.match(editorSource, /projectsApi\.createProject\(\{ id: pathCheck\.suggested_id, \.\.\.payload \}\)/);
+  assert.doesNotMatch(editorSource, /projectIdFromPath/);
+});

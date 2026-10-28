@@ -28,11 +28,6 @@ function projectNameFromPath(cwd = '') {
   return trimmed.split(/[\\/]/).pop() || DEFAULT_PROJECT_NAME;
 }
 
-function projectIdFromPath(cwd) {
-  const base = projectNameFromPath(cwd).toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  return base.replace(/^-+|-+$/g, '') || DEFAULT_PROJECT_NAME;
-}
-
 function projectForm(project) {
   const executionPolicy = projectExecutionPolicy(project);
   return {
@@ -260,8 +255,13 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
         });
         if (preview?.supported === false) throw new Error(preview.reason || '当前编程工具不支持所选执行策略');
       }
+      // 由后端按完整位置分配 ID，避免本机与远程节点上的同名项目冲突。
+      const pathCheck = mode === 'create'
+        ? await projectsApi.checkPath(payload.cwd, { nodeId: ui.formNodeId })
+        : null;
+      if (pathCheck && !pathCheck.directory) throw new Error(remote ? '节点上不存在该文件夹' : '本地不存在该文件夹');
       const saved = mode === 'create'
-        ? await projectsApi.createProject({ id: projectIdFromPath(ui.formCwd), ...payload })
+        ? await projectsApi.createProject({ id: pathCheck.suggested_id, ...payload })
         : await projectsApi.updateProject(projectID, payload);
       message.success(mode === 'create' ? '项目已创建并接管' : '项目设置已保存');
       await onSaved?.(saved);
