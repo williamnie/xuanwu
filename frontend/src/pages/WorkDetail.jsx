@@ -366,7 +366,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
           </div>
           <ResourceError error={timelineError} />
           {activityLoading && !activityLoaded ? <div className="work-activity-loading"><LoaderCircle className="is-spinning" size={14} /> {t('work.loadingActivity')}</div> : null}
-          {activityLoaded && !activityLoading && visibleTimeline.length === 0 ? <EmptySection text={timelineKind ? t('work.noMatchingActivity') : t('work.noActivity')} /> : null}
+          {activityLoaded && !activityLoading && visibleTimeline.length === 0 ? <EmptySection text={timelineCursor ? t('work.noVisibleActivityYet') : timelineKind ? t('work.noMatchingActivity') : t('work.noActivity')} /> : null}
           <div className="work-timeline-list">
             {visibleTimeline.map(item => (
               <article key={item.id}>

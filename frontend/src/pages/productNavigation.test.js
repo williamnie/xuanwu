@@ -63,7 +63,8 @@ test('product navigation has one ordered Xuanwu identity and centralized labels'
 
   assert.match(dashboardSource, /01 COMMAND_CENTER/);
   assert.match(workBoardSource, /02 WORK_LEDGER/);
-  assert.match(runSidebarSource, /03 RUN_INSPECTOR/);
+  assert.match(runSidebarSource, />执行记录</);
+  assert.doesNotMatch(runSidebarSource, /RUN_INSPECTOR|TELEMETRY: RUNTIME/);
   assert.match(piChatSource, /04 ASK_XUANWU/);
   assert.match(automationsSource, /06 AUTOMATION_LOOPS/);
   assert.match(analyticsSource, /05 TELEMETRY_ANALYTICS/);

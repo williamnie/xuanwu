@@ -67,8 +67,9 @@ test('cost presentation preserves unavailable money and provider-neutral token t
   }), {
     cachedInput: '1,234',
     completeness: 'complete',
+    completenessLabel: '用量统计完整',
     input: '2,000',
-    money: 'Unavailable',
+    money: '暂无费用数据',
     output: '300',
     reasoning: '20',
     total: '2,300',
@@ -135,3 +136,14 @@ function fixtureRun() {
 function event(id, createdAt, text) {
   return { created_at: createdAt, id, payload: JSON.stringify({ text }), type: 'issue.log' };
 }
+
+
+test('unknown cost stays unknown while reported zero and partial usage remain distinguishable', () => {
+  assert.equal(runCostView().total, '—');
+  assert.equal(runCostView().money, '暂无费用数据');
+  assert.equal(runCostView().completenessLabel, '暂无用量数据');
+  const partial = runCostView({ usage: { total_tokens: 0, completeness: 'partial' }, money: { amount_micros: 0, currency: 'USD' } });
+  assert.equal(partial.total, '0');
+  assert.equal(partial.money, 'USD 0.000000');
+  assert.equal(partial.completenessLabel, '用量统计不完整');
+});

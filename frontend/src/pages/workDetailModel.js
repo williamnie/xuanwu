@@ -6,8 +6,6 @@ const RETRYABLE_STATUSES = new Set(['failed']);
 
 export const WORK_TIMELINE_KINDS = [
   'work_event',
-  'issue_event',
-  'run',
   'evidence',
   'handoff',
   'approval',
@@ -75,5 +73,5 @@ export function mergeTimelinePages(current = [], incoming = []) {
 }
 
 export function filterTimelineItems(items = [], kind = '') {
-  return kind ? items.filter(item => item?.kind === kind) : items;
+  return items.filter(item => item?.kind !== 'run' && item?.kind !== 'issue_event' && (!kind || item?.kind === kind));
 }

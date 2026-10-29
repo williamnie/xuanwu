@@ -103,6 +103,7 @@ export function runCostView(cost) {
   return {
     cachedInput: tokenValue(usage.cached_input_tokens),
     completeness: text(usage.completeness) || 'unavailable',
+    completenessLabel: ({ complete: '用量统计完整', partial: '用量统计不完整' })[usage.completeness] || '暂无用量数据',
     input: tokenValue(usage.input_tokens),
     money: moneyValue(money),
     output: tokenValue(usage.output_tokens),
@@ -118,7 +119,7 @@ function tokenValue(value) {
 function moneyValue(money) {
   const amountMicros = money.amount_micros;
   const currency = text(money.currency);
-  if (!Number.isFinite(amountMicros) || !currency) return 'Unavailable';
+  if (!Number.isFinite(amountMicros) || !currency) return '暂无费用数据';
   return `${currency} ${(amountMicros / 1_000_000).toFixed(6)}`;
 }
 

@@ -788,6 +788,47 @@
 
 .run-detail-error { color: var(--error); flex-direction: column; }
 
+.run-summary-disclosure {
+  border-top: 1px solid var(--border-color);
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.run-summary-disclosure > summary {
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-md);
+  font-weight: 600;
+  padding: var(--space-3) 0;
+}
+
+.run-summary-disclosure > .run-resource-panel,
+.run-summary-disclosure > .evidence-panel {
+  background: transparent;
+  border: 0;
+  margin: 0;
+  max-width: none;
+  padding: 0 0 var(--space-3);
+}
+
+.run-cost-completeness { color: var(--text-muted); font-size: var(--text-xs); }
+.run-cost-breakdown { display: grid; gap: var(--space-4); grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: var(--space-4); }
+.run-cost-breakdown h3 { font-size: var(--text-md); margin: 0 0 var(--space-2); }
+.run-cost-breakdown dl { margin: 0; }
+.run-cost-breakdown dl > div { border-bottom: 1px solid var(--border-light); display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: space-between; padding: var(--space-1-5) 0; }
+.run-cost-breakdown dt { color: var(--text-muted); font-size: var(--text-2xs); }
+.run-cost-breakdown dd { color: var(--text-secondary); font-size: var(--text-xs); margin: 0; }
+.run-cost-breakdown details { color: var(--text-muted); font-size: var(--text-xs); margin-top: var(--space-2); }
+.run-cost-breakdown summary { cursor: pointer; }
+.run-cost-breakdown pre { overflow-wrap: anywhere; white-space: pre-wrap; }
+.run-detail-attention { background: var(--bg-secondary); border: 0; border-bottom: 1px solid var(--border-color); border-radius: 0; flex-shrink: 0; max-height: 25vh; overflow: auto; }
+.run-detail-attention span { color: var(--text-secondary); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.run-summary-metrics strong { overflow-wrap: anywhere; white-space: normal; }
+.run-subsection-title { flex-wrap: wrap; gap: var(--space-2); }
+.run-progress-timeline article > div > div { flex-wrap: wrap; gap: var(--space-1); }
+.run-progress-timeline p { overflow-wrap: anywhere; }
+.run-raw-event-list summary { overflow-wrap: anywhere; }
+
 @media (max-width: 980px) {
   .run-summary-layout { grid-template-columns: 1fr; }
   .run-summary-aside { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -797,6 +838,7 @@
 }
 
 @media (max-width: 760px) {
+  .run-cost-breakdown { grid-template-columns: 1fr; }
   .run-context-bar { grid-template-columns: 1fr; }
   .run-context-actions { justify-content: flex-start; }
   .run-control-confirm { align-items: stretch; flex-direction: column; }
