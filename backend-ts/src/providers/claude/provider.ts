@@ -64,7 +64,7 @@ export type { ClaudeProcessFactory };
 
 const PROVIDER = "claude" as const;
 const DEFAULT_MAX_TURNS = 50;
-export const CLAUDE_AGENT_SDK_VERSION = "0.3.152";
+export const CLAUDE_AGENT_SDK_VERSION = "0.3.312";
 
 type QueryInput = { prompt: string | AsyncIterable<unknown>; options?: ClaudeSdkOptions };
 export type ClaudeQuery = AsyncIterable<unknown> & {
@@ -112,7 +112,7 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
 
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
     assertUsableCwd(input.cwd);
-    return await this.execute(input.prompt, sdkInput(input, this.config), input.onEvent, "", input);
+    return await this.execute(input.prompt, sdkInput(input, this.config, "", `Issue #${input.issueId}`), input.onEvent, "", input);
   }
 
   async recover(input: ProviderRecoveryInput): Promise<ProviderRunResult> {
@@ -124,7 +124,7 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
     assertUsableCwd(input.cwd);
     const prompt = cleanString(input.prompt);
     if (prompt === "") throw new Error("Claude SDK session creation requires a prompt");
-    const result = await this.execute(prompt, sdkInput(input, this.config), undefined, "", input);
+    const result = await this.execute(prompt, sdkInput(input, this.config, "", input.title), undefined, "", input);
     const session = requiredSession(result);
     return {
       id: `${PROVIDER}:${session.sessionId}`,
@@ -443,7 +443,8 @@ export function claudeProviderAppEvent(event: ProviderEvent): AppEvent {
 function sdkInput(
   input: Pick<SessionCreateInput, "approvalPolicy" | "cwd" | "model" | "reasoningEffort" | "sandbox"> & Pick<ProviderRunInput, "policy">,
   config: ProviderRuntimeConfig,
-  resume = ""
+  resume = "",
+  title = ""
 ): ClaudeSdkOptions {
   const tools = nativeStringArray(input, "tools") ?? claudeTools(input.sandbox);
   const model = cleanString(input.model) || cleanString(config.model);
@@ -466,7 +467,9 @@ function sdkInput(
     ...(executable ? { pathToClaudeCodeExecutable: executable } : {}),
     ...(effort ? { effort } : {}),
     ...(model && model !== "codex-default" ? { model } : {}),
-    ...(resume ? { resume } : {})
+    ...(resume ? { resume } : {}),
+    // 只对新会话生效：续跑时 SDK 沿用会话里已保存的标题。
+    ...(cleanString(title) ? { title: cleanString(title) } : {})
   };
 }
 

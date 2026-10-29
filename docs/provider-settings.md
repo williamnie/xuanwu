@@ -155,7 +155,7 @@ status 应显示 `auth_mode=platform-profile`、`auth_source=platform_profile`�
      --json | jq '.providers[] | select(.id == "claude")'
    ```
 
-   预期 `mode == "sdk"`、`ready == true`、`status == "available"`、`sdk.installed == true`、`sdk.executable_ready == true`、`sdk.ready == true`、`sdk.version == "0.3.152"`、`api_key_configured == true`。`api_base_url_summary` 只显示安全 origin/路径占位，不应出现 key、query、userinfo 或私有 path。
+   预期 `mode == "sdk"`、`ready == true`、`status == "available"`、`sdk.installed == true`、`sdk.executable_ready == true`、`sdk.ready == true`、`sdk.version` 与 `backend-ts/package.json` 中的 `@anthropic-ai/claude-agent-sdk` 版本一致、`api_key_configured == true`。`api_base_url_summary` 只显示安全 origin/路径占位，不应出现 key、query、userinfo 或私有 path。
 
    Bun 编译产物旁会同时生成 `xuanwu.claude-agent-sdk`。这是 SDK 自身要求的原生 Claude Code executable，不是 Node sidecar/daemon；build、release install 与 rollback 都会把它作为相邻运行时资产原子部署。若缺失，status 会明确返回 `sdk.executable_ready == false`，而不是假报 SDK 健康。
 3. 在项目设置的 **Agent Profile（可选）** 中准备一个 `provider=claude` 的 profile；在 Work 新建/编辑弹窗选择它并启动一个最小 Work，例如“只读取 README 第一行并回复，不修改文件”。

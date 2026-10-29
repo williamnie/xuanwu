@@ -6,6 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
 import { createDefaultRouter, createRequestHandler, registerSystemStatusRoute } from "../server.ts";
 import { createProviderRegistry } from "../../providers/core/registry.ts";
 import { asProviderId } from "../../providers/types.ts";
+import { CLAUDE_AGENT_SDK_VERSION } from "../../providers/claude/provider.ts";
 import { createIssue } from "../../db/repositories/issueCreate.ts";
 import {
   projectPendingCompactEventSummaries,
@@ -154,7 +155,7 @@ describe("Bun system status endpoints", () => {
       env_keys: [],
       mode: "sdk",
       ready: false,
-      sdk: { executable_ready: true, installed: true, ready: false, version: "0.3.152" },
+      sdk: { executable_ready: true, installed: true, ready: false, version: CLAUDE_AGENT_SDK_VERSION },
       secrets: { api_key: { configured: false } },
       settings_mode: "runner_env_to_anthropic_sdk",
       status: "configuration_required",
@@ -335,7 +336,7 @@ describe("Bun system status endpoints", () => {
       mode: "sdk",
       ready: true,
       api_base_url_summary: "https://gateway.example/…",
-      sdk: { executable_ready: true, installed: true, ready: true, version: "0.3.152" },
+      sdk: { executable_ready: true, installed: true, ready: true, version: CLAUDE_AGENT_SDK_VERSION },
       secrets: { api_key: { configured: true } }
     });
     expect(codex?.capabilities).toEqual(CODEX_CAPABILITIES);

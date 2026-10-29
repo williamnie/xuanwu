@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ClaudeSdkExecutorProvider, type ClaudeQuery, type ClaudeQueryFactory } from "./provider.ts";
+import { CLAUDE_AGENT_SDK_VERSION, ClaudeSdkExecutorProvider, type ClaudeQuery, type ClaudeQueryFactory } from "./provider.ts";
 import type { ProviderEvent } from "../types.ts";
 
 const cwd = import.meta.dir;
@@ -75,10 +75,10 @@ describe("Claude Agent SDK provider", () => {
   });
 
   test("resumes/recover sessions with the real SDK resume ref and cleans aliases", async () => {
-    const calls: Array<{ prompt: unknown; resume?: string }> = [];
+    const calls: Array<{ prompt: unknown; resume?: string; title?: string }> = [];
     const provider = new ClaudeSdkExecutorProvider(config(), {
       queryFactory: ((input) => {
-        calls.push({ prompt: input.prompt, resume: input.options?.resume });
+        calls.push({ prompt: input.prompt, resume: input.options?.resume, title: input.options?.title });
         const sessionId = input.options?.resume || input.options?.sessionId || "";
         return fromMessages([
           init(sessionId, "turn-init"),
@@ -88,7 +88,7 @@ describe("Claude Agent SDK provider", () => {
       sessionIdFactory: () => "session-1"
     });
 
-    const created = await provider.createSession({ cwd, prompt: "create" });
+    const created = await provider.createSession({ cwd, prompt: "create", title: "Chat title" });
     expect(created).toMatchObject({ provider: "claude", provider_session_id: "session-1", provider_turn_id: "turn-result" });
 
     const messaged = await provider.sendSessionMessage({ cwd, prompt: "continue", sessionId: "session-1" });
@@ -100,6 +100,10 @@ describe("Claude Agent SDK provider", () => {
     });
     expect(recovered.session?.sessionId).toBe("session-1");
     expect(calls.map((call) => call.resume)).toEqual([undefined, "session-1", "session-1"]);
+    // 续跑沿用会话已保存的标题，只有新会话带 title。
+    expect(calls.map((call) => call.title)).toEqual(["Chat title", undefined, undefined]);
+    await provider.run(runInput());
+    expect(calls.at(-1)?.title).toBe("Issue #1");
     expect(provider.runtimeStatus().active_sessions).toBe(0);
   });
 
@@ -313,6 +317,11 @@ describe("Claude Agent SDK provider", () => {
     expect(observedCwd).toBe(cwd);
   });
 
+  test("reports the installed SDK version", async () => {
+    const manifest = await Bun.file(new URL("../../../package.json", import.meta.url)).json() as { dependencies: Record<string, string> };
+    expect(CLAUDE_AGENT_SDK_VERSION).toBe(manifest.dependencies["@anthropic-ai/claude-agent-sdk"]!);
+  });
+
   test("reports missing SDK auth explicitly without treating CLI availability as readiness", () => {
     const provider = new ClaudeSdkExecutorProvider(config({ env: {} }));
     expect(provider.runtimeStatus()).toMatchObject({
@@ -324,7 +333,7 @@ describe("Claude Agent SDK provider", () => {
       auth_mode: "environment",
       auth_source: "none",
       reason: "Claude SDK environment authentication is not configured",
-      version: "0.3.152"
+      version: CLAUDE_AGENT_SDK_VERSION
     });
   });
 
