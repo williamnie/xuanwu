@@ -18,7 +18,6 @@ const circles = {
   'index.css': ['.api-status-dot', '.status-dot'],
   'GeekWorkbench.css': ['.e2b-window-dots .e2b-dot'],
   'GeekWorkbenchPages.css': ['.composer-circle-submit, .session-composer-circle'],
-  'components/TurtleLoader.css': ['.turtle-loader-track::after'],
   'components/CodexUsagePanel.css': ['.codex-provider-identity > span::before'],
   'pages/PiChatSidebar.css': ['.pi-chat-conversation-runtime > span'],
   'pages/Handoffs.css': ['.handoff-authority-note > span'],
@@ -195,10 +194,10 @@ test('selected tabs and language controls use neutral surfaces and a thin primar
 });
 
 
-// Spec 5.5 / 6: the only long loops are 1s loading spinners and 1.4s running dots.
+// Spec 5.5 / 6: loading spinners, running dots and the shared turtle loader.
 const loopingMotion = {
   "index.css: .animate-spin, .spin-animation": "xuanwu-spin 1s linear infinite !important",
-  "components/TurtleLoader.css: .turtle-loader-track::after": "xuanwu-spin 1s linear infinite",
+  "components/TurtleLoader.css: .turtle-loader-runner": "turtle-loader-crawl 2.8s linear infinite alternate",
   "pages/PiChatSidebar.css: .pi-chat-conversation-runtime[data-tone=\"running\"] > span": "pi-chat-runtime-spin 1s linear infinite",
   "pages/ProjectSettingsEditor.css: .project-settings-loading-hint::before": "xuanwu-spin 1s linear infinite",
   "pages/PiChatThread.css: .pi-chat-status-summary[data-tone=\"running\"] .pi-chat-status-dot": "pi-chat-running-signal 1.4s ease-in-out infinite",

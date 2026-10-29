@@ -21,9 +21,10 @@ test('shared turtle loader uses the Xuanwu running asset and exposes accessible 
   assert.match(loaderSource, /turtle-loader-track/);
 });
 
-test('turtle loader uses the standard spinner without crawling or bobbing the brand image', () => {
-  assert.match(loaderStyles, /\.turtle-loader-track::after\s*\{[^}]*animation:\s*xuanwu-spin 1s linear infinite/);
-  assert.doesNotMatch(loaderStyles, /turtle-loader-crawl|turtle-loader-bob/);
+test('turtle loader keeps crawling and respects reduced motion', () => {
+  assert.match(loaderStyles, /\.turtle-loader-runner\s*\{[^}]*animation:\s*turtle-loader-crawl 2.8s linear infinite alternate/);
+  assert.doesNotMatch(loaderStyles, /turtle-loader-track::after/);
+  assert.match(loaderStyles, /prefers-reduced-motion:[\s\S]*\.turtle-loader-runner \{ animation: none;/);
   assert.match(loaderStyles, /prefers-reduced-motion/);
   assert.match(globalStyles, /\.animate-spin/);
   assert.match(globalStyles, /\.spin-animation/);

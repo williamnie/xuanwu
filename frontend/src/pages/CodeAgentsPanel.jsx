@@ -36,7 +36,8 @@ export default function CodeAgentsPanel() {
     }
   }, []);
 
-  useEffect(() => { load(true); }, [load]);
+  // 首屏读取已有检测结果；全量 CLI 探测仅由“重新检测”触发。
+  useEffect(() => { load(); }, [load]);
 
   const toggle = async (agent) => {
     setBusyAgentID(agent.id);
