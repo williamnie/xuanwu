@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
+import { createRemoteNode, getRemoteNode } from "../../db/repositories/nodes.ts";
 import { NodeAgent, NodeAgentFatalError } from "../../nodes/agent.ts";
 import { NodeHub } from "../../nodes/hub.ts";
 import { useDatabaseCleanup } from "../../testing/harness.ts";
@@ -19,13 +21,18 @@ afterEach(async () => {
   while (cleanups.length > 0) await cleanups.pop()?.();
 });
 
-async function startHub(): Promise<{ baseUrl: string; database: RunnerDatabase; hub: NodeHub; root: string }> {
+async function createHub() {
   const root = await mkdtemp(join(tmpdir(), "xuanwu-nodes-api-"));
   cleanups.push(() => rm(root, { force: true, recursive: true }));
   const database = await openDatabase({ stateDir: join(root, "state") }).then(trackDatabase);
   const hub = new NodeHub();
   const router = createRouter();
   registerNodesRoutes(router, { database, heartbeatMs: 50, hub });
+  return { database, hub, root, router };
+}
+
+async function startHub(): Promise<{ baseUrl: string; database: RunnerDatabase; hub: NodeHub; root: string }> {
+  const { database, hub, root, router } = await createHub();
   const handle = createRequestHandler(router, ADMIN_TOKEN);
   const server = Bun.serve({
     hostname: "127.0.0.1",
@@ -55,6 +62,80 @@ async function waitFor(condition: () => boolean, timeoutMs = 2_000): Promise<voi
 }
 
 describe("nodes API", () => {
+  test.each(["connect", "heartbeat"] as const)("keeps the node connected during SQLite contention at %s and persists the next heartbeat", async (phase) => {
+    const { database, hub, router } = await createHub();
+    const { node, token } = createRemoteNode(database, { name: "contended-node" });
+    const blocker = new Database(database.path);
+    const controller = new AbortController();
+    let locked = false;
+    let cancelStream: (() => Promise<void>) | undefined;
+    try {
+      if (phase === "connect") {
+        blocker.run("begin immediate");
+        locked = true;
+      }
+      const response = await router.handle(new Request("http://localhost/api/nodes/agent/stream", {
+        headers: { authorization: `Bearer ${token}` },
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(4_000)])
+      }));
+      expect(response.status).toBe(200);
+      expect(hub.isOnline(node.id)).toBe(true);
+      const reader = response.body!.getReader();
+      cancelStream = () => reader.cancel();
+      await reader.read();
+      if (!locked) {
+        blocker.run("begin immediate");
+        locked = true;
+      }
+      const lastSeen = getRemoteNode(database, node.id)!.last_seen_at;
+      // 收到锁冲突期间的心跳后，继续验证 API 可用且连接没有被清除。
+      const heartbeat = await reader.read();
+      expect(new TextDecoder().decode(heartbeat.value)).toContain(": heartbeat");
+      expect(getRemoteNode(database, node.id)!.last_seen_at).toBe(lastSeen);
+      expect(hub.isOnline(node.id)).toBe(true);
+      expect((await router.handle(new Request("http://localhost/api/nodes"))).status).toBe(200);
+      blocker.run("rollback");
+      locked = false;
+      await waitFor(() => getRemoteNode(database, node.id)!.last_seen_at !== lastSeen);
+    } finally {
+      if (locked) blocker.run("rollback");
+      blocker.close();
+      await cancelStream?.();
+      controller.abort();
+      hub.disconnect(node.id);
+    }
+  });
+
+  test.each(["connect", "heartbeat"] as const)("cleans up the node after a non-contention storage error at %s", async (phase) => {
+    const { database, hub, router } = await createHub();
+    const { node, token } = createRemoteNode(database, { name: "readonly-node" });
+    const controller = new AbortController();
+    let cancelStream: (() => Promise<void>) | undefined;
+    try {
+      if (phase === "connect") database.sqlite.run("pragma query_only=on");
+      const response = await router.handle(new Request("http://localhost/api/nodes/agent/stream", {
+        headers: { authorization: `Bearer ${token}` }, signal: controller.signal
+      }));
+      if (phase === "connect") {
+        expect(response.status).toBe(500);
+        expect(hub.isOnline(node.id)).toBe(false);
+      } else {
+        expect(response.status).toBe(200);
+        const reader = response.body!.getReader();
+        cancelStream = () => reader.cancel();
+        await reader.read();
+        database.sqlite.run("pragma query_only=on");
+        await waitFor(() => !hub.isOnline(node.id));
+      }
+      expect((await router.handle(new Request("http://localhost/api/nodes"))).status).toBe(200);
+    } finally {
+      database.sqlite.run("pragma query_only=off");
+      await cancelStream?.();
+      controller.abort();
+      hub.disconnect(node.id);
+    }
+  });
+
   test("admin endpoints require the global token and never return the token hash", async () => {
     const { baseUrl } = await startHub();
     expect((await fetch(`${baseUrl}/api/nodes`)).status).toBe(401);

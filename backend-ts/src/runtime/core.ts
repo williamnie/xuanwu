@@ -5,6 +5,7 @@ import type { AgenticWorkerClient } from "../agentic/protocol.ts";
 import { coldStartTrace } from "../benchmarks/coldStart.ts";
 import { loadConfig } from "../config/env.ts";
 import { openDatabase } from "../db/database.ts";
+import { openCoreDatabase } from "./coreDatabase.ts";
 import { reconcileReservedImContextBindings } from "../db/repositories/imContextLifecycle.ts";
 import { EventBus } from "../events/bus.ts";
 import { BackgroundProjectionWorker } from "../events/projectionWorker.ts";
@@ -52,7 +53,7 @@ export async function startCoreRuntime(args: string[], role: "all" | "core"): Pr
   const config = role === "core" ? { ...loadedConfig, webDir: "" } : loadedConfig;
   if (role === "core") assertInternalCoreAddress(config.addr);
   coldStartTrace("config_loaded");
-  const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
+  const database = await openCoreDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
   const reconciledContextBindings = reconcileReservedImContextBindings(database);
   if (reconciledContextBindings > 0) {
     console.info(JSON.stringify({ event: "im.context_bindings_reconciled", rows: reconciledContextBindings }));

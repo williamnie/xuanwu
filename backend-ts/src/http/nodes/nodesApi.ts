@@ -24,7 +24,7 @@ import {
 import { bunBuildInfo } from "../../buildInfo.ts";
 import { requestBearerToken } from "../auth.ts";
 import { createBoundedEventStream } from "../boundedEventStream.ts";
-import { HttpError, json, jsonError, parseJsonBody } from "../errors.ts";
+import { HttpError, isSqliteContention, json, jsonError, parseJsonBody } from "../errors.ts";
 import { requestPeerAddress } from "../peerAddress.ts";
 import type { Router } from "../router.ts";
 import { cleanString } from "../../util/values.ts";
@@ -83,6 +83,20 @@ export function registerNodesRoutes(router: Router, context: NodesApiContext): v
 function nodeStreamResponse(context: NodesApiContext, node: RemoteNode, signal: AbortSignal): Response {
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let detach: (() => void) | undefined;
+  let persistenceDeferred = false;
+  const touch = () => {
+    try {
+      touchRemoteNode(context.database, node.id);
+      persistenceDeferred = false;
+    } catch (error) {
+      if (!isSqliteContention(error)) throw error;
+      // 在线状态由连接表维护；时间戳遇锁可留到下一次心跳，不能拖垮 Core。
+      if (!persistenceDeferred) {
+        console.warn(JSON.stringify({ event: "node.heartbeat_deferred", node_id: node.id, reason: "sqlite_contention" }));
+      }
+      persistenceDeferred = true;
+    }
+  };
   const output = createBoundedEventStream({
     signal,
     onClose() {
@@ -91,10 +105,26 @@ function nodeStreamResponse(context: NodesApiContext, node: RemoteNode, signal: 
     }
   });
   if (output.write(`retry: 1000\n\n: connected\n\n`)) {
-    detach = context.hub.attach(node.id, { close: () => output.close(), write: (frame) => output.write(frame) });
-    touchRemoteNode(context.database, node.id);
+    try {
+      // 首次写入的非临时错误仍交给路由处理，失败时尚未发布节点在线状态。
+      touch();
+      detach = context.hub.attach(node.id, { close: () => output.close(), write: (frame) => output.write(frame) });
+    } catch (error) {
+      output.abort();
+      throw error;
+    }
     heartbeat = setInterval(() => {
-      if (output.write(": heartbeat\n\n")) touchRemoteNode(context.database, node.id);
+      try {
+        if (output.write(": heartbeat\n\n")) touch();
+      } catch (error) {
+        // 定时器已脱离 HTTP 路由的异常边界；异常只关闭本连接，让节点重连。
+        output.abort();
+        console.error(JSON.stringify({
+          event: "node.heartbeat_failed",
+          node_id: node.id,
+          error_name: error instanceof Error ? error.name : "Error"
+        }));
+      }
     }, context.heartbeatMs ?? NODE_HEARTBEAT_MS);
   }
   return new Response(output.stream, {
