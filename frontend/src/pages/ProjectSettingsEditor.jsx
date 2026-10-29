@@ -1,3 +1,5 @@
+import AgentProfileSelectOptions from '../components/AgentProfileSelectOptions.jsx';
+import { useProjectPresetCatalog } from './useProjectPresetCatalog.js';
 import { useCallback, useEffect, useRef } from 'react';
 import { useI18n } from '../i18n/context.js';
 import { buildProviderModelOptions, normalizeProviderModel } from './projectModelOptions.js';
@@ -71,6 +73,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
   const modelRequest = useRef(0);
   const selectedNode = ui.nodes.find(node => node.id === ui.formNodeId) || null;
   const remote = ui.formNodeId !== '';
+  const presetCatalog = useProjectPresetCatalog(mode === 'edit' ? ui.formNodeId : '', ui.providerCatalog);
 
   useEffect(() => {
     let cancelled = false;
@@ -207,6 +210,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (presetCatalog.loading || presetCatalog.error) return;
     if (!ui.formCwd.trim()) {
       updateUi(draft => {
         draft.formError = '项目路径不能为空';
@@ -280,7 +284,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
   const providerOptions = remote
     ? nodeReadyProviders(selectedNode).map(id => ({ value: id, label: codeAgentLabel(id, ui.providerCatalog) }))
     : discoveredProviderOptions;
-  const availableProfiles = availableAgentProfiles(ui.profiles, ui.providerCatalog);
+  const availableProfiles = availableAgentProfiles(ui.profiles, presetCatalog.catalog);
   const modelOptions = buildProviderModelOptions(ui.formProvider, ui.codexModels, [ui.formModel], language);
   const modal = layout === 'modal';
   const providerReady = providerOptions.some(option => option.value === ui.formProvider);
@@ -342,8 +346,18 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
         ) : (
           <>
             <ProjectRuntimeFields modelOptions={modelOptions} onFieldChange={setProjectRuntimeField} providerOptions={providerOptions} ui={ui} />
+            <label className="form-group">
+              <span className="ds-mono-label">{english ? 'Execution preset' : '执行预设'}</span>
+              <select className="form-control" value={ui.formAgentProfileId}
+                disabled={ui.saving || ui.profilesLoading || presetCatalog.loading || Boolean(presetCatalog.error)}
+                onChange={event => setFormField('formAgentProfileId', event.target.value)}>
+                <option value="">{english ? 'Use project defaults' : '沿用项目设置'}</option>
+                <AgentProfileSelectOptions catalog={presetCatalog.catalog} profiles={ui.profiles} selectedProfileID={ui.formAgentProfileId} />
+              </select>
+            </label>
+            {presetCatalog.error ? <p className="project-settings-error" role="alert">{presetCatalog.error}</p> : null}
             <p className="project-settings-hint">
-              {english ? 'Execution preset' : '执行预设'}：{ui.profiles.find(profile => profile.id === ui.formAgentProfileId)?.name || project?.default_agent_profile?.name || ui.formAgentProfileId || (english ? 'Project defaults' : '沿用项目设置')} · {' '}
+              {english ? 'Execution preset' : '执行预设'}：{ui.profiles.find(profile => profile.id === ui.formAgentProfileId)?.name || ui.formAgentProfileId || (english ? 'Project defaults' : '沿用项目设置')} · {' '}
               <a href="#/settings?section=advanced:presets" onClick={onCancel}>{english ? 'Edit in Advanced → Execution presets' : '在 高级 → 执行预设 中修改'}</a>
               {ui.profileError ? <span role="alert">{ui.profileError}</span> : null}
             </p>
@@ -353,7 +367,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
 
       <div className={modal ? 'project-config-modal-footer' : 'project-settings-editor-footer'}>
         {onCancel && <button className="btn btn-secondary" disabled={ui.saving} onClick={onCancel} type="button">取消</button>}
-        <button className="btn btn-primary" disabled={ui.saving || ui.providerCatalogLoading || (!providerReady && !historicalProviderPreserved)} type="submit">
+        <button className="btn btn-primary" disabled={ui.saving || ui.providerCatalogLoading || presetCatalog.loading || Boolean(presetCatalog.error) || (!providerReady && !historicalProviderPreserved)} type="submit">
           {ui.saving ? '正在保存…' : mode === 'create' ? '添加并接管' : '保存项目设置'}
         </button>
       </div>

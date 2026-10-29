@@ -42,6 +42,11 @@ const BUILTIN_POLICY: Record<string, () => { manifest: ExecutorProviderManifest;
   qoder: () => ({ manifest: qoderManifest(), policyAdapter: qoderExecutionPolicyAdapter })
 };
 
+/** 目录与执行代理复用静态元信息，不依赖中心是否安装了该工具。 */
+export function remoteProviderManifest(id: string): ExecutorProviderManifest | undefined {
+  return Object.hasOwn(BUILTIN_POLICY, id) ? BUILTIN_POLICY[id]!().manifest : undefined;
+}
+
 /** 远程运行台账：节点接受后登记，订阅结束（终止或失败）时收口。 */
 export type RemoteRunLedger = {
   finished(runRef: string): void;

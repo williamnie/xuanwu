@@ -1,13 +1,14 @@
+import { nodesApi } from '../api/nodes.js';
 import { projectsApi } from '../api/projects.js';
 import { workApi } from '../api/work.js';
 import { nativeAutomationsApi } from '../api/nativeAutomations.js';
 import { create } from 'zustand';
-import { clearAuthToken } from '../api/authToken';
+import { clearAuthToken } from '../api/authToken.js';
 import { boundedSummaryFetcher } from './summaryRefreshCoordinator.js';
 import {
   sameGuardianAlerts,
   sameProjects,
-} from '../utils/stateGuards';
+} from '../utils/stateGuards.js';
 
 export const EMPTY_WORK_COUNTS = Object.freeze({
   cancelled: 0,
@@ -35,6 +36,9 @@ export function emptyWorkSummary() {
 }
 
 const fetchWorkSummary = boundedSummaryFetcher(() => workApi.getWorkSummary());
+
+let nodesRequest;
+let nodesFetchedAt = 0;
 
 const DATA_SLICE_CONFIG = {
   projects: {
@@ -88,6 +92,20 @@ function buildConnectionPatch(current, online) {
 }
 
 export const useDataStore = create((set, get) => ({
+  nodesById: new Map(),
+  refreshNodes: ({ force = false } = {}) => {
+    if (nodesRequest) return nodesRequest;
+    if (!force && Date.now() - nodesFetchedAt < 60_000) return Promise.resolve();
+    nodesRequest = nodesApi.listNodes()
+      .then(result => set({ nodesById: new Map((result?.nodes || []).map(node => [node.id, node])) }))
+      .catch(() => set({ nodesById: new Map() }))
+      .finally(() => {
+        nodesFetchedAt = Date.now();
+        nodesRequest = undefined;
+      });
+    return nodesRequest;
+  },
+
   projects: [],
   workSummary: emptyWorkSummary(),
   automations: [],

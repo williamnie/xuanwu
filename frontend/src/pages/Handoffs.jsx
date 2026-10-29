@@ -1,3 +1,5 @@
+import { projectOptionLabel } from '../utils/projectOptionLabel.js';
+import { useProjectNodes } from '../store/useProjectNodes.js';
 import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -32,6 +34,7 @@ const STATUS_OPTIONS = ['', 'draft', 'ready', 'delivered', 'superseded'];
 const MODE_OPTIONS = ['', 'local_changes', 'branch_commit', 'push', 'draft_pr', 'ready_pr', 'deploy', 'release'];
 
 export default function Handoffs({ selectedHandoffId = '' }) {
+  const nodesById = useProjectNodes();
   const projects = useDataStore(selectProjects);
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState(selectedHandoffId);
@@ -132,7 +135,7 @@ export default function Handoffs({ selectedHandoffId = '' }) {
       <div className="handoff-filters">
         <Filter label="Project" onChange={projectId => setFilters(current => ({ ...current, projectId }))} value={filters.projectId}>
           <option value="">All projects</option>
-          {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+          {projects.map(project => <option key={project.id} value={project.id}>{projectOptionLabel(project, nodesById, project.name)}</option>)}
         </Filter>
         <Filter label="Status" onChange={status => setFilters(current => ({ ...current, status }))} value={filters.status}>
           {STATUS_OPTIONS.map(status => <option key={status || 'all'} value={status}>{status || 'All statuses'}</option>)}

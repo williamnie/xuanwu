@@ -8,6 +8,7 @@ import { projectLoopDecision, runProjectLoopOnce } from "../runner/projectLoop.t
 import { FIXTURE_TIME, insertIssue } from "../testing/harness.ts";
 import { adminFetch, useTestNodeHub, waitUntil } from "./testing.ts";
 import { providersForProjectCwd } from "./remoteExecution.ts";
+import { createRemoteNode, getRemoteNode, recordRemoteNodeHello, revokeRemoteNode } from "../db/repositories/nodes.ts";
 import { asProviderId } from "../providers/types.ts";
 
 const startNodeHub = useTestNodeHub();
@@ -166,6 +167,62 @@ describe("remote projects", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ data: [{ display_name: "Node model", id: "node-model" }] });
     expect((await adminFetch(baseUrl, `/api/providers/qoder/models?node_id=${nodeId}`)).status).toBe(409);
+  });
+
+  test("provider catalogs follow the project node and allow remote-only tools while offline", async () => {
+    const { agent, allowed, baseUrl, database, hub, nodeId } = await startNodeHub();
+    await createRemoteProject(baseUrl, nodeId, join(allowed, "repo"));
+    // 测试中心 providers={}，只有节点安装了 codex。
+    expect(await (await adminFetch(baseUrl, "/api/providers")).json()).toEqual([]);
+    const catalog = async (query: string) => {
+      const response = await adminFetch(baseUrl, `/api/providers?${query}`);
+      expect(response.status).toBe(200);
+      return await response.json() as Array<Record<string, unknown>>;
+    };
+    const online = await catalog(`node_id=${nodeId}`);
+    expect(online).toHaveLength(1);
+    expect(online[0]).toMatchObject({
+      id: "codex", label: "Codex", enabled: true, submittable: true,
+      node_id: nodeId, node_online: true, state: "ready",
+      capabilities: { issueExecution: true, models: { list: true } },
+      legacy_capabilities: expect.arrayContaining(["issue_execution", "model_list"]),
+      settings: { settings: expect.any(Array) }, native_actions: []
+    });
+    expect(await catalog("project_id=remote-repo")).toEqual(online);
+    const createWork = async (eventId: string) => {
+      const response = await adminFetch(baseUrl, "/api/works", {
+        method: "POST",
+        body: JSON.stringify({
+          project_id: "remote-repo", title: eventId, goal: "Use the node tool", type: "engineering_task", status: "triage",
+          audit: { actor: { id: "test", kind: "user" }, correlation_id: eventId, event_id: eventId,
+            occurred_at: new Date().toISOString(), reason: "test remote selection" }
+        })
+      });
+      expect(response.status).toBe(201);
+    };
+    await createWork("remote-online-create");
+    agent.stop();
+    await waitUntil(() => !hub.isOnline(nodeId));
+    const offline = await catalog("project_id=remote-repo");
+    expect(offline[0]).toMatchObject({ id: "codex", submittable: true, node_online: false, runtime: { ready: false } });
+    await createWork("remote-offline-create");
+
+    const node = getRemoteNode(database, nodeId)!;
+    recordRemoteNodeHello(database, nodeId, { remoteAddr: "127.0.0.1", info: {
+      ...node.info, providers: [
+        ...node.info.providers,
+        { id: "qoder", ready: false, capabilities: ["issue_execution"] },
+        { id: "unknown-tool", ready: true, capabilities: ["issue_execution"] }
+      ]
+    } });
+    expect((await catalog(`node_id=${nodeId}`)).map((entry) => entry.id)).toEqual(["codex", "unknown-tool"]);
+    const empty = createRemoteNode(database, { name: "never reported" }).node;
+    expect(await catalog(`node_id=${empty.id}`)).toEqual([]);
+    expect((await adminFetch(baseUrl, "/api/providers?node_id=node_unknown")).status).toBe(404);
+    expect((await adminFetch(baseUrl, "/api/providers?project_id=missing")).status).toBe(404);
+    expect((await adminFetch(baseUrl, `/api/providers?project_id=remote-repo&node_id=${empty.id}`)).status).toBe(400);
+    revokeRemoteNode(database, empty.id);
+    expect((await adminFetch(baseUrl, `/api/providers?node_id=${empty.id}`)).status).toBe(404);
   });
 
   test("local projects keep using the hub's own providers", () => {

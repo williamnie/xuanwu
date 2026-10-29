@@ -1,3 +1,4 @@
+import { useTestDatabase, insertProject } from "../../testing/harness.ts";
 import { describe, expect, test } from "bun:test";
 import { createDefaultRouter } from "../server.ts";
 import { createProviderRegistry, type ProviderFactory } from "../../providers/core/registry.ts";
@@ -5,6 +6,8 @@ import { asProviderId, type ExecutorProvider } from "../../providers/types.ts";
 import type { ProviderCapabilities } from "../../providers/core/manifest.ts";
 import { claudeManifest } from "../../providers/claude/factory.ts";
 import { claudeExecutionPolicyAdapter } from "../../providers/claude/executionPolicy.ts";
+
+const openDatabase = useTestDatabase();
 
 function factoryFor(
   id: string,
@@ -67,6 +70,23 @@ describe("P6: /api/providers discovery catalog", () => {
     expect(full.submittable).toBe(true);
     // session actions 由 capability 投影
     expect(full.session_actions).toEqual(expect.arrayContaining(["create", "resume", "interrupt"]));
+  });
+
+  test("local project and empty selectors preserve the unscoped catalog exactly", async () => {
+    const database = await openDatabase();
+    insertProject(database, "local");
+    const registry = createProviderRegistry();
+    registry.registerFactory(factoryFor("local-tool", { issueExecution: true }, {
+      id: "local-tool", capabilities: ["issue_execution"], run: async () => ({ runId: "r" })
+    } as never));
+    await registry.startConfigured({});
+    const router = createDefaultRouter({ database, providersRegistry: registry });
+    const expected = await catalogBody(router);
+    for (const query of ["project_id=local", "node_id=&project_id="]) {
+      const response = await router.handle(new Request(`http://localhost/api/providers?${query}`));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual(expected);
+    }
   });
 
   test("execution-only Provider 不显示 Session action", async () => {

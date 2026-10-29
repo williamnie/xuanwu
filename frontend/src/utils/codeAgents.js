@@ -1,3 +1,4 @@
+// catalog 由调用方按项目选择：本机目录或节点目录；不合并中心工具，也不以节点在线状态覆盖可提交性。
 export function availableCodeAgentIDs(catalog) {
   return new Set(
     (Array.isArray(catalog) ? catalog : [])

@@ -10,6 +10,7 @@
     "components/GlobalAskComposer.css",
     "components/Metadata.css",
     "components/ReleaseUpdateDialog.css",
+    "components/RemoteProjectBadge.css",
     "components/RuntimeHealthStrip.css",
     "components/RuntimeLogsPanel.css",
     "components/ToastContainer.css",

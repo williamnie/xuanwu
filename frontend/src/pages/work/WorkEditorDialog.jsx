@@ -1,3 +1,5 @@
+import { projectOptionLabel } from '../../utils/projectOptionLabel.js';
+import { useProjectNodes } from '../../store/useProjectNodes.js';
 import '../WorkBoard.css';
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Pencil, X } from 'lucide-react';
@@ -11,50 +13,38 @@ import AgentProfileSelectOptions from '../../components/AgentProfileSelectOption
 import ModalOverlay from '../../components/ModalOverlay.jsx';
 import { LAST_TASK_PROJECT_KEY, editorDraft, effectiveProfilePreview, profilePreviewText } from './workProfileRouting.js';
 import { workBlockReason } from '../workDetailModel.js';
-import { availableAgentProfiles, codeAgentAvailable, effectiveProjectProvider } from '../../utils/codeAgents.js';
+import { loadWorkCatalog, workCatalogKey, workCatalogSelection } from './workEditorCatalog.js';
 
 export default function WorkEditorDialog({ initialProject = '', mode, onClose, onSaved, projects, work }) {
+  const nodesById = useProjectNodes();
   const { t } = useI18n();
   const editing = mode === 'edit';
   const [draft, setDraft] = useState(() => editorDraft(work, projects, { initialProject, lastProject: readLastProject() }));
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [profiles, setProfiles] = useState([]);
-  const [providerCatalog, setProviderCatalog] = useState([]);
-  const [profilesLoading, setProfilesLoading] = useState(true);
+  const [catalogState, setCatalogState] = useState(null);
+  const [catalogRetry, setCatalogRetry] = useState(0);
   const selectedProject = useMemo(
     () => projects.find(project => project.id === draft.project_id) || null,
     [draft.project_id, projects],
   );
+  const nodeId = selectedProject?.node_id || '';
+  const catalogKey = workCatalogKey(draft.project_id, nodeId);
+  const { profiles, catalog: providerCatalog, loading: profilesLoading, error: catalogError,
+    inheritedAvailable: inheritedProviderAvailable, selectedAvailable: selectedCodeAgentAvailable,
+  } = workCatalogSelection(catalogState, catalogKey, draft.agent_profile_id, selectedProject);
   const effectivePreview = effectiveProfilePreview(draft.agent_profile_id, selectedProject, profiles);
-  const availableProfiles = useMemo(
-    () => availableAgentProfiles(profiles, providerCatalog),
-    [profiles, providerCatalog],
-  );
-  const inheritedProviderAvailable = codeAgentAvailable(effectiveProjectProvider(selectedProject, profiles), providerCatalog);
-  const selectedCodeAgentAvailable = editing && draft.agent_profile_id === (work?.agent_profile_id || '')
-    ? true
-    : draft.agent_profile_id
-    ? availableProfiles.some(profile => profile.id === draft.agent_profile_id)
-    : inheritedProviderAvailable;
+  const node = nodesById.get(nodeId);
+  const nodeOffline = nodeId && (node?.online === false
+    || (!node && providerCatalog.some(entry => entry.node_online === false)));
 
-  useEffect(() => {
-    let alive = true;
-    Promise.all([projectsApi.getAgentProfiles(), systemApi.getProviders()])
-      .then(([items, catalog]) => {
-        if (!alive) return;
-        setProfiles(Array.isArray(items) ? items : items?.items || []);
-        setProviderCatalog(Array.isArray(catalog) ? catalog : []);
-      })
-      .catch((loadError) => {
-        if (!alive) return;
-        setProfiles([]);
-        setProviderCatalog([]);
-        setError(loadError.message || '编程工具加载失败');
-      })
-      .finally(() => { if (alive) setProfilesLoading(false); });
-    return () => { alive = false; };
-  }, []);
+  useEffect(() => loadWorkCatalog({
+    key: catalogKey,
+    projectId: draft.project_id,
+    getProfiles: projectsApi.getAgentProfiles,
+    getProviders: systemApi.getProviders,
+    publish: setCatalogState,
+  }), [catalogKey, draft.project_id, catalogRetry]);
 
   const setField = (field, value) => setDraft(current => ({ ...current, [field]: value }));
 
@@ -62,6 +52,10 @@ export default function WorkEditorDialog({ initialProject = '', mode, onClose, o
     event.preventDefault();
     if (!draft.goal.trim() || (!editing && !draft.project_id)) {
       setError(t('editor.required'));
+      return;
+    }
+    if (profilesLoading || catalogError) {
+      setError(catalogError || '正在加载项目编程工具，请稍候');
       return;
     }
     if (!selectedCodeAgentAvailable) {
@@ -128,9 +122,9 @@ export default function WorkEditorDialog({ initialProject = '', mode, onClose, o
           ) : projects.length > 1 ? (
             <label>
               <span>{t('nav.projects')}</span>
-              <select className="form-control" onChange={event => setField('project_id', event.target.value)} required value={draft.project_id}>
+              <select className="form-control" disabled={saving} onChange={event => setField('project_id', event.target.value)} required value={draft.project_id}>
                 <option value="">{t('editor.selectProject')}</option>
-                {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+                {projects.map(project => <option key={project.id} value={project.id}>{projectOptionLabel(project, nodesById, project.name)}</option>)}
               </select>
             </label>
           ) : null}
@@ -161,7 +155,7 @@ export default function WorkEditorDialog({ initialProject = '', mode, onClose, o
               <span>{t('work.profile.preset')}</span>
               <select
                 className="form-control"
-                disabled={profilesLoading || (editing && work.status === 'in_progress')}
+                disabled={saving || profilesLoading || Boolean(catalogError) || (editing && work.status === 'in_progress')}
                 onChange={event => setField('agent_profile_id', event.target.value)}
                 value={draft.agent_profile_id}
               >
@@ -176,10 +170,22 @@ export default function WorkEditorDialog({ initialProject = '', mode, onClose, o
               </select>
             </label>
           </details>
-          <p className="work-dialog-preview">{profilePreviewText(effectivePreview)}</p>
+          {profilesLoading ? <p className="work-dialog-preview" role="status">正在加载项目编程工具…</p> : null}
+          {catalogError ? <div className="work-dialog-error" role="alert">
+            {catalogError}
+            <button className="work-action-secondary" onClick={() => setCatalogRetry(value => value + 1)} type="button">重试</button>
+          </div> : null}
+          {!profilesLoading && !catalogError && !selectedCodeAgentAvailable ? (
+            <p className="work-dialog-error" role="alert">当前执行预设在所选项目上不可用，请重新选择。</p>
+          ) : null}
+          <p className="work-dialog-preview">
+            {nodeId ? <>远程 · {node?.name || nodeId}<br /></> : null}
+            {profilePreviewText(effectivePreview)}
+          </p>
+          {nodeOffline ? <p className="work-dialog-preview" role="status">节点离线，上线后执行</p> : null}
           <footer>
             <button className="work-action-secondary" disabled={saving} onClick={onClose} type="button">{t('work.cancel')}</button>
-            <button className="work-action-primary" disabled={saving} type="submit">
+            <button className="work-action-primary" disabled={saving || profilesLoading || Boolean(catalogError) || !selectedCodeAgentAvailable} type="submit">
               {editing ? <Pencil size={15} /> : <CheckCircle2 size={15} />}
               {saving ? t('editor.saving') : editing ? t('editor.saveChanges') : t('editor.createAction')}
             </button>

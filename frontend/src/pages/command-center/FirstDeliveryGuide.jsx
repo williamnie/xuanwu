@@ -1,3 +1,5 @@
+import { projectOptionLabel } from '../../utils/projectOptionLabel.js';
+import { useProjectNodes } from '../../store/useProjectNodes.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle, CheckCircle2, ChevronRight, Clipboard, Cpu, FolderPlus, Loader2,
@@ -38,6 +40,7 @@ const AGENT_DESCRIPTIONS = Object.freeze({
 });
 
 export default function FirstDeliveryGuide({ checkSavedConnection, onComplete, onOpenWork, projects }) {
+  const nodesById = useProjectNodes();
   const refreshData = useDataStore(selectRefreshData);
   const [codexImport, refreshCodexImport] = useCodexImportPreview();
   const [snapshot, setSnapshot] = useState(EMPTY_SNAPSHOT);
@@ -392,7 +395,7 @@ export default function FirstDeliveryGuide({ checkSavedConnection, onComplete, o
               <div className="first-delivery-project-panel">
                 {projects.length ? <div className="first-delivery-work-action">
                   <select aria-label="已有项目" className="form-control" onChange={event => { setSelectedProjectID(event.target.value); setSelectedCodeAgentID(''); }} value={selectedProjectID}>
-                    {projects.map(project => <option key={project.id} value={project.id}>{project.name || project.id}</option>)}
+                    {projects.map(project => <option key={project.id} value={project.id}>{projectOptionLabel(project, nodesById, project.name || project.id)}</option>)}
                   </select>
                   <button className="btn btn-primary" disabled={Boolean(busy)} onClick={() => confirmProject()} type="button">使用此项目</button>
                 </div> : null}

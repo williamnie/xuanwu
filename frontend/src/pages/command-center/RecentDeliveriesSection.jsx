@@ -1,3 +1,5 @@
+import RemoteProjectBadge from '../../components/RemoteProjectBadge.jsx';
+import { useProjectNodes } from '../../store/useProjectNodes.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -21,6 +23,7 @@ const RECENT_DELIVERY_LIMIT = 5;
 const REFRESH_INTERVAL_MS = 30_000;
 
 export default function RecentDeliveriesSection({ limit = RECENT_DELIVERY_LIMIT, navigateTo, projects = [] }) {
+  const nodesById = useProjectNodes();
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -167,7 +170,7 @@ export default function RecentDeliveriesSection({ limit = RECENT_DELIVERY_LIMIT,
             return (
               <article className={`recent-delivery-card ${view.statusTone}`} key={item.id}>
                 <div className="recent-delivery-topline">
-                  <span className="recent-delivery-project">{projectNames.get(item.project_id) || item.project_id}</span>
+                  <span className="recent-delivery-project"><RemoteProjectBadge project={projects.find(project => project.id === item.project_id)} nodesById={nodesById} /> {projectNames.get(item.project_id) || item.project_id}</span>
                   <span className="recent-delivery-status" data-tone={view.statusTone}><i />{view.statusLabel}</span>
                 </div>
 

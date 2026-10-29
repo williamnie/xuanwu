@@ -1,3 +1,5 @@
+import RemoteProjectBadge from '../../components/RemoteProjectBadge.jsx';
+import { useProjectNodes } from '../../store/useProjectNodes.js';
 import WorkSchedule from '../work/WorkSchedule.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -34,6 +36,7 @@ const REFRESH_EVENT_TYPES = new Set([
 ]);
 
 export default function ActiveWorkSection({ limit = 10, navigateTo, projects = [] }) {
+  const nodesById = useProjectNodes();
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -197,7 +200,7 @@ export default function ActiveWorkSection({ limit = 10, navigateTo, projects = [
             return (
               <article className={`active-work-card ${view.tone} ${view.stalled ? 'is-stalled' : ''}`} key={item.id}>
                 <div className="active-work-card-topline">
-                  <span className="active-work-project">{projectNames.get(item.project_id) || item.project_id}</span>
+                  <span className="active-work-project"><RemoteProjectBadge project={projects.find(project => project.id === item.project_id)} nodesById={nodesById} /> {projectNames.get(item.project_id) || item.project_id}</span>
                   <span className={`active-work-phase ${view.tone}`}><i />{view.phaseLabel}</span>
                 </div>
                 <button className="active-work-title" onClick={() => openWork(item)} type="button">{item.title}</button>

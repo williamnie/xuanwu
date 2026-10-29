@@ -50,7 +50,7 @@ test('new session model field only exposes the selected Code Agent model choices
   assert.match(sessionsSource, /modelRequestRef\.current !== requestId/);
   assert.match(sessionsSource, /setModels\(\[\]\)/);
   assert.match(sessionsSource, /PROVIDER_MODELS_TIMEOUT_MS/);
-  assert.match(sessionsSource, /getProviderModels\(provider, \{ signal: controller\.signal \}\)/);
+  assert.match(sessionsSource, /getProviderModels\(provider, \{ nodeId, signal: controller\.signal \}\)/);
 });
 
 test('new session provider selector hides unavailable providers', () => {

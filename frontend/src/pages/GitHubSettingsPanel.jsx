@@ -1,3 +1,5 @@
+import { projectOptionLabel } from '../utils/projectOptionLabel.js';
+import { useProjectNodes } from '../store/useProjectNodes.js';
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { githubSettingsApi } from '../api/githubSettings.js';
@@ -140,11 +142,12 @@ export function GitHubSettingsView({ state, dispatch, onRefresh, onAction }) {
 }
 
 function RepositoryEditor({ repository, index, projects, onChange, onRemove }) {
+  const nodesById = useProjectNodes();
   return <fieldset className="github-settings__repository">
     <legend>仓库 {index + 1}</legend>
     <div className="github-settings__fields">
       <label><span className="ds-mono-label">仓库（owner/repository）</span><input className="form-control" required value={repository.repository} onChange={event => onChange({ repository: event.target.value })} /></label>
-      <label><span className="ds-mono-label">关联项目</span><select className="form-control" required value={repository.projectId} onChange={event => onChange({ projectId: event.target.value })}><option value="">选择已有项目</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name} · {project.id}</option>)}</select></label>
+      <label><span className="ds-mono-label">关联项目</span><select className="form-control" required value={repository.projectId} onChange={event => onChange({ projectId: event.target.value })}><option value="">选择已有项目</option>{projects.map(project => <option key={project.id} value={project.id}>{projectOptionLabel(project, nodesById, project.name)} · {project.id}</option>)}</select></label>
       <label><span className="ds-mono-label">接管标签</span><input className="form-control" required maxLength={50} value={repository.intakeLabel} onChange={event => onChange({ intakeLabel: event.target.value })} /></label>
     </div>
     <div className="github-settings__operations">{GITHUB_OPERATIONS.map(([key, title, hint]) => <label className="github-settings__check" key={key}><input type="checkbox" checked={repository[key]} onChange={event => onChange({ [key]: event.target.checked })} /><span>{title}<small>{hint}</small></span></label>)}</div>

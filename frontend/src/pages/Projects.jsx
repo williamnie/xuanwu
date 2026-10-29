@@ -1,8 +1,8 @@
 import { appHashForRoute } from '../appRouteModel.js';
 import { useI18n } from '../i18n/context.js';
 import { projectsApi } from '../api/projects.js';
-import { nodesApi } from '../api/nodes.js';
-import { useEffect, useState } from 'react';
+import RemoteProjectBadge from '../components/RemoteProjectBadge.jsx';
+import { useProjectNodes } from '../store/useProjectNodes.js';
 import { useImmer } from 'use-immer';
 import './Projects.css';
 import { message } from '../store/toastStore';
@@ -43,23 +43,9 @@ function projectLocationText(project, nodesById) {
   return `${node?.name || project.node_id}:${compactPath(project.node_path)}`;
 }
 
-function useRemoteNodes() {
-  const [nodesById, setNodesById] = useState(() => new Map());
-  useEffect(() => {
-    let cancelled = false;
-    nodesApi.listNodes()
-      .then(result => {
-        if (!cancelled) setNodesById(new Map((result?.nodes || []).map(node => [node.id, node])));
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-  return nodesById;
-}
-
 export default function Projects() {
   const { t } = useI18n();
-  const nodesById = useRemoteNodes();
+  const nodesById = useProjectNodes();
   const projects = useDataStore(selectProjects);
   const workSummary = useDataStore(selectWorkSummary);
   const backendOnline = useDataStore(selectBackendOnline);
@@ -271,7 +257,7 @@ export default function Projects() {
 
               const isHeld = Boolean(proj.hold);
               const isLoopActive = !isHeld && (proj.loop_status === 'running' || proj.auto_run === 1);
-              const nodeOffline = Boolean(proj.node_id) && nodesById.size > 0 && !nodesById.get(proj.node_id)?.online;
+              const nodeOffline = Boolean(proj.node_id) && nodesById.get(proj.node_id)?.online === false;
 
               return (
                 <div key={proj.id} className="glass-card project-card">
@@ -287,15 +273,7 @@ export default function Projects() {
                           <h3 title={proj.name}>
                             {proj.name}
                           </h3>
-                          {proj.node_id ? (
-                            <span
-                              className="project-card-remote ds-mono-label"
-                              title={`远程项目 · ${nodesById.get(proj.node_id)?.name || proj.node_id}`}
-                            >
-                              <span className="status-dot" aria-hidden="true" />
-                              远程
-                            </span>
-                          ) : null}
+                          <RemoteProjectBadge project={proj} nodesById={nodesById} />
                         </div>
                         <code title={proj.node_id ? `${proj.node_id}:${proj.node_path}` : proj.cwd}>
                           {projectLocationText(proj, nodesById)}

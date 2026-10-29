@@ -1,3 +1,5 @@
+import RemoteProjectBadge from '../../components/RemoteProjectBadge.jsx';
+import { useProjectNodes } from '../../store/useProjectNodes.js';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Folder, FolderOpen, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import {
@@ -89,6 +91,7 @@ export default function VirtualSessionList({
   searchTerm = '',
   filterMode = 'all',
 }) {
+  const nodesById = useProjectNodes();
   const [collapsed, setCollapsed] = useState({});
   const [visibleCounts, setVisibleCounts] = useState({});
   const [dragProjectId, setDragProjectId] = useState('');
@@ -271,6 +274,7 @@ export default function VirtualSessionList({
                   {isCollapsed ? <Folder size={14} /> : <FolderOpen size={14} />}
                 </span>
                 <span className="project-group-name" title={group.cwd}>{group.name}</span>
+                <RemoteProjectBadge project={projectsById.get(group.id)} nodesById={nodesById} />
                 {savingOrder && dragProjectId === group.id && <Loader2 className="project-order-saving" size={13} />}
               </button>
 

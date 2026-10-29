@@ -1,3 +1,5 @@
+import { projectOptionLabel } from '../utils/projectOptionLabel.js';
+import { useProjectNodes } from '../store/useProjectNodes.js';
 import { useI18n } from '../i18n/context.js';
 import { selectProjects, useDataStore } from '../store/dataStore.js';
 import { parseTelegramProjectMappings, serializeTelegramProjectMappings } from './telegramProjectMappings.js';
@@ -8,6 +10,7 @@ export default function TelegramProjectMappings({ onChange, value }) {
 }
 
 export function TelegramProjectMappingsView({ onChange, projects, value }) {
+  const nodesById = useProjectNodes();
   const { language } = useI18n();
   const english = language === 'en-US';
   const rows = parseTelegramProjectMappings(value);
@@ -26,7 +29,7 @@ export function TelegramProjectMappingsView({ onChange, projects, value }) {
             <select className="form-control" required value={row.projectId} onChange={event => update(index, { projectId: event.target.value })}>
               <option value="">{english ? 'Choose a project' : '选择项目'}</option>
               {row.projectId && !projects.some(project => project.id === row.projectId) && <option value={row.projectId}>{row.projectId} · {english ? 'Current value (unavailable)' : '当前值（暂不可用）'}</option>}
-              {projects.map(project => <option key={project.id} value={project.id}>{project.name || project.id} · {project.id}</option>)}
+              {projects.map(project => <option key={project.id} value={project.id}>{projectOptionLabel(project, nodesById, project.name || project.id)} · {project.id}</option>)}
             </select>
           </label>
           <button className="btn btn-secondary" type="button" onClick={() => updateRows(rows.filter((_, i) => i !== index))}>{english ? 'Remove' : '移除'}</button>

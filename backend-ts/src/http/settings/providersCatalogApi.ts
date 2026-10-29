@@ -1,3 +1,7 @@
+import { getRemoteNode } from "../../db/repositories/nodes.ts";
+import { projectLocation } from "../../nodes/projectLocation.ts";
+import { catalogForRemoteNode } from "../../nodes/providerCatalog.ts";
+import type { NodeHub } from "../../nodes/hub.ts";
 import { asProviderId } from "../../providers/types.ts";
 import { providersForNode } from "../../nodes/remoteExecution.ts";
 import type { ProviderRegistry } from "../../providers/core/registry.ts";
@@ -19,9 +23,24 @@ import type { ProviderTransport } from "../../providers/core/manifest.ts";
  */
 export function registerProvidersCatalogRoute(
   router: Router,
-  context: { database?: RunnerDatabase; providersRegistry?: ProviderRegistry }
+  context: { database?: RunnerDatabase; nodeHub?: NodeHub; providersRegistry?: ProviderRegistry }
 ): void {
-  router.get("/api/providers", () => {
+  router.get("/api/providers", (request: Request) => {
+    const params = new URL(request.url).searchParams;
+    let nodeID = params.get("node_id")?.trim() ?? "";
+    const projectID = params.get("project_id")?.trim() ?? "";
+    if (projectID) {
+      const project = context.database ? getProject(context.database, projectID) : null;
+      if (!project) return jsonError(404, "project not found");
+      const location = projectLocation(project.cwd);
+      if (nodeID && nodeID !== location.nodeId) return jsonError(400, "node_id does not match project location");
+      nodeID = location.nodeId;
+    }
+    if (nodeID) {
+      const node = context.database ? getRemoteNode(context.database, nodeID) : null;
+      if (!node || node.revoked_at) return jsonError(404, "node not found");
+      return json(catalogForRemoteNode(node, context.nodeHub?.isOnline(nodeID) ?? false));
+    }
     if (!context.providersRegistry) return json([]);
     return json(context.providersRegistry.list().map(catalogEntryFromRegistry));
   });

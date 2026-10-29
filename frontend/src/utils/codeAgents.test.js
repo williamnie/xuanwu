@@ -54,3 +54,17 @@ test('project routing resolves its default profile before the project provider',
   ]), 'claude');
   assert.equal(effectiveProjectProvider({ provider: 'codex' }, []), 'codex');
 });
+
+test('node catalog is authoritative, including tools absent from center and offline readiness', () => {
+  const nodeCatalog = [{ id: 'node-only', label: 'Node Tool', enabled: true, submittable: true,
+    capabilities: { issueExecution: true }, node_id: 'node-a', node_online: false, runtime: { ready: false } }];
+  const profiles = [{ id: 'remote', name: 'Remote preset', provider: 'node-only' }, { id: 'local', provider: 'claude' }];
+  assert.deepEqual(availableAgentProfiles(profiles, nodeCatalog), [profiles[0]]);
+  assert.deepEqual(groupedAvailableAgentProfiles(profiles, nodeCatalog), [
+    { provider: 'node-only', label: 'Node Tool', profiles: [profiles[0]] },
+  ]);
+  assert.equal(unavailableSelectedAgentProfile('local', profiles, nodeCatalog).id, 'local');
+  assert.equal(unavailableSelectedAgentProfile('remote', profiles, nodeCatalog), null);
+  assert.deepEqual(availableAgentProfiles(profiles, catalog), [profiles[1]]);
+  assert.deepEqual(availableAgentProfiles(profiles, []), []);
+});

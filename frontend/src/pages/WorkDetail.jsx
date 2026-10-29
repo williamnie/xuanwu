@@ -1,3 +1,6 @@
+import { isWaitingForProjectNode } from '../utils/remoteProjectStatus.js';
+import RemoteProjectBadge from '../components/RemoteProjectBadge.jsx';
+import { useProjectNodes } from '../store/useProjectNodes.js';
 import WorkSchedule from './work/WorkSchedule.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { workHumanReviewCopy } from './workHumanReviewCopy';
@@ -45,6 +48,7 @@ const DEFAULT_ACCEPTANCE_ID = 'issue-delivery';
 
 // 任务详情：页头和“现在怎样”常驻；结果 / 任务描述 / 执行 / 活动放进 Tab，默认 Tab 按深链和状态选择。
 export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChanged, projects = [], selectedHandoffId = '', selectedRunId = '', workId }) {
+  const nodesById = useProjectNodes();
   const { language, t } = useI18n();
   const detailRequest = useRef(0);
   const resultsRequest = useRef(0);
@@ -276,7 +280,8 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
           <span className="work-detail-status" data-status={work.status}>{t(`status.${work.status}`)}</span>
           <h1>{work.title}</h1>
         </div>
-        <div className="work-detail-meta"><span>{projectName}</span><span>{t('work.updated', { time: formatTime(work.updated_at, language) })}</span></div>
+        <div className="work-detail-meta"><span>{projectName}</span><RemoteProjectBadge project={project} nodesById={nodesById} /><span>{t('work.updated', { time: formatTime(work.updated_at, language) })}</span></div>
+        {isWaitingForProjectNode(work, project, nodesById) ? <div className="work-block-reason" role="status">等待节点上线</div> : null}
       </header>
 
       {pendingAction ? <InlineConfirmation busy={submitting} onCancel={() => setPendingAction('')} onConfirm={() => submitAction(pendingAction)} /> : null}

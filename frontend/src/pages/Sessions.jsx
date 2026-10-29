@@ -1,3 +1,4 @@
+import useNewSessionProviders from './sessions/useNewSessionProviders.js';
 import { systemApi } from '../api/system.js';
 import { projectsApi } from '../api/projects.js';
 import { runsApi } from '../api/runs.js';
@@ -213,6 +214,9 @@ export default function Sessions({
     selectedId,
   });
 
+  const { nodeId, newProviderCatalog, newProviderStatus, newSessionBlockedReason } =
+    useNewSessionProviders(selectedProject, projectId, providerCatalog, providerRuntimeStatus);
+
   useEffect(() => {
     refreshData(['projects']);
   }, [refreshData]);
@@ -329,7 +333,7 @@ export default function Sessions({
     }
   }, [loadTranscriptPage, selectedId, turnCursor]);
 
-  const loadModels = useCallback(async (provider = 'codex', runtimeStatus = null) => {
+  const loadModels = useCallback(async (provider = 'codex', runtimeStatus = null, nodeId = '') => {
     const requestId = modelRequestRef.current + 1;
     modelRequestRef.current = requestId;
     if (!provider) {
@@ -344,7 +348,7 @@ export default function Sessions({
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), PROVIDER_MODELS_TIMEOUT_MS);
     try {
-      const result = await systemApi.getProviderModels(provider, { signal: controller.signal });
+      const result = await systemApi.getProviderModels(provider, { nodeId, signal: controller.signal });
       const data = Array.isArray(result?.data?.data) ? result.data.data : result?.data;
       if (modelRequestRef.current !== requestId) return;
       setModels(Array.isArray(data) ? data : []);
@@ -360,8 +364,6 @@ export default function Sessions({
       if (modelRequestRef.current === requestId) setModelsLoading(false);
     }
   }, []);
-
-
 
   useEffect(() => {
     if (showSidebar) loadFirstPage();
@@ -393,7 +395,7 @@ export default function Sessions({
     loadSelected(isSwitching, { refreshTranscript: true });
   }, [selectedId, loadSelected]);
 
-  useEffect(() => { loadModels(sessionSettings.provider, providerRuntimeStatus); }, [loadModels, providerRuntimeStatus, sessionSettings.provider]);
+  useEffect(() => { loadModels(sessionSettings.provider, nodeId ? null : providerRuntimeStatus, nodeId); }, [loadModels, providerRuntimeStatus, sessionSettings.provider, nodeId]);
   useEffect(() => {
     let alive = true;
     Promise.allSettled([systemApi.getSystemStatus(), systemApi.getProviders()]).then(([status, catalog]) => {
@@ -693,8 +695,6 @@ export default function Sessions({
     setMessage((current) => current.trim() ? current : promptText);
     setMessageReferences((current) => current.length > 0 ? current : references);
   };
-
-
   const executeNewSessionCommand = async () => {
     await executeSessionCommand({
       commandState: promptCommand,
@@ -787,7 +787,8 @@ export default function Sessions({
   const handleCreateNewSession = async (e) => {
     if (e) e.preventDefault();
     if (sending) return;
-    const selectedProviderStatus = (providerRuntimeStatus?.providers || []).find(item => item.id === sessionSettings.provider) || {
+    if (newSessionBlockedReason) { toast.error(newSessionBlockedReason); return; }
+    const selectedProviderStatus = (newProviderStatus?.providers || []).find(item => item.id === sessionSettings.provider) || {
       id: sessionSettings.provider,
       ready: false,
       available: false,
@@ -973,8 +974,9 @@ export default function Sessions({
           projectId,
           handleProjectChange,
           sessionProjects,
-          providerOptions: readySessionProviders(providerRuntimeStatus),
-          providerCatalog,
+          providerOptions: readySessionProviders(newProviderStatus),
+          providerCatalog: newProviderCatalog,
+          blockedReason: newSessionBlockedReason,
         }}
       />
     </>

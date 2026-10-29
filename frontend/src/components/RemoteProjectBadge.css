@@ -1,0 +1,15 @@
+.project-card-remote {
+  align-items: center;
+  color: var(--text-muted);
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.project-card-remote .status-dot {
+  background-color: var(--info);
+  height: 7px;
+  width: 7px;
+}
+

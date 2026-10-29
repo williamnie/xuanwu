@@ -28,6 +28,9 @@ export type IssueEventDTO = {
 };
 
 export type ProjectDTO = {
+  name?: string;
+  node_id?: string;
+  node_path?: string;
   auto_run?: number;
   cwd: string;
   id: string;

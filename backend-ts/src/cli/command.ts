@@ -2,6 +2,7 @@ import { sanitizeError } from "./common.ts";
 import { runBackup } from "./backup.ts";
 import { runIssue } from "./issue.ts";
 import { runMaintenance } from "./maintenance.ts";
+import { runNode } from "./node.ts";
 import { runProject } from "./project.ts";
 import { getSystemDoctor, runSystem } from "./system.ts";
 import { runWork } from "./work.ts";
@@ -30,6 +31,7 @@ async function dispatch(args: string[], env: EnvReader, fetcher: Fetcher): Promi
   if (command === "backup") return await runBackup(args.slice(1), env);
   if (command === "issue") return await runIssue(args.slice(1), env, fetcher);
   if (command === "maintenance") return runMaintenance(args.slice(1));
+  if (command === "node") return await runNode(args.slice(1), env, fetcher);
   if (command === "project") return await runProject(args.slice(1), env, fetcher);
   if (command === "secrets") return await runSecrets(args.slice(1), env);
   if (command === "work") return await runWork(args.slice(1), env, fetcher);

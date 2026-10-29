@@ -1,5 +1,6 @@
 import { groupedAvailableAgentProfiles, unavailableSelectedAgentProfile } from '../utils/codeAgents.js';
 
+// catalog 接受本机或项目节点目录，分组与不可用选择始终使用同一目录。
 export default function AgentProfileSelectOptions({ catalog, profiles, selectedProfileID }) {
   const unavailable = unavailableSelectedAgentProfile(selectedProfileID, profiles, catalog);
   return (

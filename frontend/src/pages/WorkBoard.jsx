@@ -1,3 +1,6 @@
+import RemoteProjectBadge from '../components/RemoteProjectBadge.jsx';
+import { projectOptionLabel } from '../utils/projectOptionLabel.js';
+import { useProjectNodes } from '../store/useProjectNodes.js';
 import WorkSchedule from './work/WorkSchedule.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -510,6 +513,7 @@ function WorkKanban({ navigateTo, onEdit, projectId, query, refreshToken, source
 }
 
 function WorkBoardHeader({ onCreate, onProjectChange, onSourceChange, onQueryChange, onRefresh, onViewChange, projectId, projects, query, source, view }) {
+  const nodesById = useProjectNodes();
   const { t } = useI18n();
   return (
     <header className="work-ledger-header">
@@ -537,7 +541,7 @@ function WorkBoardHeader({ onCreate, onProjectChange, onSourceChange, onQueryCha
         {projects.length > 1 ? (
           <select aria-label="按项目筛选" className="form-control work-header-project" onChange={event => onProjectChange(event.target.value)} value={projectId}>
             <option value="">全部项目</option>
-            {projects.map(project => <option key={project.id} value={project.id}>{project.name || project.id}</option>)}
+            {projects.map(project => <option key={project.id} value={project.id}>{projectOptionLabel(project, nodesById, project.name || project.id)}</option>)}
           </select>
         ) : null}
         <label className="work-header-source">
@@ -714,6 +718,8 @@ function WorkCard({ dragging, moving, navigateTo, onDragEnd, onDragStart, onEdit
   const { t } = useI18n();
   const issueId = issueIdFromWorkId(work.id);
   const needsAttention = workNeedsAttention(work);
+  const project = useDataStore(state => state.projects.find(item => item.id === work.owner?.project_id));
+  const nodesById = useProjectNodes();
   return (
     <article
       aria-busy={moving}
@@ -733,7 +739,7 @@ function WorkCard({ dragging, moving, navigateTo, onDragEnd, onDragStart, onEdit
       <h3>{work.title}</h3>
       <p>{work.goal}</p>
       <WorkSchedule work={work} />
-      <div className="work-card-project">{projectName}</div>
+      <div className="work-card-project"><RemoteProjectBadge project={project} nodesById={nodesById} /> {projectName}</div>
       <div className="work-card-footer">
         <button className="work-detail-link" onClick={() => navigateTo('tasks', work.id)} type="button">
           {t('board.open')} <ArrowUpRight size={13} />

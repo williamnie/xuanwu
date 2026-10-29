@@ -146,7 +146,8 @@ test('new project form defaults to one required field and keeps optional control
   assert.match(editorSource, /mode === 'create'[\s\S]*<details className="project-settings-advanced">/);
   assert.match(editorSource, /高级运行配置（可选）/);
   assert.match(editorSource, /mode === 'edit'[\s\S]*loadAgentProfiles\(\)/);
-  assert.doesNotMatch(editorSource, /<AgentProfileManager|<AgentProfileSelectOptions/);
+  assert.doesNotMatch(editorSource, /<AgentProfileManager/);
+  assert.match(editorSource, /<AgentProfileSelectOptions catalog=\{presetCatalog\.catalog\}/);
   assert.match(editorSource, /href="#\/settings\?section=advanced:presets"/);
   assert.match(editorSource, /在 高级 → 执行预设 中修改/);
   assert.match(editorSource, /更多选项/);

@@ -1,11 +1,11 @@
 ---
 name: xuanwu
-description: Create, enqueue, inspect, retry, cancel, delete, or finish local Xuanwu issues from Codex or Claude Code. Use when the user asks an agent to hand work to Xuanwu, create a local runner issue, automate an issue loop, enqueue a task for autonomous execution, delete stale runner issues, or check runner issue status/logs.
+description: Create, enqueue, inspect, retry, cancel, delete, or finish Xuanwu issues on local or remote projects from Codex or Claude Code. Use when the user asks an agent to hand work to Xuanwu, create a local runner issue, automate an issue loop, enqueue a task for autonomous execution, delete stale runner issues, or check runner issue status/logs.
 ---
 
 # Xuanwu Issue Runner
 
-Use the local `xuanwu` CLI to hand bounded work from Codex, Claude Code, or another compatible agent to the local Xuanwu service.
+Use the local `xuanwu` CLI to hand bounded work from Codex, Claude Code, or another compatible agent to the target Xuanwu hub, selecting the project by execution location.
 
 ## Preconditions
 
@@ -70,12 +70,56 @@ xuanwu project create \
 
 `--provider` is the Project fallback Code Agent. `--default-agent-profile` is the preferred durable execution profile and may also define model, sandbox, approval policy, reasoning effort, and service tier. Keep the profile's provider aligned with the Project fallback unless an intentional cross-provider default is required.
 
-If project list is needed and CLI support is missing, query the API:
+## 远程节点与远程项目
+
+所有任务都在中心创建；运行 CLI 的机器不决定任务执行位置，所选 Project 才决定。
+
+### 从节点机器连接中心
+
+从节点机器调用中心 API 时，`--addr` 使用 `~/.xuanwu/node.json` 的 `hub`，不要沿用本机 `127.0.0.1:3008`。只读取 `hub` 字段，不要输出整个配置文件（其中可能含节点密钥）：
 
 ```bash
-curl -fsS -H "Authorization: Bearer ${XUANWU_AUTH_TOKEN}" \
-  "http://${XUANWU_ADDR:-127.0.0.1:3008}/api/projects"
+export XUANWU_ADDR="$(jq -er '.hub | select(type == "string" and length > 0)' "$HOME/.xuanwu/node.json")"
+xuanwu project list --addr "$XUANWU_ADDR" --token-file "$XUANWU_AUTH_TOKEN_FILE" --json
 ```
+
+`XUANWU_AUTH_TOKEN_FILE` 应指向当前机器上安全提供的**中心 `auth_token`** 文件。中心 API 令牌与节点连接用的 `xwn_` 密钥不同，不能混用；不要把 `node.json` 的 `token` 当成 API 令牌，不要打印、粘贴或提交任何令牌。缺少中心 API 凭据时需由管理员提供，不能用节点密钥替代。在中心本机调用时，使用该中心实际监听地址和其配置的 `auth_token`。
+
+### 按执行位置选择 Project
+
+```bash
+xuanwu project list --addr "$XUANWU_ADDR" --token-file "$XUANWU_AUTH_TOKEN_FILE" --json
+xuanwu node list --addr "$XUANWU_ADDR" --token-file "$XUANWU_AUTH_TOKEN_FILE" --json
+```
+
+项目列表的 `node_id` 为空表示**中心本机**项目；远程项目有 `node_id`、`node_path`，`cwd` 为 `node://<node-id>:<absolute-path>`。`location` 展示节点名称与路径。同一仓库可以同时注册为本机项目和远程项目，不能只按仓库名或路径相似度选项目。核对节点 ID、节点名称和路径后，将对应的项目 `id` 传给后文 `issue create --project <project-id>`；从节点发起任务也不会自动选中该节点的项目。
+
+远程项目可用的编程工具由目标节点决定，不应照搬中心本机的工具列表。`xuanwu node list` 可查看节点在线状态和上报的 providers；针对已选项目，用 `/api/providers?project_id=` 查看该执行位置的工具与就绪状态：
+
+```bash
+# XUANWU_AUTH_TOKEN 按上文认证步骤从中心令牌文件载入；不要启用 shell tracing。
+curl -fsS -G -H "Authorization: Bearer ${XUANWU_AUTH_TOKEN}" \
+  --data-urlencode "project_id=<project-id>" \
+  "${XUANWU_ADDR%/}/api/providers"
+```
+
+此 curl 示例要求 `XUANWU_ADDR` 含 `http://` 或 `https://`（节点配置的 `hub` 使用此形式）；CLI 的 `--addr` 也接受不带协议的地址。根据节点的可用 provider 选择对应 Agent Profile；节点离线或工具未就绪时，不要改选中心本机的同名项目来绕过等待。
+
+### 注册远程项目
+
+```bash
+xuanwu project create \
+  --addr "$XUANWU_ADDR" \
+  --token-file "$XUANWU_AUTH_TOKEN_FILE" \
+  --id <remote-project-id> \
+  --node-id <node-id> \
+  --cwd /absolute/path/on/node/repo \
+  --provider <node-code-agent-id> \
+  --default-agent-profile <agent-profile-id> \
+  --json
+```
+
+`--node-id` 来自 `xuanwu node list`；`--cwd` 必须是节点上的绝对路径，不是中心本机路径，也不要手写 `node://`。CLI 会请求节点校验目录，路径须在节点 `allowedRoots` 内且节点在线；省略 `--id` 时由路径检查建议项目 ID。省略 `--node-id` 则注册中心本机项目。注册后再次用 `project list` 核对执行位置，再向该 Project 建任务。
 
 ## Discover Code Agents and Profiles
 
