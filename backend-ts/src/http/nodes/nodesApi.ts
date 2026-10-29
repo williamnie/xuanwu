@@ -28,6 +28,7 @@ import { HttpError, isSqliteContention, json, jsonError, parseJsonBody } from ".
 import { requestPeerAddress } from "../peerAddress.ts";
 import type { Router } from "../router.ts";
 import { cleanString } from "../../util/values.ts";
+import { redactSensitiveText } from "../../util/redact.ts";
 
 type NodesApiContext = {
   database: RunnerDatabase;
@@ -122,7 +123,8 @@ function nodeStreamResponse(context: NodesApiContext, node: RemoteNode, signal: 
         console.error(JSON.stringify({
           event: "node.heartbeat_failed",
           node_id: node.id,
-          error_name: error instanceof Error ? error.name : "Error"
+          error_name: error instanceof Error ? error.name : "Error",
+          error: redactSensitiveText(error instanceof Error ? error.message : String(error))
         }));
       }
     }, context.heartbeatMs ?? NODE_HEARTBEAT_MS);

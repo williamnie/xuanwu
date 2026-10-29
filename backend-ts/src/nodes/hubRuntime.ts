@@ -15,6 +15,7 @@ import { isTerminalProviderEvent, type NodeRunEvent } from "./protocol.ts";
 import { installRemoteProviderResolver, rememberRemoteApproval } from "./remoteExecution.ts";
 import { installRemoteGitRunner } from "./remoteGit.ts";
 import { remoteProvidersForNode, type RemoteRunLedger } from "./remoteProvider.ts";
+import { redactSensitiveText } from "../util/redact.ts";
 
 type ProviderMap = Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 
@@ -31,6 +32,18 @@ function approvalRequestId(event: AppEvent): string {
   const params = (payload.params ?? {}) as Record<string, unknown>;
   const id = payload.id ?? params.approvalId ?? params.itemId ?? params.callId;
   return typeof id === "string" || typeof id === "number" ? String(id) : "";
+}
+
+/** 后台收口任务脱离了路由的异常边界；同步写库遇锁等失败只记日志，不能变成未处理拒绝拖垮 Core。 */
+export function background(task: () => Promise<unknown>, event: string, runRef: string): void {
+  // 套一层 async，任务同步抛出也落到同一个 catch。
+  void (async () => await task())().catch((error: unknown) => {
+    console.error(JSON.stringify({
+      event,
+      ...(runRef ? { run_ref: runRef } : {}),
+      error: redactSensitiveText(error instanceof Error ? error.message : String(error))
+    }));
+  });
 }
 
 /** 中心启动后等待节点重连、接回在途运行的时长；超时仍未回来的运行按丢失收口。 */
@@ -103,7 +116,7 @@ export function startNodeHubRuntime(options: HubRuntimeOptions): { hub: NodeHub;
         // 中心仍在等这次运行，但节点已不再持有它（节点重启）：让等待方立即失败。
         hub.failRun(run.run_ref, `node ${nodeId} restarted and lost the run`);
       } else {
-        void closeLostRun(run, `node ${nodeId} restarted and lost the run`);
+        background(() => closeLostRun(run, `node ${nodeId} restarted and lost the run`), "nodes.close_lost_run_failed", run.run_ref);
       }
     }
   });
@@ -118,9 +131,12 @@ export function startNodeHubRuntime(options: HubRuntimeOptions): { hub: NodeHub;
       const message = payload as NodeRunEvent;
       if (message.type === "event") {
         sink.push(message.event);
-        if (isTerminalProviderEvent(message.event)) void done();
+        if (isTerminalProviderEvent(message.event)) background(done, "nodes.reattached_run_finish_failed", run.run_ref);
       } else if (message.type === "error") {
-        void done().then(() => message.interrupted ? undefined : closeLostRun(run, message.message));
+        background(async () => {
+          await done();
+          if (!message.interrupted) await closeLostRun(run, message.message);
+        }, "nodes.reattached_run_finish_failed", run.run_ref);
       }
     });
     const done = async () => {
@@ -145,9 +161,13 @@ export function startNodeHubRuntime(options: HubRuntimeOptions): { hub: NodeHub;
 
   // 中心刚启动时台账里可能有上次遗留的在途运行：宽限期内节点重连即接回，否则按丢失收口。
   const graceTimer = setTimeout(() => {
-    for (const run of listActiveRemoteRuns(database)) {
-      if (!hub.hasRunListener(run.run_ref)) void closeLostRun(run, `node ${run.node_id} did not reconnect after the hub restarted`);
-    }
+    background(async () => {
+      for (const run of listActiveRemoteRuns(database)) {
+        if (!hub.hasRunListener(run.run_ref)) {
+          background(() => closeLostRun(run, `node ${run.node_id} did not reconnect after the hub restarted`), "nodes.close_lost_run_failed", run.run_ref);
+        }
+      }
+    }, "nodes.reattach_grace_failed", "");
   }, options.reattachGraceMs ?? DEFAULT_REATTACH_GRACE_MS);
   graceTimer.unref?.();
 

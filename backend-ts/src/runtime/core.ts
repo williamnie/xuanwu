@@ -6,6 +6,7 @@ import { coldStartTrace } from "../benchmarks/coldStart.ts";
 import { loadConfig } from "../config/env.ts";
 import { openDatabase } from "../db/database.ts";
 import { openCoreDatabase } from "./coreDatabase.ts";
+import { installUnhandledRejectionLogger } from "./unhandledRejection.ts";
 import { reconcileReservedImContextBindings } from "../db/repositories/imContextLifecycle.ts";
 import { EventBus } from "../events/bus.ts";
 import { BackgroundProjectionWorker } from "../events/projectionWorker.ts";
@@ -49,6 +50,7 @@ import { GitHubIssueSyncRuntime } from "../integrations/github/issueSyncRuntime.
 import { GitHubIssueDelivery } from "../integrations/github/issueDelivery.ts";
 
 export async function startCoreRuntime(args: string[], role: "all" | "core"): Promise<void> {
+  installUnhandledRejectionLogger();
   const loadedConfig = loadConfig(args);
   const config = role === "core" ? { ...loadedConfig, webDir: "" } : loadedConfig;
   if (role === "core") assertInternalCoreAddress(config.addr);
