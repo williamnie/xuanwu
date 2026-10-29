@@ -26,6 +26,7 @@ import {
   runCostView,
   runEventInitialBeforeId,
   runLogSummary,
+  runTerminalNotices,
   selectedRunAttempt,
 } from './runDetailModel.js';
 
@@ -41,18 +42,15 @@ export default function RunDetail({ navigateTo, run }) {
 
 function RunDetailContent({ navigateTo, run }) {
   const [activeSection, setActiveSection] = useState('provider');
-  const [selectedAttemptId, setSelectedAttemptId] = useState(() => run?.attempts?.at(-1)?.id || '');
+  // 空值表示持续跟随最新尝试；只有手动切换才固定，切 Run 由 key 重置。
+  const [pinnedAttemptId, setPinnedAttemptId] = useState('');
   const attempts = useMemo(() => Array.isArray(run?.attempts) ? run.attempts : [], [run]);
   const selectedAttempt = useMemo(
-    () => selectedRunAttempt(run, selectedAttemptId),
-    [run, selectedAttemptId],
+    () => selectedRunAttempt(run, pinnedAttemptId),
+    [run, pinnedAttemptId],
   );
   const issueId = runIssueId(run);
   const providerSessionRef = runAttemptProviderSessionRef(selectedAttempt, run);
-
-  useEffect(() => {
-    if (selectedAttempt?.id && selectedAttempt.id !== selectedAttemptId) setSelectedAttemptId(selectedAttempt.id);
-  }, [selectedAttempt, selectedAttemptId]);
 
   return (
     <div className="run-detail-workspace">
@@ -80,7 +78,7 @@ function RunDetailContent({ navigateTo, run }) {
               aria-selected={attempt.id === selectedAttempt?.id}
               data-status={attempt.status || 'unknown'}
               key={attempt.id}
-              onClick={() => setSelectedAttemptId(attempt.id)}
+              onClick={() => setPinnedAttemptId(attempt.id)}
               role="tab"
               type="button"
             >
@@ -163,15 +161,12 @@ class ProviderTranscriptBoundary extends Component {
 
 function RunAttention({ attempt, run }) {
   const progress = run.progress || {};
-  const terminalStatus = ['failed', 'interrupted', 'cancelled'];
-  const attemptProblem = terminalStatus.includes(attempt?.status);
-  const runProblem = terminalStatus.includes(run.status);
+  const notices = runTerminalNotices(run, attempt);
   const waiting = progress.provider_phase === 'waiting_approval';
-  if (!attemptProblem && !runProblem && !waiting && !progress.stalled?.detected) return null;
+  if (!notices.length && !waiting && !progress.stalled?.detected) return null;
   return (
     <div className="run-attention-card run-detail-attention" role="status">
-      {attemptProblem ? <span>所选尝试：{runStatusLabel(attempt.status)}{attempt.terminal?.reason ? ` · ${attempt.terminal.reason}` : ''}</span> : null}
-      {runProblem ? <span>整次执行：{runStatusLabel(run.status)}{run.terminal?.reason ? ` · ${run.terminal.reason}` : ''}</span> : null}
+      {notices.map(notice => <span key={notice.scope}>{notice.scope === 'attempt' ? '所选尝试' : '整次执行'}：{runStatusLabel(notice.status)}{notice.reason ? ` · ${notice.reason}` : ''}</span>)}
       {waiting ? <strong>等待审批</strong> : null}
       {progress.stalled?.detected ? <strong>执行可能卡住{progress.stalled.since ? ` · 自 ${formatTime(progress.stalled.since)}` : ''}</strong> : null}
     </div>

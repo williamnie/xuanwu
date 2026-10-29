@@ -105,7 +105,7 @@ export default function WorkRunList({ navigateTo, onLatestRunChange, onTotalChan
               <i aria-hidden="true" />
               <div className="work-run-list-main">
                 <strong>第 {run.sequence || total - index} 次执行</strong>
-                <span>{runStatusLabel(run.status)} · {providerLabel(run.provider)} · Attempt {run.attempt_count || 1} · {formatTime(run.started_at || run.created_at)}{run.ended_at ? ` → ${formatTime(run.ended_at)}` : ''}</span>
+                <span>{runStatusLabel(run.status)} · {providerLabel(run.provider)} · {run.attempt_count || 1} 次尝试 · {formatTime(run.started_at || run.created_at)}{run.ended_at ? ` → ${formatTime(run.ended_at)}` : ''}</span>
                 {error ? <p>{error}</p> : null}
               </div>
               <button onClick={() => navigateTo?.('runs', null, run.id)} type="button">查看执行记录 <ArrowUpRight size={13} /></button>

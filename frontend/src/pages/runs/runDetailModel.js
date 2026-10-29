@@ -9,9 +9,28 @@ export function runAttemptProviderSessionRef(attempt, run = {}) {
   return provider && sessionRef ? `${provider}:${sessionRef}` : '';
 }
 
-export function selectedRunAttempt(run, attemptId = '') {
+// 没有手动固定的 ID 时，每次投影更新都跟随最新尝试。
+export function selectedRunAttempt(run, pinnedAttemptId = '') {
   const attempts = Array.isArray(run?.attempts) ? run.attempts : [];
-  return attempts.find(attempt => attempt.id === attemptId) || attempts.at(-1) || null;
+  return attempts.find(attempt => attempt.id === pinnedAttemptId) || attempts.at(-1) || null;
+}
+
+export function runTerminalNotices(run, attempt) {
+  const problemStatuses = ['failed', 'interrupted', 'cancelled'];
+  const attemptProblem = problemStatuses.includes(attempt?.status);
+  const runProblem = problemStatuses.includes(run?.status);
+  const attemptReason = text(attempt?.terminal?.reason);
+  const runReason = text(run?.terminal?.reason);
+  const singleAttempt = run?.attempts?.length === 1;
+  const sameProblem = attempt?.status === run?.status && attemptReason === runReason;
+  const notices = [];
+  if (attemptProblem && !(runProblem && (singleAttempt || sameProblem))) {
+    notices.push({ scope: 'attempt', status: attempt.status, reason: attemptReason });
+  }
+  if (runProblem) {
+    notices.push({ scope: 'run', status: run.status, reason: runReason || (singleAttempt && attemptProblem ? attemptReason : '') });
+  }
+  return notices;
 }
 
 export function runEventInitialBeforeId(run, attempt = null) {

@@ -8,8 +8,8 @@ export const RUN_PHASE_META = {
   pi_deciding: { label: '玄武助手判断中', tone: 'verifying' },
   succeeded: { label: '已完成', tone: 'succeeded' },
   failed: { label: '失败', tone: 'failed' },
-  cancelled: { label: '已停止', tone: 'cancelled' },
-  interrupted: { label: '已暂停', tone: 'waiting' },
+  cancelled: { label: '已取消', tone: 'cancelled' },
+  interrupted: { label: '已中断', tone: 'waiting' },
   unknown: { label: '状态未知', tone: 'unknown' },
 };
 

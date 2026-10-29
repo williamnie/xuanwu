@@ -10,6 +10,7 @@ import {
   runCostView,
   runEventInitialBeforeId,
   runLogSummary,
+  runTerminalNotices,
   selectedRunAttempt,
 } from './runDetailModel.js';
 
@@ -34,6 +35,36 @@ test('failed and recovery Attempt windows keep logs scoped to the selected turn'
   ];
   assert.deepEqual(eventsWithinAttempt(events, recovery, run).map(item => item.id), [101]);
   assert.equal(runEventInitialBeforeId(run, recovery), '102');
+});
+
+test('un-pinned selection follows resume and recovery while manual selection stays pinned', () => {
+  const run = fixtureRun();
+  const initial = { ...run, attempts: [run.attempts[0]] };
+  assert.equal(selectedRunAttempt(initial)?.id, 'attempt-1');
+  assert.equal(selectedRunAttempt(run)?.id, 'attempt-2');
+  const resumed = { ...run, attempts: [...run.attempts, { id: 'attempt-3', kind: 'resume' }] };
+  assert.equal(selectedRunAttempt(resumed)?.id, 'attempt-3');
+  assert.equal(selectedRunAttempt(resumed, 'attempt-1')?.id, 'attempt-1');
+  // 手动选中当时的最新尝试，也应视为固定。
+  assert.equal(selectedRunAttempt(resumed, 'attempt-2')?.id, 'attempt-2');
+  assert.equal(selectedRunAttempt(resumed, 'removed')?.id, 'attempt-3');
+});
+
+test('terminal notices collapse a single attempt and identical outcomes but preserve distinct failures', () => {
+  const attempt = { id: 'a1', status: 'failed', terminal: { reason: '检查失败' } };
+  const run = { status: 'failed', terminal: { reason: '检查失败' }, attempts: [attempt] };
+  assert.deepEqual(runTerminalNotices(run, attempt), [{ scope: 'run', status: 'failed', reason: '检查失败' }]);
+  assert.deepEqual(runTerminalNotices({ ...run, terminal: {} }, attempt), [{ scope: 'run', status: 'failed', reason: '检查失败' }]);
+  const multiple = { ...run, attempts: [attempt, { id: 'a2' }] };
+  assert.equal(runTerminalNotices(multiple, attempt).length, 1);
+  const different = { ...multiple, terminal: { reason: '恢复失败' } };
+  assert.deepEqual(runTerminalNotices(different, attempt), [
+    { scope: 'attempt', status: 'failed', reason: '检查失败' },
+    { scope: 'run', status: 'failed', reason: '恢复失败' },
+  ]);
+  assert.equal(runTerminalNotices({ ...different, attempts: [attempt] }, attempt).length, 1);
+  assert.deepEqual(runTerminalNotices({ status: 'running' }, { status: 'interrupted' }), [{ scope: 'attempt', status: 'interrupted', reason: '' }]);
+  assert.deepEqual(runTerminalNotices({ status: 'running' }, { status: 'running' }), []);
 });
 
 test('long raw logs remain cursor-paged, deduplicated, ordered, and capped', () => {

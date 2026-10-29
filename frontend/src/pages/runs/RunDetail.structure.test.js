@@ -32,6 +32,13 @@ test('verification and developer events only mount inside opened disclosures', (
   assert.doesNotMatch(detailSource, /normalized provider events|first_event_id.*last_event_id/);
 });
 
+test('only a manual attempt click pins selection; background updates keep following the latest', () => {
+  assert.match(detailSource, /const \[pinnedAttemptId, setPinnedAttemptId\] = useState\(''\)/);
+  assert.match(detailSource, /selectedRunAttempt\(run, pinnedAttemptId\)/);
+  assert.match(detailSource, /onClick=\{\(\) => setPinnedAttemptId\(attempt.id\)\}/);
+  assert.equal((detailSource.match(/setPinnedAttemptId\(/g) || []).length, 1);
+});
+
 test('provider observation is an embedded primary tab without duplicate Evidence', () => {
   assert.match(detailSource, /<Sessions/);
   assert.match(detailSource, /ProviderSessionDrillDown/);
