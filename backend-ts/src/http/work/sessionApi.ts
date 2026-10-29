@@ -541,7 +541,8 @@ function providerScopedModel(provider: string, model: string): string {
 }
 
 function completedOperationStatus(provider: ExecutorProviderId, prompt: string | undefined, turnId: string): string {
-  if (provider !== "codex") return "idle";
+  // Codex 与常驻 Claude 会话都是提交即返回，轮的结束由 provider 事件与会话读取收口。
+  if (provider !== "codex" && provider !== "claude") return "idle";
   return prompt?.trim() || turnId.trim() ? "running" : "idle";
 }
 

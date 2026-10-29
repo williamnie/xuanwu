@@ -43,6 +43,7 @@ import SessionSidebar from './sessions/SessionSidebar';
 import SessionWorkspace from './sessions/SessionWorkspace';
 import useSessionPageSelectors from './sessions/useSessionPageSelectors';
 import {
+  canSteerSessionProvider,
   chronologicalTurns,
   eventSessionKey,
   eventSessionKeyFromPayload,
@@ -632,8 +633,7 @@ export default function Sessions({
     const promptText = message.trim();
     const referencesSnapshot = messageReferences;
     const wantsOppositeMode = Boolean(event.metaKey || event.ctrlKey);
-    const canSteer = String(selectedSession?.provider || selectedId.split(':')[0] || 'codex') === 'codex';
-    const shouldGuide = canSteer && sessionRunning && (wantsOppositeMode ? !followRunningTurn : followRunningTurn);
+    const shouldGuide = canSteerSessionProvider(selectedSession?.provider || selectedId.split(':')[0]) && sessionRunning && (wantsOppositeMode ? !followRunningTurn : followRunningTurn);
     if (!selectedId || sending || isInterruptPendingForSession(interruptStateRef.current, selectedId)) return;
     if (!hasComposerContent(promptText, messageReferences)) return;
     if (messageReferenceValidation.hasErrors) {

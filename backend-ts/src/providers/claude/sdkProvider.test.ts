@@ -75,24 +75,31 @@ describe("Claude Agent SDK provider", () => {
   });
 
   test("resumes/recover sessions with the real SDK resume ref and cleans aliases", async () => {
-    const calls: Array<{ prompt: unknown; resume?: string; title?: string }> = [];
+    const calls: Array<{ resume?: string; title?: string }> = [];
+    const submitted: Array<{ uuid: string; message: { content: string } }> = [];
     const provider = new ClaudeSdkExecutorProvider(config(), {
       queryFactory: ((input) => {
-        calls.push({ prompt: input.prompt, resume: input.options?.resume, title: input.options?.title });
+        calls.push({ resume: input.options?.resume, title: input.options?.title });
         const sessionId = input.options?.resume || input.options?.sessionId || "";
-        return fromMessages([
-          init(sessionId, "turn-init"),
-          success(sessionId, "turn-result")
-        ]);
+        const prompt = input.prompt as AsyncIterable<{ uuid: string; message: { content: string } }>;
+        return (async function* () {
+          submitted.push((await prompt[Symbol.asyncIterator]().next()).value);
+          yield init(sessionId, "turn-init");
+          yield success(sessionId, "turn-result");
+        })() as ClaudeQuery;
       }) as ClaudeQueryFactory,
       sessionIdFactory: () => "session-1"
     });
 
+    // 提交即返回：turn id 是写给 CLI 的 user message uuid，与会话历史里的 turn id 一致。
     const created = await provider.createSession({ cwd, prompt: "create", title: "Chat title" });
-    expect(created).toMatchObject({ provider: "claude", provider_session_id: "session-1", provider_turn_id: "turn-result" });
+    expect(created).toMatchObject({ provider: "claude", provider_session_id: "session-1", provider_turn_id: submitted[0]?.uuid });
+    expect(submitted[0]?.message.content).toBe("create");
 
     const messaged = await provider.sendSessionMessage({ cwd, prompt: "continue", sessionId: "session-1" });
-    expect(messaged).toMatchObject({ provider: "claude", provider_session_id: "session-1", turn_id: "turn-result" });
+    await waitFor(() => submitted.length === 2);
+    expect(messaged).toMatchObject({ provider: "claude", provider_session_id: "session-1", turn_id: submitted[1]?.uuid });
+    await waitFor(() => provider.runtimeStatus().active_sessions === 0);
 
     const recovered = await provider.recover({
       ...runInput(),

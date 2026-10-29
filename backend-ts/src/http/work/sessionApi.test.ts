@@ -320,7 +320,7 @@ describe("Bun Sessions API compatibility", () => {
     expect(getAgentSession(database, "claude:claude-existing")?.raw_ref).not.toContain("codex-default");
     expect(detail).toMatchObject({ status: 200, body: { id: "claude:claude-new", provider: "claude" } });
     expect(message).toMatchObject({ status: 201 });
-    expect(message.body).toEqual({ isRunning: false, provider: "claude", status: "idle", thread_id: "claude-new", turn_id: "claude-turn-follow-up" });
+    expect(message.body).toEqual({ isRunning: true, provider: "claude", status: "running", thread_id: "claude-new", turn_id: "claude-turn-follow-up" });
     expect(interrupt.status).toBe(200);
     expect(await interrupt.json()).toEqual({ interrupted: true });
     expect(claude.interrupts).toEqual([

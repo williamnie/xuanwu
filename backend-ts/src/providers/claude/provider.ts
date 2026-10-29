@@ -11,18 +11,14 @@ import {
   type SessionMessage
 } from "@anthropic-ai/claude-agent-sdk";
 import { accessSync, constants, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { managedExecutionEnvironment } from "../managedExecution.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
 import { registerSecretForRedaction } from "../../security/redactionRegistry.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import type { AppEvent } from "../../events/bus.ts";
-import {
-  createClaudeSdkStreamState,
-  interruptedClaudeSdkEvent,
-  projectClaudeSdkMessage,
-  timedOutClaudeSdkEvent,
-  type ClaudeSdkStreamState
-} from "./sdkStream.ts";
+import { ClaudeLiveSession, type ClaudeLiveSubmission } from "./liveSession.ts";
 import {
   ClaudeCliExecutorProvider,
   inspectClaudeCliAuth,
@@ -40,7 +36,6 @@ import {
   readBoundedClaudeSessionHistory
 } from "./sessionHistory.ts";
 import {
-  ProviderInterruptedError,
   type ExecutorCapability,
   type ExecutorProvider,
   type InterruptInput,
@@ -64,6 +59,7 @@ export type { ClaudeProcessFactory };
 
 const PROVIDER = "claude" as const;
 const DEFAULT_MAX_TURNS = 50;
+const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60_000;
 export const CLAUDE_AGENT_SDK_VERSION = "0.3.312";
 
 type QueryInput = { prompt: string | AsyncIterable<unknown>; options?: ClaudeSdkOptions };
@@ -82,6 +78,8 @@ type ClaudeSessionFunctions = {
 type ClaudeSdkProviderOptions = {
   authInspector?: (config: ProviderRuntimeConfig) => ClaudeCliAuthInspection;
   eventSink?: (event: ProviderEvent) => void;
+  /** 常驻 Claude 进程空闲多久后释放；释放后下一条消息自动 resume。 */
+  idleTimeoutMs?: number;
   queryFactory?: ClaudeQueryFactory;
   sessionIdFactory?: () => string;
   sessionFunctions?: Partial<ClaudeSessionFunctions>;
@@ -90,20 +88,11 @@ type ClaudeSdkProviderOptions = {
 
 type ClaudeProviderOptions = ClaudeSdkProviderOptions & ClaudeCliProviderOptions;
 
-type ActiveQuery = {
-  aliases: Set<string>;
-  controller: AbortController;
-  query?: ClaudeQuery;
-  invocationRef: string;
-  state: ClaudeSdkStreamState;
-  timedOut: boolean;
-};
-
 export class ClaudeSdkExecutorProvider implements ExecutorProvider {
   readonly capabilities = ["issue_execution", "sessions", "resume_session", "interrupt", "approvals"] as const;
   readonly id = PROVIDER;
   readonly interruptScope = "session" as const;
-  private readonly active = new Map<string, ActiveQuery>();
+  private readonly live = new Map<string, ClaudeLiveSession>();
   private readonly permissionBroker = new ClaudePermissionBroker();
 
   constructor(private readonly config: ProviderRuntimeConfig, private readonly options: ClaudeSdkProviderOptions = {}) {
@@ -112,48 +101,46 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
 
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
     assertUsableCwd(input.cwd);
-    return await this.execute(input.prompt, sdkInput(input, this.config, "", `Issue #${input.issueId}`), input.onEvent, "", input);
+    return await this.submit(input.prompt, sdkInput(input, this.config, "", `Issue #${input.issueId}`), input.onEvent, "", input).done;
   }
 
   async recover(input: ProviderRecoveryInput): Promise<ProviderRunResult> {
     assertUsableCwd(input.cwd);
-    return await this.execute(input.prompt, sdkInput(input, this.config, input.session.sessionId), input.onEvent, input.session.sessionId, input);
+    return await this.submit(input.prompt, sdkInput(input, this.config, input.session.sessionId), input.onEvent, input.session.sessionId, input).done;
   }
 
   async createSession(input: SessionCreateInput): Promise<SessionCreateResult> {
     assertUsableCwd(input.cwd);
     const prompt = cleanString(input.prompt);
     if (prompt === "") throw new Error("Claude SDK session creation requires a prompt");
-    const result = await this.execute(prompt, sdkInput(input, this.config, "", input.title), undefined, "", input);
-    const session = requiredSession(result);
+    const submission = this.submit(prompt, sdkInput(input, this.config, "", input.title), undefined, "", input);
+    await submission.accepted;
     return {
-      id: `${PROVIDER}:${session.sessionId}`,
+      id: `${PROVIDER}:${submission.sessionId}`,
       provider: PROVIDER,
-      provider_session_id: session.sessionId,
-      provider_turn_id: session.turnId,
-      thread_id: session.sessionId,
-      turn_id: session.turnId
+      provider_session_id: submission.sessionId,
+      provider_turn_id: submission.turnId,
+      thread_id: submission.sessionId,
+      turn_id: submission.turnId
     };
   }
 
   async sendSessionMessage(input: SessionMessageInput): Promise<SessionMessageResult> {
     const sessionId = cleanString(input.sessionId);
     if (sessionId === "") throw new Error("Claude SDK resume requires a session id");
-    if (cleanString(input.mode) === "steer") throw new Error('provider "claude" does not support live steer; interrupt or resume the session instead');
+    const prompt = cleanString(input.prompt);
+    if (prompt === "") throw new Error("Claude SDK session message requires a prompt");
+    if (cleanString(input.mode) === "steer") {
+      const live = this.live.get(sessionId);
+      if (!live?.running) throw new Error("当前 session 没有可引导的运行中 turn");
+      return sessionMessageResult(sessionId, live.steer(prompt));
+    }
     const discovered = cleanString(input.cwd) ? undefined : await this.sessionFunctions().getSessionInfo(sessionId);
     const cwd = cleanString(input.cwd) || cleanString(discovered?.cwd) || cleanString(this.config.cwd);
     assertUsableCwd(cwd);
-    const prompt = cleanString(input.prompt);
-    if (prompt === "") throw new Error("Claude SDK session message requires a prompt");
-    const result = await this.execute(prompt, sdkInput({ ...input, cwd }, this.config, sessionId), undefined, sessionId, { ...input, cwd });
-    const session = requiredSession(result);
-    if (!session.turnId) throw new Error("Claude SDK completed without a provider turn ref");
-    return {
-      provider: PROVIDER,
-      provider_session_id: session.sessionId,
-      sessionId: session.sessionId,
-      turn_id: session.turnId
-    };
+    const submission = this.submit(prompt, sdkInput({ ...input, cwd }, this.config, sessionId), undefined, sessionId, { ...input, cwd });
+    await submission.accepted;
+    return sessionMessageResult(sessionId, submission.turnId);
   }
 
   async listSessions(input: SessionListInput = {}): Promise<SessionListResult> {
@@ -166,7 +153,7 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
       offset
     });
     return {
-      data: sessions.map((session) => publicClaudeSessionSummary(session, this.active.has(session.sessionId))),
+      data: sessions.map((session) => publicClaudeSessionSummary(session, this.isRunning(session.sessionId))),
       nextCursor: sessions.length === limit ? String(offset + sessions.length) : ""
     };
   }
@@ -183,30 +170,22 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
     );
     if (!info && messages.length === 0) throw new Error(`Claude SDK session ${id} was not found`);
     assertClaudeSessionHistoryIdentity(id, info, messages);
-    const running = this.active.has(id);
-    return publicClaudeSessionDetail(id, info, messages, running);
+    const detail = publicClaudeSessionDetail(id, info, messages, this.isRunning(id));
+    // 终端接手：先在玄武里中断/释放常驻进程，再用这条命令续写，避免两个进程同时写同一会话。
+    return { ...detail, live_process: this.live.get(id)?.alive === true, resume_command: claudeResumeCommand(cleanString(info?.cwd), id) };
   }
 
   async interrupt(input: InterruptInput): Promise<void> {
-    const active = this.lookup(input.session);
-    if (!active) throw new Error(`Claude SDK session ${input.session.sessionId} is not active`);
-    active.controller.abort(input.reason || "runner interrupt");
-    this.permissionBroker.rejectInvocation(active.invocationRef, "Claude invocation interrupted while approval was pending");
-    try {
-      await boundedClaudeSdkInterrupt(active.query, 200);
-    } finally {
-      active.query?.close?.();
+    const live = this.live.get(input.session.sessionId);
+    if (!live || !await live.interrupt(input.reason || "runner interrupt")) {
+      throw new Error(`Claude SDK session ${input.session.sessionId} is not active`);
     }
   }
 
   async stop(): Promise<void> {
     this.permissionBroker.rejectAll("Claude provider stopped while approval was pending");
-    const active = [...new Set(this.active.values())];
-    for (const item of active) {
-      item.controller.abort("runner shutdown");
-      item.query?.close?.();
-      this.untrack(item);
-    }
+    for (const live of [...this.live.values()]) live.close("runner shutdown");
+    this.live.clear();
   }
 
   async resolveApproval(requestId: string, decision: import("../types.ts").ApprovalDecision): Promise<void> {
@@ -227,7 +206,7 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
       ready,
       mode: "sdk",
       version: CLAUDE_AGENT_SDK_VERSION,
-      active_sessions: new Set(this.active.values()).size,
+      active_sessions: [...this.live.values()].filter((live) => live.running).length,
       api_key_configured: this.config.authMode === "environment" && cleanString(this.config.env.ANTHROPIC_API_KEY) !== "",
       auth_configured: authConfigured,
       auth_mode: localAuth ? "local-cli" : authentication.mode,
@@ -244,90 +223,62 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
     };
   }
 
-  private async execute(
+  private submit(
     prompt: string,
     options: ClaudeSdkOptions,
     onEvent?: (event: ProviderEvent) => void,
-    resumeAlias = "",
+    resumeSessionId = "",
     policyInput?: Pick<ProviderRunInput, "cwd" | "policy">
-  ): Promise<ProviderRunResult> {
+  ): ClaudeLiveSubmission & { sessionId: string } {
     this.assertReady();
-    const durableSessionID = resumeAlias || cleanString(options.sessionId) ||
+    const sessionId = resumeSessionId || cleanString(options.sessionId) ||
       cleanString(this.options.sessionIdFactory?.()) || crypto.randomUUID();
-    if (!resumeAlias) options.sessionId = durableSessionID;
-    const state = createClaudeSdkStreamState();
-    state.sessionId = durableSessionID;
-    const active: ActiveQuery = {
-      aliases: new Set(),
-      controller: options.abortController ?? new AbortController(),
-      invocationRef: `claude-inv-${crypto.randomUUID()}`,
-      state,
-      timedOut: false
-    };
-    options.abortController = active.controller;
-    if (policyInput?.policy && policyInput.policy.nativeSummary.hostToolGate === true) {
-      options.canUseTool = this.permissionBroker.callback({
-        cwd: policyInput.cwd,
-        invocationRef: active.invocationRef,
-        onEvent,
-        policy: policyInput.policy,
-        session: () => sessionRef(active.state) ?? { provider: PROVIDER, sessionId: durableSessionID }
-      });
-    }
-    this.trackAlias(active, durableSessionID);
-    this.emit(providerSessionStartedEvent(this.id, durableSessionID, {
-      method: resumeAlias ? "claude-sdk/session_resumed" : "claude-sdk/session_started",
-      metadata: { sdk_transport: "query" }
-    }), onEvent);
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      const query = this.queryFactory()({ prompt, options });
-      active.query = query;
-      timer = setTimeout(() => {
-        active.timedOut = true;
-        const reason = `Claude SDK query timed out after ${this.config.timeoutMs}ms`;
-        void query.interrupt?.().catch(() => undefined);
-        active.controller.abort(reason);
-        query.close?.();
-      }, Math.max(1, this.config.timeoutMs));
-      for await (const message of query) {
-        const events = projectClaudeSdkMessage(message, active.state);
-        if (active.state.sessionId && active.state.sessionId !== durableSessionID) {
-          throw new Error(`Claude session ${durableSessionID} returned mismatched runtime ${active.state.sessionId}`);
-        }
-        if (active.state.sessionId) this.trackAlias(active, active.state.sessionId);
-        if (active.state.turnId) this.trackAlias(active, active.state.turnId);
-        for (const event of events) this.emit(event, onEvent);
+    const invocationRef = `claude-inv-${crypto.randomUUID()}`;
+    const policy = policyInput?.policy?.nativeSummary.hostToolGate === true ? policyInput.policy : undefined;
+    const submission = this.liveSession(sessionId, resumeSessionId !== "").submit({
+      id: crypto.randomUUID(),
+      prompt,
+      key: processKey(options, Boolean(policy)),
+      options,
+      onEvent,
+      timeoutMs: this.config.timeoutMs,
+      ...(policy ? {
+        canUseTool: (session: () => SessionRef | undefined) => this.permissionBroker.callback({
+          cwd: policyInput!.cwd,
+          invocationRef,
+          // 会话消息没有 run 级 onEvent，审批事件必须落到全局 eventSink，否则前端收不到审批请求。
+          onEvent: (event) => this.emit(event, onEvent),
+          policy,
+          session: () => session() ?? { provider: PROVIDER, sessionId }
+        })
+      } : {}),
+      rejectApprovals: (reason) => this.permissionBroker.rejectInvocation(invocationRef, reason)
+    });
+    return { ...submission, sessionId };
+  }
+
+  private liveSession(sessionId: string, resumed: boolean): ClaudeLiveSession {
+    const existing = this.live.get(sessionId);
+    if (existing) return existing;
+    const live = new ClaudeLiveSession(sessionId, {
+      emit: (event, onEvent) => this.emit(event, onEvent),
+      startQuery: (prompt, options) => this.queryFactory()({ prompt, options }),
+      sessionInfo: async (id, cwd) => await this.sessionFunctions().getSessionInfo(id, cwd ? { dir: cwd } : undefined),
+      sessionStarted: (id, wasResumed, onEvent) => this.emit(providerSessionStartedEvent(this.id, id, {
+        method: wasResumed ? "claude-sdk/session_resumed" : "claude-sdk/session_started",
+        metadata: { sdk_transport: "stream" }
+      }), onEvent),
+      idleTimeoutMs: this.options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS,
+      released: (session) => {
+        if (this.live.get(session.sessionId) === session) this.live.delete(session.sessionId);
       }
-      if (active.controller.signal.aborted && !active.state.terminal) {
-        this.emit(abortEvent(active), onEvent);
-      }
-      if (active.controller.signal.aborted) {
-        if (active.timedOut) throw new Error(abortReason(active.controller));
-        throw new ProviderInterruptedError(abortReason(active.controller));
-      }
-      if (active.timedOut) throw new Error(abortReason(active.controller));
-      if (!active.state.terminal) throw new Error("Claude SDK query ended without a terminal result event");
-      if (!active.state.completed && !active.state.interrupted) throw new Error("Claude SDK query failed");
-      const session = sessionRef(active.state);
-      if (!session) throw new Error(`Claude SDK completed without durable session ${durableSessionID}`);
-      return {
-        runId: `sdk:claude:${session.sessionId}:${session.turnId || "unknown"}`,
-        session
-      };
-    } catch (error) {
-      if (active.controller.signal.aborted) {
-        if (!active.state.terminal) this.emit(abortEvent(active), onEvent);
-        if (active.timedOut) throw new Error(abortReason(active.controller));
-        throw new ProviderInterruptedError(abortReason(active.controller));
-      }
-      throw new Error(redactSensitiveText(error instanceof Error ? error.message : String(error)));
-    } finally {
-      if (timer) clearTimeout(timer);
-      active.query?.close?.();
-      this.untrack(active);
-      this.permissionBroker.rejectInvocation(active.invocationRef, "Claude invocation ended while approval was pending");
-    }
+    }, resumed);
+    this.live.set(sessionId, live);
+    return live;
+  }
+
+  private isRunning(sessionId: string): boolean {
+    return this.live.get(sessionId)?.running === true;
   }
 
   private emit(event: ProviderEvent, onEvent?: (event: ProviderEvent) => void): void {
@@ -349,26 +300,6 @@ export class ClaudeSdkExecutorProvider implements ExecutorProvider {
       getSessionMessages: this.options.sessionFunctions?.getSessionMessages ?? sdkGetSessionMessages,
       listSessions: this.options.sessionFunctions?.listSessions ?? sdkListSessions
     };
-  }
-
-  private trackAlias(active: ActiveQuery, alias: string): void {
-    const id = cleanString(alias);
-    if (id === "" || active.aliases.has(id)) return;
-    const existing = this.active.get(id);
-    if (existing && existing !== active) throw new Error(`Claude SDK session ${id} already has an active query`);
-    this.active.set(id, active);
-    active.aliases.add(id);
-  }
-
-  private untrack(active: ActiveQuery): void {
-    for (const alias of active.aliases) {
-      if (this.active.get(alias) === active) this.active.delete(alias);
-    }
-    active.aliases.clear();
-  }
-
-  private lookup(session: SessionRef): ActiveQuery | undefined {
-    return this.active.get(session.sessionId) ?? (session.turnId ? this.active.get(session.turnId) : undefined);
   }
 }
 
@@ -490,6 +421,51 @@ function nativeBoolean(input: Pick<ProviderRunInput, "policy">, key: string): bo
 export function resolveClaudeSdkExecutable(): string {
   const configured = cleanString(Bun.env.XUANWU_CLAUDE_SDK_EXECUTABLE);
   if (configured) return isRegularFile(configured) ? configured : "";
+  const bundled = bundledClaudeSdkExecutable();
+  return compatibleSystemClaude(bundled) || bundled;
+}
+
+/**
+ * 优先用用户终端里的 claude，让玄武与终端共用同一版本、配置与会话格式；
+ * 只接受与 SDK 自带 CLI 同主次版本且不更旧的版本，否则回退到自带 CLI。
+ * XUANWU_CLAUDE_SDK_USE_SYSTEM=0 可强制只用自带 CLI。
+ */
+function compatibleSystemClaude(bundled: string): string {
+  if (cleanString(Bun.env.XUANWU_CLAUDE_SDK_USE_SYSTEM) === "0") return "";
+  const candidate = [cleanString(Bun.which("claude") ?? ""), join(homedir(), ".local", "bin", "claude")]
+    .find((path) => path !== "" && isRegularFile(path)) ?? "";
+  if (candidate === "") return "";
+  const system = claudeCliVersion(candidate);
+  if (!system) return "";
+  const required = bundled ? claudeCliVersion(bundled) : undefined;
+  if (!required) return candidate;
+  const compatible = system[0] === required[0] && system[1] === required[1] && system[2] >= required[2];
+  return compatible ? candidate : "";
+}
+
+const cliVersionCache = new Map<string, [number, number, number] | undefined>();
+
+function claudeCliVersion(path: string): [number, number, number] | undefined {
+  let cacheKey = path;
+  try {
+    cacheKey = `${path}\0${statSync(path).mtimeMs}`;
+  } catch {
+    return undefined;
+  }
+  if (cliVersionCache.has(cacheKey)) return cliVersionCache.get(cacheKey);
+  let version: [number, number, number] | undefined;
+  try {
+    const result = Bun.spawnSync([path, "--version"], { stdout: "pipe", stderr: "ignore", timeout: 5_000 });
+    const match = /(\d+)\.(\d+)\.(\d+)/.exec(result.stdout.toString());
+    if (result.exitCode === 0 && match) version = [Number(match[1]), Number(match[2]), Number(match[3])];
+  } catch {
+    version = undefined;
+  }
+  cliVersionCache.set(cacheKey, version);
+  return version;
+}
+
+function bundledClaudeSdkExecutable(): string {
   const suffix = process.platform === "win32" ? ".exe" : "";
   const adjacent = `${process.execPath}.claude-agent-sdk${suffix}`;
   if (isRegularFile(adjacent)) return adjacent;
@@ -540,16 +516,6 @@ function claudeEffort(value: string | undefined): "low" | "medium" | "high" | "x
     : undefined;
 }
 
-function requiredSession(result: ProviderRunResult): SessionRef {
-  if (!result.session?.sessionId) throw new Error("Claude SDK completed without a provider session id");
-  return result.session;
-}
-
-function sessionRef(state: ClaudeSdkStreamState): SessionRef | undefined {
-  if (!state.sessionId) return undefined;
-  return { provider: PROVIDER, sessionId: state.sessionId, ...(state.turnId ? { turnId: state.turnId } : {}) };
-}
-
 function assertUsableCwd(cwd: string): void {
   const path = cleanString(cwd);
   if (path === "") throw new Error("Claude SDK issue run blocked: cwd is required");
@@ -568,30 +534,33 @@ function registerClaudeAuthSecrets(env: Record<string, string>): void {
   }
 }
 
-function abortReason(controller: AbortController): string {
-  const reason = controller.signal.reason;
-  return redactSensitiveText(reason instanceof Error ? reason.message : String(reason || "Claude SDK query interrupted"));
+function sessionMessageResult(sessionId: string, turnId: string): SessionMessageResult {
+  return { provider: PROVIDER, provider_session_id: sessionId, sessionId, turn_id: turnId };
 }
 
-function abortEvent(active: ActiveQuery): ProviderEvent {
-  const reason = abortReason(active.controller);
-  return active.timedOut
-    ? timedOutClaudeSdkEvent(active.state, reason)
-    : interruptedClaudeSdkEvent(active.state, reason);
+/** 进程级参数一致的消息才能复用同一个常驻进程；env 含凭据，不进指纹。 */
+function processKey(options: ClaudeSdkOptions, hostToolGate: boolean): string {
+  return JSON.stringify([
+    options.cwd,
+    options.model ?? "",
+    options.effort ?? "",
+    options.permissionMode ?? "",
+    options.allowDangerouslySkipPermissions === true,
+    options.tools ?? [],
+    options.allowedTools ?? [],
+    options.maxTurns ?? 0,
+    options.pathToClaudeCodeExecutable ?? "",
+    hostToolGate
+  ]);
 }
 
-async function boundedClaudeSdkInterrupt(query: ClaudeQuery | undefined, timeoutMs: number): Promise<void> {
-  const interrupt = query?.interrupt;
-  if (!interrupt) return;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    await Promise.race([
-      interrupt.call(query),
-      new Promise<void>((resolve) => { timer = setTimeout(resolve, Math.max(1, timeoutMs)); })
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
+function claudeResumeCommand(cwd: string, sessionId: string): string {
+  const resume = `claude --resume ${shellQuote(sessionId)}`;
+  return cwd ? `cd ${shellQuote(cwd)} && ${resume}` : resume;
+}
+
+function shellQuote(value: string): string {
+  return /^[\w@%+=:,./-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 function numericCursor(value: string | undefined): number {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  canSteerSessionProvider,
   eventSessionKey,
   isAgentEvent,
   isSessionRunning,
@@ -16,6 +17,14 @@ import {
   upsertRunningSessionFromEvent,
   visibleApprovalsForSession,
 } from './sessionPageRuntime.js';
+
+test('live steer is offered only for providers that consume it inside the running turn', () => {
+  assert.equal(canSteerSessionProvider('codex'), true);
+  assert.equal(canSteerSessionProvider('claude'), true);
+  assert.equal(canSteerSessionProvider(''), true);
+  assert.equal(canSteerSessionProvider('pi-coding-agent'), false);
+  assert.equal(canSteerSessionProvider('qoder'), false);
+});
 
 test('provider session keys preserve the existing provider-prefixed identity', () => {
   assert.equal(providerSessionKey('codex', 'thread-1'), 'codex:thread-1');
