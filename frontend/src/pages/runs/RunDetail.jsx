@@ -1,7 +1,6 @@
 import { Component, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
-  BadgeDollarSign,
   Clock3,
   FileText,
   History,
@@ -190,6 +189,8 @@ function RunSummary({ attempt, issueId, run }) {
           <Metric label="当前阶段" value={runPhaseLabel(progress.provider_phase || progress.phase)} />
           <Metric label="最新进展" value={progress.latest?.summary || run.terminal?.reason || '暂无进展记录'} />
           <Metric label="耗时" value={durationText(run.started_at, run.ended_at)} />
+          <Metric label="总 token" value={runCost.total} detail={runCost.completenessLabel} />
+          <Metric label="金额" value={runCost.money} />
         </div>
         <section className="run-progress-timeline">
           <div className="run-subsection-title">
@@ -212,13 +213,6 @@ function RunSummary({ attempt, issueId, run }) {
           )) : <EmptyState icon={History} text="这次尝试暂无进展记录。" />}
         </section>
       </section>
-      <aside className="run-summary-aside">
-        <section className="run-cost-card">
-          <div className="run-subsection-title"><div><BadgeDollarSign size={15} /><strong>整次执行用量</strong></div></div>
-          <div className="run-cost-total"><span>总 token</span><strong>{runCost.total}</strong><small>{runCost.money}</small></div>
-          <span className="run-cost-completeness">{runCost.completenessLabel}</span>
-        </section>
-      </aside>
       <RunDisclosure title="本次执行验证">
         <EvidencePanel runId={run.id} title="本次执行验证" />
       </RunDisclosure>
@@ -334,8 +328,8 @@ function RunAdvanced({ attempt, issueId, run }) {
   );
 }
 
-function Metric({ label, value }) {
-  return <div><span>{label}</span><strong title={value}>{value}</strong></div>;
+function Metric({ label, value, detail }) {
+  return <div><span>{label}</span><strong title={value}>{value}</strong>{detail ? <small className="run-cost-completeness">{detail}</small> : null}</div>;
 }
 
 function ResourceHeader({ eyebrow, icon: Icon, loading, onRefresh, title }) {
