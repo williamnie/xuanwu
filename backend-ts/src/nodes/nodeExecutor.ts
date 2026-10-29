@@ -92,7 +92,8 @@ export function nodeExecutionHandlers(
       const provider = providers()[String(providerId ?? "")];
       const fn = provider?.[method as ReadMethod] as ((...values: unknown[]) => Promise<unknown>) | undefined;
       if (!provider || typeof fn !== "function") throw new Error(`provider ${String(providerId)} does not support ${String(method)}`);
-      return await fn.apply(provider, Array.isArray(args) ? args.slice(0, 2) : []);
+      // JSON 把省略的参数序列化为 null，换回 undefined 让 provider 的默认参数生效。
+      return await fn.apply(provider, Array.isArray(args) ? args.slice(0, 2).map((arg) => arg ?? undefined) : []);
     },
     // 对话页新建会话、人工审核后在原会话续写；cwd 必须落在 allowedRoots 内。
     "provider.session": async (params, agent) => {

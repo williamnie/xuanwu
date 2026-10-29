@@ -89,9 +89,10 @@ export function fakeNodeProvider() {
     },
     listSessions: async () => ({ data: [providerSessionSummary(asProviderId("codex"), { name: "node chat", sessionRef: "chat-1" })] }),
     listModels: async () => [{ id: "node-model", display_name: "Node model" }],
-    readSession: async (sessionId) => providerSessionDetail(asProviderId("codex"), {
+    // 与真实 provider 一样直接读 input 字段：中心省略的参数不能以 null 到达。
+    readSession: async (sessionId, input = {}) => providerSessionDetail(asProviderId("codex"), {
       sessionRef: sessionId,
-      turns: [{ id: "turn-on-node", items: [], status: "completed" } as ProviderSessionTurn]
+      turns: input.includeTurns === false ? [] : [{ id: "turn-on-node", items: [], status: "completed" } as ProviderSessionTurn]
     }),
     resolveApproval: async (requestId, decision) => {
       approvals.push([requestId, decision]);

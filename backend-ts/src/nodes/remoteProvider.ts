@@ -108,7 +108,7 @@ export function createRemoteExecutorProvider(options: RemoteProviderOptions): Ex
   // 只读方法经 provider.read 转发；会话的创建与续写不经节点开放。
   const read = (method: string, args: unknown[]) => hub.request(nodeId, "provider.read", { args, method, providerId: provider.id });
   const readMethods = new Set(provider.read_methods ?? []);
-  if (readMethods.has("readSession")) remote.readSession = async (sessionId, input) => await read("readSession", [sessionId, input]) as Record<string, unknown>;
+  if (readMethods.has("readSession")) remote.readSession = async (sessionId, input) => await read("readSession", [sessionId, input ?? {}]) as Record<string, unknown>;
   // 会话列表按项目 cwd 过滤时，换成节点上的路径。
   if (readMethods.has("listSessions")) {
     remote.listSessions = async (input) => await read("listSessions", [nodePathInput(input)]) as SessionListResult;
