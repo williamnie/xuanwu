@@ -6,7 +6,7 @@ import { remoteProviderManifest } from "./remoteProvider.ts";
 
 type NodeProviderCatalogEntry = ProviderCatalogEntry & { node_id: string; node_online: boolean };
 
-/** 就绪性取最后一次 hello；在线状态单独返回，离线不阻止用户创建待执行任务。 */
+/** 就绪性取最后一次 hello；在线状态单独返回，离线不阻止用户创建待执行任务。名称带节点名，与本机同名工具区分。 */
 export function catalogForRemoteNode(node: RemoteNode, online: boolean): NodeProviderCatalogEntry[] {
   return node.info.providers
     .filter((provider) => provider.ready && provider.capabilities.includes("issue_execution"))
@@ -32,7 +32,7 @@ export function catalogForRemoteNode(node: RemoteNode, online: boolean): NodePro
           state: "ready",
           manifest: {
             id: asProviderId(provider.id),
-            displayName: builtin?.displayName ?? provider.id,
+            displayName: `${node.name} · ${builtin?.displayName ?? provider.id}`,
             supportLevel: builtin?.supportLevel ?? "experimental",
             transports: ["rpc"],
             capabilities,

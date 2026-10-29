@@ -32,7 +32,8 @@ export default function WorkEditorDialog({ initialProject = '', mode, onClose, o
   const catalogKey = workCatalogKey(draft.project_id, nodeId);
   const { profiles, catalog: providerCatalog, loading: profilesLoading, error: catalogError,
     inheritedAvailable: inheritedProviderAvailable, selectedAvailable: selectedCodeAgentAvailable,
-  } = workCatalogSelection(catalogState, catalogKey, draft.agent_profile_id, selectedProject);
+  } = workCatalogSelection(catalogState, catalogKey, draft.agent_profile_id, selectedProject,
+    editing ? work?.agent_profile_id || '' : null);
   const effectivePreview = effectiveProfilePreview(draft.agent_profile_id, selectedProject, profiles);
   const node = nodesById.get(nodeId);
   const nodeOffline = nodeId && (node?.online === false
@@ -148,7 +149,7 @@ export default function WorkEditorDialog({ initialProject = '', mode, onClose, o
               </span>
             </label>
           ) : null}
-          <details className="work-dialog-more" open={!selectedCodeAgentAvailable || undefined}>
+          <details className="work-dialog-more" open={!selectedCodeAgentAvailable || Boolean(nodeId) || undefined}>
             <summary>{t('editor.moreOptions')}</summary>
             {!editing ? <TitleField onChange={value => setField('title', value)} value={draft.title} /> : null}
             <label>

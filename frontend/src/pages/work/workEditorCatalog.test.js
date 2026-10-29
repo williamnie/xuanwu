@@ -60,3 +60,11 @@ test('failed loading clears options, permits retry, and ignores obsolete failure
   await flush();
   assert.deepEqual(published.at(-1), ready);
 });
+
+test('editing keeps the unchanged original preset saveable even when the catalog no longer offers it', () => {
+  const empty = { ...ready, catalog: [] };
+  assert.equal(workCatalogSelection(empty, key, 'remote-preset', {}, 'remote-preset').selectedAvailable, true);
+  assert.equal(workCatalogSelection(empty, key, '', { provider: 'gone' }, '').selectedAvailable, true);
+  assert.equal(workCatalogSelection(empty, key, 'other', {}, 'remote-preset').selectedAvailable, false);
+  assert.equal(workCatalogSelection({ ...empty, loading: true }, key, 'remote-preset', {}, 'remote-preset').selectedAvailable, false);
+});

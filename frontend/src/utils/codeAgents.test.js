@@ -4,6 +4,7 @@ import {
   availableAgentProfiles,
   availableCodeAgentIDs,
   codeAgentAvailable,
+  agentProfileOptionLabel,
   codeAgentLabel,
   effectiveProjectProvider,
   groupedAvailableAgentProfiles,
@@ -67,4 +68,12 @@ test('node catalog is authoritative, including tools absent from center and offl
   assert.equal(unavailableSelectedAgentProfile('remote', profiles, nodeCatalog), null);
   assert.deepEqual(availableAgentProfiles(profiles, catalog), [profiles[1]]);
   assert.deepEqual(availableAgentProfiles(profiles, []), []);
+});
+
+test('preset option text names node config for builtin presets in a node catalog only', () => {
+  const nodeCatalog = [{ id: 'claude', label: 'hermes · Claude Code', node_id: 'node-a' }];
+  const builtin = { id: 'xuanwu-provider-claude', name: 'Claude Code（本机配置）', provider: 'claude' };
+  assert.equal(agentProfileOptionLabel(builtin, nodeCatalog), 'Claude Code（节点配置） · 节点默认模型');
+  assert.equal(agentProfileOptionLabel(builtin, catalog), 'Claude Code（本机配置） · 编程工具默认模型');
+  assert.equal(agentProfileOptionLabel({ id: 'mine', name: '我的（本机配置）', provider: 'claude', model: 'opus' }, nodeCatalog), '我的（本机配置） · opus');
 });

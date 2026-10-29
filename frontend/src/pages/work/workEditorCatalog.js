@@ -5,14 +5,15 @@ export function workCatalogKey(projectId, nodeId = '') {
   return JSON.stringify([projectId, nodeId]);
 }
 
-export function workCatalogSelection(state, key, profileId, project) {
+// keptProfileId：编辑时未改动的原执行预设（含空值）照常可保存，不因目录变化拦住改标题等修改。
+export function workCatalogSelection(state, key, profileId, project, keptProfileId = null) {
   const current = state?.key === key;
   const loading = !current || state.loading;
   const error = current ? state.error : '';
   const profiles = current ? state.profiles : [];
   const catalog = current ? state.catalog : [];
   const inheritedAvailable = codeAgentAvailable(effectiveProjectProvider(project, profiles), catalog);
-  const selectedAvailable = !loading && !error && (profileId
+  const selectedAvailable = !loading && !error && (keptProfileId !== null && profileId === keptProfileId ? true : profileId
     ? availableAgentProfiles(profiles, catalog).some(profile => profile.id === profileId)
     : inheritedAvailable);
   return { loading, error, profiles, catalog, inheritedAvailable, selectedAvailable };

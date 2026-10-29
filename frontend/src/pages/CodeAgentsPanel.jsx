@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, CircleAlert, Monitor, Power, RefreshCw, Save, Terminal } from 'lucide-react';
+import { nodesApi } from '../api/nodes.js';
 import { systemApi } from '../api/system.js';
 import { message } from '../store/toastStore.js';
 import { codexBackendChoices, codexBackendUpdatePayload } from '../utils/codexBackends.js';
+import { remoteCodeAgentGroups } from './remoteNodesModel.js';
 import './CodeAgentsPanel.css';
 
 const AGENT_DESCRIPTIONS = Object.freeze({
@@ -14,10 +16,15 @@ const AGENT_DESCRIPTIONS = Object.freeze({
 
 export default function CodeAgentsPanel() {
   const [state, setState] = useState({ agents: [], error: '', loading: true, runnerSettings: null });
+  const [nodes, setNodes] = useState({ error: '', items: [] });
   const [busyAgentID, setBusyAgentID] = useState('');
 
   const load = useCallback(async (discover = false) => {
     setState(current => ({ ...current, error: '', loading: true }));
+    // 节点列表单独加载，读取失败不影响本机工具。
+    nodesApi.listNodes()
+      .then(result => setNodes({ error: '', items: Array.isArray(result?.nodes) ? result.nodes : [] }))
+      .catch(error => setNodes({ error: error.message || '读取节点失败', items: [] }));
     try {
       const [response, runnerSettings] = await Promise.all([
         discover ? systemApi.discoverCodeAgents() : systemApi.getCodeAgents(),
@@ -85,6 +92,8 @@ export default function CodeAgentsPanel() {
     }
   };
 
+  const remoteGroups = remoteCodeAgentGroups(nodes.items, state.agents);
+
   return (
     <section className="code-agents-panel">
       <header className="code-agents-header">
@@ -95,6 +104,7 @@ export default function CodeAgentsPanel() {
       </header>
 
       {state.error ? <div className="code-agents-error" role="alert">{state.error}</div> : null}
+      {remoteGroups.length > 0 ? <span className="ds-mono-label">本机 · Hub</span> : null}
       <div className="code-agents-list">
         {state.agents.map(agent => (
           <CodeAgentRow
@@ -108,6 +118,39 @@ export default function CodeAgentsPanel() {
           />
         ))}
         {!state.loading && state.agents.length === 0 ? <div className="code-agents-empty">尚未检测到可用的编程工具。安装并登录后，点击“重新检测”。</div> : null}
+      </div>
+      {nodes.error ? <div className="code-agents-error" role="alert">{nodes.error}</div> : null}
+      {remoteGroups.map(group => <RemoteNodeAgents group={group} key={group.id} />)}
+    </section>
+  );
+}
+
+// 远程工具只读展示：安装、登录与启停在节点机器上完成，节点重连后自动更新。
+function RemoteNodeAgents({ group }) {
+  return (
+    <section aria-label={`节点 ${group.name} 的编程工具`} className="code-agents-remote">
+      <div className="code-agent-title">
+        <span className="ds-mono-label">远程节点</span>
+        <strong>{group.name}</strong>
+        <span className={group.status.tone === 'success' ? 'available' : ''}>{group.status.label}</span>
+      </div>
+      <div className="code-agents-list">
+        {group.agents.map(agent => (
+          <article className="code-agent-row" key={agent.id}>
+            <div className={`code-agent-status ${agent.available ? 'available' : ''}`}>
+              {agent.available ? <CheckCircle2 size={16} /> : <CircleAlert size={16} />}
+            </div>
+            <div className="code-agent-copy">
+              <div className="code-agent-title">
+                <strong>{agent.label}</strong>
+                <span className={agent.available ? 'available' : ''}>{agent.status}</span>
+              </div>
+              <p>{AGENT_DESCRIPTIONS[agent.id] || agent.id} · 运行在节点 {group.name}</p>
+              {agent.detail ? <small>{agent.detail}</small> : null}
+            </div>
+          </article>
+        ))}
+        {group.agents.length === 0 ? <div className="code-agents-empty">节点尚未上报编程工具。在节点上安装并登录后重启 xuanwu node。</div> : null}
       </div>
     </section>
   );

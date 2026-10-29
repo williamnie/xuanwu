@@ -1,4 +1,4 @@
-import { groupedAvailableAgentProfiles, unavailableSelectedAgentProfile } from '../utils/codeAgents.js';
+import { agentProfileOptionLabel, groupedAvailableAgentProfiles, unavailableSelectedAgentProfile } from '../utils/codeAgents.js';
 
 // catalog 接受本机或项目节点目录，分组与不可用选择始终使用同一目录。
 export default function AgentProfileSelectOptions({ catalog, profiles, selectedProfileID }) {
@@ -16,7 +16,7 @@ export default function AgentProfileSelectOptions({ catalog, profiles, selectedP
         <optgroup key={group.provider} label={group.label}>
           {group.profiles.map(profile => (
             <option key={profile.id} value={profile.id}>
-              {profile.name} · {profile.model || '编程工具默认模型'}
+              {agentProfileOptionLabel(profile, catalog)}
             </option>
           ))}
         </optgroup>

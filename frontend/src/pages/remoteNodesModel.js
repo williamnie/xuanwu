@@ -43,3 +43,32 @@ export function compactNodePath(path = '') {
   const parts = String(path).split(/[\\/]+/).filter(Boolean);
   return parts.length <= 3 ? path : `…/${parts.slice(-2).join('/')}`;
 }
+
+const BUILTIN_AGENT_LABELS = Object.freeze({ codex: 'Codex', claude: 'Claude Code', 'pi-coding-agent': 'Pi', qoder: 'Qoder' });
+const REMOTE_CAPABILITY_LABELS = Object.freeze({ sessions: '会话', resume_session: '续跑', model_list: '模型列表', approvals: '审批', interrupt: '中断' });
+
+/** 设置页按节点分组的远程编程工具；名称优先沿用本机同 id 工具（本机检测失败时用内置名），状态以节点在线与上报就绪为准。 */
+export function remoteCodeAgentGroups(nodes, localAgents = []) {
+  const labels = new Map((Array.isArray(localAgents) ? localAgents : []).map(agent => [agent.id, agent.label || agent.id]));
+  return (Array.isArray(nodes) ? nodes : []).filter(node => !node?.revoked_at).map(node => {
+    const providers = Array.isArray(node?.info?.providers) ? node.info.providers : [];
+    return {
+      id: node.id,
+      name: node.name || node.id,
+      status: nodeStatus(node),
+      agents: providers.map(provider => {
+        const executable = provider.ready && provider.capabilities?.includes('issue_execution');
+        const available = Boolean(node.online && executable);
+        return {
+          id: provider.id,
+          label: labels.get(provider.id) || BUILTIN_AGENT_LABELS[provider.id] || provider.id,
+          available,
+          status: !node.online ? '节点离线' : available ? '可用' : '未就绪',
+          detail: [provider.version ? `版本 ${provider.version}` : '',
+            ...(provider.capabilities || []).map(capability => REMOTE_CAPABILITY_LABELS[capability]).filter(Boolean)]
+            .filter(Boolean).join(' · '),
+        };
+      }),
+    };
+  });
+}

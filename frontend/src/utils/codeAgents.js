@@ -23,6 +23,16 @@ export function codeAgentLabel(provider, catalog) {
   return String(entry?.label || id || 'Code Agent');
 }
 
+// 内置预设沿用执行机器上的工具配置；在节点目录里改称节点配置，避免误以为跑在中心。
+export function agentProfileOptionLabel(profile, catalog) {
+  const provider = String(profile?.provider || '');
+  const remote = (Array.isArray(catalog) ? catalog : []).some(entry => String(entry?.id || '') === provider && entry?.node_id);
+  const name = remote && String(profile?.id || '').startsWith('xuanwu-provider-')
+    ? String(profile?.name || '').replace('（本机配置）', '（节点配置）')
+    : profile?.name;
+  return `${name} · ${profile?.model || (remote ? '节点默认模型' : '编程工具默认模型')}`;
+}
+
 export function groupedAvailableAgentProfiles(profiles, catalog) {
   const available = availableAgentProfiles(profiles, catalog);
   const groups = [];

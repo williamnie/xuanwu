@@ -21,12 +21,12 @@ test('node refresh deduplicates requests and forced polling bypasses stale cache
     assert.equal(calls, 1);
     const reconnect = refresh({ force: true });
     assert.equal(calls, 2);
-    resolve({ nodes: [{ id: 'remote', online: true }] });
+    resolve({ nodes: [{ id: 'remote', name: 'hermes', online: true }] });
     await reconnect;
     assert.equal(useDataStore.getState().nodesById.get('remote').online, true);
     nodesApi.listNodes = async () => { throw new Error('unavailable'); };
     await refresh({ force: true });
-    assert.equal(useDataStore.getState().nodesById.size, 0);
+    assert.deepEqual(useDataStore.getState().nodesById.get('remote'), { id: 'remote', name: 'hermes', online: undefined });
   } finally {
     nodesApi.listNodes = original;
   }

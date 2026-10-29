@@ -98,7 +98,10 @@ export const useDataStore = create((set, get) => ({
     if (!force && Date.now() - nodesFetchedAt < 60_000) return Promise.resolve();
     nodesRequest = nodesApi.listNodes()
       .then(result => set({ nodesById: new Map((result?.nodes || []).map(node => [node.id, node])) }))
-      .catch(() => set({ nodesById: new Map() }))
+      // 读取失败时保留节点名，只清掉在线状态，既不显示节点 ID 也不误判离线。
+      .catch(() => set(state => ({
+        nodesById: new Map([...state.nodesById].map(([id, node]) => [id, { ...node, online: undefined }])),
+      })))
       .finally(() => {
         nodesFetchedAt = Date.now();
         nodesRequest = undefined;

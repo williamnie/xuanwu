@@ -357,7 +357,7 @@ export default function ProjectSettingsEditor({ layout = 'inline', mode = 'edit'
             </label>
             {presetCatalog.error ? <p className="project-settings-error" role="alert">{presetCatalog.error}</p> : null}
             <p className="project-settings-hint">
-              {english ? 'Execution preset' : '执行预设'}：{ui.profiles.find(profile => profile.id === ui.formAgentProfileId)?.name || ui.formAgentProfileId || (english ? 'Project defaults' : '沿用项目设置')} · {' '}
+              {english ? 'Execution preset' : '执行预设'}：{ui.profiles.find(profile => profile.id === ui.formAgentProfileId)?.name || (ui.formAgentProfileId === project?.default_agent_profile_id ? project?.default_agent_profile?.name : '') || ui.formAgentProfileId || (english ? 'Project defaults' : '沿用项目设置')} · {' '}
               <a href="#/settings?section=advanced:presets" onClick={onCancel}>{english ? 'Edit in Advanced → Execution presets' : '在 高级 → 执行预设 中修改'}</a>
               {ui.profileError ? <span role="alert">{ui.profileError}</span> : null}
             </p>

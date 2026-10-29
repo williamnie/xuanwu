@@ -182,7 +182,7 @@ describe("remote projects", () => {
     const online = await catalog(`node_id=${nodeId}`);
     expect(online).toHaveLength(1);
     expect(online[0]).toMatchObject({
-      id: "codex", label: "Codex", enabled: true, submittable: true,
+      id: "codex", label: "laptop · Codex", enabled: true, submittable: true,
       node_id: nodeId, node_online: true, state: "ready",
       capabilities: { issueExecution: true, models: { list: true } },
       legacy_capabilities: expect.arrayContaining(["issue_execution", "model_list"]),

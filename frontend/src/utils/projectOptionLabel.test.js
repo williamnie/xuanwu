@@ -43,7 +43,7 @@ test('所有项目选项共用标签函数和节点缓存，包括自动化的�
   }
 });
 
-test('节点请求合并并缓存，加载失败回退 ID 且不改变页面连接状态，过期可恢复', async t => {
+test('节点请求合并并缓存，加载失败保留节点名且不改变页面连接状态，过期可恢复', async t => {
   let now = 100_000;
   t.mock.method(Date, 'now', () => now);
   let resolve;
@@ -60,7 +60,8 @@ test('节点请求合并并缓存，加载失败回退 ID 且不改变页面连�
   useDataStore.setState({ backendOnline: true });
   request.mock.mockImplementation(async () => { throw new Error('offline'); });
   await refresh();
-  assert.equal(projectOptionLabel(remote, useDataStore.getState().nodesById), '项目 · 远程 · node-1');
+  assert.equal(projectOptionLabel(remote, useDataStore.getState().nodesById), '项目 · 远程 · 开发机');
+  assert.equal(useDataStore.getState().nodesById.get('node-1').online, undefined);
   assert.equal(useDataStore.getState().backendOnline, true);
   now += 60_001;
   request.mock.mockImplementation(async () => ({ nodes: [{ id: 'node-1', name: '新名称' }] }));

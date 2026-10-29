@@ -21,7 +21,8 @@ test('new task keeps the title optional and calls the executor choice a preset',
   assert.match(editorDialog, /setField\('status', event\.target\.checked \? 'todo' : 'triage'\)/);
   assert.doesNotMatch(editorDialog, /Effective:|Work 显式/);
   assert.match(editorDialog, /<AgentProfileSelectOptions/);
-  assert.match(editorDialog, /workCatalogSelection\(catalogState, catalogKey, draft\.agent_profile_id, selectedProject\)/);
+  assert.match(editorDialog, /workCatalogSelection\(catalogState, catalogKey, draft\.agent_profile_id, selectedProject,\s*editing \? work\?\.agent_profile_id \|\| '' : null\)/);
+  assert.match(editorDialog, /open=\{!selectedCodeAgentAvailable \|\| Boolean\(nodeId\) \|\| undefined\}/);
   assert.match(editorDialog, /if \(!selectedCodeAgentAvailable\)/);
 });
 
