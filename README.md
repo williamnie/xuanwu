@@ -337,3 +337,10 @@ Xuanwu is open-source software distributed under the [Apache License 2.0](LICENS
 modify, and distribute it, including for commercial purposes, subject to the license terms.
 Redistributions must retain the required license and attribution notices, including
 [LICENSE](LICENSE) and [NOTICE](NOTICE) where applicable.
+
+## Claude native terminal (herdr, preview)
+
+Set `XUANWU_CLAUDE_MODE=herdr` to run interactive Claude in a herdr terminal.
+**Install and start herdr yourself on the execution node**; Xuanwu checks dependencies,
+version, service connectivity and Claude login, and never installs it automatically.
+The SDK remains the default. See [setup and limitations](docs/claude-herdr.md).

@@ -24,7 +24,7 @@ export type ProviderCapabilities = {
 
 type ProviderSupportLevel = "experimental" | "preview" | "tested";
 
-export type ProviderTransport = "rpc" | "stdio-json" | "stream-json" | "sdk" | "acp";
+export type ProviderTransport = "rpc" | "stdio-json" | "stream-json" | "sdk" | "acp" | "herdr";
 
 type ProviderProcessObservability = "none" | "lease";
 

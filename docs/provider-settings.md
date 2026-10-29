@@ -20,6 +20,10 @@ Claude model id。CLI 模式通过官方 `claude -p`、`--resume` 与 Claude 的
 
 ## 配置入口
 
+Claude 可显式选择 `XUANWU_CLAUDE_MODE=herdr` 使用原生交互终端。**用户需自行安装并启动
+herdr**，玄武会检测依赖、版本、服务和登录；见 [herdr 配置与限制](claude-herdr.md)。
+默认 SDK 模式不变，herdr 模式为 preview，尚未完成真实账号验收。
+
 常用环境变量：
 
 ```txt

@@ -129,7 +129,7 @@ export type ProviderRuntimeConfig = {
   cwd: string;
   enabled?: boolean;
   env: Record<string, string>;
-  mode?: "sdk" | "cli-fallback";
+  mode?: "sdk" | "cli-fallback" | "herdr";
   model?: string;
   platformConfigDir?: string;
   platformProfile?: string;
@@ -695,22 +695,25 @@ function readSecretFile(pathValue: string | undefined): string | undefined {
   }
 }
 
-function normalizeClaudeProviderMode(value: string | undefined): "sdk" | "cli-fallback" {
+function normalizeClaudeProviderMode(value: string | undefined): "sdk" | "cli-fallback" | "herdr" {
   const configured = cleanValue(value)?.toLowerCase();
   const mode = configured ?? "sdk";
-  if (mode === "sdk" || mode === "cli-fallback") return mode;
-  throw new Error(`XUANWU_CLAUDE_MODE must be sdk or cli-fallback, received ${mode}`);
+  if (mode === "sdk" || mode === "cli-fallback" || mode === "herdr") return mode;
+  throw new Error(`XUANWU_CLAUDE_MODE must be sdk, cli-fallback or herdr, received ${mode}`);
 }
 
 function normalizeClaudeAuthMode(
   value: string | undefined,
-  providerMode: "sdk" | "cli-fallback",
+  providerMode: "sdk" | "cli-fallback" | "herdr",
   environmentAuthConfigured: boolean
 ): "environment" | "local-cli" | "platform-profile" {
   const configured = cleanValue(value)?.toLowerCase();
   const mode = configured ?? (!environmentAuthConfigured ? "local-cli" : "environment");
   if (mode !== "environment" && mode !== "local-cli" && mode !== "platform-profile") {
     throw new Error(`XUANWU_CLAUDE_AUTH_MODE must be environment, local-cli, or platform-profile, received ${mode}`);
+  }
+  if (providerMode === "herdr" && mode !== "local-cli") {
+    throw new Error("herdr requires XUANWU_CLAUDE_AUTH_MODE=local-cli");
   }
   if (providerMode === "cli-fallback" && mode === "platform-profile") {
     throw new Error("XUANWU_CLAUDE_AUTH_MODE=platform-profile requires XUANWU_CLAUDE_MODE=sdk");

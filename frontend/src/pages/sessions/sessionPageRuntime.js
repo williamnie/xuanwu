@@ -6,7 +6,9 @@ const DEFAULT_SESSION_PROVIDER = 'codex';
 const STEERABLE_SESSION_PROVIDERS = new Set(['codex', 'claude']);
 const MESSAGE_QUEUE_STORAGE_KEY = 'codex-session-message-queue';
 
-export function canSteerSessionProvider(provider) {
+export function canSteerSessionProvider(provider, nativeMode = '') {
+  // 同为 Claude，herdr 仍是原生终端输入；只有 SDK 路径已验证 live steer。
+  if (nativeMode === 'herdr') return false;
   return STEERABLE_SESSION_PROVIDERS.has(String(provider || DEFAULT_SESSION_PROVIDER));
 }
 

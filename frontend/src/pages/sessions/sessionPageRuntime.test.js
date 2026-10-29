@@ -21,6 +21,8 @@ import {
 test('live steer is offered only for providers that consume it inside the running turn', () => {
   assert.equal(canSteerSessionProvider('codex'), true);
   assert.equal(canSteerSessionProvider('claude'), true);
+  assert.equal(canSteerSessionProvider('claude', 'herdr'), false);
+  assert.equal(canSteerSessionProvider('claude', undefined), true);
   assert.equal(canSteerSessionProvider(''), true);
   assert.equal(canSteerSessionProvider('pi-coding-agent'), false);
   assert.equal(canSteerSessionProvider('qoder'), false);

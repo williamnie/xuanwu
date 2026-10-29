@@ -176,6 +176,7 @@ export default function Sessions({
     [messageQueue, selectedId],
   );
   const selectedDetailReady = selectedSession?.id === selectedId;
+  const canSteerSelected = canSteerSessionProvider(selectedSession?.provider || selectedId.split(':')[0], selectedSession?.native_terminal?.mode);
 
   useEffect(() => {
     messageQueueRef.current = messageQueue;
@@ -633,7 +634,7 @@ export default function Sessions({
     const promptText = message.trim();
     const referencesSnapshot = messageReferences;
     const wantsOppositeMode = Boolean(event.metaKey || event.ctrlKey);
-    const shouldGuide = canSteerSessionProvider(selectedSession?.provider || selectedId.split(':')[0]) && sessionRunning && (wantsOppositeMode ? !followRunningTurn : followRunningTurn);
+    const shouldGuide = canSteerSelected && sessionRunning && (wantsOppositeMode ? !followRunningTurn : followRunningTurn);
     if (!selectedId || sending || isInterruptPendingForSession(interruptStateRef.current, selectedId)) return;
     if (!hasComposerContent(promptText, messageReferences)) return;
     if (messageReferenceValidation.hasErrors) {
@@ -926,8 +927,8 @@ export default function Sessions({
           interruptState,
           selectedId,
           currentQueuedMessages,
-          followRunningTurn,
-          setFollowRunningTurn,
+          followRunningTurn: canSteerSelected && followRunningTurn,
+          setFollowRunningTurn: canSteerSelected ? setFollowRunningTurn : null,
           sessionComposerSuggestions,
           messageReferenceDetails,
           setMessageReferences,

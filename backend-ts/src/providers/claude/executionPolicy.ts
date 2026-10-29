@@ -14,7 +14,7 @@ export const CLAUDE_EXECUTION_POLICY_CAPABILITIES: ProviderExecutionPolicyCapabi
   contract: PROVIDER_EXECUTION_POLICY_CAPABILITIES_CONTRACT,
   isolation: "tool-policy",
   combinations: EXECUTION_ACCESS_VALUES.flatMap((access) => EXECUTION_APPROVAL_VALUES.flatMap((approval) => [
-    { access, approval, support: "adapter" as const, transports: ["sdk" as const] },
+    { access, approval, support: "adapter" as const, transports: ["sdk" as const, "herdr" as const] },
     {
       access,
       approval,

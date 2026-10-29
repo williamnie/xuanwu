@@ -318,3 +318,9 @@ Fixture 通过不代表真实 Provider 账号、外部 Connector、浏览器会�
 玄武是采用 [Apache License 2.0](LICENSE) 的开源软件。遵守许可证条款即可进行使用、修改和
 分发，包括商业用途。分发本项目或衍生版本时，必须按许可证要求保留相关许可与署名声明，
 包括适用时的 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。
+
+## Claude 原生终端（herdr，preview）
+
+设置 `XUANWU_CLAUDE_MODE=herdr` 可在 herdr 终端运行交互式 Claude。
+**需要用户在执行节点自行安装并启动 herdr**；玄武会检测依赖、版本、服务和 Claude 登录，不会自动安装。
+默认 SDK 模式不变。详见 [安装配置及限制](docs/claude-herdr.md)。
