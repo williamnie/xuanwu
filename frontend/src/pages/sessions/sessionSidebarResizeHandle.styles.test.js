@@ -1,8 +1,9 @@
+import { readStylesheet } from '../../../test-support/readStylesheet.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const css = readFileSync(new URL('./SessionsClient.css', import.meta.url), 'utf8');
+const css = readStylesheet(new URL('./SessionsClient.css', import.meta.url));
 const appSidebar = readFileSync(new URL('../../components/AppSidebar.jsx', import.meta.url), 'utf8');
 const sessionsPage = readFileSync(new URL('../Sessions.jsx', import.meta.url), 'utf8');
 const sessionSidebar = readFileSync(new URL('./SessionSidebar.jsx', import.meta.url), 'utf8');

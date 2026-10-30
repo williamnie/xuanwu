@@ -1,50 +1,16 @@
-import { appHashForRoute } from '../appRouteModel.js';
-import { useI18n } from '../i18n/context.js';
-import { projectsApi } from '../api/projects.js';
-import RemoteProjectBadge from '../components/RemoteProjectBadge.jsx';
 import { useProjectNodes } from '../store/useProjectNodes.js';
-import { useImmer } from 'use-immer';
+import { selectBackendOnline, selectProjects, selectRefreshData, selectWorkSummary, useDataStore } from '../store/dataStore';
+import { FolderPlus, Folder, RefreshCw, CheckCircle2, Trash2, X, AlertCircle } from 'lucide-react';
+// 保持拆分前的样式级联：远程标记 → 项目页面 → 卡片提示 → 编辑器。
+import '../components/RemoteProjectBadge.css';
 import './Projects.css';
-import { message } from '../store/toastStore';
-import {
-  selectBackendOnline,
-  selectProjects,
-  selectRefreshData,
-  selectWorkSummary,
-  useDataStore,
-} from '../store/dataStore';
-import { 
-  ArrowUpRight,
-  FolderPlus, 
-  Folder, 
-  RefreshCw,
-  CheckCircle2,
-  Settings, 
-  Trash2, 
-  X,
-  AlertCircle
-} from 'lucide-react';
-import ProjectHoldNotice from './ProjectHoldNotice';
+import ProjectCard from './projects/ProjectCard.jsx';
 import ProjectSettingsEditor from './ProjectSettingsEditor';
 import ModalOverlay from '../components/ModalOverlay.jsx';
 import { codexImportNote, codexImportVisible, useCodexImportPreview } from './codexImportPreview.js';
-
-function compactPath(cwd = '') {
-  const text = String(cwd || '').trim().replace(/[\\/]+$/, '');
-  const parts = text.split(/[\\/]+/).filter(Boolean);
-  if (parts.length <= 3) return text || '—';
-  return `…/${parts.slice(-2).join('/')}`;
-}
-
-/** 远程项目显示「节点名:路径」，本机项目只显示路径。 */
-function projectLocationText(project, nodesById) {
-  if (!project.node_id) return compactPath(project.cwd);
-  const node = nodesById.get(project.node_id);
-  return `${node?.name || project.node_id}:${compactPath(project.node_path)}`;
-}
+import useProjectsActions from './projects/useProjectsActions.js';
 
 export default function Projects() {
-  const { t } = useI18n();
   const nodesById = useProjectNodes();
   const projects = useDataStore(selectProjects);
   const workSummary = useDataStore(selectWorkSummary);
@@ -52,126 +18,12 @@ export default function Projects() {
   const refreshData = useDataStore(selectRefreshData);
   const [codexImport, refreshCodexImport] = useCodexImportPreview();
   const showCodexImport = codexImportVisible(codexImport);
-  const [ui, updateUi] = useImmer({
-    syncing: false,
-    syncResult: null,
-    modalMode: '',
-    deleteProjectId: '',
-    deletingProjectId: '',
-    resumingHoldProjectId: '',
-    selectedProjectId: '',
-  });
-
   const {
-    syncing,
-    syncResult,
-    modalMode,
-    deleteProjectId,
-    deletingProjectId,
-    resumingHoldProjectId,
-    selectedProjectId,
-  } = ui;
-  const selectedProject = projects.find(project => project.id === selectedProjectId) || null;
-  const deleteProject = projects.find(project => project.id === deleteProjectId) || null;
-  const deleteProjectIssueCount = deleteProject
-    ? workSummary.project_counts?.find(item => item.project_id === deleteProject.id)?.counts?.total || 0
-    : 0;
-
-  const closeModal = () => {
-    updateUi(draft => {
-      draft.modalMode = '';
-      draft.selectedProjectId = '';
-    });
-  };
-
-  const handleSyncCodexProjects = async () => {
-    updateUi(draft => {
-      draft.syncing = true;
-      draft.syncResult = null;
-    });
-    try {
-      const result = await projectsApi.syncCodexProjects();
-      updateUi(draft => {
-        draft.syncResult = result;
-      });
-      await Promise.all([refreshData(['projects', 'workSummary']), refreshCodexImport()]);
-    } catch (err) {
-      updateUi(draft => {
-        draft.syncResult = { error: err.message || '同步 Codex 项目失败' };
-      });
-    } finally {
-      updateUi(draft => {
-        draft.syncing = false;
-      });
-    }
-  };
-
-  const handleOpenCreateModal = () => {
-    updateUi(draft => {
-      draft.modalMode = 'create';
-      draft.selectedProjectId = '';
-    });
-  };
-
-  const handleOpenEditModal = (project) => {
-    updateUi(draft => {
-      draft.modalMode = 'edit';
-      draft.selectedProjectId = project.id;
-    });
-  };
-
-  const handleOpenDeleteModal = (project) => {
-    updateUi(draft => {
-      draft.deleteProjectId = project.id;
-    });
-  };
-
-  const closeDeleteModal = () => {
-    if (deletingProjectId) return;
-    updateUi(draft => {
-      draft.deleteProjectId = '';
-    });
-  };
-
-  const handleDelete = async () => {
-    if (!deleteProject || deletingProjectId) return;
-    const projectToDelete = deleteProject;
-
-    updateUi(draft => {
-      draft.deletingProjectId = projectToDelete.id;
-    });
-    try {
-      await projectsApi.deleteProject(projectToDelete.id);
-      updateUi(draft => {
-        draft.deleteProjectId = '';
-      });
-      message.success(`项目 ${projectToDelete.name} 已删除`);
-      await refreshData(['projects', 'workSummary']);
-    } catch (err) {
-      message.error(err.message || '删除失败');
-    } finally {
-      updateUi(draft => {
-        draft.deletingProjectId = '';
-      });
-    }
-  };
-
-  const handleResumeHold = async (id) => {
-    updateUi(draft => {
-      draft.resumingHoldProjectId = id;
-    });
-    try {
-      await projectsApi.resumeProjectHold(id);
-      message.success('项目 hold 已恢复');
-    } catch (err) {
-      message.error('恢复失败，hold 已保留: ' + err.message);
-    } finally {
-      updateUi(draft => {
-        draft.resumingHoldProjectId = '';
-      });
-      refreshData(['projects', 'workSummary']);
-    }
-  };
+    syncing, syncResult, modalMode, selectedProjectId, selectedProject,
+    deleteProject, deleteProjectIssueCount, deletingProjectId, resumingHoldProjectId, closeModal,
+    handleSyncCodexProjects, handleOpenCreateModal, handleOpenEditModal, handleOpenDeleteModal, closeDeleteModal,
+    handleDelete, handleResumeHold,
+  } = useProjectsActions({ projects, workSummary, refreshData, refreshCodexImport });
 
   return (
     <section className="glass-card settings-project-panel">
@@ -251,82 +103,13 @@ export default function Projects() {
           </div>
         ) : (
           <div className="grid-cols-3 projects-grid">
-            {projects.map(proj => {
-              const counts = workSummary.project_counts?.find(item => item.project_id === proj.id)?.counts || {};
-              const activeCount = counts.in_progress || 0;
-
-              const isHeld = Boolean(proj.hold);
-              const isLoopActive = !isHeld && (proj.loop_status === 'running' || proj.auto_run === 1);
-              const nodeOffline = Boolean(proj.node_id) && nodesById.get(proj.node_id)?.online === false;
-
-              return (
-                <div key={proj.id} className="glass-card project-card">
-                  
-                  {/* 项目基本信息 */}
-                  <div className="project-card-header">
-                    <div className="project-card-identity">
-                      <div className="project-card-icon">
-                        <Folder size={16} />
-                      </div>
-                      <div className="project-card-title">
-                        <div className="project-card-name">
-                          <h3 title={proj.name}>
-                            {proj.name}
-                          </h3>
-                          <RemoteProjectBadge project={proj} nodesById={nodesById} />
-                        </div>
-                        <code title={proj.node_id ? `${proj.node_id}:${proj.node_path}` : proj.cwd}>
-                          {projectLocationText(proj, nodesById)}
-                        </code>
-                      </div>
-                    </div>
-
-                    <div className="project-status-pill">
-                      <span className={`status-dot ${nodeOffline ? 'idle' : activeCount > 0 ? 'running' : isLoopActive ? 'active' : 'idle'}`}></span>
-                      <span>
-                        {isHeld ? 'Hold' : nodeOffline ? '节点离线' : activeCount > 0 ? '运行中' : isLoopActive ? '监听中' : '已暂停'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <ProjectHoldNotice
-                    hold={proj.hold}
-                    onResume={() => handleResumeHold(proj.id)}
-                    resuming={resumingHoldProjectId === proj.id}
-                  />
-
-                  {/* 项目配置操作 */}
-                  <div className="project-card-footer">
-                    <a
-                      className="project-card-tasks-link"
-                      href={appHashForRoute({ currentPage: 'tasks', filterProject: proj.id, taskScope: 'all' })}
-                    >
-                      {t('projects.viewTasks')} <ArrowUpRight size={13} />
-                    </a>
-                    <div className="project-card-actions">
-                      <button
-                        className="btn btn-secondary project-card-icon-btn"
-                        onClick={() => handleOpenEditModal(proj)}
-                        aria-label={`编辑 ${proj.name} 配置`}
-                        title="设置"
-                      >
-                        <Settings size={13} />
-                      </button>
-                      <button
-                        className="btn btn-secondary btn-danger project-card-icon-btn project-card-delete-btn"
-                        onClick={() => handleOpenDeleteModal(proj)}
-                        aria-label={`删除 ${proj.name}`}
-                        title="删除"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-
-                  </div>
-
-                </div>
-              );
-            })}
+            {projects.map(proj => (
+              <ProjectCard key={proj.id} proj={proj}
+                counts={workSummary.project_counts?.find(item => item.project_id === proj.id)?.counts || {}}
+                nodesById={nodesById} handleResumeHold={handleResumeHold}
+                resumingHoldProjectId={resumingHoldProjectId}
+                handleOpenEditModal={handleOpenEditModal} handleOpenDeleteModal={handleOpenDeleteModal} />
+            ))}
           </div>
         )}
 

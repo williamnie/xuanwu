@@ -1,11 +1,24 @@
+import { readSessionPageSource } from './sessions/sessionTestSources.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+const appSource = [
+  '../App.jsx',
+  '../useAppNavigation.js',
+  '../useAppReconciliation.js',
+  '../useMobileSidebar.js',
+].map((file) => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n');
 const pageSource = readFileSync(new URL('./Runs.jsx', import.meta.url), 'utf8');
-const detailSource = readFileSync(new URL('./runs/RunDetail.jsx', import.meta.url), 'utf8');
-const sessionsSource = readFileSync(new URL('./Sessions.jsx', import.meta.url), 'utf8');
+const detailSource = [
+  './runs/RunDetail.jsx',
+  './runs/RunSummary.jsx',
+  './runs/RunEventPanels.jsx',
+  './runs/RunDetailPrimitives.jsx',
+  './runs/useRunEvents.js',
+  './runs/runDetailFormat.js',
+].map((file) => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n');
+const sessionsSource = readSessionPageSource();
 const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
 const modulesSource = readFileSync(new URL('./assistantModules.js', import.meta.url), 'utf8');
 const clientSource = readFileSync(new URL('../api/runs.js', import.meta.url), 'utf8');

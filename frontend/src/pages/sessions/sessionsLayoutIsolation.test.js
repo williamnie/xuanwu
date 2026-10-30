@@ -1,10 +1,13 @@
-import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { readAppSource } from '../../../test-support/readAppSource.js';
+import { readStylesheet } from '../../../test-support/readStylesheet.js';
+import assert from 'node:assert/strict';
+
 import test from 'node:test';
 
-const appSource = readFileSync(new URL('../../App.jsx', import.meta.url), 'utf8');
+const appSource = readAppSource();
 const appCss = readFileSync(new URL('../../App.css', import.meta.url), 'utf8');
-const clientCss = readFileSync(new URL('./SessionsClient.css', import.meta.url), 'utf8');
+const clientCss = readStylesheet(new URL('./SessionsClient.css', import.meta.url));
 const piChatCss = readFileSync(new URL('../PiChat.css', import.meta.url), 'utf8');
 
 test('Sessions layout overrides stay scoped to the Runs page', () => {

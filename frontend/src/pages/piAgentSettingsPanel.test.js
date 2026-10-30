@@ -1,11 +1,27 @@
+import { readStylesheet } from '../../test-support/readStylesheet.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { translate } from '../i18n/translations.js';
 
-const panelSource = readFileSync(new URL('./PiAgentSettingsPanel.jsx', import.meta.url), 'utf8');
-const panelStylesSource = readFileSync(new URL('./PiAgentSettingsPanel.css', import.meta.url), 'utf8');
-const stateSource = readFileSync(new URL('./piAgentSettingsState.js', import.meta.url), 'utf8');
+const panelSource = [
+  './PiAgentSettingsPanel.jsx',
+  './PiProviderConnectionSettings.jsx',
+  './PiProviderConnectionFlow.jsx',
+  './PiProviderConnectionProgress.jsx',
+  './PiSupervisorBehaviorSettings.jsx',
+  './PiSettingsFields.jsx',
+  './PiCodexOAuthPanel.jsx',
+  './piProviderConnectionLabels.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
+const panelStylesSource = readStylesheet(new URL('./PiAgentSettingsPanel.css', import.meta.url), 'utf8');
+const stateSource = [
+  './piAgentSettingsState.js',
+  './piAgentSettingsForm.js',
+  './piAgentConnectionActions.js',
+  './piAgentOAuthActions.js',
+  './piAgentSettingsPersistence.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
 const assistantSource = readFileSync(new URL('../api/assistant.js', import.meta.url), 'utf8');
 
 test('Supervisor settings drop the read-only prompt summary and keep instructions under more options', () => {
@@ -168,7 +184,6 @@ test('Supervisor settings relies on migrated canonical data instead of UI compat
   assert.doesNotMatch(stateSource, /Engineering Chief of Staff/);
   assert.match(stateSource, /normalizedSupervisorName\(supervisor\.name\)/);
 });
-
 
 test('connection choices reuse radio cards, OAuth secondary actions are disclosed, and status stays separate', () => {
   assert.match(panelSource, /settings-notification-modes provider-mode-tabs/);

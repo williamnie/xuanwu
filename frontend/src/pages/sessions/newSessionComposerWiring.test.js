@@ -1,8 +1,9 @@
+import { readSessionPageSource } from './sessionTestSources.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const sessionsSource = readFileSync(new URL('../Sessions.jsx', import.meta.url), 'utf8');
+const sessionsSource = readSessionPageSource();
 const newSessionSource = readFileSync(new URL('./NewSessionWorkspace.jsx', import.meta.url), 'utf8');
 const sidebarSource = readFileSync(new URL('./SessionSidebar.jsx', import.meta.url), 'utf8');
 const runtimeSource = readFileSync(new URL('./sessionPageRuntime.js', import.meta.url), 'utf8');

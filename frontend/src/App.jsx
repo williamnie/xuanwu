@@ -1,39 +1,24 @@
-import { eventsApi } from './api/events.js';
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition } from 'react';
-import { useImmer } from 'use-immer';
-import { systemApi } from './api/system.js';
-import { createBackendConnectionMonitor } from './api/backendConnectionMonitor.js';
-import { getAuthToken } from './api/authToken';
-import { compatibilityApi } from './api/compatibility.js';
-import {
-  assistantModuleForPage,
-  isAssistantModulePage,
-  productNavPageForRoute,
-  resolveProductPage,
-} from './pages/assistantModules';
+import { useAppNavigation } from './useAppNavigation.js';
+import { useMobileSidebar } from './useMobileSidebar.js';
+import { useAppReconciliation } from './useAppReconciliation.js';
+
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, useTransition } from 'react';
+
+import { assistantModuleForPage, isAssistantModulePage, productNavPageForRoute } from './pages/assistantModules';
 import AppSidebar from './components/AppSidebar';
 import GuardianAlertBanner from './components/GuardianAlertBanner';
 import ReleaseUpdateDialog from './components/ReleaseUpdateDialog';
 import TurtleLoader from './components/TurtleLoader';
-import {
-  selectBackendOnline,
-  selectLoading,
-  selectProjects,
-  selectRefreshData,
-  selectSetBackendConnectionState,
-  selectWorkSummary,
-  useDataStore,
-} from './store/dataStore';
-import { RECONCILE_INTERVAL_MS } from './utils/stateGuards';
+import { selectBackendOnline, selectLoading, selectProjects, selectWorkSummary, useDataStore } from './store/dataStore';
+
 import { isFirstDeliveryDetailRoute, readFirstRunOnboardingState, resolveFirstRunOnboarding, writeFirstRunOnboardingState } from './utils/firstRunOnboarding.js';
 import { assistantApi } from './api/assistant.js';
 import { createFirstDeliveryConnectionCheck } from './pages/command-center/firstDeliverySetup.js';
 import { Menu } from 'lucide-react';
 import ToastContainer from './components/ToastContainer';
-import { message as toast } from './store/toastStore';
+
 import AuthGate from './components/AuthGate';
-import { workIdFromIssueId } from './pages/workBoardModel.js';
-import { appHashForRoute, appRouteFromHash } from './appRouteModel.js';
+
 import { watchCanonicalAppHash } from './appRouteCanonicalization.js';
 import './App.css';
 import './GeekWorkbench.css';
@@ -54,31 +39,6 @@ const Automations = lazy(() => import('./pages/Automations'));
 const Settings = lazy(() => import('./pages/Settings'));
 const OnboardingPage = lazy(() => import('./pages/OnboardingPage.jsx'));
 
-const WORK_SUMMARY_RECONCILE_EVENT_TYPES = new Set([
-  'issue.created',
-  'issue.deleted',
-  'issue.status_changed',
-  'issue.updated',
-]);
-
-const PROJECT_RECONCILE_EVENT_TYPES = new Set([
-  'runner.started',
-  'runner.stopped',
-  'runner.hold',
-  'runner.hold_active',
-  'runner.hold_check.failed',
-  'runner.hold_cleared',
-]);
-
-const PAGE_DATA_SLICES = {
-  analytics: ['workSummary'],
-  automations: ['projects'],
-  'inbox': ['projects', 'workSummary'],
-  settings: ['projects', 'workSummary'],
-  tasks: ['projects', 'workSummary'],
-  handoffs: ['projects'],
-};
-
 const MOBILE_PAGE_TITLE_KEYS = {
   'ask-xuanwu': 'nav.askXuanwu',
   automations: 'nav.automations',
@@ -88,10 +48,6 @@ const MOBILE_PAGE_TITLE_KEYS = {
   settings: 'nav.settings',
   tasks: 'nav.work',
 };
-
-function getReconcileSlices(currentPage) {
-  return PAGE_DATA_SLICES[currentPage] || [];
-}
 
 function PageLoadingFallback() {
   const { t } = useI18n();
@@ -105,26 +61,11 @@ function PageLoadingFallback() {
 export default function App() {
   const { refreshLanguage, t } = useI18n();
   const [pagePending, startPageTransition] = useTransition();
-  const [isMobileViewport, setIsMobileViewport] = useState(() => globalThis.matchMedia?.('(max-width: 760px)').matches || false);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const mobileMenuButtonRef = useRef(null);
   const mainContentRef = useRef(null);
-  const sidebarRef = useRef(null);
-  const initialRoute = appRouteFromHash(globalThis.location?.hash);
-  const [appState, updateAppState] = useImmer(() => ({
-    // 路由与过滤状态
-    ...initialRoute,
-    pageContext: null,
-
-    // 主题状态（默认 E2B 极客暗黑主题，支持一键切换）
-    theme: localStorage.getItem('codex-theme') || 'dark',
-
-    // 侧边栏折叠状态
-    sidebarCollapsed: localStorage.getItem('codex-sidebar-collapsed') === 'true',
-
-    // 远程访问 token 第一阶段：本地保存后才发起 API 请求
-    authReady: Boolean(getAuthToken()),
-  }));
+  const { isMobileViewport, mobileSidebarOpen, setMobileSidebarOpen, mobileMenuButtonRef, sidebarRef, closeMobileSidebar, openMobileSidebar } = useMobileSidebar();
+  const { appState, setAuthReady, writeBrowserRoute, setFilterProject, setTaskSource, setTaskScope,
+    setTheme, toggleSidebar, navigateTo, navigateToSettingsSection, setPageContext,
+    openSupervisorConversation, rememberPiConversation } = useAppNavigation({ startPageTransition, setMobileSidebarOpen });
   const [firstRunOnboarding, setFirstRunOnboarding] = useState(() => readFirstRunOnboardingState() || 'pending');
   const [firstDeliveryWorkId, setFirstDeliveryWorkId] = useState('');
   const [checkFirstDeliveryConnection] = useState(() => createFirstDeliveryConnectionCheck(assistantApi));
@@ -133,9 +74,9 @@ export default function App() {
   const backendOnline = useDataStore(selectBackendOnline);
   const loading = useDataStore(selectLoading);
   const projects = useDataStore(selectProjects);
-  const refreshData = useDataStore(selectRefreshData);
-  const setBackendConnectionState = useDataStore(selectSetBackendConnectionState);
   const workSummary = useDataStore(selectWorkSummary);
+
+  useAppReconciliation({ authReady: appState.authReady, currentPage: appState.currentPage });
 
   const {
     currentPage,
@@ -154,281 +95,10 @@ export default function App() {
     authReady,
   } = appState;
 
-  const setAuthReady = useCallback(() => {
-    return systemApi.validateAuthToken()
-      .then(() => {
-        updateAppState(draft => {
-          draft.authReady = true;
-        });
-      })
-      .catch((err) => {
-        systemApi.clearAuthToken();
-        updateAppState(draft => {
-          draft.authReady = false;
-        });
-        throw err;
-      });
-  }, [updateAppState]);
-
-  const writeBrowserRoute = useCallback((route, { replace = false } = {}) => {
-    if (!globalThis.history || !globalThis.location) return;
-    const hash = appHashForRoute(route);
-    if (globalThis.location.hash === hash) return;
-    const href = `${globalThis.location.pathname}${globalThis.location.search}${hash}`;
-    globalThis.history[replace ? 'replaceState' : 'pushState'](null, '', href);
-  }, []);
-
-  const setFilterProject = useCallback((value) => {
-    updateAppState(draft => {
-      if (draft.filterProject !== value) {
-        draft.filterProject = value;
-      }
-    });
-    if (currentPage === 'tasks') {
-      writeBrowserRoute({
-        currentPage,
-        filterProject: value,
-        selectedWorkId,
-        selectedRunId,
-        taskScope,
-        taskSource,
-      }, { replace: true });
-    }
-  }, [currentPage, selectedWorkId, selectedRunId, taskScope, taskSource, updateAppState, writeBrowserRoute]);
-
-  const setTaskSource = useCallback((value) => {
-    updateAppState(draft => { draft.taskSource = value; });
-    writeBrowserRoute({ currentPage: 'tasks', filterProject, taskScope, taskSource: value });
-  }, [filterProject, taskScope, updateAppState, writeBrowserRoute]);
-
-  const setTaskScope = useCallback((value) => {
-    updateAppState(draft => { draft.taskScope = value; });
-    writeBrowserRoute({ currentPage: 'tasks', filterProject, taskScope: value, taskSource });
-  }, [filterProject, taskSource, updateAppState, writeBrowserRoute]);
-
-  const setTheme = useCallback((nextTheme) => {
-    updateAppState(draft => {
-      const resolved = typeof nextTheme === 'function' ? nextTheme(draft.theme) : nextTheme;
-      if (draft.theme !== resolved) {
-        draft.theme = resolved;
-      }
-    });
-  }, [updateAppState]);
-
-  const closeMobileSidebar = useCallback(() => {
-    setMobileSidebarOpen(false);
-    globalThis.requestAnimationFrame?.(() => mobileMenuButtonRef.current?.focus());
-  }, []);
-
-  const openMobileSidebar = useCallback(() => {
-    setMobileSidebarOpen(true);
-  }, []);
-
-  const toggleSidebar = useCallback(() => {
-    updateAppState(draft => {
-      const nextCollapsed = !draft.sidebarCollapsed;
-      draft.sidebarCollapsed = nextCollapsed;
-      localStorage.setItem('codex-sidebar-collapsed', String(nextCollapsed));
-    });
-  }, [updateAppState]);
-
-  const navigateTo = useCallback((page, entityId = null, sessionId = '', handoffId = '', navigationOptions = {}) => {
-    const resolvedPage = resolveProductPage(page);
-    const internalProviderSessionId = String(navigationOptions?.sessionId || '').trim();
-    const suppressLegacyWarning = navigationOptions?.suppressLegacyWarning === true;
-    if ((page === 'issues' || page === 'sessions') && resolvedPage !== page && !suppressLegacyWarning) {
-      compatibilityApi.recordLegacyRoute({ family: page, target: resolvedPage }).catch(() => {});
-      toast.warning(
-        `${page === 'issues' ? 'Issues' : 'Sessions'} 旧入口已迁移到 ${resolvedPage === 'tasks' ? 'Work' : 'Runs'}；compat v1 保留至 v0.3.x。`,
-        6000,
-      );
-    }
-    const targetHandoffId = resolvedPage === 'handoffs' || resolvedPage === 'tasks' ? handoffId || '' : '';
-    const targetWorkId = resolvedPage === 'tasks'
-      ? page === 'issues' ? workIdFromIssueId(entityId) : String(entityId || '')
-      : '';
-    const compatSessionRoute = resolvedPage === 'runs' && (page === 'sessions' || Boolean(internalProviderSessionId));
-    const targetRunId = resolvedPage === 'runs' && !compatSessionRoute
-      ? sessionId || ''
-      : resolvedPage === 'tasks' && targetWorkId ? String(navigationOptions?.runId || '').trim() : '';
-    const targetSessionId = resolvedPage === 'runs' && compatSessionRoute
-      ? internalProviderSessionId || sessionId || ''
-      : '';
-    const targetSettingsSection = resolvedPage === 'settings'
-      ? String(navigationOptions?.settingsSection || 'general').trim()
-      : '';
-    const targetRoute = {
-      currentPage: resolvedPage,
-      filterProject: String(navigationOptions?.project || '').trim(),
-      selectedHandoffId: targetHandoffId,
-      selectedPiConversationId: resolvedPage === 'ask-xuanwu' ? selectedPiConversationId : '',
-      selectedRunId: targetRunId,
-      selectedSessionId: targetSessionId,
-      selectedWorkId: targetWorkId,
-      settingsSection: targetSettingsSection,
-      taskSource: resolvedPage === 'tasks' ? String(navigationOptions?.source || '') : '',
-      taskScope: resolvedPage === 'tasks' && !targetWorkId ? String(navigationOptions?.scope || '') : '',
-    };
-    startPageTransition(() => updateAppState(draft => {
-      if (draft.currentPage !== resolvedPage) {
-        draft.currentPage = resolvedPage;
-      }
-      if (draft.selectedWorkId !== targetWorkId) {
-        draft.selectedWorkId = targetWorkId;
-      }
-      if (resolvedPage === 'runs') {
-        draft.selectedRunId = targetRunId;
-        draft.selectedSessionId = targetSessionId;
-      }
-      if (resolvedPage === 'tasks') {
-        draft.selectedRunId = targetRunId;
-        draft.taskScope = targetRoute.taskScope;
-        draft.taskSource = targetRoute.taskSource;
-      }
-      draft.filterProject = targetRoute.filterProject;
-      draft.settingsSection = targetSettingsSection;
-      draft.selectedHandoffId = targetHandoffId;
-      draft.pageContext = null;
-    }));
-    setMobileSidebarOpen(false);
-    writeBrowserRoute(targetRoute);
-  }, [selectedPiConversationId, updateAppState, writeBrowserRoute]);
-
   // 目标页面提交后回到页首，避免继承上一页的长内容滚动位置。
   useLayoutEffect(() => {
     if (mainContentRef.current) mainContentRef.current.scrollTop = 0;
   }, [currentPage]);
-
-  const navigateToSettingsSection = useCallback((section) => {
-    navigateTo('settings', null, '', '', { settingsSection: section });
-  }, [navigateTo]);
-
-  const setPageContext = useCallback((context) => {
-    updateAppState(draft => {
-      const next = context && context.page_id === draft.currentPage ? context : null;
-      if (JSON.stringify(draft.pageContext) !== JSON.stringify(next)) {
-        draft.pageContext = next;
-      }
-    });
-  }, [updateAppState]);
-
-  const openSupervisorConversation = useCallback((conversationId) => {
-    const targetConversationId = conversationId || '';
-    startPageTransition(() => updateAppState(draft => {
-      draft.selectedPiConversationId = targetConversationId;
-      draft.currentPage = 'ask-xuanwu';
-      draft.selectedWorkId = '';
-      draft.pageContext = null;
-    }));
-    writeBrowserRoute({
-      currentPage: 'ask-xuanwu',
-      selectedPiConversationId: targetConversationId,
-    });
-  }, [updateAppState, writeBrowserRoute]);
-
-  const rememberPiConversation = useCallback((conversationId) => {
-    const targetConversationId = conversationId || '';
-    updateAppState(draft => {
-      draft.selectedPiConversationId = targetConversationId;
-    });
-    writeBrowserRoute({
-      currentPage: 'ask-xuanwu',
-      selectedPiConversationId: targetConversationId,
-    }, { replace: true });
-    setMobileSidebarOpen(false);
-  }, [updateAppState, writeBrowserRoute]);
-
-  useEffect(() => {
-    if (!globalThis.addEventListener) return undefined;
-    const syncBrowserRoute = () => {
-      const route = appRouteFromHash(globalThis.location?.hash);
-      startPageTransition(() => updateAppState(draft => {
-        draft.currentPage = route.currentPage;
-        draft.filterProject = route.filterProject;
-        draft.selectedHandoffId = route.selectedHandoffId;
-        draft.selectedPiConversationId = route.selectedPiConversationId;
-        draft.selectedRunId = route.selectedRunId;
-        draft.selectedSessionId = route.selectedSessionId;
-        draft.settingsSection = route.settingsSection;
-        draft.selectedWorkId = route.selectedWorkId;
-        draft.taskScope = route.taskScope;
-        draft.taskSource = route.taskSource;
-        draft.pageContext = null;
-      }));
-      setMobileSidebarOpen(false);
-    };
-    globalThis.addEventListener('hashchange', syncBrowserRoute);
-    globalThis.addEventListener('popstate', syncBrowserRoute);
-    return () => {
-      globalThis.removeEventListener('hashchange', syncBrowserRoute);
-      globalThis.removeEventListener('popstate', syncBrowserRoute);
-    };
-  }, [updateAppState]);
-
-  useEffect(() => {
-    if (!globalThis.matchMedia) return undefined;
-    const mediaQuery = globalThis.matchMedia('(max-width: 760px)');
-    const syncMobileViewport = (event) => {
-      setIsMobileViewport(event.matches);
-      if (!event.matches) setMobileSidebarOpen(false);
-    };
-    setIsMobileViewport(mediaQuery.matches);
-    mediaQuery.addEventListener('change', syncMobileViewport);
-    return () => mediaQuery.removeEventListener('change', syncMobileViewport);
-  }, []);
-
-  useEffect(() => {
-    if (!isMobileViewport || !mobileSidebarOpen) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    const focusableSelector = 'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    const focusFrame = globalThis.requestAnimationFrame?.(() => {
-      sidebarRef.current?.querySelector(focusableSelector)?.focus();
-    });
-    const handleDrawerKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        closeMobileSidebar();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const focusable = Array.from(sidebarRef.current?.querySelectorAll(focusableSelector) || []);
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.body.style.overflow = 'hidden';
-    document.addEventListener('keydown', handleDrawerKeyDown);
-    return () => {
-      if (focusFrame) globalThis.cancelAnimationFrame?.(focusFrame);
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', handleDrawerKeyDown);
-    };
-  }, [closeMobileSidebar, isMobileViewport, mobileSidebarOpen]);
-
-  const refreshVisibleData = useCallback(() => {
-    refreshData(getReconcileSlices(currentPage));
-  }, [currentPage, refreshData]);
-
-  const refreshVisibleWorkSummary = useCallback(() => {
-    if (getReconcileSlices(currentPage).includes('workSummary')) refreshData(['workSummary']);
-  }, [currentPage, refreshData]);
-
-  useEffect(() => {
-    if (!authReady) return undefined;
-    refreshVisibleData();
-    // SSE 是主通道；低频 reconcile 只兜底补偿断线期间错过的事件。
-    if (getReconcileSlices(currentPage).length === 0) return undefined;
-
-    const interval = setInterval(refreshVisibleData, RECONCILE_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [authReady, currentPage, refreshVisibleData]);
 
   useEffect(() => {
     if (!authReady || loading || !backendOnline || firstRunOnboarding !== 'pending') return;
@@ -446,32 +116,6 @@ export default function App() {
     if (!authReady) return;
     refreshLanguage().catch(() => {});
   }, [authReady, refreshLanguage]);
-
-
-
-  // 订阅 SSE 实时变更，触发数据刷新
-  useEffect(() => {
-    if (!authReady) return undefined;
-    const monitor = createBackendConnectionMonitor({
-      onStateChange: setBackendConnectionState,
-      probe: signal => systemApi.getCoreHealth({ signal }),
-    });
-    const unsubscribe = eventsApi.subscribeToEvents(
-      (event) => {
-        if (WORK_SUMMARY_RECONCILE_EVENT_TYPES.has(event.type)) {
-          refreshVisibleWorkSummary();
-        } else if (PROJECT_RECONCILE_EVENT_TYPES.has(event.type)) {
-          refreshData(['projects']);
-        }
-      },
-      () => monitor.onError(),
-      () => monitor.onOpen()
-    );
-    return () => {
-      monitor.stop();
-      unsubscribe();
-    };
-  }, [authReady, refreshData, refreshVisibleWorkSummary, setBackendConnectionState]);
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
@@ -492,7 +136,6 @@ export default function App() {
   const assistantModule = assistantModuleForPage(currentPage);
   const mobileNavPage = productNavPageForRoute(currentPage);
   const mobilePageTitle = t(MOBILE_PAGE_TITLE_KEYS[mobileNavPage] || 'nav.commandCenter');
-
 
   if (!authReady) {
     return (

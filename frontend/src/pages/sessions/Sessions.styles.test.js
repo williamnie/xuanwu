@@ -1,11 +1,12 @@
+import { readStylesheet } from '../../../test-support/readStylesheet.js';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import test from 'node:test';
 
 const files = ['SessionsClient', 'Sessions', 'ApprovalDialog', 'SessionCommandPanel', 'SessionComposer'];
-const styles = Object.fromEntries(files.map(name => [name, readFileSync(new URL(`./${name}.css`, import.meta.url), 'utf8')]));
+const styles = Object.fromEntries(files.map(name => [name, readStylesheet(new URL(`./${name}.css`, import.meta.url), 'utf8')]));
 const sourceRoot = new URL('../../', import.meta.url);
-const runtimeStyles = readFileSync(new URL('../../index.css', import.meta.url), 'utf8');
+const runtimeStyles = readStylesheet(new URL('../../index.css', import.meta.url));
 const canonicalTokens = readFileSync(new URL('../../../../docs/design-system/tokens.css', import.meta.url), 'utf8');
 const spec = readFileSync(new URL('../../../../docs/design-system/spec.md', import.meta.url), 'utf8');
 const uncomment = css => css.replace(/\/\*[\s\S]*?\*\//g, '');

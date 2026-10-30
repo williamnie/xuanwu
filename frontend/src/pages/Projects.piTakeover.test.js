@@ -2,8 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const pageSource = readFileSync(new URL('./Projects.jsx', import.meta.url), 'utf8');
-const editorSource = readFileSync(new URL('./ProjectSettingsEditor.jsx', import.meta.url), 'utf8');
+const pageSource = [
+  './Projects.jsx',
+  './projects/ProjectCard.jsx',
+  './projects/useProjectsActions.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
+const editorSource = [
+  './ProjectSettingsEditor.jsx',
+  './projects/useProjectSettingsEditor.js',
+  './projects/ProjectRuntimeFields.jsx',
+  './projects/projectSettingsForm.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
 const apiSource = readFileSync(new URL('../api/projects.js', import.meta.url), 'utf8');
 
 test('Projects treats PI takeover as the default project contract without an opt-out', () => {

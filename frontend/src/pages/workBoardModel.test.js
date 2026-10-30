@@ -98,7 +98,10 @@ test('large Work lists preserve deterministic combined filtering', () => {
 });
 
 test('Work stays primary while Issues route redirects and compatibility APIs keep the domain client', () => {
-  const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+  const app = [
+  '../App.jsx',
+  '../useAppNavigation.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
   const sidebar = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
   const navigation = readFileSync(new URL('./assistantModules.js', import.meta.url), 'utf8');
   const client = readFileSync(new URL('../api/work.js', import.meta.url), 'utf8');

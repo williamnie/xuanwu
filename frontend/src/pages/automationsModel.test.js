@@ -1,3 +1,4 @@
+import { readAppSource } from '../../test-support/readAppSource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -38,7 +39,7 @@ test('filters list by user-visible identity', () => {
 
 test('top-level Automations page exposes editor, history, run-now, filters, realtime refresh, and states', () => {
   const page = readFileSync(new URL('./Automations.jsx', import.meta.url), 'utf8');
-  const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+  const app = readAppSource();
   for (const token of ['AutomationEditor', 'History', 'runNow', 'AutomationFilters', 'subscribeToEvents', 'AutomationState']) assert.match(page, new RegExp(token));
   assert.match(page, /createPortal\([\s\S]*document\.body/);
   assert.match(page, /useI18n\(\)/);

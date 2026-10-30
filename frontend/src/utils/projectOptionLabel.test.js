@@ -20,14 +20,16 @@ test('项目选项保留本机名称，远程名称包含节点名，未知节�
 
 test('所有项目选项共用标签函数和节点缓存，包括自动化的两处选择器', () => {
   const expected = new Map([
-    ['work/WorkEditorDialog.jsx', 1], ['WorkBoard.jsx', 1],
+    ['work/WorkEditorDialog.jsx', 1], ['work/WorkBoardHeader.jsx', 1],
     ['command-center/FirstDeliveryGuide.jsx', 1], ['command-center/DeliveryEffectivenessSection.jsx', 1],
     ['ExecutionPresetsPanel.jsx', 1], ['Handoffs.jsx', 1], ['GitHubSettingsPanel.jsx', 1],
     ['SkillLibraryPanel.jsx', 1], ['Automations.jsx', 2], ['TelegramProjectMappings.jsx', 1],
     ['sessions/NewSessionWorkspace.jsx', 1],
   ]);
   for (const [file, count] of expected) {
-    const source = readFileSync(new URL(`../pages/${file}`, import.meta.url), 'utf8');
+    const source = readFileSync(new URL(`../pages/${file}`, import.meta.url), 'utf8')
+      + (file === 'command-center/FirstDeliveryGuide.jsx'
+        ? readFileSync(new URL('../pages/command-center/useFirstDeliveryGuideState.js', import.meta.url), 'utf8') : '');
     const options = [...source.matchAll(/<option\b[^>]*value=\{project.id\}[^>]*>([\s\S]*?)<\/option>/g)];
     assert.equal(options.length, count, file);
     for (const option of options) assert.match(option[1], /projectOptionLabel\(project, nodesById,/, file);

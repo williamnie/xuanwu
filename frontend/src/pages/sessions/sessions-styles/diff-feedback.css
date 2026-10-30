@@ -1,0 +1,162 @@
+/* Git Diff Cards 文件夹与代码补丁样式 */
+.diff-file-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  width: 100%;
+  max-width: 800px;
+}
+
+.diff-file-header {
+  display: flex;
+  align-items: center;
+  padding: var(--space-2-5) var(--space-3-5);
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.diff-file-icon {
+  margin-right: var(--space-2);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+}
+
+.diff-file-path {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-file-badges {
+  display: flex;
+  gap: var(--space-1-5);
+}
+
+.diff-badge {
+  padding: var(--space-0-5) var(--space-1-5);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+}
+
+.diff-badge.added {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.diff-badge.removed {
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+.diff-file-body {
+  max-height: 250px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  color: var(--text-secondary);
+  line-height: 1.45;
+  background: var(--bg-card);
+}
+
+.diff-line {
+  padding: var(--space-1) var(--space-3);
+  white-space: pre-wrap;
+  word-break: break-all;
+  border-left: 3px solid transparent;
+}
+
+.diff-line.added {
+  background: var(--success-bg);
+  color: var(--success);
+  border-left-color: var(--success);
+}
+
+.diff-line.removed {
+  background: var(--error-bg);
+  color: var(--error);
+  border-left-color: var(--error);
+}
+
+.diff-line.meta {
+  background: var(--primary-glow);
+  color: var(--primary);
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+/* Animations */
+.spin-animation {
+  animation: spin 1s linear infinite;
+}
+
+.session-item-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  animation: spin 1s linear infinite;
+  color: var(--info);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.generic-tool-card {
+  width: 100%;
+  max-width: 800px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.generic-tool-title {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  font-size: var(--text-md);
+  font-weight: 650;
+}
+
+.generic-tool-body {
+  margin: 0;
+  padding: var(--space-3);
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  line-height: 1.5;
+}
+
+.session-detail-error {
+  margin: var(--space-2-5) var(--space-3) 0;
+  padding: var(--space-2-5) var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--error) 35%, var(--border-color));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--error) 8%, var(--bg-card));
+  color: var(--error);
+  font-size: var(--text-md);
+  line-height: 1.45;
+}
+
+.session-detail-error-empty {
+  margin: var(--space-6);
+}

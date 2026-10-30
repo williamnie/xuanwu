@@ -1,17 +1,27 @@
+import { readAppSource } from '../../../test-support/readAppSource.js';
+
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { translate } from '../../i18n/translations.js';
 
-const guideSource = readFileSync(new URL('./FirstDeliveryGuide.jsx', import.meta.url), 'utf8');
+const guideSource = [
+  './FirstDeliveryGuide.jsx',
+  './useFirstDeliveryGuideState.js',
+  './useFirstDeliveryActions.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
 const connectorSource = readFileSync(new URL('./OnboardingSupervisorConnection.jsx', import.meta.url), 'utf8');
 const onboardingPageSource = readFileSync(new URL('../OnboardingPage.jsx', import.meta.url), 'utf8');
 const onboardingPageStyles = readFileSync(new URL('../OnboardingPage.css', import.meta.url), 'utf8');
 const dashboardSource = readFileSync(new URL('../Dashboard.jsx', import.meta.url), 'utf8');
-const appSource = readFileSync(new URL('../../App.jsx', import.meta.url), 'utf8');
+const appSource = readAppSource();
 const projectsApiSource = readFileSync(new URL('../../api/projects.js', import.meta.url), 'utf8');
 const firstDeliveryApiSource = readFileSync(new URL('../../api/firstDelivery.js', import.meta.url), 'utf8');
-const supervisorStateSource = readFileSync(new URL('../piAgentSettingsState.js', import.meta.url), 'utf8');
+const supervisorStateSource = [
+  '../piAgentSettingsState.js',
+  '../piAgentConnectionActions.js',
+  '../piAgentSettingsPersistence.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
 
 test('first delivery owns a standalone first-run page and starts the selected project loop', () => {
   assert.match(onboardingPageSource, /<FirstDeliveryGuide/);

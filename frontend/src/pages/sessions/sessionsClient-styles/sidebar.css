@@ -1,0 +1,199 @@
+/* Codex Sessions 桌面客户端高仿真专属样式表 */
+
+/* 全屏通顶客户端容器 */
+.sessions-client-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  overflow: hidden;
+}
+
+/* App sidebar portal */
+.sessions-app-sidebar-slot {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  margin: var(--space-5) calc(var(--space-1) * -1) 0;
+}
+
+.sessions-app-sidebar-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  user-select: none;
+}
+
+.sessions-app-sidebar-panel .sidebar-shortcut-items {
+  margin-bottom: var(--space-4);
+}
+
+.sessions-app-sidebar-panel .sidebar-section-title {
+  margin: var(--space-3) 0 var(--space-1-5) var(--space-2);
+}
+
+.sessions-app-sidebar-panel .sidebar-scroll-area {
+  margin-right: calc(var(--space-1-5) * -1);
+  padding-right: var(--space-1);
+}
+
+.sessions-app-sidebar-panel .session-list-viewport {
+  padding: var(--space-2) var(--space-1) var(--space-2) 0;
+}
+
+.sessions-app-sidebar-panel .project-session-groups {
+  gap: var(--space-1-5);
+}
+
+.sessions-app-sidebar-panel .project-group-header {
+  padding-left: var(--space-1-5);
+  padding-right: var(--space-1-5);
+}
+
+.sessions-app-sidebar-panel .project-group-sessions {
+  padding-left: var(--space-5);
+}
+
+/* 顶部快捷菜单项 */
+.sidebar-shortcut-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  margin-bottom: var(--space-5);
+}
+
+.sidebar-shortcut-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2-5);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.sidebar-shortcut-item:hover {
+  background-color: var(--nav-hover);
+  color: var(--text-primary);
+}
+
+.sidebar-shortcut-item.active {
+  background-color: var(--nav-active);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.sidebar-shortcut-item-icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+}
+
+.sidebar-shortcut-item.active .sidebar-shortcut-item-icon {
+  color: var(--primary);
+}
+
+/* 侧边栏标题栏 */
+.sidebar-section-title {
+  color: var(--text-muted);
+  margin: var(--space-3) 0 var(--space-1-5) var(--space-2);
+  user-select: none;
+  font-size: var(--text-2xs);
+  font-weight: 800;
+}
+
+/* 会话与项目滚动列表区 */
+.sidebar-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  margin-right: calc(var(--space-2-5) * -1);
+  padding-right: var(--space-1-5);
+}
+
+.sidebar-scroll-area::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar-scroll-area::-webkit-scrollbar-thumb {
+  background-color: var(--border-color);
+  border-radius: var(--radius-xs);
+}
+
+/* 置顶列表项 */
+.pinned-sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  margin-bottom: var(--space-3);
+}
+
+.pinned-session-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-2) var(--space-2-5);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-md);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+  gap: var(--space-2);
+}
+
+.pinned-session-row:hover {
+  background-color: var(--nav-hover);
+  border-color: var(--border-color);
+}
+
+.pinned-session-row.active {
+  background-color: var(--nav-active);
+  border-color: var(--border-color);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pinned-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pinned-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  color: var(--text-muted);
+}
+
+.pinned-action-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-1);
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.pinned-action-btn:hover {
+  color: var(--text-secondary);
+  background-color: var(--nav-hover);
+}
+

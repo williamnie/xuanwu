@@ -1,8 +1,10 @@
+import { readAppSource } from '../../test-support/readAppSource.js';
+
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+const app = readAppSource();
 const dialog = readFileSync(new URL('./ReleaseUpdateDialog.jsx', import.meta.url), 'utf8');
 const styles = readFileSync(new URL('./ReleaseUpdateDialog.css', import.meta.url), 'utf8');
 

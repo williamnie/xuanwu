@@ -1,3 +1,4 @@
+import { readStylesheet } from '../../test-support/readStylesheet.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -6,7 +7,7 @@ const authGate = readFileSync(new URL('../components/AuthGate.jsx', import.meta.
 const panel = readFileSync(new URL('./RemoteAccessTokenPanel.jsx', import.meta.url), 'utf8');
 const sections = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
 const systemApi = readFileSync(new URL('../api/system.js', import.meta.url), 'utf8');
-const appStyles = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
+const appStyles = readStylesheet(new URL('../index.css', import.meta.url));
 
 test('first browser connection explains macOS and Linux token locations', () => {
   assert.match(authGate, /首次连接/);

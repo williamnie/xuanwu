@@ -51,7 +51,13 @@ test('reuse UI exposes status and switching without rendering independent login/
 });
 
 test('runtime form writes source only when saved, and guards delayed discovery/test results after a source switch', () => {
-  const source = readFileSync(new URL('./piAgentSettingsState.js', import.meta.url), 'utf8');
+  const source = [
+  './piAgentSettingsState.js',
+  './piAgentSettingsForm.js',
+  './piAgentConnectionActions.js',
+  './piAgentOAuthActions.js',
+  './piAgentSettingsPersistence.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
   const selection = source.slice(source.indexOf('const selectCodexLogin'), source.indexOf('const discoverModels'));
   assert.match(selection, /invalidateConnectionTest/);
   assert.match(selection, /setForm/);

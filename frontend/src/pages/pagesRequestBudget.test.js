@@ -1,15 +1,23 @@
+import { readSessionPageSource } from './sessions/sessionTestSources.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const sessionsSource = readFileSync(new URL('./Sessions.jsx', import.meta.url), 'utf8');
+const sessionsSource = readSessionPageSource();
 const dashboardSource = readFileSync(new URL('./Dashboard.jsx', import.meta.url), 'utf8');
-const projectsSource = readFileSync(new URL('./Projects.jsx', import.meta.url), 'utf8');
+const projectsSource = [
+  './Projects.jsx',
+  './projects/useProjectsActions.js',
+].map((file) => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n');
 const runsSource = readFileSync(new URL('./Runs.jsx', import.meta.url), 'utf8');
 const activeWorkSource = readFileSync(new URL('./command-center/ActiveWorkSection.jsx', import.meta.url), 'utf8');
 const attentionSource = readFileSync(new URL('./command-center/AttentionSection.jsx', import.meta.url), 'utf8');
 const recentDeliveriesSource = readFileSync(new URL('./command-center/RecentDeliveriesSection.jsx', import.meta.url), 'utf8');
-const firstDeliverySource = readFileSync(new URL('./command-center/FirstDeliveryGuide.jsx', import.meta.url), 'utf8');
+const firstDeliverySource = [
+  './command-center/FirstDeliveryGuide.jsx',
+  './command-center/useFirstDeliveryGuideState.js',
+  './command-center/useFirstDeliveryActions.js',
+].map((file) => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n');
 const usageSource = readFileSync(new URL('../components/CodexUsagePanel.jsx', import.meta.url), 'utf8');
 
 test('sessions page initial store refresh does not fetch global issue list or capabilities', () => {

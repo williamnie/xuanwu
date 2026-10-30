@@ -1,8 +1,9 @@
+import { readAppSource } from '../test-support/readAppSource.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import test from 'node:test';
 
-const appSource = readFileSync(new URL('./App.jsx', import.meta.url), 'utf8');
+const appSource = readAppSource();
 
 test('Automations page only reconciles project labels because it owns Automation API loading', () => {
   assert.match(appSource, /automations:\s*\['projects'\]/);

@@ -1,13 +1,14 @@
+import { readSessionPageSource } from '../sessions/sessionTestSources.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const detailSource = readFileSync(new URL('./RunDetail.jsx', import.meta.url), 'utf8');
+const detailSource = ['RunDetail.jsx', 'RunSummary.jsx', 'RunEventPanels.jsx', 'RunDetailPrimitives.jsx', 'useRunEvents.js', 'runDetailFormat.js'].map(file => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n');
 const apiSource = readFileSync(new URL('../../api/runs.js', import.meta.url), 'utf8');
 const modelSource = readFileSync(new URL('./runDetailModel.js', import.meta.url), 'utf8');
 
 const runsPageSource = readFileSync(new URL('../Runs.jsx', import.meta.url), 'utf8');
-const sessionsSource = readFileSync(new URL('../Sessions.jsx', import.meta.url), 'utf8');
+const sessionsSource = readSessionPageSource();
 const chatSource = readFileSync(new URL('../sessions/SessionChatWorkspace.jsx', import.meta.url), 'utf8');
 const infoSource = readFileSync(new URL('../sessions/SessionInfoPanel.jsx', import.meta.url), 'utf8');
 

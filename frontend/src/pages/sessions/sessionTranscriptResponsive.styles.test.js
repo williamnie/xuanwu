@@ -1,9 +1,11 @@
-import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { readStylesheet } from '../../../test-support/readStylesheet.js';
+import assert from 'node:assert/strict';
+
 import test from 'node:test';
 
-const sessionsCss = readFileSync(new URL('./Sessions.css', import.meta.url), 'utf8');
-const clientCss = readFileSync(new URL('./SessionsClient.css', import.meta.url), 'utf8');
+const sessionsCss = readStylesheet(new URL('./Sessions.css', import.meta.url));
+const clientCss = readStylesheet(new URL('./SessionsClient.css', import.meta.url));
 const transcriptCss = readFileSync(new URL('./SessionTranscript.css', import.meta.url), 'utf8');
 
 function ruleFor(css, selector) {

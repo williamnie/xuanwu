@@ -1,12 +1,13 @@
+import { readStylesheet } from '../../test-support/readStylesheet.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const component = readFileSync(new URL('./ModalOverlay.jsx', import.meta.url), 'utf8');
-const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
+const css = readStylesheet(new URL('../index.css', import.meta.url));
 const consumers = [
   '../pages/Projects.jsx',
-  '../pages/WorkBoard.jsx',
+  '../pages/work/WorkEvidenceDialog.jsx',
   '../pages/work/HumanReview.jsx',
   '../pages/work/WorkEditorDialog.jsx',
 ].map(path => readFileSync(new URL(path, import.meta.url), 'utf8'));

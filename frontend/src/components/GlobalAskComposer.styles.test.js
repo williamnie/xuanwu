@@ -1,3 +1,5 @@
+import { readAppSource } from '../../test-support/readAppSource.js';
+
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -38,12 +40,11 @@ test('global composer starts as a compact launcher and expands as an overlay whi
 test('page and portal dialog composers hide the global overlay without matching its own editor', () => {
   assert.match(css, /\.main-content:has\(\.prompt-editor-shell\.composer\) ~ \.global-ask-composer-shell,\s*body:has\(> \.modal-overlay \.prompt-editor-shell\.composer\) \.global-ask-composer-shell\s*\{\s*display:\s*none;/);
   assert.doesNotMatch(css, /(?:body|\.app-container):has\(\.prompt-editor-shell\.composer\)/);
-  const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+  const app = readAppSource();
   assert.match(app, /<main className="main-content"[\s\S]*?<\/main>[\s\S]*?<GlobalAskComposer/);
   const editor = readFileSync(new URL('./editor/PromptEditor.jsx', import.meta.url), 'utf8');
   assert.match(editor, /prompt-editor-shell \$\{isComposer \? 'composer' : ''\}/);
 });
-
 
 test('main flex viewport reserves launcher height, bottom offset and clearance for nested scrollers', () => {
   const selector = '.main-content:not(:has(.prompt-editor-shell.composer)):has(~ .global-ask-composer-shell)';

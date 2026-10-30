@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readStylesheet } from '../../../test-support/readStylesheet.js';
 import test from 'node:test';
 
-const read = name => readFileSync(new URL(name, import.meta.url), 'utf8');
+const read = name => readStylesheet(new URL(name, import.meta.url), 'utf8');
 const taskListCss = read('./TaskList.css');
 const workBoardCss = read('../WorkBoard.css');
 const geekPagesCss = read('../../GeekWorkbenchPages.css');

@@ -1,5 +1,6 @@
+import { readAppSource } from '../test-support/readAppSource.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import test from 'node:test';
 import { canonicalAppHash, watchCanonicalAppHash } from './appRouteCanonicalization.js';
 import { appHashForRoute, appRouteFromHash } from './appRouteModel.js';
@@ -55,7 +56,7 @@ test('normalization replaces the current history entry on load, back/forward and
   assert.equal(browser.location.hash, '#/tasks?source=manual');
   stop();
   assert.equal(listeners.size, 0);
-  const app = readFileSync(new URL('./App.jsx', import.meta.url), 'utf8');
+  const app = readAppSource();
   assert.match(app, /useLayoutEffect\(\(\) => watchCanonicalAppHash\(\), \[\]\)/);
 });
 

@@ -1,9 +1,18 @@
+import { readStylesheet } from '../../test-support/readStylesheet.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const board = readFileSync(new URL('./WorkBoard.jsx', import.meta.url), 'utf8');
-const css = readFileSync(new URL('./WorkBoard.css', import.meta.url), 'utf8');
+const board = [
+  './WorkBoard.jsx',
+  './work/WorkKanban.jsx',
+  './work/WorkColumn.jsx',
+  './work/WorkBoardHeader.jsx',
+  './work/WorkEvidenceDialog.jsx',
+  './work/useWorkKanbanData.js',
+  './work/workKanbanModel.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
+const css = readStylesheet(new URL('./WorkBoard.css', import.meta.url));
 const composerCss = readFileSync(new URL('../components/GlobalAskComposer.css', import.meta.url), 'utf8');
 const editorDialog = readFileSync(new URL('./work/WorkEditorDialog.jsx', import.meta.url), 'utf8');
 const actions = readFileSync(new URL('./work/workActions.js', import.meta.url), 'utf8');
@@ -91,9 +100,11 @@ test('Task page keeps search in the header, defaults to the list and keeps the b
   assert.doesNotMatch(composerCss, /\.main-content\.has-global-ask-composer\s*\{/);
 });
 
-
 test('task project selection uses the URL-owned filter for both views and existing list requests', () => {
-  const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+  const app = [
+  '../App.jsx',
+  '../useAppNavigation.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
   const list = readFileSync(new URL('./work/TaskList.jsx', import.meta.url), 'utf8');
   assert.match(app, /<WorkBoard\s+filterProject=\{filterProject\}\s+onProjectChange=\{setFilterProject\}/);
   assert.match(board, /filterProject: projectId = ''/);
@@ -105,7 +116,10 @@ test('task project selection uses the URL-owned filter for both views and existi
 });
 
 test('task source resets list and board pagination, carries through history lanes, and avoids unfiltered counts', () => {
-  const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+  const app = [
+  '../App.jsx',
+  '../useAppNavigation.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
   const list = readFileSync(new URL('./work/TaskList.jsx', import.meta.url), 'utf8');
   assert.match(app, /draft\.taskSource = route\.taskSource/);
   assert.match(app, /onSourceChange=\{setTaskSource\}/);

@@ -55,7 +55,7 @@ test('nonqueued views do not inherit a stale schedule and English renders throug
 test('all four surfaces consume the projection and old readiness is not duplicated on the home card', () => {
   const read = name => readFileSync(new URL(name, import.meta.url), 'utf8');
   assert.match(read('./TaskList.jsx'), /workScheduleSummary\(work, t\)/);
-  assert.match(read('../WorkBoard.jsx'), /<WorkSchedule work={work}/);
+  assert.match(read('./WorkColumn.jsx'), /<WorkSchedule work={work}/);
   assert.match(read('../WorkDetail.jsx'), /work.schedule \? <WorkSchedule all work={work}/);
   assert.match(read('../command-center/ActiveWorkSection.jsx'), /!item.schedule && item.readiness/);
   assert.match(read('../command-center/ActiveWorkSection.jsx'), /<WorkSchedule work={item}/);

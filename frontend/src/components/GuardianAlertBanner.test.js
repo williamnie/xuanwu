@@ -1,3 +1,5 @@
+import { readAppSource } from '../../test-support/readAppSource.js';
+
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -8,7 +10,7 @@ import {
   guardianSeverityLabel,
 } from './guardianAlertDisplay.js';
 
-const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+const appSource = readAppSource();
 const bannerSource = readFileSync(new URL('./GuardianAlertBanner.jsx', import.meta.url), 'utf8');
 const assistantSource = readFileSync(new URL('../api/assistant.js', import.meta.url), 'utf8');
 const storeSource = readFileSync(new URL('../store/dataStore.js', import.meta.url), 'utf8');

@@ -1,12 +1,22 @@
+import { readStylesheet } from '../../test-support/readStylesheet.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const source = readFileSync(new URL('./Projects.jsx', import.meta.url), 'utf8');
-const editorSource = readFileSync(new URL('./ProjectSettingsEditor.jsx', import.meta.url), 'utf8');
+const source = [
+  './Projects.jsx',
+  './projects/ProjectCard.jsx',
+  './projects/useProjectsActions.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
+const editorSource = [
+  './ProjectSettingsEditor.jsx',
+  './projects/useProjectSettingsEditor.js',
+  './projects/ProjectRuntimeFields.jsx',
+  './projects/projectSettingsForm.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
 const presetsSource = readFileSync(new URL('./ExecutionPresetsPanel.jsx', import.meta.url), 'utf8');
 const managerSource = readFileSync(new URL('./AgentProfileManager.jsx', import.meta.url), 'utf8');
-const css = readFileSync(new URL('./Projects.css', import.meta.url), 'utf8');
+const css = readStylesheet(new URL('./Projects.css', import.meta.url));
 
 function ruleFor(selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

@@ -1,0 +1,28 @@
+@media (max-width: 980px) {
+  .run-summary-layout { grid-template-columns: 1fr; }
+  .run-summary-aside { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .run-attention-card { grid-column: 1 / -1; }
+  .run-summary-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .run-summary-metrics > div:nth-child(even) { border-right: 0; }
+}
+
+@media (max-width: 760px) {
+  .run-cost-breakdown { grid-template-columns: 1fr; }
+  .run-context-bar { grid-template-columns: 1fr; }
+  .run-context-actions { justify-content: flex-start; }
+  .run-control-confirm { align-items: stretch; flex-direction: column; }
+  .run-provider-drilldown > header { align-items: flex-start; flex-direction: column; gap: var(--space-1); }
+  .run-surface-notice { align-items: flex-start; flex-direction: column; gap: var(--space-0-5); }
+  .run-detail-content { padding: var(--space-4) var(--space-3) var(--space-6); }
+  .run-detail-section-tabs,
+  .run-attempt-tabs { padding-left: var(--space-3); padding-right: var(--space-3); }
+  .run-summary-aside { display: flex; }
+  .run-summary-metrics { grid-template-columns: 1fr; }
+  .run-summary-metrics > div { border-bottom: 1px solid var(--border-color); border-right: 0; }
+  .run-summary-metrics > div:last-child { border-bottom: 0; }
+  .run-log-list article { gap: var(--space-1) var(--space-2); grid-template-columns: 64px minmax(0, 1fr); }
+  .run-log-list article p { grid-column: 1 / -1; }
+  .run-advanced-contract { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .run-raw-event-list summary { grid-template-columns: 60px minmax(0, 1fr); }
+  .run-raw-event-list summary time { display: none; }
+}

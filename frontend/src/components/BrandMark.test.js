@@ -1,3 +1,4 @@
+import { readStylesheet } from '../../test-support/readStylesheet.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -6,7 +7,7 @@ const brandSource = readFileSync(new URL('./BrandMark.jsx', import.meta.url), 'u
 const brandConstants = readFileSync(new URL('../brand.js', import.meta.url), 'utf8');
 const sidebarSource = readFileSync(new URL('./AppSidebar.jsx', import.meta.url), 'utf8');
 const authSource = readFileSync(new URL('./AuthGate.jsx', import.meta.url), 'utf8');
-const cssSource = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
+const cssSource = readStylesheet(new URL('../index.css', import.meta.url));
 const indexHtml = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
 
 test('Xuanwu brand constants and logo are available to app chrome', () => {

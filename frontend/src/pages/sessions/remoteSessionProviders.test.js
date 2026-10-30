@@ -1,3 +1,4 @@
+import { readSessionPageSource } from './sessionTestSources.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { remoteSessionProviders } from './remoteSessionProviders.js';
@@ -25,7 +26,7 @@ test('project-scoped requests discard stale responses and both submit paths hono
   const { readFile } = await import('node:fs/promises');
   const hook = await readFile(new URL('./useNewSessionProviders.js', import.meta.url), 'utf8');
   const workspace = await readFile(new URL('./NewSessionWorkspace.jsx', import.meta.url), 'utf8');
-  const page = await readFile(new URL('../Sessions.jsx', import.meta.url), 'utf8');
+  const page = readSessionPageSource();
   assert.match(hook, /getProviders\(\{ projectId, signal: controller.signal \}\)/);
   assert.match(hook, /remoteCatalog\?\.projectId === projectId/);
   assert.match(hook, /alive = false; controller.abort\(\)/);
