@@ -52,6 +52,7 @@ export const MIGRATIONS = words(`
   083_attention_action_recent_index 084_supervisor_natural_instructions 085_runtime_read_indexes
   086_github_issue_cases 087_pi_memory_history 088_pi_memory_reflections 089_runtime_activity_indexes
   090_pi_credential_source 091_hot_path_read_indexes 092_remote_nodes 093_remote_runs
+  094_guardian_inbox_active_index
 `);
 
 export const COLUMNS: Record<string, string[]> = {
@@ -114,7 +115,7 @@ export const INDEXES: Record<string, string[]> = {
   `),
   external_links: words("idx_external_links_external idx_external_links_issue"),
   pi_approval_requests: words("idx_pi_approval_requests_issue ux_pi_approval_requests_provider_session_approval"),
-  pi_guardian_event_inbox: words("ux_pi_guardian_event_source"),
+  pi_guardian_event_inbox: words("ux_pi_guardian_event_source idx_pi_guardian_event_active"),
   pi_guardian_decisions: words("ux_pi_guardian_decisions_key"),
   pi_notification_preferences: words("idx_pi_notification_preferences_scope idx_pi_notification_preferences_effective"),
   pi_recovery_attempts: words(`

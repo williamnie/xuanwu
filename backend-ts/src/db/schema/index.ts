@@ -1,3 +1,4 @@
+import { guardianInboxActiveIndexMigration } from "./094_guardian_inbox_active_index.ts";
 import { remoteRunsMigration } from "./093_remote_runs.ts";
 import { remoteNodesMigration } from "./092_remote_nodes.ts";
 import { hotPathReadIndexesMigration } from "./091_hot_path_read_indexes.ts";
@@ -190,4 +191,5 @@ export const migrations = [
   hotPathReadIndexesMigration,
   remoteNodesMigration,
   remoteRunsMigration,
+  guardianInboxActiveIndexMigration,
 ];

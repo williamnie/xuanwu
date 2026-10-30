@@ -2,7 +2,10 @@ import type { RunnerDatabase } from "../../db/database.ts";
 import {
   getPiGuardianDecision,
   listPiGuardianDecisions,
-  listPiGuardianEvents,
+  listPendingPiGuardianEvents,
+  hasPendingPiGuardianEvents,
+  guardianEventLimit,
+  GUARDIAN_EVENT_CYCLE_LIMIT,
   transitionPiGuardianDecisionState,
   updatePiGuardianEvent,
   upsertPiGuardianDecision,
@@ -33,6 +36,7 @@ import { isoSeconds } from "../../util/values.ts";
 
 type GuardianDecisionOrchestratorOptions = {
   limit?: number;
+  maxEvents?: number;
   now?: Date;
 };
 export type GuardianDecisionOrchestratorSummary = {
@@ -47,22 +51,31 @@ export type GuardianDecisionOrchestratorSummary = {
   merged: number;
   rescheduled: number;
   scanned: number;
+  // 数值标记会进入现有 schedule_phase 的 result 摘要。
+  truncated: 0 | 1;
 };
 
-const DEFAULT_LIMIT = 50;
-
-export function drainGuardianDecisionOrchestrator(
+export async function drainGuardianDecisionOrchestrator(
   db: RunnerDatabase,
   options: GuardianDecisionOrchestratorOptions = {}
-): GuardianDecisionOrchestratorSummary {
-  const limit = Math.max(1, options.limit ?? DEFAULT_LIMIT);
+): Promise<GuardianDecisionOrchestratorSummary> {
+  const limit = guardianEventLimit(options.limit);
+  const maxEvents = guardianEventLimit(options.maxEvents, GUARDIAN_EVENT_CYCLE_LIMIT);
   const now = options.now ?? new Date();
   const total = emptySummary();
-  while (true) {
-    const batch = runGuardianDecisionOrchestratorOnce(db, { ...options, limit, now });
+  while (total.scanned < maxEvents) {
+    const batchLimit = Math.min(limit, maxEvents - total.scanned);
+    const batch = runGuardianDecisionOrchestratorOnce(db, { ...options, limit: batchLimit, now });
     addSummary(total, batch);
-    if (batch.scanned < limit) return total;
+    if (batch.scanned < batchLimit) return total;
+    if (total.scanned >= maxEvents) {
+      total.truncated = hasPendingPiGuardianEvents(db) ? 1 : 0;
+      return total;
+    }
+    // 每批后让出事件循环，剩余事件留待本轮下一批或下一轮处理。
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
+  return total;
 }
 
 export function runGuardianDecisionOrchestratorOnce(
@@ -73,7 +86,7 @@ export function runGuardianDecisionOrchestratorOnce(
   const now = options.now ?? new Date();
   summary.rescheduled += rescheduleDeferredGuardianDecisions(db, now);
   executeReadyDecisionActions(db, now, summary);
-  const events = pendingEvents(db, options.limit ?? DEFAULT_LIMIT);
+  const events = listPendingPiGuardianEvents(db, options.limit);
   for (const event of events) {
     summary.scanned += 1;
     try {
@@ -215,10 +228,6 @@ function actionsJson(existing: PiGuardianDecision | null, next: string): string 
   return existing.actions_json === "" || existing.actions_json === "[]" ? next : existing.actions_json;
 }
 
-function pendingEvents(db: RunnerDatabase, limit: number): PiGuardianEvent[] {
-  return listPiGuardianEvents(db, { status: "pending" }).slice(0, Math.max(1, limit));
-}
-
 function existingPlan(existing: PiGuardianDecision | null, plan: GuardianDecisionPlan): GuardianDecisionPlan {
   if (!existing) return plan;
   const meta = guardianDecisionMergeMeta(existing);
@@ -255,7 +264,8 @@ function emptySummary(): GuardianDecisionOrchestratorSummary {
     lease_skipped: 0,
     merged: 0,
     rescheduled: 0,
-    scanned: 0
+    scanned: 0,
+    truncated: 0
   };
 }
 

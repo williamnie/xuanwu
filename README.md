@@ -297,6 +297,14 @@ Core uses indexed status reads and batch-local event projection dictionaries. Pr
 checks its time budget between rows; MCP and Git subprocess work has bounded concurrency,
 output and deadlines. SQLite statements themselves remain synchronous.
 
+Guardian inbox health checks and FIFO consumption use an active-event partial index, so
+consumed audit history does not add work to these queries. Consumption reads at most 50 events
+per default batch, yields between batches, and processes at most 250 events per cycle. Excess
+events remain pending for the next cycle; `guardianDecisions.truncated=1` indicates a remaining
+backlog at the cycle limit. The existing watchdog interval and stale-event threshold are unchanged.
+See the [Guardian inbox operations notes](docs/runbooks/guardian-inbox.md) for verification and
+historical-data retention boundaries.
+
 Slow SSE consumers are disconnected when their response queue exceeds 1 MiB; clients should
 reconnect and reload the current snapshot. Run log persistence is asynchronous and ordered,
 with a 32 MiB / 1,024-entry queue per Run; a queue or write failure is surfaced during Run

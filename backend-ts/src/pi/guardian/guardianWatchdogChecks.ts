@@ -1,4 +1,5 @@
 import { ROUTABLE_INTENT_SQL } from "./guardianWatchdogMaintenance.ts";
+import { GUARDIAN_INBOX_ACTIVE_INDEX } from "../../db/schema/094_guardian_inbox_active_index.ts";
 import { type PiGuardianWatchdogContext, type PiGuardianWatchdogCheck, PiRuntimeRow, CountRow, DigestGroupRow, type PiGuardianWatchdogComponent } from "./guardianWatchdog.ts";
 import { ok, alert, countAlerts, digestOverdue } from "./guardianWatchdogStatus.ts";
 
@@ -131,8 +132,8 @@ export function schedulerChecks(context: PiGuardianWatchdogContext): PiGuardianW
 export function inboxChecks(context: PiGuardianWatchdogContext): PiGuardianWatchdogCheck[] {
   const rows = context.db.sqlite.query<CountRow, [string]>(`
     select project_id, count(*) as count, min(created_at) as oldest_created_at
-    from pi_guardian_event_inbox
-    where status in ('pending','leased') and created_at<=?
+    from pi_guardian_event_inbox indexed by ${GUARDIAN_INBOX_ACTIVE_INDEX}
+    where (status='pending' or status='leased') and created_at<=?
     group by project_id order by count desc, project_id asc limit ${context.limit}
   `).all(context.cutoffText);
   return countAlerts({
