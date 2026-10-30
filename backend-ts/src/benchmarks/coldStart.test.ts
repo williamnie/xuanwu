@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, dirname, basename } from "node:path";
 
 describe("cold-start memory benchmark", () => {
 
@@ -28,5 +28,9 @@ describe("cold-start memory benchmark", () => {
 });
 
 function source(relativePath: string): string {
-  return readFileSync(join(import.meta.dir, relativePath), "utf8");
+  const path = join(import.meta.dir, relativePath);
+  const stem = basename(path, ".ts");
+  const modules = readdirSync(dirname(path)).filter(file =>
+    file.startsWith(`${stem}.`) && file.endsWith(".ts") && !file.includes(".test."));
+  return modules.map(file => readFileSync(join(dirname(path), file), "utf8")).join("\n");
 }

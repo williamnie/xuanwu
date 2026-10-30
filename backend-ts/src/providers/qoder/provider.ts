@@ -1,63 +1,13 @@
 import type { SessionReadInput } from "../types.ts";
-import type {
-  ExecutorCapability,
-  ExecutorProvider,
-  InterruptInput,
-  ProviderRecoveryInput,
-  ProviderRunInput,
-  ProviderRunResult,
-  ProviderRuntimeStatus,
-  SessionCreateInput,
-  SessionCreateResult,
-  SessionListInput,
-  SessionListResult,
-  SessionMessageInput,
-  SessionMessageResult,
-  SessionRef
-} from "../types.ts";
-import { ProviderInterruptedError } from "../types.ts";
+import type { ExecutorCapability, ExecutorProvider, InterruptInput, ProviderRecoveryInput, ProviderRunInput, ProviderRunResult, ProviderRuntimeStatus, SessionCreateInput, SessionCreateResult, SessionListInput, SessionListResult, SessionMessageInput, SessionMessageResult, SessionRef } from "../types.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
-import { redactSensitiveText } from "../../util/redact.ts";
-import { projectQoderMessage, qoderFailureEvent, qoderInterruptedEvent } from "./events.ts";
-import {
-  createQoderSdkFacade,
-  QoderExecutionError,
-  type QoderQueryResult,
-  type QoderRunOptions,
-  type QoderSdkFacade
-} from "./sdkFacade.ts";
+import { createQoderSdkFacade, type QoderRunOptions, type QoderSdkFacade } from "./sdkFacade.ts";
 import { QoderPermissionBroker } from "./permissionBroker.ts";
-import { probeQoderRuntime, type QoderRuntimeProbe } from "./runtime.ts";
-import {
-  assertQoderSessionHistoryIdentity,
-  defaultQoderSessionFunctions,
-  publicQoderSessionDetail,
-  publicQoderSessionSummary,
-  readQoderSessionHistory,
-  type QoderSessionFunctions
-} from "./sessionHistory.ts";
+import { probeQoderRuntime } from "./runtime.ts";
+import { assertQoderSessionHistoryIdentity, defaultQoderSessionFunctions, publicQoderSessionDetail, publicQoderSessionSummary, readQoderSessionHistory, type QoderSessionFunctions } from "./sessionHistory.ts";
 import { cleanString } from "../../util/values.ts";
-
-const SYSTEM_PROMPT = "You are executing a Xuanwu-managed Issue. Follow the Issue prompt and report only verified outcomes.";
-
-export type QoderExecutorProviderOptions = {
-  approvalTimeoutMs?: number;
-  facade?: QoderSdkFacade;
-  invocationIdFactory?: () => string;
-  readiness?: QoderRuntimeProbe;
-  sessionIdFactory?: () => string;
-  sessionFunctions?: Partial<QoderSessionFunctions>;
-};
-
-type ActiveInvocation = {
-  aliases: Set<string>;
-  invocationRef: string;
-  interrupted: boolean;
-  messageRef: string;
-  sessionObserved: boolean;
-  sessionRef: string;
-  terminalProjected: boolean;
-};
+import { executeQoderInvocation } from "./providerInvocation.ts";
+import { type ActiveInvocation, type QoderExecutorProviderOptions, required, requiredSession, numericCursor, normalizeLimit, qoderModelView, QODER_STATIC_MODEL_SUGGESTIONS, redactModelError } from "./providerModel.ts";
 
 export class QoderExecutorProvider implements ExecutorProvider {
   readonly id = "qoder" as const;
@@ -230,104 +180,12 @@ export class QoderExecutorProvider implements ExecutorProvider {
     this.active.clear();
   }
 
-  private async execute(
-    input: ProviderRunInput,
-    sessionOptions: Pick<QoderRunOptions, "resume" | "sessionId">,
-    resumeAlias = ""
-  ): Promise<ProviderRunResult> {
-    const invocationRef = cleanString(this.options.invocationIdFactory?.()) || `qoder-inv-${crypto.randomUUID()}`;
-    const active: ActiveInvocation = {
-      aliases: new Set(),
-      interrupted: false,
-      invocationRef,
-      messageRef: "",
-      sessionObserved: false,
-      sessionRef: cleanString(resumeAlias) || cleanString(sessionOptions.sessionId),
-      terminalProjected: false
-    };
-    this.track(active, invocationRef);
-    if (active.sessionRef) this.track(active, active.sessionRef);
-    const options: QoderRunOptions = {
-      ...sessionOptions,
-      approvalPolicy: input.approvalPolicy,
-      canUseTool: this.permissionBroker.callback({
-        approvalPolicy: input.approvalPolicy,
-        cwd: input.cwd,
-        invocationRef,
-        onEvent: input.onEvent,
-        policy: input.policy,
-        sandbox: input.sandbox,
-        session: () => active.sessionRef
-          ? { provider: "qoder", sessionId: active.sessionRef, ...(active.messageRef ? { turnId: active.messageRef } : {}) }
-          : undefined
-      }),
-      cwd: input.cwd,
-      invocationKey: invocationRef,
-      model: input.model,
-      policy: input.policy,
-      reasoningEffort: input.reasoningEffort,
-      sandbox: input.sandbox,
-      systemPrompt: SYSTEM_PROMPT
-    };
-    try {
-      const outcome = await this.facade.run(input.prompt, options, (message, context) => {
-        const event = projectQoderMessage(message, {
-          interrupted: context.interrupted || active.interrupted,
-          invocationRef,
-          resume: cleanString(sessionOptions.resume) !== "",
-          usage: context.usage
-        });
-        const sessionRef = cleanString(event.session?.sessionId);
-        if (sessionRef) {
-          active.sessionObserved = true;
-          if (active.sessionRef && active.sessionRef !== sessionRef) {
-            throw new Error(`Qoder invocation ${invocationRef} returned mismatched session ${sessionRef}`);
-          }
-          active.sessionRef = sessionRef;
-          this.track(active, sessionRef);
-        }
-        const messageRef = cleanString(event.session?.turnId);
-        if (messageRef) {
-          active.messageRef = messageRef;
-          this.track(active, messageRef);
-        }
-        if (event.runEvent?.terminal) active.terminalProjected = true;
-        input.onEvent?.(event);
-      });
-      if (outcome.terminal === "interrupted" || outcome.terminal === "cancelled") {
-        if (!active.terminalProjected) {
-          input.onEvent?.(qoderInterruptedEvent(invocationRef, outcome.sessionId || active.sessionRef, outcome.messageRef));
-        }
-        throw new ProviderInterruptedError("Qoder query interrupted");
-      }
-      return qoderRunResult(outcome);
-    } catch (error) {
-      if (error instanceof ProviderInterruptedError) throw error;
-      if (error instanceof QoderExecutionError && error.details.code === "interrupted") {
-        input.onEvent?.(qoderInterruptedEvent(invocationRef, active.sessionRef, active.messageRef));
-        throw new ProviderInterruptedError(error.message);
-      }
-      if (error instanceof QoderExecutionError) {
-        // result error 已由 message adapter 投影；SDK/process/no-result failure 需在此补 terminal。
-        if (!active.terminalProjected) {
-          input.onEvent?.(qoderFailureEvent({
-            ...error.details,
-            sessionId: active.sessionObserved ? error.details.sessionId : ""
-          }, invocationRef));
-        }
-        throw error;
-      }
-      const wrapped = new QoderExecutionError({
-        category: "sdk",
-        message: error instanceof Error ? error.message : String(error),
-        retryable: false,
-        sessionId: active.sessionObserved ? active.sessionRef : ""
-      });
-      input.onEvent?.(qoderFailureEvent(wrapped.details, invocationRef));
-      throw wrapped;
-    } finally {
-      this.untrack(active);
-    }
+  private execute(input: ProviderRunInput, sessionOptions: Pick<QoderRunOptions, "resume" | "sessionId">, resumeAlias = ""): Promise<ProviderRunResult> {
+    return executeQoderInvocation({
+      options: this.options, facade: this.facade, permissionBroker: this.permissionBroker,
+      track: (active, alias) => this.track(active, alias),
+      untrack: active => this.untrack(active)
+    }, input, sessionOptions, resumeAlias);
   }
 
   private track(active: ActiveInvocation, alias: string): void {
@@ -376,55 +234,5 @@ export class QoderExecutorProvider implements ExecutorProvider {
   }
 }
 
-const QODER_STATIC_MODEL_SUGGESTIONS = ["auto", "ultimate", "performance", "efficient", "lite"] as const;
-
-function qoderModelView(model: import("@qoder-ai/qoder-agent-sdk").ModelInfo): Record<string, unknown> {
-  const id = cleanString(model.value);
-  const efforts = Array.isArray(model.efforts) ? model.efforts.map(cleanString).filter(Boolean) : [];
-  return {
-    displayName: cleanString(model.displayName) || id,
-    id,
-    model: id,
-    isDefault: model.isDefault === true,
-    source: "qoder_account_live",
-    verified: true,
-    supportedReasoningEfforts: efforts.map((reasoningEffort) => ({ reasoningEffort })),
-    ...(cleanString(model.defaultEffort) ? { defaultReasoningEffort: cleanString(model.defaultEffort) } : {}),
-    ...(model.priceFactor === undefined ? {} : { creditsMultiplier: model.priceFactor })
-  };
-}
-
-function redactModelError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return redactSensitiveText(message).slice(0, 240);
-}
-
-function qoderRunResult(outcome: QoderQueryResult): ProviderRunResult {
-  const sessionId = required(outcome.sessionId, "Qoder result session id");
-  const messageRef = required(outcome.messageRef, "Qoder result message ref");
-  return {
-    runId: required(outcome.invocationRef, "Qoder invocation ref"),
-    session: { provider: "qoder", sessionId, turnId: messageRef }
-  };
-}
-
-function requiredSession(result: ProviderRunResult): SessionRef {
-  if (!result.session) throw new Error("Qoder execution completed without a session ref");
-  return result.session;
-}
-
-function required(value: unknown, label: string): string {
-  const text = cleanString(value);
-  if (!text) throw new Error(`${label} is required`);
-  return text;
-}
-
-function numericCursor(value: string | undefined): number {
-  const cursor = Number(value);
-  return Number.isSafeInteger(cursor) && cursor >= 0 ? cursor : 0;
-}
-
-function normalizeLimit(value: number | undefined): number {
-  if (!Number.isSafeInteger(value) || (value ?? 0) <= 0) return 50;
-  return Math.min(value!, 100);
-}
+export { type QoderInvocationHost, executeQoderInvocation } from "./providerInvocation.ts";
+export { type QoderExecutorProviderOptions } from "./providerModel.ts";

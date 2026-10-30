@@ -4,71 +4,31 @@ import {
   cleanString,
   deleteByID,
   getByID,
-  integerInput,
-  integerValue,
-  jsonText,
   listRows,
   now,
-  optionalString,
-  requiredString,
   requireCreateFields,
-  updateByID,
-  type PatchInput
+  updateByID
 } from "./common.ts";
-import { redactAuditJsonText, redactAuditText } from "./auditRedaction.ts";
 import { placeholders } from "../../sql.ts";
-
-export type PiAction = {
-  id: string; project_id: string; issue_id: number; conversation_id: string; action_type: string;
-  status: string; risk_level: string; requires_confirmation: number; payload_json: string;
-  result_json: string; rationale: string; source: string; gate_decision: string; gate_reason: string;
-  requested_changes: string; snoozed_until: string; decided_by: string; approved_by: string;
-  delegation_id: string; guardian_decision_id: string; heartbeat_id: string; idempotency_key: string;
-  lease_key: string; lease_expires_at: string;
-  expected_state_json: string; before_snapshot_json: string; legacy_bypass_reason: string;
-  created_at: string; updated_at: string;
-};
-
-export type PiActionEvent = {
-  id: number; action_id: string; project_id: string; issue_id: number; conversation_id: string;
-  event_type: string; actor: string; decision: string; reason: string; payload_json: string;
-  result_json: string; error: string; delegation_id: string; heartbeat_id: string; created_at: string;
-};
-
-export type PiActionInput = PatchInput<PiAction>;
-type PiActionEventInput = PatchInput<PiActionEvent>;
-export type PendingPiActionNotification = Pick<PiAction,
-  "action_type" | "conversation_id" | "created_at" | "id" | "issue_id" |
-  "payload_json" | "project_id" | "status">;
-export type PiActionFilter = { conversationId?: string; issueId?: number; projectId?: string; status?: string };
-type RecentAttentionPiActionFilter = { limit: number; updatedAfter: string };
-type PiActionEventFilter = {
-  actionId?: string;
-  conversationId?: string;
-  delegationId?: string;
-  eventType?: string;
-  issueId?: number;
-  projectId?: string;
-};
-
-const TABLE = "pi_actions";
-const EVENT_TABLE = "pi_action_events";
-const COLUMNS = `id, project_id, issue_id, conversation_id, action_type, status,
-  risk_level, requires_confirmation, payload_json, result_json, rationale, source,
-  gate_decision, gate_reason, requested_changes, snoozed_until, decided_by, approved_by,
-  delegation_id, heartbeat_id, guardian_decision_id, idempotency_key, lease_key,
-  lease_expires_at, expected_state_json, before_snapshot_json, legacy_bypass_reason,
-  created_at, updated_at`;
-const EVENT_COLUMNS = `id, action_id, project_id, issue_id, conversation_id, event_type, actor,
-  decision, reason, payload_json, result_json, error, delegation_id, heartbeat_id, created_at`;
-const UPDATE_COLUMNS = [
-  "project_id", "issue_id", "conversation_id", "action_type", "status", "risk_level",
-  "requires_confirmation", "payload_json", "result_json", "rationale", "source",
-  "gate_decision", "gate_reason", "requested_changes", "snoozed_until", "decided_by",
-  "approved_by", "delegation_id", "heartbeat_id", "guardian_decision_id",
-  "idempotency_key", "lease_key", "lease_expires_at", "expected_state_json",
-  "before_snapshot_json", "legacy_bypass_reason"
-] as const;
+import {
+  type PiActionInput,
+  type PiAction,
+  normalizeCreate,
+  TABLE,
+  COLUMNS,
+  UPDATE_COLUMNS,
+  normalizePatch,
+  type PiActionFilter,
+  mapPiAction,
+  type PiActionEventInput,
+  type PiActionEvent,
+  normalizeEventCreate,
+  EVENT_TABLE,
+  eventInsertColumns,
+  type PiActionEventFilter,
+  EVENT_COLUMNS,
+  mapPiActionEvent
+} from "./actionsModel.ts";
 
 export function createPiAction(db: RunnerDatabase, input: PiActionInput): PiAction {
   const record = normalizeCreate(input);
@@ -101,144 +61,6 @@ export function listPiActions(db: RunnerDatabase, filter: PiActionFilter = {}): 
     ["issue_id=?", filter.issueId],
     ["status=?", filter.status]
   ], "created_at asc, id asc"));
-}
-
-/** 仅加载活动窗口内的详情，避免单个 Issue 请求反序列化全部历史 payload。 */
-export function listPiActivityActions(db: RunnerDatabase, filter: {
-  actionIds?: string[]; issueIds?: number[]; conversationId?: string; source?: string;
-  since?: string; until?: string; limit?: number;
-}): PiAction[] {
-  const args: Array<string | number> = [];
-  const scope: string[] = [];
-  if (filter.actionIds?.length) {
-    scope.push(`id in (${placeholders(filter.actionIds.length)})`);
-    args.push(...filter.actionIds);
-  }
-  if (filter.issueIds?.length) {
-    scope.push(`issue_id in (${placeholders(filter.issueIds.length)})`);
-    args.push(...filter.issueIds);
-  }
-  if (filter.conversationId) { scope.push("conversation_id=?"); args.push(filter.conversationId); }
-  const where = scope.length ? [`(${scope.join(" or ")})`] : [];
-  if (filter.source) { where.push("source=?"); args.push(filter.source); }
-  if (filter.since && Number.isFinite(Date.parse(filter.since))) { where.push("julianday(updated_at)>=julianday(?)"); args.push(filter.since); }
-  if (filter.until && Number.isFinite(Date.parse(filter.until))) { where.push("julianday(updated_at)<=julianday(?)"); args.push(filter.until); }
-  const limit = Number.isSafeInteger(filter.limit) && Number(filter.limit) > 0 ? Math.min(500, Number(filter.limit)) : 500;
-  return db.sqlite.query<Record<string, unknown>, Array<string | number>>(`
-    select ${COLUMNS} from ${TABLE}
-    ${where.length ? `where ${where.join(" and ")}` : ""}
-    order by updated_at desc, id desc limit ?
-  `).all(...args, limit).map(mapPiAction);
-}
-
-export function latestCompletedEnqueueAction(db: RunnerDatabase, issueID: number): Pick<PiAction, "id" | "source"> | null {
-  return db.sqlite.query<Pick<PiAction, "id" | "source">, [number]>(`
-    select id, source from pi_actions
-    where issue_id=? and action_type='issue.enqueue' and status='completed'
-    order by created_at desc, id desc limit 1
-  `).get(issueID);
-}
-
-/** 一次读取最新的关联审计，避免逐 Action/Issue 扫描并重复加载历史。 */
-export function listPiActivityActionEvents(db: RunnerDatabase, scope: {
-  actionIds?: string[]; issueIds?: number[]; conversationId?: string;
-  since?: string; until?: string;
-}): PiActionEvent[] {
-  const args: Array<string | number> = [];
-  const where: string[] = [];
-  if (scope.actionIds?.length) { where.push(`action_id in (${placeholders(scope.actionIds.length)})`); args.push(...scope.actionIds); }
-  if (scope.issueIds?.length) { where.push(`issue_id in (${placeholders(scope.issueIds.length)})`); args.push(...scope.issueIds); }
-  if (scope.conversationId) { where.push("conversation_id=?"); args.push(scope.conversationId); }
-  if (where.length === 0) return [];
-  const conditions = [`(${where.join(" or ")})`];
-  if (scope.since && Number.isFinite(Date.parse(scope.since))) { conditions.push("julianday(created_at)>=julianday(?)"); args.push(scope.since); }
-  if (scope.until && Number.isFinite(Date.parse(scope.until))) { conditions.push("julianday(created_at)<=julianday(?)"); args.push(scope.until); }
-  return db.sqlite.query<Record<string, unknown>, Array<string | number>>(`
-    select ${EVENT_COLUMNS} from ${EVENT_TABLE} where ${conditions.join(" and ")}
-    order by id desc limit 500
-  `).all(...args).map(mapPiActionEvent);
-}
-
-export function listRecentAttentionPiActions(
-  db: RunnerDatabase,
-  filter: RecentAttentionPiActionFilter
-): PiAction[] {
-  const limit = Math.min(Math.max(Math.trunc(filter.limit), 1), 25);
-  const updatedAfter = requiredString(filter.updatedAfter, "pi_actions.updated_after");
-  return db.sqlite.query<Record<string, unknown>, [string, number]>(`
-    select ${COLUMNS} from ${TABLE} indexed by idx_pi_actions_attention_recent
-    where status in ('candidate', 'pending', 'approved', 'changes_requested', 'snoozed')
-      and updated_at>=?
-    order by updated_at desc, id desc
-    limit ?
-  `).all(updatedAfter, limit).map(mapPiAction);
-}
-
-export function listActiveAttentionPiActions(db: RunnerDatabase): PiAction[] {
-  return db.sqlite.query<Record<string, unknown>, []>(`
-    select ${COLUMNS} from ${TABLE} indexed by idx_pi_actions_attention_recent
-    where status in ('candidate', 'pending', 'approved', 'changes_requested', 'snoozed')
-    order by updated_at desc, id desc
-  `).all().map(mapPiAction);
-}
-
-export function listPendingPiActionNotifications(
-  db: RunnerDatabase,
-  createdAfter: string
-): PendingPiActionNotification[] {
-  return db.sqlite.query<Record<string, unknown>, [string]>(`
-    select id, project_id, issue_id, conversation_id, action_type, status,
-      payload_json, created_at
-    from ${TABLE} indexed by idx_pi_actions_pending_notification
-    where status='pending'
-      and action_type in ('assistant.tool.call', 'mcp.tool.call')
-      and created_at>=?
-    order by created_at asc, id asc
-  `).all(createdAfter).map((row) => ({
-    action_type: requiredString(row.action_type, `${TABLE}.action_type`),
-    conversation_id: optionalString(row.conversation_id),
-    created_at: requiredString(row.created_at, `${TABLE}.created_at`),
-    id: requiredString(row.id, `${TABLE}.id`),
-    issue_id: integerValue(row.issue_id, `${TABLE}.issue_id`),
-    payload_json: jsonText(row.payload_json, "{}"),
-    project_id: optionalString(row.project_id),
-    status: requiredString(row.status, `${TABLE}.status`)
-  }));
-}
-
-/**
- * Returns only Actions whose normalized carrier payload references one Issue.
- *
- * Work detail must not materialize every historical Action (and every large
- * payload/result JSON value) just to project relations for a single Work.
- */
-export function listPiActionsReferencingIssue(db: RunnerDatabase, issueID: number): PiAction[] {
-  const id = positiveIssueID(issueID);
-  const payload = validJson("payload_json");
-  const result = validJson("result_json");
-  const args = Array.from({ length: 7 }, () => id);
-  return db.sqlite.query<Record<string, unknown>, number[]>(`
-    select ${COLUMNS} from ${TABLE}
-    where issue_id=?
-      or cast(json_extract(${payload}, '$.issue_id') as integer)=?
-      or cast(json_extract(${payload}, '$.target_issue_id') as integer)=?
-      or exists (
-        select 1 from json_each(${payload}, '$.issue_ids')
-        where cast(json_each.value as integer)=?
-      )
-      or exists (
-        select 1 from json_each(${payload}, '$.target_issue_ids')
-        where cast(json_each.value as integer)=?
-      )
-      or (
-        action_type in ('issue.create', 'agent.workflow_request')
-        and (
-          cast(json_extract(${result}, '$.id') as integer)=?
-          or cast(json_extract(${result}, '$.issue_id') as integer)=?
-        )
-      )
-    order by created_at asc, id asc
-  `).all(...args).map(mapPiAction);
 }
 
 export function getPiAction(db: RunnerDatabase, id: string): PiAction | null {
@@ -303,103 +125,15 @@ function mustGetPiActionEvent(db: RunnerDatabase, id: number): PiActionEvent {
   return mapPiActionEvent(row);
 }
 
-function normalizeCreate(input: PiActionInput): PiAction {
-  return {
-    id: cleanString(input.id), project_id: cleanString(input.project_id),
-    issue_id: integerInput(input.issue_id), conversation_id: cleanString(input.conversation_id),
-    action_type: cleanString(input.action_type), status: cleanString(input.status),
-    risk_level: cleanString(input.risk_level) || "low",
-    requires_confirmation: integerInput(input.requires_confirmation),
-    payload_json: jsonText(input.payload_json, "{}"), result_json: jsonText(input.result_json, "{}"),
-    rationale: cleanString(input.rationale), source: cleanString(input.source),
-    gate_decision: cleanString(input.gate_decision), gate_reason: cleanString(input.gate_reason),
-    requested_changes: cleanString(input.requested_changes), snoozed_until: cleanString(input.snoozed_until),
-    decided_by: cleanString(input.decided_by), approved_by: cleanString(input.approved_by),
-    delegation_id: cleanString(input.delegation_id), guardian_decision_id: cleanString(input.guardian_decision_id),
-    heartbeat_id: cleanString(input.heartbeat_id), idempotency_key: cleanString(input.idempotency_key),
-    lease_key: cleanString(input.lease_key), lease_expires_at: cleanString(input.lease_expires_at),
-    expected_state_json: jsonText(input.expected_state_json, "{}"),
-    before_snapshot_json: jsonText(input.before_snapshot_json, "{}"),
-    legacy_bypass_reason: cleanString(input.legacy_bypass_reason) ||
-      (cleanString(input.guardian_decision_id) === "" ? "legacy_direct_action" : ""),
-    created_at: "", updated_at: ""
-  };
-}
-
-function normalizePatch(input: PiActionInput): PiActionInput {
-  return {
-    ...input,
-    before_snapshot_json: input.before_snapshot_json === undefined ? undefined : jsonText(input.before_snapshot_json, "{}"),
-    expected_state_json: input.expected_state_json === undefined ? undefined : jsonText(input.expected_state_json, "{}"),
-    payload_json: input.payload_json === undefined ? undefined : jsonText(input.payload_json, "{}"),
-    result_json: input.result_json === undefined ? undefined : jsonText(input.result_json, "{}")
-  };
-}
-
-function normalizeEventCreate(input: PiActionEventInput): PiActionEvent {
-  return {
-    id: 0, action_id: cleanString(input.action_id), project_id: cleanString(input.project_id),
-    issue_id: integerInput(input.issue_id), conversation_id: cleanString(input.conversation_id),
-    event_type: cleanString(input.event_type), actor: cleanString(input.actor),
-    decision: cleanString(input.decision), reason: redactAuditText(cleanString(input.reason)),
-    payload_json: redactAuditJsonText(jsonText(input.payload_json, "{}")),
-    result_json: redactAuditJsonText(jsonText(input.result_json, "{}")),
-    error: redactAuditText(cleanString(input.error)), delegation_id: cleanString(input.delegation_id),
-    heartbeat_id: cleanString(input.heartbeat_id), created_at: ""
-  };
-}
-
-function mapPiAction(row: Record<string, unknown>): PiAction {
-  return {
-    id: requiredString(row.id, "pi_actions.id"), project_id: optionalString(row.project_id),
-    issue_id: integerValue(row.issue_id, "pi_actions.issue_id"),
-    conversation_id: optionalString(row.conversation_id),
-    action_type: requiredString(row.action_type, "pi_actions.action_type"),
-    status: requiredString(row.status, "pi_actions.status"),
-    risk_level: requiredString(row.risk_level, "pi_actions.risk_level"),
-    requires_confirmation: integerValue(row.requires_confirmation, "pi_actions.requires_confirmation"),
-    payload_json: optionalString(row.payload_json), result_json: optionalString(row.result_json),
-    rationale: optionalString(row.rationale), source: optionalString(row.source),
-    gate_decision: optionalString(row.gate_decision), gate_reason: optionalString(row.gate_reason),
-    requested_changes: optionalString(row.requested_changes), snoozed_until: optionalString(row.snoozed_until),
-    decided_by: optionalString(row.decided_by), approved_by: optionalString(row.approved_by),
-    delegation_id: optionalString(row.delegation_id), guardian_decision_id: optionalString(row.guardian_decision_id),
-    heartbeat_id: optionalString(row.heartbeat_id), idempotency_key: optionalString(row.idempotency_key),
-    lease_key: optionalString(row.lease_key), lease_expires_at: optionalString(row.lease_expires_at),
-    expected_state_json: optionalString(row.expected_state_json) || "{}",
-    before_snapshot_json: optionalString(row.before_snapshot_json) || "{}",
-    legacy_bypass_reason: optionalString(row.legacy_bypass_reason),
-    created_at: requiredString(row.created_at, "pi_actions.created_at"),
-    updated_at: requiredString(row.updated_at, "pi_actions.updated_at")
-  };
-}
-
-function mapPiActionEvent(row: Record<string, unknown>): PiActionEvent {
-  return {
-    id: integerValue(row.id, "pi_action_events.id"),
-    action_id: requiredString(row.action_id, "pi_action_events.action_id"),
-    project_id: optionalString(row.project_id), issue_id: integerValue(row.issue_id, "pi_action_events.issue_id"),
-    conversation_id: optionalString(row.conversation_id),
-    event_type: requiredString(row.event_type, "pi_action_events.event_type"),
-    actor: optionalString(row.actor), decision: optionalString(row.decision), reason: redactAuditText(optionalString(row.reason)),
-    payload_json: redactAuditJsonText(optionalString(row.payload_json) || "{}"),
-    result_json: redactAuditJsonText(optionalString(row.result_json) || "{}"),
-    error: redactAuditText(optionalString(row.error)), delegation_id: optionalString(row.delegation_id),
-    heartbeat_id: optionalString(row.heartbeat_id),
-    created_at: requiredString(row.created_at, "pi_action_events.created_at")
-  };
-}
-
-function eventInsertColumns(): string {
-  return `action_id, project_id, issue_id, conversation_id, event_type, actor, decision,
-    reason, payload_json, result_json, error, delegation_id, heartbeat_id, created_at`;
-}
-
-function validJson(column: "payload_json" | "result_json"): string {
-  return `case when json_valid(${column}) then ${column} else '{}' end`;
-}
-
-function positiveIssueID(value: number): number {
-  if (!Number.isSafeInteger(value) || value <= 0) throw new Error("issue id must be a positive integer");
-  return value;
-}
+export type { PiAction } from "./actionsModel.ts";
+export type { PiActionEvent } from "./actionsModel.ts";
+export type { PiActionInput } from "./actionsModel.ts";
+export type { PendingPiActionNotification } from "./actionsModel.ts";
+export type { PiActionFilter } from "./actionsModel.ts";
+export { listPiActivityActions } from "./actionsActivity.ts";
+export { latestCompletedEnqueueAction } from "./actionsActivity.ts";
+export { listPiActivityActionEvents } from "./actionsActivity.ts";
+export { listRecentAttentionPiActions } from "./actionsActivity.ts";
+export { listActiveAttentionPiActions } from "./actionsActivity.ts";
+export { listPendingPiActionNotifications } from "./actionsActivity.ts";
+export { listPiActionsReferencingIssue } from "./actionsActivity.ts";

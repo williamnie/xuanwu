@@ -2,11 +2,17 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
 const issueRuns = read("../../db/repositories/issueRuns.ts");
-const providerRuntime = read("../../runner/providerRuntime.ts");
+const providerRuntime = [
+  "", ".model", ".execution", ".events", ".outcomes", ".policy", ".persistence", ".publication", ".errors"
+].map(suffix => read(`../../runner/providerRuntime${suffix}.ts`)).join("\n");
 const productionMaterializers = [
   "../../db/repositories/issueQueue.ts",
   "../review/humanReview.ts",
-  "../../runner/piAcceptanceApplication.ts",
+  "../review/humanReviewModel.ts",
+  "../review/humanReviewProjection.ts",
+  "../review/humanReviewResume.ts",
+  ...["", ".model", ".apply", ".outcomes", ".continuation", ".prompts", ".retry", ".progress", ".audit"]
+    .map(suffix => `../../runner/piAcceptanceApplication${suffix}.ts`),
   "../../runner/automationWorkRunExecutor.ts"
 ].map(read).join("\n");
 

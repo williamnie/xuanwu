@@ -1,88 +1,11 @@
-import type { CanUseTool, Options as ClaudeSdkOptions, SDKSessionInfo } from "@anthropic-ai/claude-agent-sdk";
+import type { Options as ClaudeSdkOptions } from "@anthropic-ai/claude-agent-sdk";
 import { redactSensitiveText } from "../../util/redact.ts";
 import { cleanString, objectValue } from "../../util/values.ts";
-import {
-  ProviderInterruptedError,
-  type ProviderEvent,
-  type ProviderRunResult,
-  type SessionRef
-} from "../types.ts";
-import {
-  createClaudeSdkStreamState,
-  interruptedClaudeSdkEvent,
-  projectClaudeSdkMessage,
-  timedOutClaudeSdkEvent,
-  type ClaudeSdkStreamState
-} from "./sdkStream.ts";
-
-const PROVIDER = "claude" as const;
-/** CLI 只有打开该开关才发 session_state_changed；idle 是官方认定的“整轮结束”信号。 */
-export const CLAUDE_SESSION_STATE_EVENTS_ENV = "CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS";
-const INTERRUPT_GRACE_MS = 3_000;
-/** 新进程迟迟不回首条消息时，不让“提交即返回”的调用方一直等；轮本身继续受 timeoutMs 约束。 */
-const ACCEPT_WAIT_MS = 10_000;
-
-export type ClaudeLiveQuery = AsyncIterable<unknown> & {
-  close?: () => void;
-  interrupt?: () => Promise<void>;
-};
-
-export type ClaudeLiveTurnRequest = {
-  /** 提交给 CLI 的 user message uuid，也是会话历史里这一轮的 turn id。 */
-  id: string;
-  prompt: string;
-  /** 进程级参数指纹；不同指纹的消息必须换进程（resume）后再发。 */
-  key: string;
-  options: ClaudeSdkOptions;
-  onEvent?: (event: ProviderEvent) => void;
-  canUseTool?: (session: () => SessionRef | undefined) => CanUseTool;
-  rejectApprovals: (reason: string) => void;
-  timeoutMs: number;
-};
-
-export type ClaudeLiveSessionHost = {
-  emit(event: ProviderEvent, onEvent?: (event: ProviderEvent) => void): void;
-  /** 回调里拿到的是已补齐 sessionId/resume/abortController/canUseTool 的最终参数。 */
-  startQuery(prompt: AsyncIterable<unknown>, options: ClaudeSdkOptions): ClaudeLiveQuery;
-  sessionInfo(sessionId: string, cwd: string): Promise<SDKSessionInfo | undefined>;
-  sessionStarted(sessionId: string, resumed: boolean, onEvent?: (event: ProviderEvent) => void): void;
-  idleTimeoutMs: number;
-  /** 进程与待发消息都清空后通知 provider 释放映射。 */
-  released(session: ClaudeLiveSession): void;
-};
-
-type Turn = {
-  request: ClaudeLiveTurnRequest;
-  proc?: LiveProcess;
-  state: ClaudeSdkStreamState;
-  heldResult?: ProviderEvent[];
-  /** 派发后进程是否已回过任何消息；没回就退出的轮可以安全地换进程重发一次。 */
-  answered: boolean;
-  redispatched: boolean;
-  resultSeen: boolean;
-  interrupted?: string;
-  timedOut?: string;
-  timer?: ReturnType<typeof setTimeout>;
-  accepted: () => void;
-  resolve: (result: ProviderRunResult) => void;
-  reject: (error: Error) => void;
-  callback?: CanUseTool;
-};
-
-type LiveProcess = {
-  abort: AbortController;
-  input: InputQueue;
-  key: string;
-  query: ClaudeLiveQuery;
-  stateEvents: boolean;
-};
-
-export type ClaudeLiveSubmission = {
-  turnId: string;
-  /** 进程已接手（首条 SDK 消息到达、或已在本地排队）即 resolve，用于“提交即返回”。 */
-  accepted: Promise<void>;
-  done: Promise<ProviderRunResult>;
-};
+import { ProviderInterruptedError, type ProviderEvent, type ProviderRunResult } from "../types.ts";
+import { interruptedClaudeSdkEvent, projectClaudeSdkMessage, timedOutClaudeSdkEvent } from "./sdkStream.ts";
+import { ClaudeTranscriptSnapshot } from "./liveSessionSnapshot.ts";
+import { type Turn, createClaudeLiveTurn, userMessage, sessionRef, scratchState, asProgress } from "./liveSessionTurn.ts";
+import { type LiveProcess, type ClaudeLiveSessionHost, type ClaudeLiveTurnRequest, type ClaudeLiveSubmission, INTERRUPT_GRACE_MS, boundedInterrupt, ACCEPT_WAIT_MS, createInputQueue, CLAUDE_SESSION_STATE_EVENTS_ENV } from "./liveSessionModel.ts";
 
 /**
  * 一个 Claude 会话对应一个常驻 SDK Query：普通消息在本地串行排队（CLI 会把排队消息合并成一轮，
@@ -91,19 +14,18 @@ export type ClaudeLiveSubmission = {
  * 被上游当成提前结束。
  */
 export class ClaudeLiveSession {
+  private readonly transcriptSnapshot: ClaudeTranscriptSnapshot;
   private proc?: LiveProcess;
   private current?: Turn;
   private readonly pending: Turn[] = [];
   private pumping = false;
   private idleTimer?: ReturnType<typeof setTimeout>;
-  private snapshot?: { fileSize?: number; lastModified: number };
-  private lastCwd = "";
-  /** 每次进入空闲递增；只认当前这段空闲期拍到的快照，玄武自己的写入不算“外部改动”。 */
-  private idleGeneration = 0;
+
   private transcriptExists: boolean;
 
   constructor(readonly sessionId: string, private readonly host: ClaudeLiveSessionHost, resumed: boolean) {
     this.transcriptExists = resumed;
+    this.transcriptSnapshot = new ClaudeTranscriptSnapshot(sessionId, host, () => !this.current);
   }
 
   get running(): boolean {
@@ -115,19 +37,7 @@ export class ClaudeLiveSession {
   }
 
   submit(request: ClaudeLiveTurnRequest): ClaudeLiveSubmission {
-    let accepted!: () => void;
-    let refuse!: (error: Error) => void;
-    const acceptedPromise = new Promise<void>((resolve, rejectAccepted) => { accepted = resolve; refuse = rejectAccepted; });
-    // run() 只等 done；未被等待的 accepted 失败不能变成未处理拒绝。
-    acceptedPromise.catch(() => undefined);
-    let resolve!: (result: ProviderRunResult) => void;
-    let reject!: (error: Error) => void;
-    const done = new Promise<ProviderRunResult>((resolveDone, rejectDone) => { resolve = resolveDone; reject = rejectDone; });
-    const state = createClaudeSdkStreamState();
-    state.sessionId = this.sessionId;
-    const turn: Turn = { request, state, answered: false, redispatched: false, resultSeen: false, accepted, resolve, reject };
-    // 进程接手前就失败时，“提交即返回”的调用方也必须拿到这个错误。
-    done.catch(refuse);
+    const { turn, accepted, acceptedPromise, done } = createClaudeLiveTurn(request, this.sessionId);
     this.pending.push(turn);
     if (this.current) accepted();
     void this.pump();
@@ -177,9 +87,8 @@ export class ClaudeLiveSession {
     try {
       const turn = this.pending.shift()!;
       this.clearIdleTimer();
-      const changed = this.proc ? this.proc.key !== turn.request.key || await this.changedOutside(turn) : false;
-      this.idleGeneration += 1;
-      this.snapshot = undefined;
+      const changed = this.proc ? this.proc.key !== turn.request.key || await this.transcriptSnapshot.changedOutside(turn) : false;
+      this.transcriptSnapshot.invalidate();
       if (changed) {
         this.closeProcess("Claude session settings or transcript changed; resuming in a new process");
       }
@@ -365,7 +274,7 @@ export class ClaudeLiveSession {
 
   private becameIdle(cwd: string): void {
     this.clearIdleTimer();
-    void this.captureSnapshot(cwd);
+    void this.transcriptSnapshot.capture(cwd);
     if (!this.proc) {
       this.releaseIfDone();
       return;
@@ -383,107 +292,9 @@ export class ClaudeLiveSession {
     this.idleTimer = undefined;
   }
 
-  private async captureSnapshot(cwd: string): Promise<void> {
-    this.lastCwd = cwd || this.lastCwd;
-    const generation = ++this.idleGeneration;
-    let snapshot: typeof this.snapshot;
-    try {
-      const info = await this.host.sessionInfo(this.sessionId, this.lastCwd);
-      snapshot = info ? { fileSize: info.fileSize, lastModified: info.lastModified } : undefined;
-    } catch {
-      snapshot = undefined;
-    }
-    if (generation === this.idleGeneration && !this.current) this.snapshot = snapshot;
-  }
-
-  /** 常驻进程空闲期间若有人在终端续写了同一会话，旧进程上下文已过期，必须换新进程 resume。 */
-  private async changedOutside(turn: Turn): Promise<boolean> {
-    if (!this.snapshot) return false;
-    try {
-      const info = await this.host.sessionInfo(this.sessionId, cleanString(turn.request.options.cwd));
-      if (!info) return false;
-      return info.lastModified !== this.snapshot.lastModified || info.fileSize !== this.snapshot.fileSize;
-    } catch {
-      return false;
-    }
-  }
-
   private emitAll(turn: Turn, events: ProviderEvent[]): void {
     for (const event of events) this.host.emit(event, turn.request.onEvent);
   }
 }
 
-function asProgress(event: ProviderEvent): ProviderEvent {
-  if (!event.runEvent?.terminal) return event;
-  return {
-    ...event,
-    type: "status",
-    status: "superseded",
-    runEvent: { ...event.runEvent, kind: "progress", outcome: "running", terminal: false }
-  };
-}
-
-function scratchState(sessionId: string): ClaudeSdkStreamState {
-  const state = createClaudeSdkStreamState();
-  state.sessionId = sessionId;
-  return state;
-}
-
-function sessionRef(state: ClaudeSdkStreamState): SessionRef | undefined {
-  if (!state.sessionId) return undefined;
-  return { provider: PROVIDER, sessionId: state.sessionId, ...(state.turnId ? { turnId: state.turnId } : {}) };
-}
-
-function userMessage(uuid: string, sessionId: string, prompt: string, priority?: "next") {
-  return {
-    type: "user",
-    uuid,
-    session_id: sessionId,
-    parent_tool_use_id: null,
-    ...(priority ? { priority } : {}),
-    message: { role: "user", content: prompt }
-  };
-}
-
-type InputQueue = { iterable: AsyncIterable<unknown>; push(message: unknown): void; close(): void };
-
-function createInputQueue(): InputQueue {
-  const items: unknown[] = [];
-  let wake: (() => void) | undefined;
-  let closed = false;
-  return {
-    iterable: (async function* () {
-      while (!closed) {
-        if (items.length > 0) {
-          yield items.shift();
-          continue;
-        }
-        await new Promise<void>((resolve) => { wake = resolve; });
-        wake = undefined;
-      }
-    })(),
-    push(message) {
-      if (closed) return;
-      items.push(message);
-      wake?.();
-    },
-    close() {
-      closed = true;
-      wake?.();
-    }
-  };
-}
-
-async function boundedInterrupt(query: ClaudeLiveQuery | undefined, timeoutMs: number): Promise<void> {
-  const interrupt = query?.interrupt;
-  if (!interrupt) return;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    await Promise.race([
-      interrupt.call(query),
-      new Promise<void>((resolve) => { timer = setTimeout(resolve, Math.max(1, timeoutMs)); })
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
+export { CLAUDE_SESSION_STATE_EVENTS_ENV, type ClaudeLiveQuery, type ClaudeLiveTurnRequest, type ClaudeLiveSessionHost, type ClaudeLiveSubmission } from "./liveSessionModel.ts";

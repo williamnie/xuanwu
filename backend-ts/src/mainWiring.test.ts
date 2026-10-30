@@ -4,12 +4,12 @@ import { join } from "node:path";
 
 describe("server entrypoint wiring", () => {
   test("passes executor providers into Feishu PI conversations", () => {
-    const source = readFileSync(join(import.meta.dir, "runtime", "core.ts"), "utf8");
+    const source = readCoreSource();
 
     expect(source).toContain("runPiConversationPrompt({ bus, database, providers }");
   });
   test("shares stable IM chat/thread conversation ids across Feishu and Telegram", () => {
-    const source = readFileSync(join(import.meta.dir, "runtime", "core.ts"), "utf8");
+    const source = readCoreSource();
 
     expect(source).toContain("const runSupervisorConversation = async ({ channelContext, channelContextProjection, conversationId, prompt, targetIssueId, targetProjectId, targetProjectSource, title }");
     expect(source).toContain("createFeishuChannelModule({");
@@ -34,7 +34,7 @@ describe("server entrypoint wiring", () => {
   });
 
   test("keeps automatic LLM boundaries behind the Agentic Worker client in split mode", () => {
-    const core = readFileSync(join(import.meta.dir, "runtime", "core.ts"), "utf8");
+    const core = readCoreSource();
 
     expect(core).toContain("createHttpAgenticWorkerClient");
     expect(core).toContain("agenticClient.runProjectCycle");
@@ -44,7 +44,7 @@ describe("server entrypoint wiring", () => {
   });
 
   test("uses non-suspending physical memory and lifecycle-owned descendants off the Core HTTP loop", () => {
-    const core = readFileSync(join(import.meta.dir, "runtime", "core.ts"), "utf8");
+    const core = readCoreSource();
     const darwinMemory = readFileSync(join(import.meta.dir, "observability", "darwinProcessMemory.ts"), "utf8");
 
     expect(core).toContain("inspect: () => runtimeMemoryRows(runtimeStartedAt, providerRuntime(), agenticClient.activity(), providerLeases())");
@@ -61,3 +61,8 @@ describe("server entrypoint wiring", () => {
   });
 
 });
+
+function readCoreSource(): string {
+  return ["core.ts", "core.startup.ts", "core.support.ts"]
+    .map(file => readFileSync(join(import.meta.dir, "runtime", file), "utf8")).join("\n");
+}

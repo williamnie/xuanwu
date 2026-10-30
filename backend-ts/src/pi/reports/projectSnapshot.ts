@@ -1,10 +1,9 @@
 import type { RunnerDatabase } from "../../db/database.ts";
 import { listAgentSessions, type AgentSession } from "../../db/repositories/agentSessions.ts";
-import { hydrateStoredIssueLogPayload } from "../../db/repositories/issueEvents.ts";
 import { getProject, type Project } from "../../db/repositories/projects.ts";
-import { redactSensitiveText } from "../../util/redact.ts";
 import { scanProjectFindings, type ProjectFinding } from "./projectFindings.ts";
 import { listProjectSessionProgress, type SessionProgressSummary } from "../runnerTools/sessionObserver.ts";
+import { recentProjectErrors, summarizePath, redactSnapshotText, compactSummary, optionalString, integerValue, tableExists } from "./projectSnapshotErrors.ts";
 
 export type ProjectStatusSnapshot = {
   active_holds: ProjectHoldSnapshot[];
@@ -25,38 +24,43 @@ export type ProjectStatusSnapshot = {
   total_issues: number;
 };
 
-type ProjectRunSnapshot = {
+export type ProjectRunSnapshot = {
   attempt: number; ended_at: string; exit_reason: string; issue_id: number;
   provider: string; run_id: string; started_at: string; status: string;
 };
 
-type ProjectSessionSnapshot = {
+export type ProjectSessionSnapshot = {
   agent_role: string; issue_id: number; provider: string; provider_session_id: string;
   session_key: string; status: string; title: string; updated_at: string;
 };
 
-type ProjectHoldSnapshot = {
+export type ProjectHoldSnapshot = {
   hold_since: string; last_check_at: string; last_check_error: string; message: string;
   next_check_at: string; reason: string; updated_at: string;
 };
 
-type ProjectErrorSnapshot = {
+export type ProjectErrorSnapshot = {
   issue_id: number; message: string; source: "event" | "issue" | "run"; status: string; timestamp: string;
 };
 
-type RunRow = {
+export type RunRow = {
   attempt: unknown; ended_at: unknown; error: unknown; exit_reason: unknown; issue_id: unknown;
   provider: unknown; run_id: unknown; started_at: unknown; status: unknown;
 };
 
-type HoldRow = Record<keyof ProjectHoldSnapshot, unknown>;
-type EventRow = { created_at: unknown; issue_id: unknown; payload: unknown; type: unknown };
-type StatusCountRow = { count: unknown; status: unknown };
-type IssueSummaryRow = { id: unknown; status: unknown; title: unknown; updated_at: unknown };
-type IssueErrorRow = IssueSummaryRow & { error: unknown };
+export type HoldRow = Record<keyof ProjectHoldSnapshot, unknown>;
 
-const PROJECT_STATUS_LIMIT = 8;
-const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g;
+export type EventRow = { created_at: unknown; issue_id: unknown; payload: unknown; type: unknown };
+
+export type StatusCountRow = { count: unknown; status: unknown };
+
+export type IssueSummaryRow = { id: unknown; status: unknown; title: unknown; updated_at: unknown };
+
+export type IssueErrorRow = IssueSummaryRow & { error: unknown };
+
+export const PROJECT_STATUS_LIMIT = 8;
+
+export const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g;
 
 export function createProjectStatusSnapshot(db: RunnerDatabase, projectID: string): ProjectStatusSnapshot {
   const project = requireProject(db, projectID);
@@ -92,13 +96,13 @@ export function createProjectStatusSnapshot(db: RunnerDatabase, projectID: strin
   };
 }
 
-function requireProject(db: RunnerDatabase, id: string): Project {
+export function requireProject(db: RunnerDatabase, id: string): Project {
   const project = getProject(db, id);
   if (!project) throw new Error("project not found");
   return project;
 }
 
-function projectStatusCounts(
+export function projectStatusCounts(
   db: RunnerDatabase,
   table: "agent_sessions" | "issues",
   projectID: string
@@ -108,18 +112,18 @@ function projectStatusCounts(
   `).all(projectID));
 }
 
-function projectRunStatusCounts(db: RunnerDatabase, projectID: string): Record<string, number> {
+export function projectRunStatusCounts(db: RunnerDatabase, projectID: string): Record<string, number> {
   return statusCounts(db.sqlite.query<StatusCountRow, [string]>(`
     select ir.status, count(*) as count from issue_runs ir
     join issues i on i.id=ir.issue_id where i.project_id=? group by ir.status
   `).all(projectID));
 }
 
-function statusCounts(rows: StatusCountRow[]): Record<string, number> {
+export function statusCounts(rows: StatusCountRow[]): Record<string, number> {
   return Object.fromEntries(rows.map((row) => [optionalString(row.status, "unknown"), integerValue(row.count)]));
 }
 
-function latestIssues(db: RunnerDatabase, projectID: string): ProjectStatusSnapshot["latest_issues"] {
+export function latestIssues(db: RunnerDatabase, projectID: string): ProjectStatusSnapshot["latest_issues"] {
   return db.sqlite.query<IssueSummaryRow, [string, number]>(`
     select id, status, title, updated_at from issues where project_id=?
     order by updated_at desc, id desc limit ?
@@ -131,7 +135,7 @@ function latestIssues(db: RunnerDatabase, projectID: string): ProjectStatusSnaps
   }));
 }
 
-function listProjectRuns(
+export function listProjectRuns(
   db: RunnerDatabase,
   projectID: string,
   limit: number
@@ -146,7 +150,7 @@ function listProjectRuns(
   `).all(projectID, limit).map(mapRunRow);
 }
 
-function mapRunRow(row: RunRow): ProjectRunSnapshot & { error: string } {
+export function mapRunRow(row: RunRow): ProjectRunSnapshot & { error: string } {
   return {
     attempt: integerValue(row.attempt),
     ended_at: optionalString(row.ended_at),
@@ -160,7 +164,7 @@ function mapRunRow(row: RunRow): ProjectRunSnapshot & { error: string } {
   };
 }
 
-function recentSessions(sessions: AgentSession[]): ProjectSessionSnapshot[] {
+export function recentSessions(sessions: AgentSession[]): ProjectSessionSnapshot[] {
   return sessions.map((session) => ({
     agent_role: session.agent_role,
     issue_id: session.issue_id,
@@ -173,7 +177,7 @@ function recentSessions(sessions: AgentSession[]): ProjectSessionSnapshot[] {
   }));
 }
 
-function listProjectHolds(db: RunnerDatabase, projectID: string): ProjectHoldSnapshot[] {
+export function listProjectHolds(db: RunnerDatabase, projectID: string): ProjectHoldSnapshot[] {
   if (!tableExists(db, "project_holds")) return [];
   return db.sqlite.query<HoldRow, [string]>(`
     select reason, message, hold_since, next_check_at, last_check_at, last_check_error, updated_at
@@ -181,7 +185,7 @@ function listProjectHolds(db: RunnerDatabase, projectID: string): ProjectHoldSna
   `).all(projectID).map(mapHoldRow);
 }
 
-function mapHoldRow(row: HoldRow): ProjectHoldSnapshot {
+export function mapHoldRow(row: HoldRow): ProjectHoldSnapshot {
   return {
     hold_since: optionalString(row.hold_since),
     last_check_at: optionalString(row.last_check_at),
@@ -191,141 +195,4 @@ function mapHoldRow(row: HoldRow): ProjectHoldSnapshot {
     reason: redactSnapshotText(optionalString(row.reason)),
     updated_at: optionalString(row.updated_at)
   };
-}
-
-function recentProjectErrors(
-  db: RunnerDatabase,
-  projectID: string
-): ProjectErrorSnapshot[] {
-  const errors = [
-    ...issueErrors(db, projectID),
-    ...runErrors(db, projectID),
-    ...eventErrors(db, projectID)
-  ];
-  return errors
-    .sort((left, right) => right.timestamp.localeCompare(left.timestamp) || sourceOrder(left) - sourceOrder(right))
-    .slice(0, PROJECT_STATUS_LIMIT);
-}
-
-function issueErrors(db: RunnerDatabase, projectID: string): ProjectErrorSnapshot[] {
-  return db.sqlite.query<IssueErrorRow, [string, number]>(`
-    select id, status, title, error, updated_at from issues
-    where project_id=? and (status='failed' or error<>'')
-    order by updated_at desc, id desc limit ?
-  `).all(projectID, PROJECT_STATUS_LIMIT).map((issue) => ({
-    issue_id: integerValue(issue.id),
-    message: redactSnapshotText(optionalString(issue.error) || "issue failed"),
-    source: "issue" as const,
-    status: optionalString(issue.status, "unknown"),
-    timestamp: optionalString(issue.updated_at)
-  }));
-}
-
-function runErrors(db: RunnerDatabase, projectID: string): ProjectErrorSnapshot[] {
-  return db.sqlite.query<RunRow, [string, number]>(`
-    select ir.id as run_id, ir.issue_id, ir.attempt, ir.status, ir.provider, ir.started_at,
-      ir.ended_at, ir.exit_reason, ir.error
-    from issue_runs ir join issues i on i.id=ir.issue_id
-    where i.project_id=? and (ir.status='failed' or ir.error<>'')
-    order by coalesce(nullif(ir.ended_at, ''), ir.started_at) desc, ir.attempt desc limit ?
-  `).all(projectID, PROJECT_STATUS_LIMIT).map(mapRunRow).map((run) => ({
-    issue_id: run.issue_id,
-    message: redactSnapshotText(run.error || "run failed"),
-    source: "run" as const,
-    status: run.status,
-    timestamp: run.ended_at || run.started_at
-  }));
-}
-
-function eventErrors(db: RunnerDatabase, projectID: string): ProjectErrorSnapshot[] {
-  return db.sqlite.query<EventRow, [string]>(`
-    select e.issue_id, e.type, e.payload, e.created_at from issue_events e
-    join issues i on i.id=e.issue_id
-    where i.project_id=? and e.type in ('issue.log', 'issue.error', 'runner.hold')
-    order by e.created_at desc, e.id desc limit ${PROJECT_STATUS_LIMIT}
-  `).all(projectID).map((row) => mapEventError(db, row))
-    .filter((item): item is ProjectErrorSnapshot => item !== null);
-}
-
-function sourceOrder(error: ProjectErrorSnapshot): number {
-  if (error.source === "event") return 0;
-  if (error.source === "run") return 1;
-  return 2;
-}
-
-function mapEventError(db: RunnerDatabase, row: EventRow): ProjectErrorSnapshot | null {
-  const storedPayload = optionalString(row.payload);
-  const payload = optionalString(row.type) === "issue.log"
-    ? hydrateStoredIssueLogPayload(db, storedPayload)
-    : storedPayload;
-  const message = eventErrorMessage(payload);
-  if (message === "") return null;
-  return {
-    issue_id: integerValue(row.issue_id),
-    message: redactSnapshotText(message),
-    source: "event",
-    status: optionalString(row.type),
-    timestamp: optionalString(row.created_at)
-  };
-}
-
-function eventErrorMessage(payload: string): string {
-  if (payload === "") return "";
-  try {
-    const parsed = JSON.parse(payload) as Record<string, unknown>;
-    const type = optionalString(parsed.type);
-    const text = optionalString(parsed.error) || optionalString(parsed.message) || optionalString(parsed.text);
-    return type.includes("error") || text !== "" ? text : "";
-  } catch {
-    return /error|failed|panic|fatal/i.test(payload) ? payload : "";
-  }
-}
-
-function compactSummary(snapshot: Omit<ProjectStatusSnapshot, "compact_summary">): string {
-  const issueCounts = formatCounts(snapshot.issue_status_counts);
-  const runCounts = formatCounts(snapshot.run_status_counts);
-  const sessionCounts = formatCounts(snapshot.session_status_counts);
-  return [
-    `project ${snapshot.id}: ${snapshot.name}`,
-    `issues total=${snapshot.total_issues}${issueCounts}`,
-    `runs${runCounts}`,
-    `sessions${sessionCounts}`,
-    `holds=${snapshot.active_holds.length}`,
-    `findings=${snapshot.findings.length}`,
-    `recent_errors=${snapshot.recent_errors.length}`
-  ].join("; ");
-}
-
-function formatCounts(counts: Record<string, number>): string {
-  const entries = Object.entries(counts).sort(([left], [right]) => left.localeCompare(right));
-  return entries.length === 0 ? "=0" : ` [${entries.map(([key, value]) => `${key}=${value}`).join(", ")}]`;
-}
-
-function tableExists(db: RunnerDatabase, table: string): boolean {
-  const row = db.sqlite.query<{ name: string }, [string]>(
-    "select name from sqlite_master where type='table' and name=?"
-  ).get(table);
-  return row?.name === table;
-}
-
-function summarizePath(value: string): string {
-  const clean = value.trim();
-  if (clean === "") return "";
-  const parts = clean.split(/[\\/]+/).filter(Boolean);
-  return parts.length === 0 ? "[redacted-path]" : `[redacted-path]/${redactSnapshotText(parts.at(-1) ?? "")}`;
-}
-
-function redactSnapshotText(value: string): string {
-  return redactSensitiveText(value).replace(ABSOLUTE_PATH_PATTERN, "[redacted-path]");
-}
-
-function optionalString(value: unknown, fallback = ""): string {
-  if (value === null || value === undefined) return fallback;
-  if (typeof value !== "string") return fallback;
-  const trimmed = value.trim();
-  return trimmed === "" ? fallback : trimmed;
-}
-
-function integerValue(value: unknown): number {
-  return typeof value === "number" && Number.isInteger(value) ? value : 0;
 }

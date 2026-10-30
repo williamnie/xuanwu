@@ -1,0 +1,210 @@
+import { describe, expect, test } from "bun:test";
+import {
+  classifyPiActionRisk,
+  gatePiActionEnvelope
+} from "./actionEngine.ts";
+import type { PiGatePolicy } from "./actionGate.ts";
+
+
+
+export function registerManualModeStillExecutesTrustedRead() {
+test("manual mode still executes trusted read-only actions without approval", () => {
+    for (const actionType of [
+      "agent.profile_recommend",
+      "issue.execution_status",
+      "issue.list",
+      "issue.read",
+      "issue.state_diagnose",
+      "issue.status_summary",
+      "project.list",
+      "project.status",
+      "repo.search",
+      "repo.read_excerpt",
+      "repo.tree",
+      "session.list",
+      "session.read_summary",
+      "memory.search",
+      "sdk.read",
+      "sdk.grep",
+      "sdk.find",
+      "sdk.ls",
+      "mcp.registry.list",
+      "mcp.capability.read",
+      "mcp.requirement.recommend",
+      "mcp.resource.list",
+      "mcp.resource.read",
+      "skill.list",
+      "skill.read",
+      "skill.recommend"
+    ]) {
+      expect(gatePiActionEnvelope({
+        action_type: actionType,
+        payload: { query: "status" },
+        project_id: "demo",
+        requires_confirmation: false,
+        risk_level: "low",
+        source: "pi_readonly_tool"
+      }, { mode: "manual" })).toMatchObject({
+        decision: "execute"
+      });
+    }
+  });
+
+test("delegated allowlists do not create approval noise for ordinary read-only context collection", () => {
+    const policy: PiGatePolicy = {
+      allowed_actions: ["issue.enqueue"],
+      authorizedActions: [{ action_type: "issue.enqueue", issue_id: 7, project_id: "demo" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    };
+
+    for (const actionType of [
+      "repo.search",
+      "repo.read_excerpt",
+      "project.status",
+      "session.read_summary",
+      "skill.list",
+      "mcp.registry.list"
+    ]) {
+      expect(gatePiActionEnvelope({
+        action_type: actionType,
+        payload: { query: "status" },
+        project_id: "demo",
+        requires_confirmation: false,
+        risk_level: "low",
+        source: "pi_readonly_tool"
+      }, policy)).toMatchObject({ decision: "execute" });
+    }
+
+    for (const actionType of ["memory.remember", "skill.intent_audit"]) {
+      expect(gatePiActionEnvelope({
+        action_type: actionType,
+        payload: { query: "status" },
+        project_id: "demo",
+        requires_confirmation: false,
+        risk_level: "low",
+        source: "pi_tool"
+      }, policy)).toMatchObject({ decision: "deny" });
+    }
+  });
+
+test("MCP actions require capability allowlist when policy provides one", () => {
+    const envelope = {
+      action_type: "mcp.resource.read",
+      payload: { capability_id: "docs:resource:runbook" },
+      project_id: "demo",
+      requires_confirmation: false,
+      risk_level: "low",
+      source: "pi_mcp_tool"
+    } as const;
+
+    expect(gatePiActionEnvelope(envelope, {
+      allowedMcpCapabilities: ["docs:resource:runbook"],
+      authorizedActions: [{ action_type: "mcp.resource.read", project_id: "demo" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({ decision: "execute" });
+    expect(gatePiActionEnvelope(envelope, {
+      allowedMcpCapabilities: ["docs:resource:other"],
+      authorizedActions: [{ action_type: "mcp.resource.read", project_id: "demo" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({
+      decision: "deny",
+      reason: expect.stringContaining("MCP")
+    });
+    expect(gatePiActionEnvelope(envelope, {
+      allowedMcpCapabilities: ["docs:resource:other"],
+      mode: "attended"
+    })).toMatchObject({ decision: "deny" });
+    expect(gatePiActionEnvelope(envelope, {
+      allowedMcpCapabilities: undefined,
+      mode: "attended"
+    })).toMatchObject({ decision: "execute" });
+  });
+
+test("MCP gate honors delegation allowlist aliases and keeps high-risk calls pending", () => {
+    const envelope = {
+      action_type: "mcp.tool.call",
+      payload: { capability_id: "docs:tool:delete_doc", input: { id: "runbook" } },
+      project_id: "demo",
+      requires_confirmation: true,
+      risk_level: "high",
+      source: "pi_mcp_tool"
+    } as const;
+
+    expect(gatePiActionEnvelope(envelope, { mode: "attended" })).toMatchObject({
+      decision: "ask",
+      reason: expect.stringContaining("confirmation")
+    });
+    expect(gatePiActionEnvelope(envelope, {
+      allowed_mcp_capabilities: ["docs:tool:delete_doc"],
+      authorizedActions: [{ action_type: "mcp.tool.call", project_id: "demo" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({
+      decision: "ask",
+      reason: expect.stringContaining("confirmation")
+    });
+    expect(gatePiActionEnvelope(envelope, {
+      allowed_mcp_capabilities: ["docs:tool:search"],
+      authorizedActions: [{ action_type: "mcp.tool.call", project_id: "demo" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({
+      decision: "deny",
+      reason: expect.stringContaining("MCP")
+    });
+  });
+
+test("MCP gate checks nested issue assignment requirement patches", () => {
+    const envelope = {
+      action_type: "agent.executor_assign",
+      issue_id: 7,
+      payload: {
+        issue_id: 7,
+        patch: { required_mcp_capabilities: ["docs:resource:runbook"] }
+      },
+      project_id: "demo",
+      requires_confirmation: true,
+      risk_level: "medium",
+      source: "pi_tool"
+    } as const;
+
+    expect(gatePiActionEnvelope(envelope, {
+      allowed_mcp_capabilities: ["docs:resource:runbook"],
+      authorizedActions: [{ action_type: "agent.executor_assign", issue_id: 7, project_id: "demo" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({ decision: "execute" });
+    expect(gatePiActionEnvelope(envelope, {
+      allowed_mcp_capabilities: ["docs:resource:other"],
+      authorizedActions: [{ action_type: "agent.executor_assign", issue_id: 7, project_id: "demo" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({
+      decision: "deny",
+      reason: expect.stringContaining("MCP")
+    });
+  });
+
+test("delegated authorization does not bypass high-risk confirmation", () => {
+    const envelope = {
+      action_type: "session.steer",
+      payload: { prompt: "change running executor", session_key: "codex:thread-1" },
+      project_id: "demo",
+      requires_confirmation: true,
+      risk_level: "high",
+      source: "pi_tool"
+    } as const;
+
+    expect(gatePiActionEnvelope(envelope, {
+      authorizedActions: [{ action_type: "session.steer", project_id: "demo" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({
+      decision: "ask",
+      reason: expect.stringContaining("confirmation")
+    });
+  });
+}

@@ -1,74 +1,15 @@
 import { effectiveCodexHome } from "../../config/codexServer.ts";
-import { redactSensitiveText } from "../../util/redact.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
-import type { ApprovalDecision, ProviderEvent } from "../types.ts";
+import type { ApprovalDecision } from "../types.ts";
 import { CodexApprovalBroker } from "./approvalBroker.ts";
-import { normalizeCodexEvent } from "./events.ts";
 import { CodexProcessGroupLifecycle, type CodexProcessOwnership } from "./processLifecycle.ts";
 import { managedExecutionEnvironment } from "../managedExecution.ts";
-
-export type JsonRpcParams = Record<string, unknown> | unknown[] | null;
-
-type JsonRpcResponse = {
-  id?: unknown;
-  method?: unknown;
-  params?: unknown;
-  result?: unknown;
-  error?: { code?: unknown; message?: unknown } | null;
-};
-
-type PendingRequest = {
-  resolve: (value: unknown) => void;
-  reject: (error: Error) => void;
-  timeout?: ReturnType<typeof setTimeout>;
-};
-
-export type CodexJsonRpcProcess = {
-  stdin: { write(chunk: string | Uint8Array): unknown; flush?: () => unknown; end?: () => unknown };
-  stdout: ReadableStream<Uint8Array> | null;
-  stderr: ReadableStream<Uint8Array> | null;
-  exited: Promise<number>;
-  kill(signal?: string | number): unknown;
-  pid?: number;
-};
-
-export type CodexJsonRpcProcessFactory = (options: {
-  command: string[];
-  cwd?: string;
-  env: Record<string, string | undefined>;
-}) => CodexJsonRpcProcess;
-
-type ServerRequestHandler = (method: string, params: unknown) => Promise<unknown> | unknown;
-type CodexTransportOptions = {
-  idleTtlMs?: number;
-  onEvent?: (event: ProviderEvent) => void;
-  ownershipFile?: string;
-  processFactory?: CodexJsonRpcProcessFactory;
-  processLifecycle?: CodexProcessGroupLifecycle;
-  onDiagnostic?: (event: ProviderEvent) => void;
-  onServerRequest?: ServerRequestHandler;
-};
-
-export type CodexProcessLease = {
-  bind(sessionID: string, turnID?: string): void;
-  release(): void;
-};
-
-const MAX_STDERR_LINES = 50;
-const MAX_LINE_BYTES = 10 * 1024 * 1024;
-const CODEX_APP_SERVER_RPC_TIMEOUT_MS = 90_000;
-const CODEX_APP_SERVER_IDLE_TTL_MS = 15_000;
-const CODEX_PROCESS_ACTIVE_REFRESH_MS = 5_000;
-const CODEX_PROCESS_STRUCTURE_EVENTS = new Set([
-  "error",
-  "item/completed",
-  "item/started",
-  "thread/status/changed",
-  "turn/completed",
-  "turn/started"
-]);
+import { CodexProtocolReader } from "./jsonRpcProtocol.ts";
+import { splitCommand, clearPendingTimeout, spawnCodexProcess, asError } from "./jsonRpcIO.ts";
+import { type CodexJsonRpcProcess, type PendingRequest, type CodexTransportOptions, type CodexProcessLease, type JsonRpcParams, type CodexJsonRpcProcessFactory, codexAppServerRpcTimeoutMs, CODEX_PROCESS_ACTIVE_REFRESH_MS, codexIdleTtlMs } from "./jsonRpcModel.ts";
 
 export class CodexStdioJsonRpcTransport {
+  private readonly reader: CodexProtocolReader;
   private nextId = 0;
   private process?: CodexJsonRpcProcess;
   private processGeneration = 0;
@@ -84,6 +25,17 @@ export class CodexStdioJsonRpcTransport {
   private stopped = false;
 
   constructor(private readonly config: ProviderRuntimeConfig, private readonly options: CodexTransportOptions = {}) {
+    this.reader = new CodexProtocolReader({
+      options, pending: this.pending, stderrBuffer: this.stderrBuffer,
+      get approvals() { return transport.approvals; },
+      get processLifecycle() { return transport.processLifecycle; },
+      process: () => this.process,
+      write: payload => this.write(payload),
+      failPending: error => this.failPending(error),
+      emitDiagnostic: (method, text, error) => this.emitDiagnostic(method, text, error),
+      releaseSession: (sessionID, turnID) => this.releaseSession(sessionID, turnID)
+    });
+    const transport = this;
     this.approvals = new CodexApprovalBroker({ onEvent: (event) => this.options.onEvent?.(event) });
     this.processLifecycle = options.processLifecycle ?? new CodexProcessGroupLifecycle(
       options.ownershipFile ?? "",
@@ -103,7 +55,7 @@ export class CodexStdioJsonRpcTransport {
     if (this.process) return;
     this.cancelIdleStop();
     this.stopped = false;
-    const spawned = this.processFactory()({
+    const spawned = (this.options.processFactory ?? spawnCodexProcess)({
       command: splitCommand(this.config.command),
       cwd: this.config.cwd.trim() || undefined,
       env: managedExecutionEnvironment({ ...Bun.env, ...this.config.env, CODEX_HOME: effectiveCodexHome(this.config) })
@@ -117,8 +69,8 @@ export class CodexStdioJsonRpcTransport {
       spawned.kill("SIGTERM");
       throw error;
     }
-    this.readStdout(this.process.stdout);
-    this.readStderr(this.process.stderr);
+    this.reader.readStdout(this.process.stdout);
+    this.reader.readStderr(this.process.stderr);
     this.watchExit(this.process);
   }
 
@@ -185,7 +137,7 @@ export class CodexStdioJsonRpcTransport {
 
   runtimeSnapshot(): { idle_ttl_ms: number; owners: string[]; process?: CodexProcessOwnership } {
     return {
-      idle_ttl_ms: this.idleTtlMs(),
+      idle_ttl_ms: codexIdleTtlMs(this.options.idleTtlMs),
       owners: [...this.leases.values()].map((lease) => lease.owner),
       process: this.processLifecycle.snapshot()
     };
@@ -199,7 +151,7 @@ export class CodexStdioJsonRpcTransport {
       this.pending.set(id, {
         resolve,
         reject,
-        timeout: setTimeout(() => this.timeoutRequest(id, method), this.requestTimeoutMs())
+        timeout: setTimeout(() => this.timeoutRequest(id, method), codexAppServerRpcTimeoutMs(this.config.timeoutMs))
       });
     });
     try {
@@ -222,10 +174,6 @@ export class CodexStdioJsonRpcTransport {
     await this.approvals.resolveApproval(requestId, decision);
   }
 
-  private processFactory(): CodexJsonRpcProcessFactory {
-    return this.options.processFactory ?? spawnCodexProcess;
-  }
-
   private registerRequest(): number {
     this.nextId += 1;
     return this.nextId;
@@ -236,87 +184,6 @@ export class CodexStdioJsonRpcTransport {
     if (!current) throw new Error("codex app-server stdio transport is not started");
     current.stdin.write(`${JSON.stringify(payload)}\n`);
     current.stdin.flush?.();
-  }
-
-  private readStdout(stream: ReadableStream<Uint8Array> | null): void {
-    if (!stream) return;
-    void readLines(stream, (line) => this.handleStdoutLine(line), (error) => this.failPending(error));
-  }
-
-  private readStderr(stream: ReadableStream<Uint8Array> | null): void {
-    if (!stream) return;
-    void readLines(stream, (line) => this.captureStderrLine(line));
-  }
-
-  private handleStdoutLine(line: string): void {
-    let message: JsonRpcResponse;
-    try {
-      message = JSON.parse(line) as JsonRpcResponse;
-    } catch (error) {
-      this.emitDiagnostic("protocol/error", redactSensitiveText(line), asError(error).message);
-      return;
-    }
-    if (isRequestId(message.id) && typeof message.method === "string") {
-      void this.deliverServerRequest(message.id, message.method, message.params);
-      return;
-    }
-    if (typeof message.id === "number") this.deliverResponse(message.id, message);
-    if (typeof message.method === "string" && message.id === undefined) this.deliverEvent(message.method, message.params);
-  }
-
-  private async deliverServerRequest(id: string | number, method: string, params: unknown): Promise<void> {
-    try {
-      const result = await this.serverRequestResult(method, params, id);
-      this.write({ id, result });
-    } catch (error) {
-      this.write({ id, error: { code: -32603, message: asError(error).message } });
-    }
-  }
-
-  private async serverRequestResult(method: string, params: unknown, id: string | number = 0): Promise<unknown> {
-    if (this.approvals.canHandle(method)) return await this.approvals.request(id, method, params);
-    if (this.options.onServerRequest) return await this.options.onServerRequest(method, params);
-    if (method === "item/tool/requestUserInput") return { answers: {} };
-    if (method === "mcpServer/elicitation/request") return { action: "cancel", content: null, _meta: null };
-    if (method === "item/tool/call") return { contentItems: [], success: false };
-    throw new Error(`unsupported server request: ${method}`);
-  }
-
-  private deliverEvent(method: string, params: unknown): void {
-    const event = normalizeCodexEvent({ method, params });
-    if (CODEX_PROCESS_STRUCTURE_EVENTS.has(method)) {
-      void this.processLifecycle.refresh(this.process, {
-        mode: "coalesced",
-        reason: "structural_event"
-      }).catch((error) => this.emitDiagnostic(
-        "process/scan_failed",
-        "process topology refresh failed",
-        asError(error).message
-      ));
-    }
-    if (event.runEvent?.terminal && event.session?.sessionId) {
-      this.releaseSession(event.session.sessionId, event.session.turnId);
-    }
-    this.options.onEvent?.(event);
-  }
-
-  private deliverResponse(id: number, message: JsonRpcResponse): void {
-    const request = this.pending.get(id);
-    if (!request) return;
-    this.pending.delete(id);
-    clearPendingTimeout(request);
-    if (message.error) {
-      request.reject(new Error(`codex rpc ${String(message.error.code ?? "error")}: ${String(message.error.message ?? "unknown error")}`));
-      return;
-    }
-    request.resolve(message.result);
-  }
-
-  private captureStderrLine(line: string): void {
-    const text = redactSensitiveText(line);
-    this.stderrBuffer.push(text);
-    if (this.stderrBuffer.length > MAX_STDERR_LINES) this.stderrBuffer.shift();
-    this.emitDiagnostic("process/stderr", text, text);
   }
 
   private watchExit(process: CodexJsonRpcProcess): void {
@@ -365,15 +232,11 @@ export class CodexStdioJsonRpcTransport {
     this.options.onDiagnostic?.({ provider: "codex", type, text, error });
   }
 
-  private requestTimeoutMs(): number {
-    return codexAppServerRpcTimeoutMs(this.config.timeoutMs);
-  }
-
   private timeoutRequest(id: number, method: string): void {
     const request = this.pending.get(id);
     if (!request) return;
     this.pending.delete(id);
-    const error = new Error(`codex app-server request timed out after ${this.requestTimeoutMs()}ms: ${method}`);
+    const error = new Error(`codex app-server request timed out after ${codexAppServerRpcTimeoutMs(this.config.timeoutMs)}ms: ${method}`);
     request.reject(error);
     this.emitDiagnostic("process/timeout", error.message, error.message);
     void this.restartAfterTimeout();
@@ -397,7 +260,7 @@ export class CodexStdioJsonRpcTransport {
       void this.stop().catch((error) => {
         this.emitDiagnostic("process/idle_stop_failed", asError(error).message, asError(error).message);
       });
-    }, this.idleTtlMs());
+    }, codexIdleTtlMs(this.options.idleTtlMs));
     this.idleTimer.unref?.();
   }
 
@@ -430,83 +293,8 @@ export class CodexStdioJsonRpcTransport {
     this.processActivityTimer = undefined;
   }
 
-  private idleTtlMs(): number {
-    const configured = this.options.idleTtlMs;
-    return typeof configured === "number" && Number.isFinite(configured) && configured >= 0
-      ? configured
-      : CODEX_APP_SERVER_IDLE_TTL_MS;
-  }
 }
 
-function clearPendingTimeout(request: PendingRequest | undefined): void {
-  if (request?.timeout) clearTimeout(request.timeout);
-}
-
-export function codexAppServerRpcTimeoutMs(configuredTimeoutMs: number): number {
-  return Math.min(Math.max(1, configuredTimeoutMs), CODEX_APP_SERVER_RPC_TIMEOUT_MS);
-}
-
-function isRequestId(value: unknown): value is string | number {
-  return typeof value === "number" || typeof value === "string";
-}
-
-function spawnCodexProcess({ command, cwd, env }: {
-  command: string[];
-  cwd?: string;
-  env: Record<string, string | undefined>;
-}): CodexJsonRpcProcess {
-  return Bun.spawn(command, { cwd, detached: true, env, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
-}
-
-export function splitCommand(command: string): string[] {
-  const parts = command.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)?.map(unquoteArg) ?? [];
-  if (parts.length === 0) throw new Error("codex command is empty");
-  return parts;
-}
-
-function unquoteArg(value: string): string {
-  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-    return value.slice(1, -1);
-  }
-  return value;
-}
-
-async function readLines(
-  stream: ReadableStream<Uint8Array>,
-  onLine: (line: string) => void,
-  onError?: (error: Error) => void
-): Promise<void> {
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      buffer = drainLines(buffer, onLine);
-      if (buffer.length > MAX_LINE_BYTES) throw new Error("codex app-server stdout frame exceeds limit");
-    }
-    buffer += decoder.decode();
-    if (buffer.trim() !== "") onLine(buffer);
-  } catch (error) {
-    onError?.(asError(error));
-  } finally {
-    reader.releaseLock();
-  }
-}
-
-function drainLines(buffer: string, onLine: (line: string) => void): string {
-  let start = 0;
-  while (true) {
-    const index = buffer.indexOf("\n", start);
-    if (index < 0) return buffer.slice(start);
-    const line = buffer.slice(start, index).replace(/\r$/, "");
-    if (line.trim() !== "") onLine(line);
-    start = index + 1;
-  }
-}
-
-function asError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
-}
+export { type CodexProtocolHost, CodexProtocolReader } from "./jsonRpcProtocol.ts";
+export { splitCommand } from "./jsonRpcIO.ts";
+export { type JsonRpcParams, type CodexJsonRpcProcess, type CodexJsonRpcProcessFactory, type CodexProcessLease, codexAppServerRpcTimeoutMs } from "./jsonRpcModel.ts";

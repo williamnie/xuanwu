@@ -1,98 +1,30 @@
 import type { RunnerDatabase } from "../database.ts";
-import {
-  ATTEMPT_STATUSES,
-  RUN_STATUSES,
-  type AttemptStatus,
-  type RunID,
-  type RunStatus
-} from "../../domain/run/contracts.ts";
-import {
-  NORMALIZED_RUN_EVENT_CONTRACT,
-  type NormalizedRunEvent
-} from "../../providers/types.ts";
-import { validateNormalizedRunEvent } from "../../providers/runEvents.ts";
+import { type RunID } from "../../domain/run/contracts.ts";
+import { NORMALIZED_RUN_EVENT_CONTRACT } from "../../providers/types.ts";
 import {
   RUN_PROGRESS_PROJECTOR_VERSION,
   RUN_PROGRESS_TIMELINE_LIMIT,
-  projectRunAttemptProgress,
-  type RunProgressLatest,
-  type RunProgressPhase,
-  type RunProgressPhaseSummary,
-  type RunProgressSourceEvent,
-  type RunProgressTimelineItem
+  projectRunAttemptProgress
 } from "../../events/runProgressProjector.ts";
-import { cleanString } from "../../util/values.ts";
-
-export const RUN_PROGRESS_STALLED_AFTER_MS = 15 * 60 * 1000;
-const RUN_PROGRESS_SOURCE_EVENT_LIMIT = 5000;
-const RUN_PROGRESS_STATUS_RUN_LIMIT = 32;
-
-type RunProgressStalledSignal = {
-  detected: boolean;
-  evaluated_at: string;
-  reason: "" | "no_progress_for_threshold" | "waiting_approval";
-  since: string;
-  threshold_ms: number;
-};
-
-export type RunProgressProjection = {
-  invalid_event_count: number;
-  latest: RunProgressLatest | null;
-  phase_summary: RunProgressPhaseSummary[];
-  projected_by: typeof RUN_PROGRESS_PROJECTOR_VERSION;
-  projection_mode: "list_summary" | "read_through_rebuild";
-  provider_phase: RunProgressPhase;
-  replay: {
-    duplicate_event_count: number;
-    ignored_event_count: number;
-    source_event_count: number;
-    source_event_truncated: boolean;
-    timeline_truncated: number;
-    unique_event_count: number;
-    unmapped_event_count: number;
-  };
-  source_event_range: { first_id: number; last_id: number } | null;
-  source_of_truth: "issue_runs+run_attempts+issue_events";
-  stalled: RunProgressStalledSignal;
-  timeline: RunProgressTimelineItem[];
-  updated_at: string;
-};
-
-type RunProjectionRow = {
-  ended_at: string;
-  issue_id: number;
-  legacy_id: string;
-  legacy_status: string;
-  run_id: string;
-  run_sequence: number;
-  started_at: string;
-};
-
-type AttemptProjectionRow = {
-  agent_session_key: string | null;
-  attempt_id: string;
-  ended_at: string;
-  kind: string;
-  provider: string;
-  provider_session_id: string;
-  provider_turn_id: string;
-  sequence: number;
-  started_at: string;
-  status: string | null;
-  updated_at: string;
-};
-
-type EventRow = { created_at: string; id: number; payload: string };
-
-type ParsedEvents = {
-  events: RunProgressSourceEvent[];
-  firstID: number;
-  invalid: number;
-  lastID: number;
-  sourceCount: number;
-  sourceTruncated: boolean;
-  unmapped: number;
-};
+import {
+  type RunProgressProjection,
+  nonNegativeInteger,
+  compareTimeline,
+  positiveInteger,
+  RUN_PROGRESS_STALLED_AFTER_MS,
+  sum,
+  RUN_PROGRESS_STATUS_RUN_LIMIT
+} from "./runProgressModel.ts";
+import {
+  projectionRun,
+  projectionAttempts,
+  projectionEventRows,
+  parseProjectionEvents,
+  attemptInitialPhase,
+  runInitialPhase,
+  authoritativeRunPhase
+} from "./runProgressEvents.ts";
+import { latestActivityAt, stalledSignal } from "./runProgressSignals.ts";
 
 export function rebuildRunProgressProjection(
   db: RunnerDatabase,
@@ -180,229 +112,5 @@ export function runProgressProjectionStatus(db: RunnerDatabase, now = new Date()
   };
 }
 
-function authoritativeRunPhase(run: RunProjectionRow, latest: AttemptProjectionRow | undefined): RunStatus | null {
-  const status = run.legacy_status === "in_progress" && latest?.kind === "recovery" &&
-    ["created", "failed", "interrupted"].includes(latest.status ?? "")
-    ? "recovering"
-    : run.legacy_status === "in_progress" ? "running"
-      : run.legacy_status === "succeeded" ? "succeeded"
-        : ["failed", "cancelled"].includes(run.legacy_status) ? run.legacy_status
-          : null;
-  return RUN_STATUSES.includes(status as RunStatus) ? status as RunStatus : null;
-}
-
-function projectionRun(db: RunnerDatabase, runID: RunID): RunProjectionRow | null {
-  return db.sqlite.query<RunProjectionRow, [string]>(`
-    select id as legacy_id, run_id, issue_id, attempt as run_sequence,
-      status as legacy_status, started_at, ended_at
-    from issue_runs where run_id=?
-  `).get(runID);
-}
-
-function projectionAttempts(db: RunnerDatabase, legacyID: string): AttemptProjectionRow[] {
-  return db.sqlite.query<AttemptProjectionRow, [string]>(`
-    select attempt_id, sequence, kind, status, provider, provider_session_id,
-      provider_turn_id, agent_session_key, started_at, ended_at, updated_at
-    from run_attempts where issue_run_id=? order by sequence asc
-  `).all(legacyID);
-}
-
-function projectionEventRows(db: RunnerDatabase, run: RunProjectionRow): EventRow[] {
-  const nextStartedAt = db.sqlite.query<{ started_at: string }, [number, number]>(`
-    select started_at from issue_runs where issue_id=? and attempt>?
-    order by attempt asc limit 1
-  `).get(run.issue_id, run.run_sequence)?.started_at ?? "";
-  const upperBound = earliestTimestamp(run.ended_at, nextStartedAt);
-  // 按 (issue_id, type, rowid) 索引倒序走到窗口上限即停，避免为排序解析该 Issue 的全部日志 JSON；
-  // 日志在写入时取时间戳，id 序与 created_at 序一致，窗口内再恢复 (created_at, id) 的稳定顺序。
-  return db.sqlite.query<EventRow, [number, string, string, string]>(`
-    select id, payload, created_at from issue_events
-    where issue_id=? and type='issue.log' and julianday(created_at)>=julianday(?)
-      and (?='' or julianday(created_at)<=julianday(?))
-      and json_valid(payload)
-      and json_extract(payload, '$.run_event.contract')='${NORMALIZED_RUN_EVENT_CONTRACT}'
-    order by id desc
-    limit ${RUN_PROGRESS_SOURCE_EVENT_LIMIT + 1}
-  `).all(run.issue_id, run.started_at, upperBound, upperBound).sort(compareEventRows);
-}
-
-function compareEventRows(left: EventRow, right: EventRow): number {
-  if (left.created_at !== right.created_at) return left.created_at < right.created_at ? -1 : 1;
-  return left.id - right.id;
-}
-
-function parseProjectionEvents(rows: EventRow[], attempts: AttemptProjectionRow[]): ParsedEvents {
-  const boundedRows = rows.slice(-RUN_PROGRESS_SOURCE_EVENT_LIMIT);
-  const result: ParsedEvents = {
-    events: [], firstID: 0, invalid: 0, lastID: 0,
-    sourceCount: boundedRows.length, sourceTruncated: rows.length > RUN_PROGRESS_SOURCE_EVENT_LIMIT, unmapped: 0
-  };
-  for (const row of boundedRows) {
-    if (result.firstID === 0) result.firstID = row.id;
-    result.lastID = row.id;
-    const payload = jsonObject(row.payload);
-    const event = normalizedEvent(payload.run_event);
-    if (!event) {
-      result.invalid += 1;
-      continue;
-    }
-    const attempt = eventAttempt(event, row.created_at, attempts);
-    if (!attempt) {
-      result.unmapped += 1;
-      continue;
-    }
-    result.events.push({
-      attempt_id: attempt.attempt_id,
-      attempt_sequence: attempt.sequence,
-      event,
-      occurred_at: row.created_at,
-      source_event_id: row.id,
-      summary: eventSummary(payload, event)
-    });
-  }
-  return result;
-}
-
-function normalizedEvent(value: unknown): NormalizedRunEvent | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const event = value as NormalizedRunEvent;
-  try {
-    if (event.contract !== NORMALIZED_RUN_EVENT_CONTRACT || !event.metadata || !event.source) return null;
-    return validateNormalizedRunEvent(event).length === 0 ? event : null;
-  } catch {
-    return null;
-  }
-}
-
-function eventAttempt(
-  event: NormalizedRunEvent,
-  occurredAt: string,
-  attempts: AttemptProjectionRow[]
-): AttemptProjectionRow | undefined {
-  const providerAttempts = attempts.filter((attempt) => attempt.provider === event.provider);
-  const turnID = cleanString(event.metadata.provider_turn_id);
-  if (turnID) {
-    const exact = providerAttempts.filter((attempt) => attempt.provider_turn_id === turnID).at(-1);
-    if (exact) return exact;
-  }
-  const sessionID = cleanString(event.metadata.provider_session_id);
-  if (sessionID) {
-    const session = providerAttempts.filter((attempt) => attempt.provider_session_id === sessionID &&
-      insideAttemptWindow(occurredAt, attempt)).at(-1);
-    if (session) return session;
-  }
-  const inWindow = providerAttempts.filter((attempt) => insideAttemptWindow(occurredAt, attempt)).at(-1);
-  if (inWindow) return inWindow;
-  const eventTime = timestamp(occurredAt);
-  return providerAttempts.filter((attempt) => timestamp(attempt.started_at || attempt.updated_at) <= eventTime).at(-1) ??
-    providerAttempts[0];
-}
-
-function insideAttemptWindow(occurredAt: string, attempt: AttemptProjectionRow): boolean {
-  const eventTime = timestamp(occurredAt);
-  const start = timestamp(attempt.started_at || attempt.updated_at);
-  const end = attempt.ended_at ? timestamp(attempt.ended_at) : Number.POSITIVE_INFINITY;
-  return eventTime >= start && eventTime <= end;
-}
-
-function attemptInitialPhase(run: RunProjectionRow, attempt: AttemptProjectionRow): RunProgressPhase {
-  const status = ATTEMPT_STATUSES.includes(attempt.status as AttemptStatus) ? attempt.status as AttemptStatus : null;
-  if (attempt.kind === "recovery" && status === "created" && run.legacy_status === "in_progress") return "recovering";
-  if (status === "created") return "queued";
-  return status ?? "unknown";
-}
-
-function runInitialPhase(run: RunProjectionRow, attempt: AttemptProjectionRow | undefined): RunProgressPhase {
-  if (attempt) return attemptInitialPhase(run, attempt);
-  const phase = authoritativeRunPhase(run, attempt);
-  return phase === "created" ? "queued" : phase ?? "unknown";
-}
-
-function latestActivityAt(
-  db: RunnerDatabase,
-  run: RunProjectionRow,
-  attempt: AttemptProjectionRow | undefined,
-  latestEventAt: string
-): string {
-  const sessionAt = attempt?.agent_session_key
-    ? db.sqlite.query<{ updated_at: string }, [string]>(
-        "select updated_at from agent_sessions where session_key=?"
-      ).get(attempt.agent_session_key)?.updated_at ?? ""
-    : "";
-  return latestTimestamp(
-    run.ended_at,
-    run.started_at,
-    attempt?.updated_at ?? "",
-    attempt?.ended_at ?? "",
-    sessionAt,
-    latestEventAt
-  );
-}
-
-function stalledSignal(
-  runPhase: RunStatus | null,
-  providerPhase: RunProgressPhase,
-  since: string,
-  now: Date,
-  thresholdMs: number
-): RunProgressStalledSignal {
-  const waiting = providerPhase === "waiting_approval";
-  const active = runPhase === "running" || runPhase === "recovering";
-  const elapsed = Math.max(0, now.getTime() - timestamp(since));
-  const detected = active && !waiting && elapsed >= thresholdMs;
-  return {
-    detected,
-    evaluated_at: now.toISOString(),
-    reason: waiting ? "waiting_approval" : detected ? "no_progress_for_threshold" : "",
-    since,
-    threshold_ms: thresholdMs
-  };
-}
-
-function eventSummary(payload: Record<string, unknown>, event: NormalizedRunEvent): string {
-  return [payload.error, payload.status, payload.text, payload.command, payload.raw_method, payload.type]
-    .map(cleanString)
-    .find(Boolean) || event.source.method;
-}
-
-function jsonObject(value: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
-  } catch {
-    return {};
-  }
-}
-
-function compareTimeline(left: RunProgressTimelineItem, right: RunProgressTimelineItem): number {
-  const time = timestamp(left.occurred_at) - timestamp(right.occurred_at);
-  if (time !== 0) return time;
-  return left.source_event_id - right.source_event_id;
-}
-
-function earliestTimestamp(...values: string[]): string {
-  return values.filter(Boolean).sort((left, right) => timestamp(left) - timestamp(right))[0] ?? "";
-}
-
-function latestTimestamp(...values: string[]): string {
-  return values.filter(Boolean).sort((left, right) => timestamp(left) - timestamp(right)).at(-1) ?? "";
-}
-
-function timestamp(value: string): number {
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function sum(values: number[]): number {
-  return values.reduce((total, value) => total + value, 0);
-}
-
-function positiveInteger(value: number, label: string): number {
-  if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${label} must be a positive integer`);
-  return value;
-}
-
-function nonNegativeInteger(value: number, label: string): number {
-  if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${label} must be a non-negative integer`);
-  return value;
-}
+export { RUN_PROGRESS_STALLED_AFTER_MS } from "./runProgressModel.ts";
+export type { RunProgressProjection } from "./runProgressModel.ts";

@@ -304,7 +304,7 @@ test("core background maintenance follows saved source, checks repeatedly and st
 
 test("every application runtime entry uses the shared factory with explicit isolated modes", () => {
   const root=join(import.meta.dir,"../..");
-  const files=["http/pi/piRuntime.ts","http/pi/piOAuthApi.ts","pi/runtime/sessionTitleGenerator.ts"];
+  const files=["http/pi/piRuntime.createPiRuntimeSession.ts","http/pi/piOAuthApi.recordOAuthAudit.ts","pi/runtime/sessionTitleGenerator.ts"];
   for(const file of files){const text=readFileSync(join(root,file),"utf8");expect(text).toContain("createPiModelRuntime(");expect(text).not.toContain("ModelRuntime.create(");}
   expect(readFileSync(join(root,"pi/runtime/codexLoginMaintenance.ts"),"utf8")).toContain("setInterval(check, CODEX_REFRESH_INTERVAL_MS)");
 });
