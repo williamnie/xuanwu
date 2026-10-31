@@ -25,7 +25,8 @@ test('note states the auto-run side effect with real counts', () => {
 
 test('both entry points gate the button on the preview and refresh it after importing', () => {
   for (const file of ['./Projects.jsx', './command-center/FirstDeliveryGuide.jsx']) {
-    const source = readFileSync(new URL(file, import.meta.url), 'utf8');
+    const files = file.includes('FirstDeliveryGuide') ? [file, './command-center/useFirstDeliveryGuideState.js', './command-center/useFirstDeliveryActions.js'] : [file, './projects/useProjectsActions.js'];
+    const source = files.map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
     assert.match(source, /useCodexImportPreview\(\)/);
     assert.match(source, /codexImportVisible\(codexImport\)/);
     assert.match(source, /refreshCodexImport\(\)/);

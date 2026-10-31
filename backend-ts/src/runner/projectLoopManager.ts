@@ -1,4 +1,3 @@
-import { projectCapacityAvailable } from "./queueEligibility.ts";
 import {
   projectLoopDecision,
   recordProjectLoopDecision,
@@ -6,10 +5,10 @@ import {
   type ProjectLoopInput
 } from "./projectLoop.ts";
 import {
-  countActiveExecutorWork,
   hasActiveExecutorWorkForProject,
   projectExecutionLockKey
 } from "../db/repositories/issueQueue.ts";
+import { executionLocationHasCapacity, projectExecutionLocation } from "../nodes/capacity.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
@@ -30,13 +29,15 @@ type ProjectLoopState = {
   forcedProjects: Set<string>;
   waitingProjects: string[];
   workerCount: number;
+  /** 按执行位置（"" 为中心本机，否则为节点 ID）统计的 worker 数。 */
+  workersByLocation: Map<string, number>;
 };
 
 const statesByDatabase = new WeakMap<RunnerDatabase, ProjectLoopState>();
 const activeLoopCounts = new Map<string, number>();
 let maxParallelProjects = 1;
 
-type RunnableProject = { id: string; lockKey: string };
+type RunnableProject = { id: string; location: string; lockKey: string };
 
 export function startProjectLoop(
   runtime: ProjectLoopRuntime,
@@ -80,6 +81,7 @@ export function readProjectLoopSnapshot(database: RunnerDatabase) {
   const state = statesByDatabase.get(database);
   return { source: "core_runtime" as const, maximum: maxParallelProjects,
     workers: state?.workerCount ?? 0,
+    workersByLocation: new Map(state?.workersByLocation ?? []),
     activeLockKeys: new Set(state?.activeLockKeys ?? []), forcedProjects: new Set(state?.forcedProjects ?? []) };
 }
 
@@ -97,6 +99,7 @@ async function runWorker(runtime: ProjectLoopRuntime, project: RunnableProject):
   } finally {
     state.activeLockKeys.delete(project.lockKey);
     state.workerCount = Math.max(0, state.workerCount - 1);
+    state.workersByLocation.set(project.location, Math.max(0, (state.workersByLocation.get(project.location) ?? 1) - 1));
     startQueuedWorkers(runtime, project.id);
   }
 }
@@ -173,17 +176,19 @@ function startQueuedWorkers(runtime: ProjectLoopRuntime, errorProjectID = "proje
 
 function drainQueuedWorkers(runtime: ProjectLoopRuntime): void {
   const state = stateFor(runtime.database);
-  while (canStartWorker(runtime.database, state)) {
+  for (;;) {
     const project = nextRunnableProject(runtime, state);
     if (!project) return;
     state.activeLockKeys.add(project.lockKey);
     state.workerCount += 1;
+    state.workersByLocation.set(project.location, (state.workersByLocation.get(project.location) ?? 0) + 1);
     void runWorker(runtime, project);
   }
 }
 
-function canStartWorker(db: RunnerDatabase, state: ProjectLoopState): boolean {
-  return projectCapacityAvailable(countActiveExecutorWork(db), state.workerCount, maxParallelProjects);
+/** 中心本机与每个远程节点各有独立的并发名额，节点之间、节点与本机互不占用。 */
+function locationHasCapacity(db: RunnerDatabase, state: ProjectLoopState, location: string): boolean {
+  return executionLocationHasCapacity(db, location, state.workersByLocation.get(location) ?? 0, maxParallelProjects);
 }
 
 function nextRunnableProject(runtime: ProjectLoopRuntime, state: ProjectLoopState): RunnableProject | null {
@@ -192,7 +197,8 @@ function nextRunnableProject(runtime: ProjectLoopRuntime, state: ProjectLoopStat
     const id = state.waitingProjects.shift();
     if (!id) continue;
     const lockKey = projectExecutionLockKey(runtime.database, id);
-    if (state.activeLockKeys.has(lockKey)) {
+    const location = projectExecutionLocation(runtime.database, id);
+    if (state.activeLockKeys.has(lockKey) || !locationHasCapacity(runtime.database, state, location)) {
       state.waitingProjects.push(id);
       continue;
     }
@@ -204,7 +210,7 @@ function nextRunnableProject(runtime: ProjectLoopRuntime, state: ProjectLoopStat
       deleteActiveLoop(state, id);
       continue;
     }
-    return { id, lockKey };
+    return { id, location, lockKey };
   }
   return null;
 }
@@ -221,7 +227,8 @@ function stateFor(database: RunnerDatabase): ProjectLoopState {
     activeLoops: new Set(),
     forcedProjects: new Set(),
     waitingProjects: [],
-    workerCount: 0
+    workerCount: 0,
+    workersByLocation: new Map()
   };
   statesByDatabase.set(database, state);
   return state;

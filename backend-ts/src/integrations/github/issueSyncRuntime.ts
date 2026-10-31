@@ -14,6 +14,7 @@ import { syncGitHubHumanReview } from "./issueHumanBridge.ts";
 import { relayNativeGitHubQuestion } from "./nativeQuestionBridge.ts";
 import { interruptIssueForStatusTransition } from "../../runner/interrupt.ts";
 import { isExecutorProviderId } from "../../providers/types.ts";
+import { providersForProjectID } from "../../nodes/remoteExecution.ts";
 
 type RepositoryCursor = { since?: string; cooldownUntil?: string; repositoryId?: number; query?: string; etag?: string };
 type RuntimeOptions = {
@@ -195,7 +196,8 @@ export class GitHubIssueSyncRuntime {
       if (issue && !["done", "failed", "cancelled"].includes(issue.status)) {
         const run = listIssueRuns(db, issue.id).at(-1);
         if (run && !run.ended_at) {
-          const provider = isExecutorProviderId(run.provider) ? this.options.runtime.providers?.[run.provider] : undefined;
+          const providers = providersForProjectID(db, this.options.runtime.providers, issue.project_id);
+          const provider = isExecutorProviderId(run.provider) ? providers?.[run.provider] : undefined;
           if (!provider?.interrupt || !run.provider_session_id || (provider.interruptScope !== "active" && provider.interruptScope !== "session" && !run.provider_turn_id)) {
             updateGitHubIssueCase(db, record.issue_node_id, record.source_revision, { last_error: "External Issue closed or intake removed; waiting for provider interruption" });
             return;

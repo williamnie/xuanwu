@@ -1,0 +1,161 @@
+.settings-project-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.settings-project-panel-header {
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  gap: var(--space-5);
+  justify-content: space-between;
+  padding-bottom: var(--space-5);
+}
+
+.settings-project-panel-header h2 {
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  margin: var(--space-1) 0 var(--space-1-5);
+}
+
+.settings-project-panel-header p {
+  color: var(--text-muted);
+  font-size: var(--text-md);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.settings-project-panel-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: var(--space-2-5);
+  justify-content: flex-end;
+}
+
+.settings-project-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+/* Keep the title and actions visible while long project configuration forms scroll. */
+.project-config-modal {
+  --project-modal-inline-padding: var(--space-6);
+
+  background: var(--bg-card);
+  border: 1px solid color-mix(in srgb, var(--border-color) 82%, var(--text-muted) 18%);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  max-width: 720px;
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+  padding: 0;
+  width: min(720px, calc(100vw - 48px));
+}
+
+.project-config-modal-create {
+  max-width: 640px;
+  width: min(640px, calc(100vw - 48px));
+}
+
+.project-modal-overlay {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: color-mix(in srgb, var(--terminal-bg) 34%, transparent);
+  padding: var(--space-6);
+}
+
+.project-config-modal-header {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: space-between;
+  padding: var(--space-6) var(--project-modal-inline-padding) var(--space-4-5);
+}
+
+.project-config-modal-header h2 {
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  margin: 0;
+}
+
+.project-config-modal-header p {
+  color: var(--text-muted);
+  font-size: var(--text-md);
+  line-height: 1.5;
+  margin: var(--space-1-5) 0 0;
+  max-width: 520px;
+}
+
+.project-config-modal-close {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  height: 34px;
+  padding: 0;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+  width: 34px;
+}
+
+.project-config-modal-close:hover {
+  background: var(--button-secondary-bg);
+  border-color: var(--button-border);
+  color: var(--text-primary);
+}
+
+.project-config-modal-close:focus-visible {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.project-config-modal-form {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.project-config-modal-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-1) var(--project-modal-inline-padding) var(--space-6);
+  scrollbar-gutter: stable;
+}
+
+.project-config-modal-footer {
+  background: color-mix(in srgb, var(--bg-secondary) 48%, var(--bg-card));
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  padding: var(--space-4) var(--project-modal-inline-padding) var(--space-5);
+}
+
+.project-config-modal-footer .btn {
+  min-height: 40px;
+  padding-inline: var(--space-4);
+}
+
+@supports (height: 100dvh) {
+  .project-config-modal {
+    max-height: min(90vh, calc(100dvh - 48px));
+  }
+}
+

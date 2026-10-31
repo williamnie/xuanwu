@@ -1,3 +1,4 @@
+import { readAppSource } from '../test-support/readAppSource.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -13,7 +14,7 @@ const handoffId = 'xw:handoff:derived:42';
 const runId = 'xw:run:issue_runs:issue-42-attempt-2';
 const workPath = `#/work/${encodeURIComponent(workId)}`;
 const deliveryPath = `${workPath}/delivery/${encodeURIComponent(handoffId)}`;
-const appSource = readFileSync(new URL('./App.jsx', import.meta.url), 'utf8');
+const appSource = readAppSource();
 
 function assertPage(route, page) {
   assert.ok((PAGE_IDS[page] || [page]).includes(route.currentPage), `${route.currentPage} must remain the ${page} surface`);
@@ -37,7 +38,7 @@ function browserHistory(initialHash) {
     setMobileSidebarOpen: () => {},
   };
   // eslint-disable-next-line no-regex-spaces -- Match the frozen source indentation literally.
-  const effect = appSource.match(/useEffect\(\(\) => \{\n    if \(!globalThis.addEventListener\)([\s\S]*?)\n  \}, \[updateAppState\]\);/);
+  const effect = appSource.match(/useEffect\(\(\) => \{\n    if \(!globalThis.addEventListener\)([\s\S]*?)\n  \}, \[setMobileSidebarOpen, startPageTransition, updateAppState\]\);/);
   assert.ok(effect, 'browser history must keep the live App synchronization effect');
   runInNewContext(`(() => { if (!globalThis.addEventListener)${effect[1]} })()`, context);
   // eslint-disable-next-line no-regex-spaces -- Match the frozen source indentation literally.

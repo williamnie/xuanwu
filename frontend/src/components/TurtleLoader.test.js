@@ -1,17 +1,19 @@
+import { readAppSource } from '../../test-support/readAppSource.js';
+import { readStylesheet } from '../../test-support/readStylesheet.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const loaderSource = readFileSync(new URL('./TurtleLoader.jsx', import.meta.url), 'utf8');
 const loaderStyles = readFileSync(new URL('./TurtleLoader.css', import.meta.url), 'utf8');
-const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+const appSource = readAppSource();
 const sessionSource = [
   '../pages/sessions/SessionSidebar.jsx',
   '../pages/sessions/SessionWorkspace.jsx',
   '../pages/sessions/SessionChatWorkspace.jsx',
 ].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
 const piChatSource = readFileSync(new URL('../pages/PiChat.jsx', import.meta.url), 'utf8');
-const globalStyles = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
+const globalStyles = readStylesheet(new URL('../index.css', import.meta.url));
 
 test('shared turtle loader uses the Xuanwu running asset and exposes accessible status text', () => {
   assert.match(loaderSource, /turtleAssetForState/);
@@ -21,9 +23,10 @@ test('shared turtle loader uses the Xuanwu running asset and exposes accessible 
   assert.match(loaderSource, /turtle-loader-track/);
 });
 
-test('turtle loader uses the standard spinner without crawling or bobbing the brand image', () => {
-  assert.match(loaderStyles, /\.turtle-loader-track::after\s*\{[^}]*animation:\s*xuanwu-spin 1s linear infinite/);
-  assert.doesNotMatch(loaderStyles, /turtle-loader-crawl|turtle-loader-bob/);
+test('turtle loader keeps crawling and respects reduced motion', () => {
+  assert.match(loaderStyles, /\.turtle-loader-runner\s*\{[^}]*animation:\s*turtle-loader-crawl 2.8s linear infinite alternate/);
+  assert.doesNotMatch(loaderStyles, /turtle-loader-track::after/);
+  assert.match(loaderStyles, /prefers-reduced-motion:[\s\S]*\.turtle-loader-runner \{ animation: none;/);
   assert.match(loaderStyles, /prefers-reduced-motion/);
   assert.match(globalStyles, /\.animate-spin/);
   assert.match(globalStyles, /\.spin-animation/);

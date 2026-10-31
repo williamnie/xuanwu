@@ -1,3 +1,5 @@
+import { projectOptionLabel } from '../../utils/projectOptionLabel.js';
+import { useProjectNodes } from '../../store/useProjectNodes.js';
 import { ArrowUp, Brain, Folder, Gauge, Loader2, ShieldAlert, SlidersHorizontal } from 'lucide-react';
 import PromptEditor from '../../components/editor/PromptEditor';
 import SessionCommandPanel from './SessionCommandPanel';
@@ -42,7 +44,9 @@ export default function NewSessionWorkspace({
   sessionProjects,
   providerOptions = [],
   providerCatalog = [],
+  blockedReason = '',
 }) {
+  const nodesById = useProjectNodes();
   const selectedProviderAvailable = providerOptions.some(option => option.id === sessionSettings.provider);
   return (
     <div className="new-session-container animate-fade-in">
@@ -83,7 +87,7 @@ export default function NewSessionWorkspace({
               setPromptCommandResult(null);
               setPromptCommandError('');
             }}
-            onSubmitKey={!promptCommand && !sending && hasComposerContent(prompt, promptReferences) && !newSessionReferenceValidation.hasErrors ? handleCreateNewSession : null}
+            onSubmitKey={!blockedReason && selectedProviderAvailable && !promptCommand && !sending && hasComposerContent(prompt, promptReferences) && !newSessionReferenceValidation.hasErrors ? handleCreateNewSession : null}
             footerControls={(
               <NewSessionPermissionControl
                 settings={sessionSettings}
@@ -98,7 +102,7 @@ export default function NewSessionWorkspace({
                 modelsError={modelsError}
                 modelsLoading={modelsLoading}
                 sending={sending}
-                canSubmit={!promptCommand && hasComposerContent(prompt, promptReferences) && !newSessionReferenceValidation.hasErrors}
+                canSubmit={!blockedReason && selectedProviderAvailable && !promptCommand && hasComposerContent(prompt, promptReferences) && !newSessionReferenceValidation.hasErrors}
                 onModelChange={(value) => handleSettingChange('model', value)}
                 onServiceTierChange={(value) => handleSettingChange('serviceTier', value)}
                 onSubmit={handleCreateNewSession}
@@ -107,21 +111,23 @@ export default function NewSessionWorkspace({
           />
         </div>
 
+        {blockedReason ? <p className="new-session-subtitle" role="status">{blockedReason}</p> : null}
+
         <div className="new-session-bottom-tags">
           <div className="bottom-tag-select">
             <Folder size={13} />
-            <span>项目: {selectedProject?.name || '未选择'}</span>
+            <span>项目: {selectedProject ? projectOptionLabel(selectedProject, nodesById, selectedProject.name || '未选择') : '未选择'}</span>
             <select value={projectId} onChange={(event) => handleProjectChange(event.target.value)}>
               <option value="">选择项目</option>
               {sessionProjects.map((project) => (
-                <option key={project.id} value={project.id}>{project.name}</option>
+                <option key={project.id} value={project.id}>{projectOptionLabel(project, nodesById, project.name)}</option>
               ))}
             </select>
           </div>
 
           <div className="bottom-tag-select">
             <SlidersHorizontal size={13} />
-            <span>Coding tool: {selectedProviderAvailable ? projectProviderLabel(sessionSettings.provider) : '未选择'}</span>
+            <span>Coding tool: {selectedProviderAvailable ? providerOptions.find(option => option.id === sessionSettings.provider)?.label : '未选择'}</span>
             <select value={selectedProviderAvailable ? sessionSettings.provider : ''} onChange={(event) => handleSettingChange('provider', event.target.value)}>
               {!selectedProviderAvailable ? <option disabled value="">选择可用编程工具</option> : null}
               {providerOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}

@@ -146,6 +146,11 @@ export type ProviderRunInput = {
   sandbox?: string;
   /** v1 authority. Legacy sandbox/approvalPolicy remain only during the compatibility window. */
   policy?: ResolvedExecutionPolicy;
+  /**
+   * 远程节点项目引用的托管 Skill 版本（中心本机目录）。提示里以节点占位符引用它们，
+   * 远程 provider 负责把这些目录下发到节点；本机 provider 忽略该字段。
+   */
+  skillPackages?: Array<{ directory: string; path: string }>;
   onEvent?: (event: ProviderEvent) => void;
 };
 

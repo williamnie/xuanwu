@@ -1,3 +1,5 @@
+import { projectOptionLabel } from '../utils/projectOptionLabel.js';
+import { useProjectNodes } from '../store/useProjectNodes.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BookOpen, Check, Download, LoaderCircle, Plus, RefreshCw, ShieldCheck } from 'lucide-react';
 import { skillLibraryApi } from '../api/skillLibrary.js';
@@ -9,6 +11,7 @@ const OPERATIONS = { enable: '启用', disable: '停用', update: '更新', roll
 const SOURCE_LABELS = { git: 'Git 仓库', local: '本地目录', inline: '直接编写' };
 
 export default function SkillLibraryPanel() {
+  const nodesById = useProjectNodes();
   const [library, setLibrary] = useState(EMPTY);
   const [projects, setProjects] = useState([]);
   const [projectId, setProjectId] = useState('');
@@ -86,7 +89,7 @@ export default function SkillLibraryPanel() {
       </div>
       <div className="skill-library-filters">
         <label><span className="ds-mono-label">作用域</span><select aria-label="技能作用域" value={projectId} disabled={Boolean(busy)} onChange={event => { setProjectId(event.target.value); setSelectedKey(''); setDetail(null); setError(''); setNotice(''); detailSequence.current++; }}>
-          <option value="">整个玄武实例</option>{projects.map(project => <option value={project.id} key={project.id}>{project.name || project.id}</option>)}
+          <option value="">整个玄武实例</option>{projects.map(project => <option value={project.id} key={project.id}>{projectOptionLabel(project, nodesById, project.name || project.id)}</option>)}
         </select></label>
         <label><span className="ds-mono-label">查找技能</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="名称或来源" /></label>
       </div>

@@ -1,4 +1,9 @@
+import { getRemoteNode } from "../../db/repositories/nodes.ts";
+import { projectLocation } from "../../nodes/projectLocation.ts";
+import { catalogForRemoteNode } from "../../nodes/providerCatalog.ts";
+import type { NodeHub } from "../../nodes/hub.ts";
 import { asProviderId } from "../../providers/types.ts";
+import { providersForNode } from "../../nodes/remoteExecution.ts";
 import type { ProviderRegistry } from "../../providers/core/registry.ts";
 import { catalogEntryFromRegistry } from "../../providers/core/catalog.ts";
 import { json, jsonError } from "../errors.ts";
@@ -18,16 +23,43 @@ import type { ProviderTransport } from "../../providers/core/manifest.ts";
  */
 export function registerProvidersCatalogRoute(
   router: Router,
-  context: { database?: RunnerDatabase; providersRegistry?: ProviderRegistry }
+  context: { database?: RunnerDatabase; nodeHub?: NodeHub; providersRegistry?: ProviderRegistry }
 ): void {
-  router.get("/api/providers", () => {
+  router.get("/api/providers", (request: Request) => {
+    const params = new URL(request.url).searchParams;
+    let nodeID = params.get("node_id")?.trim() ?? "";
+    const projectID = params.get("project_id")?.trim() ?? "";
+    if (projectID) {
+      const project = context.database ? getProject(context.database, projectID) : null;
+      if (!project) return jsonError(404, "project not found");
+      const location = projectLocation(project.cwd);
+      if (nodeID && nodeID !== location.nodeId) return jsonError(400, "node_id does not match project location");
+      nodeID = location.nodeId;
+    }
+    if (nodeID) {
+      const node = context.database ? getRemoteNode(context.database, nodeID) : null;
+      if (!node || node.revoked_at) return jsonError(404, "node not found");
+      return json(catalogForRemoteNode(node, context.nodeHub?.isOnline(nodeID) ?? false));
+    }
     if (!context.providersRegistry) return json([]);
     return json(context.providersRegistry.list().map(catalogEntryFromRegistry));
   });
   router.get("/api/providers/:id/models", async (request: Request) => {
-    if (!context.providersRegistry) return jsonError(404, "provider catalog unavailable");
-    const parts = new URL(request.url).pathname.split("/");
+    const url = new URL(request.url);
+    const parts = url.pathname.split("/");
     const id = decodeURIComponent(parts.at(-2) ?? "");
+    // 远程项目选模型：读取节点上该编程工具的模型列表。
+    const nodeID = url.searchParams.get("node_id")?.trim() ?? "";
+    if (nodeID !== "") {
+      const remote = providersForNode(nodeID)[asProviderId(id)];
+      if (!remote?.listModels) return jsonError(409, `provider "${id}" on node ${nodeID} does not support model_list`);
+      try {
+        return json({ data: await remote.listModels() });
+      } catch (error) {
+        return jsonError(409, redactedUserVisibleText(error instanceof Error ? error.message : "node model list unavailable"));
+      }
+    }
+    if (!context.providersRegistry) return jsonError(404, "provider catalog unavailable");
     try {
       const provider = context.providersRegistry.getReady(asProviderId(id));
       if (!provider.capabilities.includes("model_list") || !provider.listModels) {

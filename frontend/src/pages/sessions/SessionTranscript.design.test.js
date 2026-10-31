@@ -1,11 +1,11 @@
+import { readSessionTranscriptSource } from './sessionTestSources.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import SessionTranscript from './SessionTranscript.jsx';
 
-const transcriptSource = readFileSync(new URL('./SessionTranscript.jsx', import.meta.url), 'utf8');
+const transcriptSource = readSessionTranscriptSource();
 
 test('persisted turns render task input cards before provider execution blocks', () => {
   assert.match(transcriptSource, /<UserMessageBubble[\s\S]*timestamp=\{turnTimestamp\(turn, session, 'user'\)\}/);

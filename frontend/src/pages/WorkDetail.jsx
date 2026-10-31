@@ -1,249 +1,32 @@
+import { isWaitingForProjectNode } from '../utils/remoteProjectStatus.js';
+import RemoteProjectBadge from '../components/RemoteProjectBadge.jsx';
 import WorkSchedule from './work/WorkSchedule.jsx';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { workHumanReviewCopy } from './workHumanReviewCopy';
 import WorkFeedback from './work/WorkFeedback.jsx';
-import {
-  AlertTriangle,
-  ArrowLeft,
-  CheckCircle2,
-  CircleDot,
-  Copy,
-  LoaderCircle,
-  Pencil,
-  Play,
-  RefreshCw,
-  RotateCw,
-  Square,
-} from 'lucide-react';
-import { evidenceApi } from '../api/evidence.js';
-import { handoffsApi } from '../api/handoffs.js';
-import { workApi } from '../api/work.js';
+import { AlertTriangle, ArrowLeft, CircleDot, Copy, LoaderCircle, Pencil, Play, RefreshCw, RotateCw, Square } from 'lucide-react';
 import MarkdownPreview from '../components/editor/MarkdownPreview.jsx';
-import { message } from '../store/toastStore.js';
 import WorkEditorDialog from './work/WorkEditorDialog.jsx';
 import WorkRunList from './work/WorkRunList.jsx';
 import { HumanReviewCard } from './work/HumanReview.jsx';
-import { useHumanReview } from './work/useHumanReview.jsx';
 import { workProfileSummary } from './work/workProfileRouting.js';
 import WorkDeliveryView from './work/WorkDeliveryView.jsx';
-import { issueIdFromWorkId } from './workBoardModel.js';
-import {
-  WORK_DETAIL_TABS,
-  WORK_TIMELINE_KINDS,
-  buildWorkActionPayload,
-  defaultWorkDetailTab,
-  filterTimelineItems,
-  mergeTimelinePages,
-  workAvailableActions,
-  workBlockReason,
-} from './workDetailModel.js';
+import { WORK_DETAIL_TABS, WORK_TIMELINE_KINDS } from './workDetailModel.js';
+import useWorkDetail from './work/useWorkDetail.js';
+import { WorkStateSummary, WorkDetailLoading, WorkDetailFailure, SectionHeading, EmptySection, ResourceError, InlineConfirmation } from './work/WorkDetailStates.jsx';
+import { formatTime } from './work/workDetailFormatting.js';
 import './WorkDetail.css';
-import { useI18n } from '../i18n/context.js';
 
-const EMPTY_RESULTS = { evidence: [], handoffs: [] };
-const DEFAULT_ACCEPTANCE_ID = 'issue-delivery';
-
-// 任务详情：页头和“现在怎样”常驻；结果 / 任务描述 / 执行 / 活动放进 Tab，默认 Tab 按深链和状态选择。
 export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChanged, projects = [], selectedHandoffId = '', selectedRunId = '', workId }) {
-  const { language, t } = useI18n();
-  const detailRequest = useRef(0);
-  const resultsRequest = useRef(0);
-  const activityRequest = useRef(0);
-  const [detail, setDetail] = useState(null);
-  const [results, setResults] = useState(EMPTY_RESULTS);
-  const [resultErrors, setResultErrors] = useState({});
-  const [latestRun, setLatestRun] = useState(null);
-  const [timeline, setTimeline] = useState([]);
-  const [timelineCursor, setTimelineCursor] = useState('');
-  const [timelineKind, setTimelineKind] = useState('');
-  const [timelineError, setTimelineError] = useState('');
-  const [activeTab, setActiveTab] = useState('');
-  const [runCount, setRunCount] = useState(null);
-  const [activeDeliveryId, setActiveDeliveryId] = useState(selectedHandoffId);
-  const [loading, setLoading] = useState(true);
-  const [resultsLoading, setResultsLoading] = useState(true);
-  const [activityLoading, setActivityLoading] = useState(false);
-  const [activityLoaded, setActivityLoaded] = useState(false);
-  const [timelineLoadingMore, setTimelineLoadingMore] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [pendingAction, setPendingAction] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [processToken, setProcessToken] = useState(0);
-  const [error, setError] = useState('');
-
-  const loadDetail = useCallback(async ({ silent = false } = {}) => {
-    const version = ++detailRequest.current;
-    if (!silent) setLoading(true);
-    setError('');
-    try {
-      const nextDetail = await workApi.getWork(workId);
-      if (version === detailRequest.current) setDetail(nextDetail);
-    } catch (loadError) {
-      if (version === detailRequest.current) setError(loadError.message || t('work.loadFailed'));
-    } finally {
-      if (version === detailRequest.current) setLoading(false);
-    }
-  }, [t, workId]);
-
-  const loadResults = useCallback(async () => {
-    const version = ++resultsRequest.current;
-    setResultsLoading(true);
-    const settled = await Promise.allSettled([
-      evidenceApi.listEvidence({ limit: 20, workId }),
-      handoffsApi.getHandoffs({ limit: 10, workId }),
-    ]);
-    if (version !== resultsRequest.current) return;
-    const [evidenceResult, handoffsResult] = settled;
-    setResults({
-      evidence: fulfilledItems(evidenceResult),
-      handoffs: fulfilledItems(handoffsResult),
-    });
-    setResultErrors(settledErrors(settled, ['evidence', 'handoffs']));
-    setResultsLoading(false);
-  }, [workId]);
-
-  const loadActivity = useCallback(async () => {
-    const version = ++activityRequest.current;
-    setActivityLoading(true);
-    try {
-      const response = await workApi.getWorkTimeline(workId, { limit: 60 });
-      if (version !== activityRequest.current) return;
-      setTimeline(response?.items || []);
-      setTimelineCursor(response?.next_cursor || '');
-      setTimelineError('');
-      setActivityLoaded(true);
-    } catch (loadError) {
-      if (version === activityRequest.current) setTimelineError(loadError.message || t('work.loadActivityFailed'));
-    } finally {
-      if (version === activityRequest.current) setActivityLoading(false);
-    }
-  }, [t, workId]);
-
-  useEffect(() => {
-    setDetail(null);
-    setResults(EMPTY_RESULTS);
-    setResultErrors({});
-    setLatestRun(null);
-    setTimeline([]);
-    setTimelineCursor('');
-    setTimelineKind('');
-    setTimelineError('');
-    setActiveTab('');
-    setRunCount(null);
-    setActivityLoaded(false);
-    setActiveDeliveryId(selectedHandoffId);
-    setEditorOpen(false);
-    setPendingAction('');
-    loadDetail();
-    loadResults();
-  }, [loadDetail, loadResults, selectedHandoffId]);
-
-  useEffect(() => {
-    if (activeTab === 'activity' && !activityLoaded && !activityLoading) loadActivity();
-  }, [activeTab, activityLoaded, activityLoading, loadActivity]);
-
-  const work = detail?.work || null;
-  const issueId = issueIdFromWorkId(work?.id);
-  const project = projects.find(item => item.id === work?.owner?.project_id) || null;
-  const projectName = project?.name || work?.owner?.project_id || 'Unscoped';
-  const decision = detail?.decision || null;
-  const availableActions = workAvailableActions(work?.status, decision);
-  const blockReason = workBlockReason(work, project);
-  const feedbackPending = ['received', 'executing'].includes(detail?.feedback?.status);
-  const workRunning = work?.status === 'in_progress';
-  useEffect(() => {
-    if (!feedbackPending && !workRunning) return undefined;
-    const timer = window.setInterval(() => {
-      if (document.visibilityState !== 'visible') return;
-      void loadDetail({ silent: true });
-      void loadResults();
-    }, 10000);
-    return () => window.clearInterval(timer);
-  }, [feedbackPending, loadDetail, loadResults, workRunning]);
-  const visibleTimeline = useMemo(() => filterTimelineItems(timeline, timelineKind), [timeline, timelineKind]);
-  const customAcceptance = useMemo(
-    () => (work?.acceptance?.criteria || []).filter(criterion => criterion.id !== DEFAULT_ACCEPTANCE_ID),
-    [work],
-  );
-
-  useEffect(() => {
-    setActiveDeliveryId(current => selectedHandoffId
-      || (results.handoffs.some(item => item.id === current) ? current : results.handoffs[0]?.id || ''));
-  }, [results.handoffs, selectedHandoffId]);
-
-  // 首次拿到任务时选默认 Tab；之后状态刷新不抢走用户手动选的 Tab。
-  const workStatus = work?.status || '';
-  useEffect(() => {
-    if (workStatus) setActiveTab(current => current || defaultWorkDetailTab(workStatus, { selectedHandoffId, selectedRunId }));
-  }, [selectedHandoffId, selectedRunId, workStatus]);
-
-  // 从执行记录页“所属任务”回来时，同一任务也切到执行并高亮那一次。
-  useEffect(() => {
-    if (selectedRunId) setActiveTab('runs');
-  }, [selectedRunId]);
-
-  useEffect(() => {
-    if (!work) return;
-    onPageContextChange?.({
-      page_id: 'tasks',
-      project_id: work.owner?.project_id || '',
-      work_id: work.id,
-      ...(activeDeliveryId ? { handoff_id: activeDeliveryId } : {}),
-    });
-  }, [activeDeliveryId, onPageContextChange, work]);
-
-  const refreshAll = async () => {
-    setRefreshing(true);
-    setProcessToken(value => value + 1);
-    await Promise.all([loadDetail({ silent: true }), loadResults(), ...(activityLoaded ? [loadActivity()] : [])]);
-    setRefreshing(false);
-  };
-
-  const loadMoreTimeline = async () => {
-    if (!timelineCursor || timelineLoadingMore) return;
-    setTimelineLoadingMore(true);
-    try {
-      const response = await workApi.getWorkTimeline(workId, { cursor: timelineCursor, limit: 60 });
-      setTimeline(current => mergeTimelinePages(current, response?.items || []));
-      setTimelineCursor(response?.next_cursor || '');
-      setTimelineError('');
-    } catch (timelineLoadError) {
-      setTimelineError(timelineLoadError.message || t('work.loadMoreActivityFailed'));
-    } finally {
-      setTimelineLoadingMore(false);
-    }
-  };
-
-  const submitAction = async (action) => {
-    if (!work || submitting) return;
-    setSubmitting(true);
-    try {
-      await workApi.controlWork(work.id, action, buildWorkActionPayload(work, action));
-      message.success(t(action === 'enqueue' ? 'work.enqueued' : action === 'retry' ? 'work.requeued' : 'work.cancelled'));
-      setPendingAction('');
-      await refreshAll();
-      onWorkChanged?.();
-    } catch (actionError) {
-      message.error(actionError.message || t('work.actionFailed'));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const copyWorkId = async () => {
-    try {
-      await navigator.clipboard.writeText(work.id);
-      message.success(t('work.idCopied'));
-    } catch (copyError) {
-      message.error(copyError.message || t('work.copyFailed'));
-    }
-  };
-
-  const handleLatestRunChange = useCallback(run => setLatestRun(run), []);
-  const handleRunTotalChange = useCallback(total => setRunCount(total), []);
-  const review = useHumanReview({ onSubmitted: async () => { await refreshAll(); onWorkChanged?.(); } });
-
+  const {
+    nodesById, language, t, detail, work,
+    results, resultErrors, latestRun, timelineCursor, timelineKind,
+    timelineError, activeTab, runCount, activeDeliveryId, loading,
+    resultsLoading, activityLoading, activityLoaded, timelineLoadingMore, refreshing,
+    editorOpen, pendingAction, submitting, processToken, error,
+    issueId, project, projectName, decision, availableActions,
+    blockReason, visibleTimeline, customAcceptance, setActiveTab, setTimelineKind,
+    setActiveDeliveryId, setEditorOpen, setPendingAction, refreshAll, loadMoreTimeline,
+    submitAction, copyWorkId, handleLatestRunChange, handleRunTotalChange, review,
+  } = useWorkDetail({ onPageContextChange, onWorkChanged, projects, selectedHandoffId, selectedRunId, workId });
   if (loading && !work) return <WorkDetailLoading />;
   if (error || !work) return <WorkDetailFailure error={error} navigateTo={navigateTo} />;
 
@@ -276,7 +59,8 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
           <span className="work-detail-status" data-status={work.status}>{t(`status.${work.status}`)}</span>
           <h1>{work.title}</h1>
         </div>
-        <div className="work-detail-meta"><span>{projectName}</span><span>{t('work.updated', { time: formatTime(work.updated_at, language) })}</span></div>
+        <div className="work-detail-meta"><span>{projectName}</span><RemoteProjectBadge project={project} nodesById={nodesById} /><span>{t('work.updated', { time: formatTime(work.updated_at, language) })}</span></div>
+        {isWaitingForProjectNode(work, project, nodesById) ? <div className="work-block-reason" role="status">等待节点上线</div> : null}
       </header>
 
       {pendingAction ? <InlineConfirmation busy={submitting} onCancel={() => setPendingAction('')} onConfirm={() => submitAction(pendingAction)} /> : null}
@@ -361,7 +145,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
           </div>
           <ResourceError error={timelineError} />
           {activityLoading && !activityLoaded ? <div className="work-activity-loading"><LoaderCircle className="is-spinning" size={14} /> {t('work.loadingActivity')}</div> : null}
-          {activityLoaded && !activityLoading && visibleTimeline.length === 0 ? <EmptySection text={timelineKind ? t('work.noMatchingActivity') : t('work.noActivity')} /> : null}
+          {activityLoaded && !activityLoading && visibleTimeline.length === 0 ? <EmptySection text={timelineCursor ? t('work.noVisibleActivityYet') : timelineKind ? t('work.noMatchingActivity') : t('work.noActivity')} /> : null}
           <div className="work-timeline-list">
             {visibleTimeline.map(item => (
               <article key={item.id}>
@@ -378,73 +162,4 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       {review.dialog}
     </section>
   );
-}
-
-function WorkStateSummary({ status, decision }) {
-  const { t } = useI18n();
-  const pendingSummary = decision?.owner === 'human'
-    ? [workHumanReviewCopy(decision?.request?.kind, t).pending, decision?.request?.question || t('work.state.reviewDetail')]
-    : decision?.phase === 'pi_continuing'
-      ? [t('work.state.piRepairingTitle'), t('work.state.piRepairingDetail')]
-      : decision?.phase === 'pi_deciding'
-        ? [t('work.state.piVerifyingTitle'), t('work.state.piVerifyingDetail')]
-        : decision?.phase === 'pi_error'
-          ? [t('work.state.piBlockedTitle'), decision?.activity?.error || t('work.state.piBlockedDetail')]
-          : decision?.phase === 'pi_waiting'
-            ? [t('work.state.piWaitingTitle'), t('work.state.piWaitingDetail')]
-            : [t('work.state.piQueuedTitle'), t('work.state.piQueuedDetail')];
-  const summary = {
-    cancelled: [t('work.state.cancelledTitle'), t('work.state.cancelledDetail')],
-    done: [t('work.state.doneTitle'), t('work.state.doneDetail')],
-    failed: [t('work.state.failedTitle'), t('work.state.failedDetail')],
-    in_progress: decision?.phase?.startsWith('pi_') ? pendingSummary : [t('work.state.runningTitle'), t('work.state.runningDetail')],
-    needs_user: pendingSummary,
-    todo: [t('work.state.queuedTitle'), t('work.state.queuedDetail')],
-    triage: [t('work.state.readyTitle'), t('work.state.readyDetail')],
-  }[status] || [status, t('work.state.unknownDetail')];
-  const Icon = status === 'failed' ? AlertTriangle : status === 'done' ? CheckCircle2 : CircleDot;
-  return <div className="work-state-summary" data-status={status}><Icon size={16} /><div><strong>{summary[0]}</strong><span>{summary[1]}</span></div></div>;
-}
-
-function WorkDetailLoading() {
-  const { t } = useI18n();
-  return <div className="work-detail-loading"><LoaderCircle className="is-spinning" size={14} /><strong>{t('work.loadingDetail')}</strong></div>;
-}
-
-function WorkDetailFailure({ error, navigateTo }) {
-  const { t } = useI18n();
-  return <section className="work-detail-failure" role="alert"><AlertTriangle size={16} /><div><strong>{t('work.detailUnavailable')}</strong><span>{error || t('work.notFound')}</span></div><button onClick={() => navigateTo('tasks')} type="button"><ArrowLeft size={14} /> {t('work.backToBoard')}</button></section>;
-}
-
-function SectionHeading({ eyebrow, title }) {
-  return <header className="work-section-heading"><span>{eyebrow}</span><h2>{title}</h2></header>;
-}
-
-function EmptySection({ text }) {
-  return <div className="work-section-empty"><CircleDot size={16} /><span>{text}</span></div>;
-}
-
-function ResourceError({ error }) {
-  return error ? <div className="work-resource-error" role="alert"><AlertTriangle size={14} /> {error}</div> : null;
-}
-
-function InlineConfirmation({ busy, onCancel, onConfirm }) {
-  const { t } = useI18n();
-  return <div className="work-inline-confirm" role="alertdialog" aria-label={t('work.confirmCancel')}><AlertTriangle size={16} /><div><strong>{t('work.confirmCancel')}</strong><span>{t('work.cancelAudit')}</span></div><button disabled={busy} onClick={onCancel} type="button">{t('work.keep')}</button><button className="danger" disabled={busy} onClick={onConfirm} type="button">{busy ? t('work.submitting') : t('work.confirmCancelAction')}</button></div>;
-}
-
-function fulfilledItems(result) {
-  if (result.status !== 'fulfilled') return [];
-  if (Array.isArray(result.value)) return result.value;
-  return result.value?.items || [];
-}
-
-function settledErrors(results, keys) {
-  return Object.fromEntries(results.flatMap((result, index) => result.status === 'rejected' ? [[keys[index], result.reason?.message || `Failed to load ${keys[index]}`]] : []));
-}
-
-function formatTime(value, language) {
-  if (!value) return '—';
-  const date = new Date(value);
-  return Number.isFinite(date.getTime()) ? date.toLocaleString(language) : value;
 }

@@ -1,12 +1,24 @@
+import { readStylesheet } from '../../test-support/readStylesheet.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const pageSource = readFileSync(new URL('./PiChat.jsx', import.meta.url), 'utf8');
+const pageSource = [
+  './PiChat.jsx',
+  './PiChatSidebar.jsx',
+  './PiChatThread.jsx',
+  './PiChatComposer.jsx',
+  './piChatNavigation.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
 const composerMetaSource = readFileSync(new URL('./PiChatComposerMeta.jsx', import.meta.url), 'utf8');
-const stateSource = readFileSync(new URL('./piChatState.js', import.meta.url), 'utf8');
+const stateSource = [
+  './piChatState.js',
+  './piChatFields.js',
+  './piChatRuntime.js',
+  './piChatMessageActions.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
 const runtimeStateSource = readFileSync(new URL('./piChatRuntimeState.js', import.meta.url), 'utf8');
-const threadCss = readFileSync(new URL('./PiChatThread.css', import.meta.url), 'utf8');
+const threadCss = readStylesheet(new URL('./PiChatThread.css', import.meta.url), 'utf8');
 
 function ruleFor(selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

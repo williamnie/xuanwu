@@ -1,3 +1,4 @@
+// catalog 由调用方按项目选择：本机目录或节点目录；不合并中心工具，也不以节点在线状态覆盖可提交性。
 export function availableCodeAgentIDs(catalog) {
   return new Set(
     (Array.isArray(catalog) ? catalog : [])
@@ -20,6 +21,16 @@ export function codeAgentLabel(provider, catalog) {
   const id = String(provider || '').trim();
   const entry = (Array.isArray(catalog) ? catalog : []).find(item => String(item?.id || '') === id);
   return String(entry?.label || id || 'Code Agent');
+}
+
+// 内置预设沿用执行机器上的工具配置；在节点目录里改称节点配置，避免误以为跑在中心。
+export function agentProfileOptionLabel(profile, catalog) {
+  const provider = String(profile?.provider || '');
+  const remote = (Array.isArray(catalog) ? catalog : []).some(entry => String(entry?.id || '') === provider && entry?.node_id);
+  const name = remote && String(profile?.id || '').startsWith('xuanwu-provider-')
+    ? String(profile?.name || '').replace('（本机配置）', '（节点配置）')
+    : profile?.name;
+  return `${name} · ${profile?.model || (remote ? '节点默认模型' : '编程工具默认模型')}`;
 }
 
 export function groupedAvailableAgentProfiles(profiles, catalog) {

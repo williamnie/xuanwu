@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const panel = readFileSync(new URL('./EvidencePanel.jsx', import.meta.url), 'utf8');
-const workBoard = readFileSync(new URL('../pages/WorkBoard.jsx', import.meta.url), 'utf8');
+const workBoard = [
+  '../pages/work/WorkColumn.jsx',
+  '../pages/work/WorkEvidenceDialog.jsx',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
 const sessionWorkspace = readFileSync(new URL('../pages/sessions/SessionChatWorkspace.jsx', import.meta.url), 'utf8');
 
 test('Work and Run surfaces share the user-readable Evidence panel', () => {

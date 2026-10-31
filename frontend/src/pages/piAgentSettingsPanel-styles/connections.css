@@ -1,0 +1,274 @@
+.supervisor-settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.supervisor-settings-header {
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  gap: var(--space-5);
+  justify-content: space-between;
+  padding: var(--space-1) 0 var(--space-3);
+}
+
+.supervisor-settings-header h3 {
+  font-size: var(--text-xl);
+  font-weight: 650;
+  margin: 0;
+}
+
+.supervisor-settings-header .settings-entry-eyebrow {
+  align-items: center;
+  color: var(--primary);
+  display: inline-flex;
+  font-size: var(--text-2xs);
+  gap: var(--space-1-5);
+}
+.provider-console-label {
+  color: var(--primary);
+  font-size: var(--text-2xs);
+  font-weight: 800;
+}
+
+.supervisor-readiness {
+  border-bottom: 1px solid var(--border-color);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.supervisor-readiness-item {
+  align-items: center;
+  border-right: 1px solid var(--border-color);
+  color: var(--text-muted);
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2) var(--space-2-5) var(--space-2) 0;
+}
+
+.supervisor-readiness-item + .supervisor-readiness-item {
+  padding-left: var(--space-3);
+}
+
+.supervisor-readiness-item:last-child {
+  border-right: 0;
+}
+
+.supervisor-readiness-item.ready {
+  color: var(--success);
+}
+
+.supervisor-readiness-item > span {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.supervisor-readiness-item small {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.supervisor-readiness-item strong {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.supervisor-configuration-stage.settings-configuration-stage {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--text-primary);
+  border-radius: 0;
+  gap: var(--space-3);
+  padding: 0 0 var(--space-5);
+}
+
+.supervisor-configuration-stage .settings-stage-header {
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  min-height: 48px;
+}
+
+.supervisor-configuration-stage .settings-stage-header > span {
+  border-radius: 0;
+  font-size: var(--text-2xs);
+  height: 26px;
+  width: 28px;
+}
+
+.supervisor-configuration-stage .settings-stage-header h3 {
+  font-size: var(--text-base);
+}
+
+.supervisor-configuration-stage .settings-stage-header p {
+  font-size: var(--text-xs);
+  margin-top: var(--space-0-5);
+}
+
+.provider-console {
+  border-bottom: 1px solid var(--text-primary);
+  border-top: 1px solid var(--border-color);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 230px;
+}
+
+.provider-console-main {
+  min-width: 0;
+  padding-right: var(--space-6);
+}
+
+.provider-connection-toolbar {
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  gap: var(--space-4);
+  justify-content: space-between;
+  min-height: 46px;
+}
+
+.provider-connection-picker {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.provider-connection-picker > label {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.provider-connection-picker > label > span {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+}
+
+.provider-connection-toolbar .form-control {
+  height: 31px;
+  min-width: 230px;
+  width: auto;
+}
+
+.provider-delete-trigger {
+  color: var(--error);
+  white-space: nowrap;
+}
+
+.provider-delete-trigger:not(:disabled) {
+  border-color: color-mix(in srgb, var(--error) 38%, var(--border-color));
+}
+
+.provider-delete-confirm {
+  align-items: center;
+  background: color-mix(in srgb, var(--error) 5%, transparent);
+  border-bottom: 1px solid var(--border-color);
+  border-left: 2px solid var(--error);
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: var(--space-2) var(--space-2-5);
+}
+
+.provider-delete-confirm > div {
+  display: flex;
+  gap: var(--space-1-5);
+}
+
+.provider-delete-confirm > div:first-child {
+  flex-direction: column;
+  gap: var(--space-0-5);
+}
+
+.provider-delete-confirm strong {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.provider-delete-confirm span {
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+}
+
+.provider-delete-confirm-button {
+  background: var(--error);
+  color: var(--button-primary-fg);
+}
+
+.provider-delete-confirm-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--error) 86%, var(--text-primary));
+}
+
+.provider-mode-tabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.provider-mode-tabs .settings-notification-mode {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.provider-mode-tabs .settings-notification-mode > label:first-child {
+  padding: var(--space-4);
+  width: 100%;
+}
+
+.provider-mode-tabs .settings-notification-mode:has(input:checked) {
+  border-color: var(--primary);
+}
+
+.supervisor-oauth-controls { display: grid; gap: var(--space-2); min-width: 0; }
+.supervisor-oauth-more code { color: var(--text-muted); display: block; font-size: var(--text-xs); overflow-wrap: anywhere; }
+
+.provider-flow-section {
+  padding: var(--space-5) 0 0;
+}
+
+.provider-flow-heading,
+.provider-model-heading,
+.supervisor-oauth-heading,
+.provider-connection-actions,
+.prompt-debug-heading,
+.supervisor-applied-model,
+.supervisor-save-row {
+  align-items: center;
+  display: flex;
+  gap: var(--space-4);
+  justify-content: space-between;
+}
+
+.provider-flow-heading {
+  margin-bottom: var(--space-4);
+}
+
+.provider-flow-heading h4 {
+  color: var(--text-primary);
+  font-size: var(--text-xl);
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.provider-flow-heading p {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  margin: var(--space-0-5) 0 0;
+}
+
+.provider-flow-heading > span {
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border-color));
+  color: var(--primary);
+  flex: 0 0 auto;
+  font-size: var(--text-2xs);
+  font-weight: 800;
+  padding: var(--space-1) var(--space-1-5);
+}
+

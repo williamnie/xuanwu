@@ -1,20 +1,19 @@
-import { readdir, readFile, stat } from "node:fs/promises";
-import type { Dirent } from "node:fs";
-import { homedir } from "node:os";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
 import type { ProviderEvent } from "../types.ts";
 import { normalizeCodexEvent } from "./events.ts";
 import type { ThreadSummary } from "./threadLifecycle.ts";
 import { cleanString, objectValue } from "../../util/values.ts";
+import { codexSessionRoots, resolveCodexRolloutPath, safeCodexRolloutPath, parsedObject, elapsedMilliseconds } from "./rolloutRecoveryPaths.ts";
 
-const MAX_ROLLOUT_BYTES = 32 * 1024 * 1024;
+export const MAX_ROLLOUT_BYTES = 32 * 1024 * 1024;
 
-type RolloutItem = {
+export type RolloutItem = {
   payload: Record<string, unknown>;
   timestamp: string;
 };
 
-type RolloutRecoveryOptions = {
+export type RolloutRecoveryOptions = {
   codexHome?: string;
 };
 
@@ -113,7 +112,7 @@ export function parseCodexRolloutExecEvents(
   return output;
 }
 
-function recoveredExecEvent(
+export function recoveredExecEvent(
   call: RolloutItem,
   input: {
     output: Record<string, unknown>;
@@ -150,7 +149,7 @@ function recoveredExecEvent(
   return event.type === "tool" ? event : undefined;
 }
 
-function recoveredDirectCommandEvent(
+export function recoveredDirectCommandEvent(
   call: RolloutItem,
   input: {
     output: Record<string, unknown>;
@@ -183,14 +182,14 @@ function recoveredDirectCommandEvent(
   });
 }
 
-function directCommandExitCode(output: string): number | undefined {
+export function directCommandExitCode(output: string): number | undefined {
   const match = output.match(/(?:^|\n)Process exited with code (-?\d+)(?:\n|$)/);
   if (!match) return undefined;
   const value = Number(match[1]);
   return Number.isSafeInteger(value) ? value : undefined;
 }
 
-function explicitNestedExitCode(contentItems: unknown[]): number | undefined {
+export function explicitNestedExitCode(contentItems: unknown[]): number | undefined {
   const text = contentItems.map((entry) => cleanString(objectValue(entry).text)).filter(Boolean).join("\n");
   const match = text.match(/"exit_code"\s*:\s*(-?\d+)/);
   if (match) {
@@ -209,131 +208,32 @@ function explicitNestedExitCode(contentItems: unknown[]): number | undefined {
   return undefined;
 }
 
-function processExitCode(value: string): number | undefined {
+export function processExitCode(value: string): number | undefined {
   const match = value.match(/(?:^|\n)Process exited with code (-?\d+)(?:\n|$)/);
   if (!match) return undefined;
   const code = Number(match[1]);
   return Number.isSafeInteger(code) ? code : undefined;
 }
 
-function outputSessionID(value: unknown): string {
+export function outputSessionID(value: unknown): string {
   const match = outputText(value).match(/(?:^|\n)SESSION_ID=(\d+)(?:\n|$)/);
   return match?.[1] ?? "";
 }
 
-function outputText(value: unknown): string {
+export function outputText(value: unknown): string {
   if (typeof value === "string") return value;
   if (!Array.isArray(value)) return "";
   return value.map((entry) => cleanString(objectValue(entry).text)).filter(Boolean).join("\n");
 }
 
-function integerText(value: unknown): string {
+export function integerText(value: unknown): string {
   if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return String(value);
   const text = cleanString(value);
   return /^\d+$/.test(text) ? text : "";
 }
 
-function matchesTurn(item: Record<string, unknown>, expectedTurnID: string): boolean {
+export function matchesTurn(item: Record<string, unknown>, expectedTurnID: string): boolean {
   const metadata = objectValue(item.internal_chat_message_metadata_passthrough);
   const observed = cleanString(metadata.turn_id);
   return observed === "" || expectedTurnID === "" || observed === expectedTurnID;
-}
-
-async function resolveCodexRolloutPath(
-  thread: ThreadSummary,
-  roots: string[]
-): Promise<string> {
-  const explicit = cleanString(thread.path);
-  if (safeCodexRolloutPath(explicit, roots)) return explicit;
-  // thread/start 通常没有 rollout path；UUIDv7 自带时间，只查对应日期附近的受控 sessions 目录。
-  const threadID = cleanString(thread.provider_session_id);
-  const dateParts = uuidV7DateParts(threadID);
-  if (dateParts.length === 0) return "";
-  const suffix = `-${threadID}.jsonl`;
-  for (const root of roots) {
-    for (const parts of dateParts) {
-      const directory = join(root, ...parts);
-      let entries: Dirent[];
-      try {
-        entries = await readdir(directory, { withFileTypes: true });
-      } catch {
-        continue;
-      }
-      const matches = entries
-        .filter((entry) => entry.isFile() && entry.name.endsWith(suffix))
-        .map((entry) => join(directory, entry.name))
-        .sort();
-      if (matches.length === 1 && safeCodexRolloutPath(matches[0]!, roots)) {
-        return matches[0]!;
-      }
-    }
-  }
-  return "";
-}
-
-function codexSessionRoots(codexHome?: string): string[] {
-  const explicitHome = cleanString(codexHome);
-  const configuredHome = explicitHome || cleanString(process.env.CODEX_HOME);
-  const values = explicitHome
-    ? [join(explicitHome, "sessions")]
-    : [
-      configuredHome ? join(configuredHome, "sessions") : "",
-      join(homedir(), ".codex", "sessions")
-    ];
-  return [...new Set(values.filter(Boolean).map((root) => resolve(root)))];
-}
-
-function safeCodexRolloutPath(path: string, roots: string[]): boolean {
-  if (!isAbsolute(path)) return false;
-  const candidate = resolve(path);
-  return roots.some((root) => {
-    const child = relative(root, candidate);
-    return child !== "" && child !== ".." && !child.startsWith(`..${sep}`);
-  });
-}
-
-function uuidV7DateParts(threadID: string): string[][] {
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(threadID)) {
-    return [];
-  }
-  const timestamp = Number.parseInt(threadID.replaceAll("-", "").slice(0, 12), 16);
-  if (!Number.isSafeInteger(timestamp)) return [];
-  const output: string[][] = [];
-  const seen = new Set<string>();
-  for (const offset of [0, -86_400_000, 86_400_000]) {
-    const date = new Date(timestamp + offset);
-    const candidates = [
-      [date.getFullYear(), date.getMonth() + 1, date.getDate()],
-      [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate()]
-    ];
-    for (const [year, month, day] of candidates) {
-      const parts = [String(year), padDatePart(month), padDatePart(day)];
-      const key = parts.join("/");
-      if (seen.has(key)) continue;
-      seen.add(key);
-      output.push(parts);
-    }
-  }
-  return output;
-}
-
-function padDatePart(value: number): string {
-  return String(value).padStart(2, "0");
-}
-
-function elapsedMilliseconds(start: string, end: string): number {
-  const startMs = Date.parse(start);
-  const endMs = Date.parse(end);
-  return Number.isFinite(startMs) && Number.isFinite(endMs)
-    ? Math.max(0, Math.round(endMs - startMs))
-    : 0;
-}
-
-function parsedObject(value: string): Record<string, unknown> | undefined {
-  if (value.trim() === "") return undefined;
-  try {
-    return objectValue(JSON.parse(value));
-  } catch {
-    return undefined;
-  }
 }

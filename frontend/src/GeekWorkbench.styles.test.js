@@ -1,15 +1,17 @@
+import { readAppSource } from '../test-support/readAppSource.js';
+import { readStylesheet } from '../test-support/readStylesheet.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const appSource = readFileSync(new URL('./App.jsx', import.meta.url), 'utf8');
-const indexCss = readFileSync(new URL('./index.css', import.meta.url), 'utf8');
+const appSource = readAppSource();
+const indexCss = readStylesheet(new URL('./index.css', import.meta.url));
 const foundationCss = readFileSync(new URL('./GeekWorkbench.css', import.meta.url), 'utf8');
 const pagesCss = readFileSync(new URL('./GeekWorkbenchPages.css', import.meta.url), 'utf8');
 const piChatCss = readFileSync(new URL('./pages/PiChat.css', import.meta.url), 'utf8');
 const piChatThreadCss = readFileSync(new URL('./pages/PiChatThread.css', import.meta.url), 'utf8');
 const piChatSidebarCss = readFileSync(new URL('./pages/PiChatSidebar.css', import.meta.url), 'utf8');
-const workBoardCss = readFileSync(new URL('./pages/WorkBoard.css', import.meta.url), 'utf8');
+const workBoardCss = readStylesheet(new URL('./pages/WorkBoard.css', import.meta.url));
 const designTokensCss = readFileSync(new URL('../../docs/design-system/tokens.css', import.meta.url), 'utf8');
 
 test('geek workbench styles load after the legacy app stylesheet', () => {

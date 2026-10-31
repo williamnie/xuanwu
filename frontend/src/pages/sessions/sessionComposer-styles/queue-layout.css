@@ -1,0 +1,214 @@
+/* 排队消息面板 */
+.session-message-queue-panel {
+  display: grid;
+  gap: var(--space-1-5);
+  margin-bottom: var(--space-1-5);
+}
+
+.session-message-queue-list {
+  display: grid;
+  gap: var(--space-1-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.session-message-queue-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2-5);
+  border: 1px solid var(--border-light);
+  padding: var(--space-1-5) var(--space-2);
+  background: var(--control-bg);
+  border-radius: var(--radius-md);
+}
+
+.session-message-queue-item.failed {
+  border-color: color-mix(in srgb, var(--error) 26%, transparent);
+  background: var(--error-bg);
+}
+
+.session-message-queue-main {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.session-message-queue-badge {
+  color: var(--info);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.session-message-queue-item.failed .session-message-queue-badge {
+  color: var(--error);
+}
+
+.session-message-queue-text {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: var(--text-md);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-message-queue-error {
+  color: var(--error);
+  font-size: var(--text-sm);
+}
+
+.session-message-queue-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: var(--space-1-5);
+}
+
+.session-message-queue-actions button {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-xs);
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.session-message-queue-actions button:hover {
+  border-color: var(--border-color-hover);
+  color: var(--text-primary);
+}
+
+/* 中断状态条 */
+.session-interrupt-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  margin-bottom: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--info) 24%, transparent);
+  padding: var(--space-1-5) var(--space-2-5);
+  background: var(--info-bg);
+  color: var(--info);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: var(--radius-xs);
+}
+
+.session-interrupt-status.success {
+  border-color: color-mix(in srgb, var(--success) 26%, transparent);
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.session-interrupt-status.error {
+  border-color: color-mix(in srgb, var(--error) 26%, transparent);
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+.session-composer-circle:disabled,
+.session-composer-select select:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+@media (max-width: 760px) {
+  .session-composer {
+    padding: var(--space-3);
+  }
+
+  .session-composer-select.model {
+    margin-left: 0;
+  }
+
+  .session-composer-select-value {
+    max-width: 132px;
+  }
+
+}
+
+/* Composer internals are owned here; page shells only position the component. */
+.client-chat-composer-section .session-composer {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  margin: 0 auto;
+  max-width: var(--sessions-composer-max-width);
+  padding: 0;
+}
+
+.client-chat-composer-section .prompt-editor-shell.composer,
+.new-session-composer-wrapper .prompt-editor-shell.composer,
+.pi-chat-composer .prompt-editor-shell.composer {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--sessions-composer-radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.client-chat-composer-section .prompt-editor-content.composer {
+  line-height: 1.58;
+  padding: var(--space-4-5) var(--space-6) var(--space-2);
+  font-size: var(--text-lg);
+}
+
+.new-session-composer-wrapper .prompt-editor-content.composer {
+  line-height: 1.5;
+  min-height: 110px;
+  padding: var(--space-4-5) var(--space-5) var(--space-2);
+  font-size: var(--text-lg);
+}
+
+.client-chat-composer-section .prompt-composer-footer,
+.pi-chat-composer .prompt-composer-footer,
+.new-session-composer-wrapper .prompt-composer-footer {
+  padding: var(--space-2) var(--space-3-5) var(--space-3-5) var(--space-4);
+}
+
+.client-chat-composer-section .session-composer-select,
+.pi-chat-composer .session-composer-select,
+.new-session-composer-wrapper .composer-embedded-select {
+  border-radius: var(--radius-xs);
+}
+
+.session-composer-mode-switch button.active::after {
+  background: var(--primary);
+  bottom: 0;
+  content: '';
+  height: 2px;
+  left: 0;
+  position: absolute;
+  right: 0;
+}
+
+.session-composer-circle:disabled {
+  background: var(--bg-card-hover);
+  border-color: var(--border-color);
+  color: var(--text-faint);
+}
+
+.client-chat-composer-section .prompt-editor-shell.composer:focus-within,
+.new-session-composer-wrapper .prompt-editor-shell.composer:focus-within,
+.pi-chat-composer .prompt-editor-shell.composer:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.client-chat-composer-section .prompt-editor-content.composer .ProseMirror {
+  min-height: 96px;
+}
+
+.new-session-composer-wrapper .prompt-editor-content.composer .ProseMirror {
+  min-height: 110px;
+}

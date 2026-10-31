@@ -22,6 +22,7 @@ import {
 } from "./automationWorkRunExecutor.ts";
 import { prepareStandingOrderExecution } from "./standingOrderRuntime.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
+import { providersForProjectID } from "../nodes/remoteExecution.ts";
 
 type NativeAutomationRuntimeOptions = {
   bus?: Pick<EventBus, "publish">;
@@ -83,7 +84,7 @@ function createNativeWorkflowDispatcher(
     const role = workflow.manifest.stages[0]?.agent.role ?? "executor";
     const selection = recommendExecutorProfile(options.database, project, { issue_id: issueID, role });
     const providerID = providerIDFor(selection.provider, project.provider);
-    const provider = options.providers?.[providerID];
+    const provider = providersForProjectID(options.database, options.providers, project.id)?.[providerID];
     if (!provider) throw new Error(`automation workflow provider \"${providerID}\" is not registered`);
 
     const result = await runIssueWithProvider(provider, {

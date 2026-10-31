@@ -2,8 +2,19 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const source = readFileSync(new URL('./piChatState.js', import.meta.url), 'utf8');
-const panelSource = readFileSync(new URL('./PiChat.jsx', import.meta.url), 'utf8');
+const source = [
+  './piChatState.js',
+  './piChatFields.js',
+  './piChatRuntime.js',
+  './piChatMessageActions.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
+const panelSource = [
+  './PiChat.jsx',
+  './PiChatSidebar.jsx',
+  './PiChatThread.jsx',
+  './PiChatComposer.jsx',
+  './piChatNavigation.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
 const runtimeSource = readFileSync(new URL('./piChatRuntimeState.js', import.meta.url), 'utf8');
 
 test('PI Assistant chat loader keeps a stable callback and loads projects for @ mentions', () => {
@@ -28,7 +39,6 @@ test('mentioning a project reuses the selected conversation instead of replacing
   assert.match(source, /const conversationId = state\.selectedConversationId\s*\|\| await createConversation\('New conversation', \{ project: targetProject \}\)/);
   assert.doesNotMatch(source, /shouldCreateProjectConversation/);
 });
-
 
 test('Xuanwu Chat uses a failure fallback instead of empty-text wording', () => {
   assert.match(source, /runnerReplyText\(result\)/);

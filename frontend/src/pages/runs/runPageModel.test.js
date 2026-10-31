@@ -3,6 +3,8 @@ import test from 'node:test';
 import {
   buildRunControlPayload,
   mergeRunPages,
+  providerLabel,
+  runStatusLabel,
   runAvailableActions,
   runIssueId,
   runProviderSessionRef,
@@ -78,3 +80,14 @@ function attempt(sequence, provider, sessionRef, status, observationRef = '', re
     status,
   };
 }
+
+
+test('provider and attempt labels keep missing values distinct from real statuses', () => {
+  assert.equal(providerLabel('codex'), 'Codex');
+  assert.equal(providerLabel('claude'), 'Claude');
+  assert.equal(providerLabel('pi-coding-agent'), 'Pi Coding Agent');
+  assert.equal(providerLabel('future-provider'), 'future-provider');
+  assert.equal(providerLabel(''), '未知工具');
+  assert.equal(runStatusLabel('interrupted'), '已中断');
+  assert.equal(runStatusLabel('created'), '准备中');
+});

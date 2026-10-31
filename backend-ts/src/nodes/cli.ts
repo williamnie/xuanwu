@@ -1,0 +1,172 @@
+import { readFile } from "node:fs/promises";
+import { homedir, hostname } from "node:os";
+import { join } from "node:path";
+import { bunBuildInfo } from "../buildInfo.ts";
+import type { ExecutorProvider } from "../providers/types.ts";
+import { NodeAgent, NodeAgentFatalError, type NodeAgentOptions } from "./agent.ts";
+import { nodeExecutionHandlers, nodeProviderInfo } from "./nodeExecutor.ts";
+import { nodeGitHandlers } from "./nodeGit.ts";
+import { startNodeProviders } from "./nodeProviders.ts";
+import { currentNodeCommand, nodeServicePlan, removeNodeService, writeNodeService } from "./service.ts";
+
+export type NodeCliConfig = { allowedRoots: string[]; hubUrl: string; maxParallel?: number; token: string };
+
+const USAGE = `usage: xuanwu node [--hub <url>] [--token <key>] [--root <dir>]... [--config <file>]
+       xuanwu node install [--hub <url>] [--token <key>] [--root <dir>]... [--start]
+       xuanwu node uninstall [--stop]
+
+  install    写入 ~/.xuanwu/node.json（0600）并生成 systemd 用户服务 / launchd 服务，开机自启、退出后自动拉起
+  uninstall  删除服务定义（保留 node.json）
+
+  --hub      中心地址，例如 http://100.64.0.1:8787
+  --token    添加节点时中心给出的密钥（也可用环境变量 XUANWU_NODE_TOKEN，避免出现在进程列表中）
+  --root     允许中心在其中运行 agent 的目录，可重复；未配置时拒绝所有项目
+  --max-parallel  本节点同时执行的任务上限，默认 1
+  --config   配置文件，默认 ~/.xuanwu/node.json：{"hub": "...", "token": "...", "roots": ["..."]}
+`;
+
+export async function runNodeCommand(args: string[], env: Record<string, string | undefined> = Bun.env): Promise<number> {
+  if (args.includes("--help") || args.includes("-h")) {
+    process.stdout.write(USAGE);
+    return 0;
+  }
+  if (args[0] === "install" || args[0] === "uninstall") return await runServiceCommand(args[0], args.slice(1), env);
+  let config: NodeCliConfig;
+  try {
+    config = await resolveNodeCliConfig(args, env);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n\n${USAGE}`);
+    return 2;
+  }
+  // provider 在 NodeAgent 之前启动，会话事件经这个转发口在 agent 创建后送达。
+  const appEvents: { forward?: (event: unknown) => void } = {};
+  const { registry, stateDir } = await startNodeProviders((event) => appEvents.forward?.(event));
+  const agent = new NodeAgent(nodeAgentOptions(config, () => registry.readyProviders(), join(stateDir, "node")));
+  appEvents.forward = (event) => agent.emitAppEvent(event);
+  process.once("SIGINT", () => agent.stop());
+  process.once("SIGTERM", () => agent.stop());
+  try {
+    await agent.run();
+    return 0;
+  } catch (error) {
+    if (error instanceof NodeAgentFatalError) {
+      process.stderr.write(`${error.message}\n`);
+      return 1;
+    }
+    throw error;
+  } finally {
+    await registry.stopAll();
+  }
+}
+
+async function runServiceCommand(action: "install" | "uninstall", args: string[], env: Record<string, string | undefined>): Promise<number> {
+  const run = args.includes(action === "install" ? "--start" : "--stop");
+  const rest = args.filter((arg) => arg !== "--start" && arg !== "--stop");
+  try {
+    const config = action === "install"
+      ? await resolveNodeCliConfig(rest, env)
+      : { allowedRoots: [], hubUrl: "", token: "" };
+    if (action === "install" && config.allowedRoots.length === 0) throw new Error("install needs at least one --root");
+    const plan = nodeServicePlan(config, { command: currentNodeCommand(), env: { HOME: env.HOME, PATH: env.PATH } });
+    if (action === "install") await writeNodeService(plan);
+    else await removeNodeService(plan);
+    const commands = action === "install" ? plan.start : plan.stop;
+    for (const file of action === "install" ? plan.files : plan.files.slice(1)) {
+      process.stdout.write(`${action === "install" ? "wrote" : "removed"} ${file.path}\n`);
+    }
+    if (!run) {
+      process.stdout.write(`\n${action === "install" ? "启动" : "停止"}服务：\n${commands.map((command) => `  ${command.join(" ")}`).join("\n")}\n`);
+      return 0;
+    }
+    for (const command of commands) {
+      const result = Bun.spawnSync(command, { stderr: "inherit", stdout: "inherit" });
+      if (result.exitCode !== 0 && action === "install") throw new Error(`${command.join(" ")} failed with exit ${result.exitCode}`);
+    }
+    return 0;
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    return 1;
+  }
+}
+
+/** 命令行参数优先于环境变量，环境变量优先于配置文件。 */
+export async function resolveNodeCliConfig(args: string[], env: Record<string, string | undefined>): Promise<NodeCliConfig> {
+  const flags = parseFlags(args);
+  const configPath = flags.config ?? join(env.HOME || homedir(), ".xuanwu", "node.json");
+  const file = await readConfigFile(configPath, flags.config !== undefined);
+  const hubUrl = (flags.hub ?? env.XUANWU_NODE_HUB ?? stringField(file.hub)).trim();
+  const token = (flags.token ?? env.XUANWU_NODE_TOKEN ?? stringField(file.token)).trim();
+  const allowedRoots = flags.roots.length > 0
+    ? flags.roots
+    : Array.isArray(file.roots) ? file.roots.filter((root): root is string => typeof root === "string" && root.trim() !== "") : [];
+  if (hubUrl === "") throw new Error("missing hub address (--hub)");
+  if (!/^https?:\/\//.test(hubUrl)) throw new Error("hub address must start with http:// or https://");
+  if (token === "") throw new Error("missing node token (--token or XUANWU_NODE_TOKEN)");
+  const maxParallel = flags.maxParallel ?? (typeof file.max_parallel === "number" ? file.max_parallel : undefined);
+  if (maxParallel !== undefined && (!Number.isInteger(maxParallel) || maxParallel < 1 || maxParallel > 64)) {
+    throw new Error("--max-parallel must be an integer between 1 and 64");
+  }
+  return { allowedRoots, hubUrl, token, ...(maxParallel === undefined ? {} : { maxParallel }) };
+}
+
+function nodeAgentOptions(
+  config: NodeCliConfig,
+  providers: () => Record<string, ExecutorProvider>,
+  workDir: string
+): NodeAgentOptions {
+  if (config.allowedRoots.length === 0) {
+    console.warn(JSON.stringify({ event: "node.no_allowed_roots", message: "no --root configured; the hub cannot run agents on this node" }));
+  }
+  return {
+    ...config,
+    handlers: { ...nodeExecutionHandlers(providers, { workDir }), ...nodeGitHandlers },
+    info: () => ({
+      hostname: hostname(),
+      ...(config.maxParallel ? { max_parallel: config.maxParallel } : {}),
+      os: process.platform,
+      providers: nodeProviderInfo(providers()),
+      version: bunBuildInfo().version
+    })
+  };
+}
+
+type NodeFlags = { config?: string; hub?: string; maxParallel?: number; roots: string[]; token?: string };
+
+function parseFlags(args: string[]): NodeFlags {
+  const result: NodeFlags = { roots: [] };
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? "";
+    const [name, inline] = arg.startsWith("--") && arg.includes("=") ? [arg.slice(0, arg.indexOf("=")), arg.slice(arg.indexOf("=") + 1)] : [arg, undefined];
+    const value = () => {
+      if (inline !== undefined) return inline;
+      const next = args[index + 1];
+      if (next === undefined || next.startsWith("--")) throw new Error(`missing value for ${name}`);
+      index += 1;
+      return next;
+    };
+    if (name === "--hub") result.hub = value();
+    else if (name === "--token") result.token = value();
+    else if (name === "--root") result.roots.push(value());
+    else if (name === "--config") result.config = value();
+    else if (name === "--max-parallel") result.maxParallel = Number(value());
+    else throw new Error(`unknown option: ${arg}`);
+  }
+  return result;
+}
+
+async function readConfigFile(path: string, required: boolean): Promise<Record<string, unknown>> {
+  let text: string;
+  try {
+    text = await readFile(path, "utf8");
+  } catch (error) {
+    if (!required && (error as NodeJS.ErrnoException).code === "ENOENT") return {};
+    throw new Error(`cannot read node config ${path}`);
+  }
+  const parsed: unknown = JSON.parse(text);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new Error(`node config ${path} must be a JSON object`);
+  return parsed as Record<string, unknown>;
+}
+
+function stringField(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}

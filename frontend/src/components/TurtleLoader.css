@@ -26,21 +26,8 @@
   right: 0;
 }
 
-.turtle-loader-track::after {
-  animation: xuanwu-spin 1s linear infinite;
-  background: transparent;
-  border: 2px solid var(--border-color);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  bottom: 4px;
-  content: '';
-  height: 14px;
-  left: 12px;
-  position: absolute;
-  width: 14px;
-}
-
 .turtle-loader-runner {
+  animation: turtle-loader-crawl 2.8s linear infinite alternate;
   bottom: 4px;
   display: block;
   height: 52px;
@@ -98,6 +85,11 @@
   width: 100%;
 }
 
+@keyframes turtle-loader-crawl {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .turtle-loader-track::after { animation: none; }
+  .turtle-loader-runner { animation: none; }
 }

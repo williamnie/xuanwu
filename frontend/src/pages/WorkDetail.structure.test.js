@@ -2,8 +2,21 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const detail = readFileSync(new URL('./WorkDetail.jsx', import.meta.url), 'utf8');
-const board = readFileSync(new URL('./WorkBoard.jsx', import.meta.url), 'utf8');
+const detail = [
+  './WorkDetail.jsx',
+  './work/useWorkDetail.js',
+  './work/WorkDetailStates.jsx',
+  './work/workDetailFormatting.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
+const board = [
+  './WorkBoard.jsx',
+  './work/WorkKanban.jsx',
+  './work/WorkColumn.jsx',
+  './work/WorkBoardHeader.jsx',
+  './work/WorkEvidenceDialog.jsx',
+  './work/useWorkKanbanData.js',
+  './work/workKanbanModel.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
 const model = readFileSync(new URL('./workDetailModel.js', import.meta.url), 'utf8');
 const runList = readFileSync(new URL('./work/WorkRunList.jsx', import.meta.url), 'utf8');
 const runsPage = readFileSync(new URL('./Runs.jsx', import.meta.url), 'utf8');

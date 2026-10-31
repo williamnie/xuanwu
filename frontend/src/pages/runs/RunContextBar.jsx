@@ -1,3 +1,4 @@
+import { runPhaseLabel } from './runPhaseLabels.js';
 import { useState } from 'react';
 import { ArrowUpRight, CircleStop, Play, RotateCcw } from 'lucide-react';
 import { runsApi } from '../../api/runs.js';
@@ -7,6 +8,7 @@ import {
   runAvailableActions,
   runIssueId,
   runStatusLabel,
+  providerLabel,
 } from './runPageModel.js';
 
 // 执行记录页与任务详情共用的执行头部：状态、所属任务与受审计的中断 / 继续 / 重试。
@@ -51,10 +53,10 @@ export default function RunContextBar({ allowRetry = true, navigateTo, onRunChan
           ) : null}
         </div>
         <div className="run-context-meta">
-          <span>{run.provider || 'unknown'}</span>
-          {showWorkLink ? <span>Run {run.sequence || '?'}</span> : null}
-          <span>Attempt {run.progress?.attempt_sequence || run.attempt_count || '?'}</span>
-          <span>Phase {run.progress?.provider_phase || run.progress?.phase || 'unknown'}</span>
+          <span>{providerLabel(run.provider)}</span>
+          {showWorkLink ? <span>第 {run.sequence || '?'} 次执行</span> : null}
+          <span>尝试 {run.progress?.attempt_sequence || run.attempt_count || '?'}</span>
+          <span>阶段：{runPhaseLabel(run.progress?.provider_phase || run.progress?.phase)}</span>
           {run.progress?.stalled?.detected ? <span className="run-context-warning">可能卡住</span> : null}
         </div>
       </div>

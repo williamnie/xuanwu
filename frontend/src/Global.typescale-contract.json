@@ -10,6 +10,7 @@
     "components/GlobalAskComposer.css",
     "components/Metadata.css",
     "components/ReleaseUpdateDialog.css",
+    "components/RemoteProjectBadge.css",
     "components/RuntimeHealthStrip.css",
     "components/RuntimeLogsPanel.css",
     "components/ToastContainer.css",
@@ -73,7 +74,8 @@
     "pages/SkillLibraryPanel.css",
     "pages/SkillsRuntimePanel.css",
     "pages/SourcePoliciesPanel.css",
-    "pages/TelegramSettingsPanel.css"
+    "pages/TelegramSettingsPanel.css",
+    "pages/RemoteNodesPanel.css"
   ],
   "panelPadding": [
     {

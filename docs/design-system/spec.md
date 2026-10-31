@@ -387,6 +387,7 @@
 | hover / focus | `transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease`；**不加 transform 位移**（icon 按钮除外，可 translateY(-0.5px)） |
 | 页面/卡片进入 | `fadeUp`: `opacity 0→1, translateY(6px)→0`，`180ms cubic-bezier(.16,1,.3,1)`，仅首屏一次 |
 | 状态点脉冲 | `pulse`: `opacity .45→1→.45`，`1.4s ease-in-out infinite`，仅用于 running |
+| 品牌加载（2026-10-29 补充） | 共享 TurtleLoader 允许 `turtle-loader-crawl 2.8s linear infinite alternate`，仅以 transform 在轨道内持续移动，不叠加 spinner；`prefers-reduced-motion: reduce` 下静止。此为品牌加载器专用例外 |
 | 加载转圈 | `spin 1s linear infinite`，12–14px、2px 边框、`border-top-color: currentColor` |
 | 面板展开/折叠 | `max-height` 或 grid-rows 过渡 ≤ 200ms；**禁止** scale 缩放 |
 | **禁止** | 弹跳 ease（bounce/elastic）、多元素级联延迟、hover 放大阴影、任何 > 300ms 的过渡、`transform: scale` 强调 |
@@ -458,7 +459,7 @@
 | 颜色 / 圆角 / 字号 / 间距令牌 | 全部 78 个前端 CSS 纳入同一合同，禁止 hex / rgba、数值圆角、未登记字号 / padding / margin / gap；新文件不能跳过检查。10 个固定字号档 + 响应式标题、12 个间距档由规范与唯一 tokens 定义共同检查。局部变量只可引用规范令牌，font 简写不能藏入裸字号；JSX 仍仅允许 7 处动态几何表达式。第 4 节结构例外精确登记 12 条，见下文 |
 | 圆角与按钮几何 | 非气泡 / 输入器的 `--radius-lg` 已迁移到 `--radius-md`；数值圆角只保留 0 与明确圆形例外；全局测试精确限制 6 组大圆角选择器，圆形白名单不可隐式扩展。真实页面可见按钮圆角检测通过 |
 | 细线分割 | 延续前三轮证据；本轮任务、运行、设置分区仍使用中性底和 1px 边框，测试禁止渐变卡片与外发光 |
-| 动效 | 全量 CSS 扫描只允许 ≤180ms 的 opacity / transform / 颜色过渡；删除 left / width / scale 等动效。循环动画精确白名单只含 1s spinner、1.4s running pulse；品牌加载器为静态图标加标准 spinner。参考组件入场同步为 180ms |
+| 动效 | 全量 CSS 扫描只允许 ≤180ms 的 opacity / transform / 颜色过渡；删除 left / width / scale 等动效。循环动画精确白名单只含 1s spinner、1.4s running pulse；品牌加载器现按 6 节的 2026-10-29 补充使用持续爬行动画。参考组件入场同步为 180ms |
 | 图标 | JSX 全量检查 lucide 导入、13 / 14 / 15 / 16 / 34px 尺寸及 stroke 2；CSS 描边同查，按钮图标为 14px。真实页面检测所有可见 lucide 的计算尺寸；无彩色实心闪电 |
 | 双主题与参考页 | 示例页 textarea 和字体 URL 转义修复，html5lib 全页解析 0 错误。参考 Tab 同步中性底 + 2px 下划线；换新本地端口复核以排除浏览器旧 CSS 缓存。参考页完整 light / dark × 980 / 760 截图与真实页逐项对照 |
 | 760px 几何 | 首页、任务列表 / 看板 / 详情、执行记录 Coding Tool、会话、项目与设置各分区 light / dark × 980 / 760 检查；高级六节另行展开检查。无页面横向溢出，发送按钮命中通过；看板保留其既有容器内横向滚动 |

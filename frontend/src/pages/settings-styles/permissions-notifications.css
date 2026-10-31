@@ -1,0 +1,297 @@
+.settings-permissions-panel,
+.settings-notification-panel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.settings-product-header,
+.settings-authority-note,
+.settings-preference-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  justify-content: space-between;
+}
+
+.settings-product-header h2 {
+  align-items: center;
+  display: flex;
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  gap: var(--space-2);
+}
+
+.settings-product-header p,
+.settings-authority-note p {
+  color: var(--text-muted);
+  font-size: var(--text-md);
+  line-height: 1.55;
+  margin: var(--space-1) 0 0;
+}
+
+.settings-inline-error {
+  background: var(--error-glow);
+  border: 1px solid color-mix(in srgb, var(--error) 35%, var(--border-color));
+  border-radius: var(--radius-md);
+  color: var(--error);
+  font-size: var(--text-md);
+  padding: var(--space-2-5) var(--space-3);
+}
+
+.settings-matrix-block,
+.settings-preference-history {
+  display: grid;
+  gap: var(--space-2-5);
+}
+
+.settings-block-title {
+  color: var(--text-secondary);
+  font-size: var(--text-md);
+  font-weight: 820;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.settings-permission-table {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+}
+
+.settings-permission-row {
+  align-items: center;
+  border-top: 1px solid var(--border-light);
+  display: grid;
+  font-size: var(--text-md);
+  gap: var(--space-2-5);
+  grid-template-columns: minmax(150px, 1.35fr) minmax(140px, 1fr) minmax(100px, 0.7fr) minmax(120px, 0.9fr);
+  min-width: 600px;
+  padding: var(--space-2-5) var(--space-3);
+}
+
+.settings-permission-row:first-child { border-top: 0; }
+.settings-permission-row code { overflow-wrap: anywhere; }
+
+.settings-connector-permissions .settings-permission-row {
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.7fr) minmax(0, 0.9fr);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-permission-header {
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 800;
+}
+
+.settings-permission-row .is-warning { color: var(--warning); }
+.settings-permission-row .is-danger { color: var(--error); }
+
+.settings-risk-copy,
+.settings-notification-safety {
+  align-items: flex-start;
+  background: var(--warning-bg);
+  border: 1px solid color-mix(in srgb, var(--warning) 32%, var(--border-color));
+  border-radius: var(--radius-md);
+  color: var(--warning);
+  display: flex;
+  font-size: var(--text-md);
+  gap: var(--space-2);
+  line-height: 1.5;
+  padding: var(--space-2-5) var(--space-3);
+}
+
+.settings-risk-copy svg,
+.settings-notification-safety svg { flex: 0 0 auto; margin-top: var(--space-1); }
+
+.settings-authority-note {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.settings-authority-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.settings-empty-state {
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: var(--text-md);
+  padding: var(--space-3);
+}
+
+.settings-notification-form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.settings-notification-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+}
+
+.settings-channel-picker,
+.settings-notify-options {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.settings-channel-picker > span,
+.settings-notify-options legend {
+  color: var(--text-secondary);
+  font-size: var(--text-md);
+  font-weight: 800;
+}
+
+.settings-channel-picker label,
+.settings-notify-options label {
+  align-items: center;
+  color: var(--text-secondary);
+  display: flex;
+  font-size: var(--text-md);
+  gap: var(--space-2);
+}
+
+.settings-channel-picker small { color: var(--text-muted); }
+
+.settings-notify-options {
+  grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
+}
+
+.settings-notify-options legend { padding: 0 var(--space-1-5); }
+
+.settings-notify-options label span {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.settings-notify-options code {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.settings-notification-form > .btn { justify-self: start; }
+
+.settings-preference-row {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-2-5) var(--space-3);
+}
+
+.settings-preference-row > div {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.settings-preference-row span {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.settings-restart-zone {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 170px;
+  position: relative;
+}
+
+.settings-danger-button {
+  background: transparent;
+  border: 1px solid var(--error);
+  box-shadow: none;
+  color: var(--error);
+}
+
+.settings-danger-button:hover:not(:disabled),
+.settings-danger-button:focus-visible {
+  background: var(--error-bg);
+  outline: 2px solid var(--error);
+  outline-offset: 2px;
+}
+
+.settings-danger-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.settings-restart-confirm {
+  background: var(--bg-card);
+  border: 1px solid color-mix(in srgb, var(--error) 35%, var(--border-color));
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  width: min(320px, 82vw);
+}
+
+.settings-restart-confirm strong {
+  align-items: center;
+  color: var(--error);
+  display: inline-flex;
+  gap: var(--space-1-5);
+}
+
+.settings-restart-confirm p {
+  color: var(--text-muted);
+  font-size: var(--text-md);
+  line-height: 1.5;
+  margin-top: var(--space-1);
+}
+
+.settings-restart-confirm-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .settings-restart-zone {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .settings-restart-confirm {
+    position: static;
+    width: 100%;
+  }
+
+  .settings-advanced-danger-zone,
+  .settings-product-header,
+  .settings-authority-note,
+  .settings-preference-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-notification-grid,
+  .settings-notify-options {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-permission-table {
+    overflow-x: auto;
+  }
+
+  .settings-permission-row {
+    min-width: 680px;
+  }
+}
+

@@ -1,0 +1,41 @@
+.runtime-status__health { display: flex; flex-wrap: wrap; gap: var(--space-1-5) var(--space-4); list-style: none; margin: 0; padding: 0; }
+.runtime-status__health li { align-items: center; color: var(--text-secondary); display: inline-flex; font-size: var(--text-sm); gap: var(--space-1-5); }
+.runtime-status__health strong { color: var(--text-primary); font-weight: 650; }
+.runtime-status__reasons { border-left: 2px solid var(--warning); color: var(--text-secondary); font-size: var(--text-sm); margin: 0; padding: var(--space-1) 0 var(--space-1) var(--space-6); }
+.runtime-status__logs { margin-top: var(--space-3); }
+.settings-advanced-sections { display: flex; flex-direction: column; }
+.settings-advanced-sections .settings-disclosure + .settings-disclosure { border-top: 0; }
+.settings-advanced-sections .settings-disclosure > summary strong { font-weight: 700; }
+.settings-advanced-body { display: grid; gap: var(--space-4); }
+.settings-preferences { display: grid; gap: var(--space-4); }
+.settings-subsection-title { border-top: 1px solid var(--border-color); font-size: var(--text-xl); font-weight: 650; margin: var(--space-6) 0 var(--space-2-5); padding-top: var(--space-4-5); }
+.settings-notifications-page, .settings-ai-page { display: grid; gap: var(--space-4); }
+.settings-notifications-page > .settings-subsection-title { margin-bottom: calc(var(--space-1-5) * -1); }
+.settings-product-header h3 { font-size: var(--text-xl); font-weight: 650; margin: 0; }
+.settings-notification-modes { border: 0; display: grid; gap: var(--space-2); margin: 0; padding: 0; }
+.settings-notification-modes legend, .settings-notify-options legend { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 800; letter-spacing: 0.1em; margin-bottom: var(--space-1-5); text-transform: uppercase; }
+.settings-notification-mode { display: grid; gap: var(--space-1-5); }
+.settings-notification-mode > label:first-child { align-items: flex-start; cursor: pointer; display: flex; gap: var(--space-2); }
+.settings-notification-mode > label:first-child > span { display: flex; flex-direction: column; gap: var(--space-0-5); }
+.settings-notification-modes strong { font-size: var(--text-md); font-weight: 650; }
+.settings-notification-modes small { color: var(--text-muted); font-size: var(--text-xs); }
+.settings-notification-progress { align-items: center; color: var(--text-secondary); display: flex; font-size: var(--text-sm); gap: var(--space-2); padding-left: var(--space-5); }
+.settings-notification-legacy { border-left: 2px solid var(--warning); color: var(--text-secondary); font-size: var(--text-sm); margin: 0; padding: var(--space-1) var(--space-2); }
+.settings-notify-more > summary { color: var(--text-secondary); cursor: pointer; font-size: var(--text-sm); font-weight: 700; }
+.settings-notify-more[open] > summary { margin-bottom: var(--space-2-5); }
+.persona-settings-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); display: grid; gap: var(--space-3); padding: var(--space-4-5); }
+.persona-settings-panel .settings-product-header h3 { align-items: center; display: inline-flex; gap: var(--space-1-5); }
+.persona-save-row { align-items: center; display: flex; gap: var(--space-3); justify-content: flex-end; }
+.persona-save-row > span { color: var(--text-muted); font-size: var(--text-sm); }
+
+/* Spec 0.3 / 5.8.1: independently expandable cards never compete for emphasis. */
+.settings-advanced-sections .btn-primary {
+  background: var(--button-secondary-bg);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+.settings-advanced-sections .btn-primary:hover:not(:disabled) {
+  background: var(--nav-hover);
+  border-color: var(--border-color-hover);
+  color: var(--text-primary);
+}

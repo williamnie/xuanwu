@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { BriefcaseBusiness, Loader2, MessageSquarePlus, RotateCw } from 'lucide-react';
 import TurtleLoader from '../../components/TurtleLoader';
-import { runStatusLabel } from './runPageModel.js';
+import { providerLabel, runStatusLabel } from './runPageModel.js';
 
 const RUNS_APP_SIDEBAR_SLOT_ID = 'sessions-app-sidebar-slot';
 
@@ -38,25 +38,24 @@ export default function RunSidebar({
       <div className="sidebar-shortcut-items">
         <button className="sidebar-shortcut-item runs-new-session-button" onClick={onNewProviderSession} type="button">
           <span className="sidebar-shortcut-item-icon"><MessageSquarePlus size={16} /></span>
-          <span>新建 provider session</span>
+          <span>新建对话</span>
         </button>
       </div>
 
       <div className="runs-sidebar-heading">
         <div>
-          <span className="sidebar-section-title font-mono">03 RUN_INSPECTOR</span>
-          <small className="font-mono text-zinc-500">[TELEMETRY: RUNTIME]</small>
+          <span className="sidebar-section-title font-mono">执行记录</span>
         </div>
-        <button aria-busy={refreshing} aria-label="刷新 Runs" className="runs-sidebar-refresh" disabled={refreshing} onClick={onRefresh} type="button">
+        <button aria-busy={refreshing} aria-label="刷新执行记录" className="runs-sidebar-refresh" disabled={refreshing} onClick={onRefresh} type="button">
           <RotateCw className={refreshing ? 'animate-spin' : ''} size={13} />
         </button>
       </div>
 
       <div className="sidebar-scroll-area runs-sidebar-scroll" onScroll={loadOnScroll}>
         {loading && runs.length === 0 ? (
-          <div className="session-list-loading"><TurtleLoader compact label="正在读取 Runs…" /></div>
+          <div className="session-list-loading"><TurtleLoader compact label="正在读取执行记录…" /></div>
         ) : runs.length === 0 ? (
-          <div className="runs-sidebar-empty">暂无 Run；Work 被 runner claim 后会生成执行记录。</div>
+          <div className="runs-sidebar-empty">暂无执行记录，任务开始执行后会显示在这里。</div>
         ) : (
           <div className="runs-sidebar-list">
             {runs.map(run => (
@@ -70,7 +69,7 @@ export default function RunSidebar({
                 <span className="run-sidebar-work"><BriefcaseBusiness size={13} /> 任务 #{workNumber(run.work_id)}</span>
                 <span className="run-sidebar-meta">
                   <span className={`run-status-dot ${run.status || 'unknown'}`} />
-                  {runStatusLabel(run.status)} · {providerLabel(run.provider)} · Attempt {run.attempt_count || run.sequence || 0}
+                  {runStatusLabel(run.status)} · {providerLabel(run.provider)} · {run.attempt_count || 0} 次尝试
                 </span>
               </button>
             ))}
@@ -85,13 +84,6 @@ export default function RunSidebar({
       </div>
     </div>
   ), portalTarget);
-}
-
-function providerLabel(provider) {
-  if (provider === 'codex') return 'Codex';
-  if (provider === 'claude') return 'Claude';
-  if (provider === 'pi-coding-agent') return 'Pi Coding Agent';
-  return provider || 'Unknown';
 }
 
 function workNumber(workId) {

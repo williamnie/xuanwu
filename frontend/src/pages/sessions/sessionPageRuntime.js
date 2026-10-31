@@ -2,7 +2,15 @@ import { approvalsForSession } from './approvalQueue.js';
 import { normalizeQueuedSessionMessages } from './sessionMessageQueue.js';
 
 const DEFAULT_SESSION_PROVIDER = 'codex';
+// Claude 的 steer 由 CLI 在下一个工具边界并入当前轮；回复已在收尾时则紧接着续一轮。
+const STEERABLE_SESSION_PROVIDERS = new Set(['codex', 'claude']);
 const MESSAGE_QUEUE_STORAGE_KEY = 'codex-session-message-queue';
+
+export function canSteerSessionProvider(provider, nativeMode = '') {
+  // 同为 Claude，herdr 仍是原生终端输入；只有 SDK 路径已验证 live steer。
+  if (nativeMode === 'herdr') return false;
+  return STEERABLE_SESSION_PROVIDERS.has(String(provider || DEFAULT_SESSION_PROVIDER));
+}
 
 export function readQueuedSessionMessages() {
   try {

@@ -1,3 +1,4 @@
+import { readStylesheet } from '../../test-support/readStylesheet.js';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -7,7 +8,7 @@ import { connectionHealth, integrationChannelFromHash, loadConnectionStatus, rec
 import { I18nContext } from '../i18n/context.js';
 import { configureGuide } from './settingsProductModels.js';
 
-const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
+const read = path => (path.endsWith('.css') ? readStylesheet : readFileSync)(new URL(path, import.meta.url), 'utf8');
 const diagnostics = [{ id: 'feishu', health: { state: 'healthy' } }, { id: 'telegram', health: { state: 'failed' } }];
 const registry = [{ id: 'feishu', receiver: { state: 'reconnecting' } }, { id: 'telegram', receiver: { state: 'polling' } }];
 const render = (channels = registry, connectors = diagnostics, language = 'zh-CN') => renderToStaticMarkup(

@@ -1,3 +1,6 @@
+import { isWaitingForProjectNode } from '../../utils/remoteProjectStatus.js';
+import RemoteProjectBadge from '../../components/RemoteProjectBadge.jsx';
+import { useProjectNodes } from '../../store/useProjectNodes.js';
 import { workScheduleSummary } from './workScheduleModel.js';
 import { ScheduleBlockerLinks } from './WorkSchedule.jsx';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -18,6 +21,7 @@ const LIST_REFRESH_EVENT_TYPES = new Set(['issue.created', 'issue.deleted', 'iss
 
 // 任务页默认视图：服务端筛选与分页；行内按钮与看板拖拽共用 workActions 的动作表。
 export default function TaskList({ counts = {}, navigateTo, onCreate, onEdit, projectId, projects, query, source = '', refreshToken = 0, scope, onScopeChange }) {
+  const nodesById = useProjectNodes();
   const { language, t } = useI18n();
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(null);
@@ -170,7 +174,7 @@ export default function TaskList({ counts = {}, navigateTo, onCreate, onEdit, pr
             const primary = actions.find(action => action.primary);
             const secondary = actions.filter(action => action !== primary);
             const issueId = issueIdFromWorkId(work.id);
-            const detail = workScheduleSummary(work, t) || workBlockReason(work, project) || firstLine(work.goal);
+            const detail = isWaitingForProjectNode(work, project, nodesById) ? '等待节点上线' : workScheduleSummary(work, t) || workBlockReason(work, project) || firstLine(work.goal);
             const expanded = expandedId === work.id;
             const canEdit = work.status !== 'in_progress';
             return (
@@ -182,6 +186,7 @@ export default function TaskList({ counts = {}, navigateTo, onCreate, onEdit, pr
                     <small>{detail}</small>
                   </span>
                   <span className="task-list-meta">
+                    <RemoteProjectBadge project={project} nodesById={nodesById} />
                     <em data-status={work.status}>{t(`status.${work.status}`)}</em>
                     <span>{project?.name || work.owner?.project_id || '—'}{issueId ? ` · #${issueId}` : ''}</span>
                     <time dateTime={work.updated_at}>{relativeTime(work.updated_at, language)}</time>

@@ -1,8 +1,10 @@
-import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { readStylesheet } from '../../test-support/readStylesheet.js';
+import assert from 'node:assert/strict';
+
 import test from 'node:test';
 
-const styles = readFileSync(new URL('./Settings.css', import.meta.url), 'utf8');
+const styles = readStylesheet(new URL('./Settings.css', import.meta.url));
 const tokens = readFileSync(new URL('../../../docs/design-system/tokens.css', import.meta.url), 'utf8');
 const aliases = readFileSync(new URL('../GeekWorkbench.css', import.meta.url), 'utf8');
 

@@ -1,3 +1,6 @@
+import { guardianInboxActiveIndexMigration } from "./094_guardian_inbox_active_index.ts";
+import { remoteRunsMigration } from "./093_remote_runs.ts";
+import { remoteNodesMigration } from "./092_remote_nodes.ts";
 import { hotPathReadIndexesMigration } from "./091_hot_path_read_indexes.ts";
 import { piCredentialSourceMigration } from "./090_pi_credential_source.ts";
 import { runtimeActivityIndexesMigration } from "./089_runtime_activity_indexes.ts";
@@ -186,4 +189,7 @@ export const migrations = [
   runtimeActivityIndexesMigration,
   piCredentialSourceMigration,
   hotPathReadIndexesMigration,
+  remoteNodesMigration,
+  remoteRunsMigration,
+  guardianInboxActiveIndexMigration,
 ];

@@ -1,8 +1,9 @@
+import { readStylesheet } from '../../../test-support/readStylesheet.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import test from 'node:test';
 
-const runsCss = readFileSync(new URL('./Runs.css', import.meta.url), 'utf8');
+const runsCss = readStylesheet(new URL('./Runs.css', import.meta.url));
 
 function ruleFor(css, selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

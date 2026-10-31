@@ -1,0 +1,123 @@
+.sidebar-section-title {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--text-muted);
+  margin: var(--space-6) 0 var(--space-2) var(--space-3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sidebar-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+}
+
+.nav-item-main {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.nav-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Nav Buttons inside Sidebar */
+.nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 38px;
+  padding: var(--space-2) var(--space-2-5);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  font-weight: 620;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.nav-item:hover {
+  background: var(--nav-hover);
+  color: var(--text-primary);
+}
+
+.nav-item.active {
+  background: var(--nav-active);
+  color: var(--text-primary);
+  box-shadow: none;
+  font-weight: 720;
+}
+
+.nav-item.nav-item-secondary {
+  color: var(--text-muted);
+  font-size: var(--text-md);
+}
+
+.sidebar-footer {
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  margin-top: auto;
+  padding-top: var(--space-2-5);
+}
+
+.sidebar-footer-actions {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-1);
+}
+
+.sidebar-footer-actions .nav-item {
+  flex: 0 0 34px;
+  height: 34px;
+  justify-content: center;
+  min-height: 34px;
+  min-width: 0;
+  padding: 0;
+  width: 34px;
+}
+
+.sidebar-footer-actions .nav-item.active::before {
+  display: none;
+}
+
+.nav-badge {
+  font-size: var(--text-xs);
+  background: var(--border-color);
+  color: var(--text-muted);
+  padding: var(--space-0-5) var(--space-1-5);
+  border-radius: var(--radius-xs);
+  font-weight: 600;
+}
+
+/* New Issue Button in Sidebar */
+
+/* Progress bar inside sidebar */
+
+/* Sub-items list (FOCUS & PROJECT) */
+
+.dashboard-page,
+.projects-page,
+.issues-page {
+  margin: 0 auto;
+  max-width: 1680px;
+  width: 100%;
+}
+
+/* Header standard styles */
+
+/* Kanban Layout */
+
+/* Kanban Card */
+
+/* Column Empty placeholder */
+

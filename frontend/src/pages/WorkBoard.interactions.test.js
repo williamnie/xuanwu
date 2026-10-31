@@ -1,9 +1,18 @@
+import { readStylesheet } from '../../test-support/readStylesheet.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const board = readFileSync(new URL('./WorkBoard.jsx', import.meta.url), 'utf8');
-const css = readFileSync(new URL('./WorkBoard.css', import.meta.url), 'utf8');
+const board = [
+  './WorkBoard.jsx',
+  './work/WorkKanban.jsx',
+  './work/WorkColumn.jsx',
+  './work/WorkBoardHeader.jsx',
+  './work/WorkEvidenceDialog.jsx',
+  './work/useWorkKanbanData.js',
+  './work/workKanbanModel.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
+const css = readStylesheet(new URL('./WorkBoard.css', import.meta.url));
 const composerCss = readFileSync(new URL('../components/GlobalAskComposer.css', import.meta.url), 'utf8');
 const editorDialog = readFileSync(new URL('./work/WorkEditorDialog.jsx', import.meta.url), 'utf8');
 const actions = readFileSync(new URL('./work/workActions.js', import.meta.url), 'utf8');
@@ -21,7 +30,9 @@ test('new task keeps the title optional and calls the executor choice a preset',
   assert.match(editorDialog, /setField\('status', event\.target\.checked \? 'todo' : 'triage'\)/);
   assert.doesNotMatch(editorDialog, /Effective:|Work 显式/);
   assert.match(editorDialog, /<AgentProfileSelectOptions/);
-  assert.match(editorDialog, /draft\.agent_profile_id === \(work\?\.agent_profile_id \|\| ''\)/);
+  assert.match(editorDialog, /workCatalogSelection\(catalogState, catalogKey, draft\.agent_profile_id, selectedProject,\s*editing \? work\?\.agent_profile_id \|\| '' : null\)/);
+  assert.match(editorDialog, /open=\{!selectedCodeAgentAvailable \|\| Boolean\(nodeId\) \|\| undefined\}/);
+  assert.match(editorDialog, /if \(!selectedCodeAgentAvailable\)/);
 });
 
 test('Work Board cards restore drag and drop through guarded Issue actions', () => {
@@ -89,9 +100,11 @@ test('Task page keeps search in the header, defaults to the list and keeps the b
   assert.doesNotMatch(composerCss, /\.main-content\.has-global-ask-composer\s*\{/);
 });
 
-
 test('task project selection uses the URL-owned filter for both views and existing list requests', () => {
-  const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+  const app = [
+  '../App.jsx',
+  '../useAppNavigation.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
   const list = readFileSync(new URL('./work/TaskList.jsx', import.meta.url), 'utf8');
   assert.match(app, /<WorkBoard\s+filterProject=\{filterProject\}\s+onProjectChange=\{setFilterProject\}/);
   assert.match(board, /filterProject: projectId = ''/);
@@ -103,7 +116,10 @@ test('task project selection uses the URL-owned filter for both views and existi
 });
 
 test('task source resets list and board pagination, carries through history lanes, and avoids unfiltered counts', () => {
-  const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+  const app = [
+  '../App.jsx',
+  '../useAppNavigation.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
   const list = readFileSync(new URL('./work/TaskList.jsx', import.meta.url), 'utf8');
   assert.match(app, /draft\.taskSource = route\.taskSource/);
   assert.match(app, /onSourceChange=\{setTaskSource\}/);

@@ -255,11 +255,55 @@ For a source-built macOS background service:
 The canonical development and operational commands live in the
 [architecture index](docs/architecture/README.md) and [runbooks](docs/runbooks/).
 
+## Remote nodes (preview)
+
+By default Xuanwu only drives projects and coding tools on the machine it runs on. Run the
+agent side on another machine and its projects and Codex / Claude / Pi / Qoder become
+available to the same Xuanwu:
+
+1. In **Settings → Projects → Remote nodes**, add a node and copy the start command (the
+   token is shown once).
+2. On the node (with `xuanwu` installed and its coding tools signed in), run:
+
+   ```bash
+   XUANWU_NODE_TOKEN=<token> xuanwu node --hub http://<xuanwu-address> --root ~/code
+   ```
+
+   `--root` may repeat and limits where Xuanwu may run agents; with none, every project is
+   refused. `--max-parallel` sets how many tasks the node runs at once (default 1). For a
+   long-running node use `xuanwu node install ... --start`, which registers a systemd /
+   launchd service that starts at boot and restarts on exit; its settings, token included,
+   go to `~/.xuanwu/node.json` with mode 0600.
+3. When adding a project, pick its **location** and enter the path on the node.
+
+Nodes connect out to Xuanwu (SSE down, HTTP up), so Xuanwu never needs to reach them. Tasks,
+logs and state stay in Xuanwu's database, and **the hub verifies all work**: it collects git
+evidence through read-only git on the node, reads the session summary there, and retries on
+the same node or continues the same session as acceptance decides, unattended. The hub and
+every node have their own concurrency slots. After a hub or node restart, runs still going
+on the node are reattached and runs the node lost are closed at once.
+
+When a human review asks for changes, the task continues in the original session on its node,
+and the chat page can start and continue sessions on remote projects; approval requests from a
+node session appear in the hub's UI and Feishu notifications and are resolved on that node.
+
+The preview targets LAN / Tailscale and is not hardened for the public internet; the UI warns
+when a node connects from a non-private address or runs a different version than the hub. See
+the [remote node design](docs/design/remote-agent-plan.md).
+
 ## Runtime resource limits
 
 Core uses indexed status reads and batch-local event projection dictionaries. Projection work
 checks its time budget between rows; MCP and Git subprocess work has bounded concurrency,
 output and deadlines. SQLite statements themselves remain synchronous.
+
+Guardian inbox health checks and FIFO consumption use an active-event partial index, so
+consumed audit history does not add work to these queries. Consumption reads at most 50 events
+per default batch, yields between batches, and processes at most 250 events per cycle. Excess
+events remain pending for the next cycle; `guardianDecisions.truncated=1` indicates a remaining
+backlog at the cycle limit. The existing watchdog interval and stale-event threshold are unchanged.
+See the [Guardian inbox operations notes](docs/runbooks/guardian-inbox.md) for verification and
+historical-data retention boundaries.
 
 Slow SSE consumers are disconnected when their response queue exceeds 1 MiB; clients should
 reconnect and reload the current snapshot. Run log persistence is asynchronous and ordered,
@@ -301,3 +345,10 @@ Xuanwu is open-source software distributed under the [Apache License 2.0](LICENS
 modify, and distribute it, including for commercial purposes, subject to the license terms.
 Redistributions must retain the required license and attribution notices, including
 [LICENSE](LICENSE) and [NOTICE](NOTICE) where applicable.
+
+## Claude native terminal (herdr, preview)
+
+Set `XUANWU_CLAUDE_MODE=herdr` to run interactive Claude in a herdr terminal.
+**Install and start herdr yourself on the execution node**; Xuanwu checks dependencies,
+version, service connectivity and Claude login, and never installs it automatically.
+The SDK remains the default. See [setup and limitations](docs/claude-herdr.md).

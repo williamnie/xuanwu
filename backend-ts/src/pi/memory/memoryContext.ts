@@ -1,12 +1,13 @@
 import type { RunnerDatabase } from "../../db/database.ts";
 import type { PiMemoryItem } from "../../db/repositories/pi.ts";
-import { memoryWriteIdentity } from "../../db/repositories/pi/memoryHistory.ts";
-import { parseMemoryExperience } from "./memoryExperience.ts";
 import { MEMORY_TECHNICAL_LIMIT, rankMemoryCandidates, technicalMemory, type MemoryTaskContext, type MemoryScope } from "./memoryRetrieval.ts";
 import { cleanString, positiveInteger } from "../../util/values.ts";
+import { formatMemoryLine, contextItem } from "./memoryContextProjection.ts";
+import { withIssueTask, memoryLimit, memoryTokenBudget, selectWithinBudget, scopeKey, truncationSummary, scopeRank, cleanScopeID } from "./memoryContextBudget.ts";
 
-type PiMemorySelection = { id: string; revision: number; content_fingerprint: string; reason: string };
-type PiMemoryPromptContextInput = MemoryTaskContext & {
+export type PiMemorySelection = { id: string; revision: number; content_fingerprint: string; reason: string };
+
+export type PiMemoryPromptContextInput = MemoryTaskContext & {
   conversationID?: string;
   inboxItemID?: number | string;
   issueID?: number;
@@ -19,6 +20,7 @@ type PiMemoryPromptContextInput = MemoryTaskContext & {
   scopes?: MemoryScope[];
   selection?: PiMemorySelection[];
 };
+
 export type PiMemoryContextItem = {
   authority: string;
   authorized_at: string;
@@ -54,7 +56,8 @@ export type PiMemoryContextItem = {
   version: string;
   selection_stage: "policy" | "text_candidate" | "pi_selected";
 };
-type PiMemoryProvenance = {
+
+export type PiMemoryProvenance = {
   citation_id: string;
   citation_label: string;
   citation_type: string;
@@ -64,13 +67,15 @@ type PiMemoryProvenance = {
   source_path: string;
   source_type: string;
 };
-type PiMemoryRetrievalLimits = {
+
+export type PiMemoryRetrievalLimits = {
   item_limit: number;
   token_budget: number;
   token_estimate: number;
   truncated: boolean;
 };
-type PiMemoryTruncationSummary = {
+
+export type PiMemoryTruncationSummary = {
   omitted_by_item_limit: number;
   omitted_by_token_budget: number;
   omitted_count: number;
@@ -80,6 +85,7 @@ type PiMemoryTruncationSummary = {
   total_candidates: number;
   truncated_item_ids: string[];
 };
+
 export type PiMemoryRetrievalResult = {
   memory_items: PiMemoryContextItem[];
   retrieval_scopes: string[];
@@ -90,10 +96,13 @@ export type PiMemoryRetrievalResult = {
     omitted_by_candidate_limit?: number; omitted_by_selection_or_technical_limit?: number };
 };
 
-const DEFAULT_MEMORY_LIMIT = 10;
-const MAX_MEMORY_LIMIT = 24;
-const DEFAULT_TOKEN_BUDGET = 900;
-const MAX_TOKEN_BUDGET = 4000;
+export const DEFAULT_MEMORY_LIMIT = 10;
+
+export const MAX_MEMORY_LIMIT = 24;
+
+export const DEFAULT_TOKEN_BUDGET = 900;
+
+export const MAX_TOKEN_BUDGET = 4000;
 
 export function buildPiMemoryPromptContext(db: RunnerDatabase, input: PiMemoryPromptContextInput = {}): string {
   const result = retrievePiMemoryContext(db, input);
@@ -150,7 +159,7 @@ export function collectPiMemoryContextItems(
   return retrievePiMemoryContext(db, input).memory_items;
 }
 
-function rawMemoryContextItems(
+export function rawMemoryContextItems(
   ranked: ReturnType<typeof rankMemoryCandidates>["candidates"],
   input: PiMemoryPromptContextInput
 ): PiMemoryContextItem[] {
@@ -177,14 +186,14 @@ function rawMemoryContextItems(
   });
 }
 
-function memoryOrder(left: PiMemoryItem, right: PiMemoryItem): number {
+export function memoryOrder(left: PiMemoryItem, right: PiMemoryItem): number {
   return scopeRank(left) - scopeRank(right) ||
     right.pinned - left.pinned ||
     right.updated_at.localeCompare(left.updated_at) ||
     left.id.localeCompare(right.id);
 }
 
-function memoryScopeFilters(input: PiMemoryPromptContextInput) {
+export function memoryScopeFilters(input: PiMemoryPromptContextInput) {
   if (input.scopes) return input.scopes;
   const filters: Array<{ disabled: number; scope: string; scopeId?: string }> = [];
   for (const issueID of scopedIssueIDs(input)) filters.push({ disabled: 0, scope: "issue", scopeId: String(issueID) });
@@ -202,206 +211,7 @@ function memoryScopeFilters(input: PiMemoryPromptContextInput) {
   return filters;
 }
 
-function scopedIssueIDs(input: PiMemoryPromptContextInput): number[] {
+export function scopedIssueIDs(input: PiMemoryPromptContextInput): number[] {
   const ids = [positiveInteger(input.issueID), ...(input.issueIDs ?? []).map(positiveInteger)];
   return [...new Set(ids.filter((id) => id > 0))].slice(0, 2);
-}
-
-function contextItem(item: PiMemoryItem): PiMemoryContextItem {
-  const reference = memoryReference(item);
-  const context: PiMemoryContextItem = {
-    authority: item.authority,
-    authorized_at: item.authorized_at,
-    authorized_by: item.authorized_by,
-    confidence: item.confidence,
-    content: item.content,
-    citation_id: item.citation_id,
-    citation_label: item.citation_label,
-    citation_type: item.citation_type,
-    citation_url: item.citation_url,
-    id: item.id,
-    kind: item.kind,
-    layer: item.layer,
-    last_seen_at: item.last_seen_at,
-    memory_key: item.memory_key,
-    memory_type: item.memory_type,
-    occurrence_count: item.occurrence_count,
-    pinned: item.pinned,
-    provenance: memoryProvenance(item, reference),
-    reference,
-    retrieval_scope: scopeKey({ scope: item.scope, scopeId: item.scope_id }),
-    selection_reason: selectionReason(item),
-    scope: item.scope,
-    scope_id: item.scope_id,
-    source_id: item.source_id,
-    source_path: reference,
-    source_type: item.source_type,
-    token_estimate: 0,
-    truncated: false,
-    updated_at: item.updated_at,
-    revision: item.revision,
-    content_fingerprint: memoryWriteIdentity(item).content,
-    version: parseMemoryExperience(item.content)?.version || "",
-    selection_stage: technicalMemory(item) ? "text_candidate" : "policy"
-  };
-  context.token_estimate = itemTokenEstimate(context);
-  return context;
-}
-
-function memoryProvenance(item: PiMemoryItem, reference: string): PiMemoryProvenance {
-  return {
-    citation_id: item.citation_id,
-    citation_label: item.citation_label,
-    citation_type: item.citation_type,
-    citation_url: item.citation_url,
-    reference,
-    source_id: item.source_id,
-    source_path: reference,
-    source_type: item.source_type
-  };
-}
-
-function selectionReason(item: PiMemoryItem): string {
-  const base = `scope ${scopeKey({ scope: item.scope, scopeId: item.scope_id })} matched retrieval request`;
-  return item.pinned === 1 ? `${base}; pinned memory ranked first` : `${base}; ranked by scope and freshness`;
-}
-
-function formatMemoryLine(item: PiMemoryContextItem): string {
-  return `- [${item.reference} | revision=${item.revision} | fingerprint=${item.content_fingerprint} | memory_key=${item.memory_key} | authority=${item.authority} | seen=${item.occurrence_count} | ${item.scope}:${item.scope_id || "runner"} | ${sourceLabel(item)} | ${citationLabel(item)} | updated=${item.updated_at} | confidence=${item.confidence}${item.truncated ? " | truncated=true" : ""}] ${item.kind}: ${item.content}`;
-}
-
-function sourceLabel(item: PiMemoryContextItem): string {
-  const source = [item.source_type, item.source_id].filter(Boolean).join(":");
-  return `source=${source || "unknown"}`;
-}
-
-function citationLabel(item: PiMemoryContextItem): string {
-  const ref = [item.citation_type, item.citation_id].filter(Boolean).join(":");
-  const label = item.citation_label || item.citation_url;
-  return `citation=${[ref, label].filter(Boolean).join(" ") || "none"}`;
-}
-
-function memoryReference(item: PiMemoryItem): string {
-  return `pi_memory_items/${item.id}`;
-}
-
-function selectWithinBudget(items: PiMemoryContextItem[], itemLimit: number, tokenBudget: number) {
-  const selected: PiMemoryContextItem[] = [];
-  let tokenEstimate = 0;
-  let truncated = items.length > itemLimit;
-  let stoppedByTokenBudget = false;
-  for (const item of items.slice(0, itemLimit)) {
-    const remaining = tokenBudget - tokenEstimate;
-    if (remaining <= 0) { stoppedByTokenBudget = true; truncated = true; break; }
-    const next = fitItemToBudget(item, remaining);
-    if (!next) { stoppedByTokenBudget = true; truncated = true; continue; }
-    selected.push(next);
-    tokenEstimate += next.token_estimate;
-    truncated ||= next.truncated;
-  }
-  return { items: selected, stoppedByTokenBudget, tokenEstimate, truncated };
-}
-
-function truncationSummary(
-  items: PiMemoryContextItem[],
-  selected: ReturnType<typeof selectWithinBudget>,
-  itemLimit: number,
-  tokenBudget: number
-): PiMemoryTruncationSummary {
-  const limitedCount = Math.min(items.length, itemLimit);
-  const omittedByItemLimit = Math.max(0, items.length - itemLimit);
-  const omittedByTokenBudget = selected.stoppedByTokenBudget ? limitedCount - selected.items.length : 0;
-  const truncatedItemIds = selected.items.filter((item) => item.truncated).map((item) => item.id);
-  return {
-    omitted_by_item_limit: omittedByItemLimit,
-    omitted_by_token_budget: omittedByTokenBudget,
-    omitted_count: Math.max(0, items.length - selected.items.length),
-    selected_count: selected.items.length,
-    summary: truncationText(omittedByItemLimit, omittedByTokenBudget, truncatedItemIds.length, tokenBudget),
-    token_budget: tokenBudget,
-    total_candidates: items.length,
-    truncated_item_ids: truncatedItemIds
-  };
-}
-
-function truncationText(itemLimitOmitted: number, budgetOmitted: number, truncatedItems: number, tokenBudget: number): string {
-  const omitted = itemLimitOmitted + budgetOmitted;
-  if (omitted === 0 && truncatedItems === 0) return `No truncation; token budget ${tokenBudget} was sufficient.`;
-  return `${omitted} memory item(s) omitted and ${truncatedItems} item(s) shortened by token budget ${tokenBudget}.`;
-}
-
-function fitItemToBudget(item: PiMemoryContextItem, tokenBudget: number): PiMemoryContextItem | null {
-  const fullEstimate = itemTokenEstimate(item);
-  if (fullEstimate <= tokenBudget) return { ...item, token_estimate: fullEstimate };
-  // 经验中的适用条件、反例和版本必须一起保留，不能截成看似通用的修复建议。
-  if (item.selection_stage !== "policy") return null;
-  let low = 0;
-  let high = [...item.content].length;
-  while (low < high) {
-    const middle = Math.ceil((low + high) / 2);
-    const candidate = { ...item, content: truncateRunes(item.content, middle), truncated: true };
-    if (itemTokenEstimate(candidate) <= tokenBudget) low = middle;
-    else high = middle - 1;
-  }
-  if (low <= 1) return null;
-  const next = { ...item, content: truncateRunes(item.content, low), truncated: true };
-  return { ...next, token_estimate: itemTokenEstimate(next) };
-}
-
-function scopeKey(input: { scope: string; scopeId?: string }): string {
-  return `${input.scope}:${input.scopeId || "runner"}`;
-}
-
-function scopeRank(item: PiMemoryItem): number {
-  if (item.scope === "issue") return 0;
-  if (item.scope === "inbox") return 1;
-  if (item.scope === "source") return 2;
-  if (item.scope === "skill") return 3;
-  if (item.scope === "conversation") return 4;
-  if (item.scope === "session") return 5;
-  if (item.scope === "project") return 6;
-  if (item.scope === "global") return 7;
-  return 8;
-}
-
-function memoryLimit(value: number | undefined): number {
-  if (typeof value !== "number" || !Number.isInteger(value)) return DEFAULT_MEMORY_LIMIT;
-  return Math.max(0, Math.min(value, MAX_MEMORY_LIMIT));
-}
-
-function memoryTokenBudget(value: number | undefined): number {
-  if (typeof value !== "number" || !Number.isInteger(value)) return DEFAULT_TOKEN_BUDGET;
-  return Math.max(0, Math.min(value, MAX_TOKEN_BUDGET));
-}
-
-function estimateTokens(value: string): number {
-  return Math.ceil([...value].reduce((sum, char) => sum + (char.charCodeAt(0) < 128 ? 0.25 : 1), 0));
-}
-
-function itemTokenEstimate(item: PiMemoryContextItem): number {
-  // 工具返回完整 JSON，不能只给正文计费；CJK 也不能当成四字符一个 token。
-  return Math.max(estimateTokens(formatMemoryLine(item)), estimateTokens(JSON.stringify({ ...item, token_estimate: 4000 })));
-}
-
-function withIssueTask(db: RunnerDatabase, input: PiMemoryPromptContextInput): PiMemoryPromptContextInput {
-  if (input.taskDescription || !input.projectID) return input;
-  const descriptions = scopedIssueIDs(input).flatMap((id) => {
-    const row = db.sqlite.query<{ title: string; description: string }, [number, string]>(
-      "select substr(title,1,512) as title, substr(description,1,3584) as description from issues where id=? and project_id=?"
-    ).get(id, input.projectID!);
-    return row ? [`${row.title}\n${row.description}`] : [];
-  });
-  return { ...input, taskDescription: descriptions.join("\n").slice(0, 4096) };
-}
-
-function truncateRunes(value: string, maxRunes: number): string {
-  const runes = [...value];
-  if (runes.length <= maxRunes) return value;
-  if (maxRunes <= 1) return "…";
-  return `${runes.slice(0, maxRunes - 1).join("")}…`;
-}
-
-function cleanScopeID(value: number | string | undefined): string {
-  if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return String(value);
-  return typeof value === "string" ? value.trim() : "";
 }

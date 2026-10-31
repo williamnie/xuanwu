@@ -19,6 +19,6 @@ test('preset editing preserves policy validation and project assignment only wri
   assert.match(panel, /updateAgentProfile\(payload\.id, payload\)/);
   assert.match(panel, /createAgentProfile\(payload\)/);
   assert.match(panel, /updateProject\(projectID, \{ default_agent_profile_id: profileID \}\)/);
-  assert.match(panel, /availableAgentProfiles\(profiles, providerCatalog\)/);
+  assert.match(panel, /availableAgentProfiles\(profiles, assignmentCatalog\.catalog\)/);
   assert.match(panel, /<AgentProfileSelectOptions/);
 });

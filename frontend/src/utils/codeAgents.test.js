@@ -4,6 +4,7 @@ import {
   availableAgentProfiles,
   availableCodeAgentIDs,
   codeAgentAvailable,
+  agentProfileOptionLabel,
   codeAgentLabel,
   effectiveProjectProvider,
   groupedAvailableAgentProfiles,
@@ -53,4 +54,26 @@ test('project routing resolves its default profile before the project provider',
     { id: 'claude-profile', provider: 'claude' },
   ]), 'claude');
   assert.equal(effectiveProjectProvider({ provider: 'codex' }, []), 'codex');
+});
+
+test('node catalog is authoritative, including tools absent from center and offline readiness', () => {
+  const nodeCatalog = [{ id: 'node-only', label: 'Node Tool', enabled: true, submittable: true,
+    capabilities: { issueExecution: true }, node_id: 'node-a', node_online: false, runtime: { ready: false } }];
+  const profiles = [{ id: 'remote', name: 'Remote preset', provider: 'node-only' }, { id: 'local', provider: 'claude' }];
+  assert.deepEqual(availableAgentProfiles(profiles, nodeCatalog), [profiles[0]]);
+  assert.deepEqual(groupedAvailableAgentProfiles(profiles, nodeCatalog), [
+    { provider: 'node-only', label: 'Node Tool', profiles: [profiles[0]] },
+  ]);
+  assert.equal(unavailableSelectedAgentProfile('local', profiles, nodeCatalog).id, 'local');
+  assert.equal(unavailableSelectedAgentProfile('remote', profiles, nodeCatalog), null);
+  assert.deepEqual(availableAgentProfiles(profiles, catalog), [profiles[1]]);
+  assert.deepEqual(availableAgentProfiles(profiles, []), []);
+});
+
+test('preset option text names node config for builtin presets in a node catalog only', () => {
+  const nodeCatalog = [{ id: 'claude', label: 'hermes · Claude Code', node_id: 'node-a' }];
+  const builtin = { id: 'xuanwu-provider-claude', name: 'Claude Code（本机配置）', provider: 'claude' };
+  assert.equal(agentProfileOptionLabel(builtin, nodeCatalog), 'Claude Code（节点配置） · 节点默认模型');
+  assert.equal(agentProfileOptionLabel(builtin, catalog), 'Claude Code（本机配置） · 编程工具默认模型');
+  assert.equal(agentProfileOptionLabel({ id: 'mine', name: '我的（本机配置）', provider: 'claude', model: 'opus' }, nodeCatalog), '我的（本机配置） · opus');
 });

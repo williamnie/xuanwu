@@ -54,7 +54,10 @@ test('timeline pagination stays deduplicated and filterable', () => {
   const first = [timeline('two', '2026-07-17T00:02:00Z', 'run'), timeline('one', '2026-07-17T00:01:00Z', 'work_event')];
   const merged = mergeTimelinePages(first, [timeline('one', '2026-07-17T00:01:00Z', 'work_event'), timeline('zero', '2026-07-17T00:00:00Z', 'run')]);
   assert.deepEqual(merged.map(item => item.id), ['two', 'one', 'zero']);
-  assert.deepEqual(filterTimelineItems(merged, 'run').map(item => item.id), ['two', 'zero']);
+  assert.deepEqual(filterTimelineItems(merged).map(item => item.id), ['one']);
+  assert.deepEqual(filterTimelineItems(merged, 'run'), []);
+  assert.deepEqual(filterTimelineItems([...merged, timeline('event', '2026-07-17T00:04:00Z', 'issue_event')]).map(item => item.id), ['one']);
+  assert.deepEqual(filterTimelineItems(merged, 'work_event').map(item => item.id), ['one']);
 });
 
 function timeline(id, occurredAt, kind) {

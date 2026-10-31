@@ -6,6 +6,7 @@ import {
 } from "../../db/repositories/pi/approvalLifecycle.ts";
 import type { ApprovalDecision, ExecutorProvider, ExecutorProviderId } from "../../providers/types.ts";
 import { constrainApprovalGrantScope } from "../../pi/actions/approvalGrantScope.ts";
+import { providersForProjectID } from "../../nodes/remoteExecution.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
 
 type ImApprovalResolveInput = {
@@ -32,7 +33,7 @@ export async function resolvePiApprovalRequestFromIm(
     sessionId: request.session_id || request.thread_id
   });
   if (decision !== "defer") {
-    const provider = input.provider ?? providerForRequest(input.providers, request.provider);
+    const provider = input.provider ?? providerForRequest(providersForProjectID(db, input.providers, request.project_id), request.provider);
     await resolveProviderApproval(db, request.approval_id, request.provider_approval_id || request.approval_id, provider, {
       decision: scoped.decision.decision,
       scope: scoped.decision.scope

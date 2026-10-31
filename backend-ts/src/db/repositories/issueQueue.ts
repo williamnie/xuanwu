@@ -50,6 +50,24 @@ export function countActiveExecutorWork(db: RunnerDatabase): number {
   `);
 }
 
+/**
+ * 某个执行位置上的在途运行数：nodeID 为空表示中心本机，否则为该远程节点。
+ * 各位置的并发名额相互独立，远程运行不占中心本机的名额。
+ */
+export function countActiveExecutorWorkAt(db: RunnerDatabase, nodeID: string): number {
+  return nodeID === ""
+    ? countRows(db, `
+      select count(distinct ir.id) as count from issue_runs ir
+      join issues i on i.id=ir.issue_id join projects p on p.id=i.project_id
+      where ir.ended_at='' and p.cwd not like 'node://%'
+    `)
+    : countRows(db, `
+      select count(distinct ir.id) as count from issue_runs ir
+      join issues i on i.id=ir.issue_id join projects p on p.id=i.project_id
+      where ir.ended_at='' and substr(p.cwd, 1, length(?))=?
+    `, [`node://${nodeID}:`, `node://${nodeID}:`]);
+}
+
 export function hasActiveExecutorWorkForProject(
   db: RunnerDatabase,
   projectID: string,

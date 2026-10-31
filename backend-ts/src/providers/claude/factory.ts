@@ -3,12 +3,14 @@ import { asProviderId, type ExecutorProvider, type ProviderEvent } from "../type
 import type { ExecutorProviderManifest, ProviderCapabilities } from "../core/manifest.ts";
 import type { ProviderFactory, ProviderRuntimeConfig as RegistryProviderConfig, RegisteredProvider } from "../core/registry.ts";
 import { detectProviderCommand } from "../core/command.ts";
+import { ClaudeHerdrProvider } from "./herdrProvider.ts";
+import { inspectHerdr } from "./herdrTransport.ts";
 import { createClaudeExecutorProvider } from "./provider.ts";
 import { CLAUDE_EXECUTION_POLICY_CAPABILITIES, claudeExecutionPolicyAdapter } from "./executionPolicy.ts";
 
 /**
  * P8：Claude ProviderFactory——SDK 与 CLI transport 共享 manifest/session projection。
- * - capability 只声明实际实现（SDK/CLI 均无 approvals/model_list）；
+ * - capability 只声明实际实现（不声明未验证的 live steer/model_list）；
  * - 没有真实账号 acceptance 前 supportLevel 保持 preview；
  * - Claude-native history parser（sessionHistory.ts）留在 Claude module；
  * - 本地 CLI 登录、设置和 Session 复用由 delegate（cliProvider）保持。
@@ -27,7 +29,7 @@ export function claudeManifest(): ExecutorProviderManifest {
     id: asProviderId("claude"),
     displayName: "Claude Agent SDK",
     supportLevel: "preview",
-    transports: ["sdk", "stdio-json"],
+    transports: ["sdk", "stdio-json", "herdr"],
     capabilities: CLAUDE_CAPABILITIES,
     executionPolicy: CLAUDE_EXECUTION_POLICY_CAPABILITIES,
     processObservability: "lease",
@@ -36,7 +38,8 @@ export function claudeManifest(): ExecutorProviderManifest {
         { kind: "string", key: "model", label: "Model" },
         { kind: "enum", key: "mode", label: "Transport", options: [
           { value: "sdk", label: "SDK" },
-          { value: "cli-fallback", label: "CLI fallback" }
+          { value: "cli-fallback", label: "CLI fallback" },
+          { value: "herdr", label: "herdr 原生终端（需自行安装并启动 herdr）" }
         ] },
         { kind: "enum", key: "auth_mode", label: "Auth source", options: [
           { value: "local-cli", label: "本地 CLI 登录" },
@@ -58,12 +61,18 @@ export function claudeFactory(options: ClaudeFactoryOptions = {}): ProviderFacto
     manifest,
     parseConfig: (raw: unknown) => (raw ?? {}) as RegistryProviderConfig,
     autoDetect: (config) => {
+      if (config.mode === "herdr") {
+        const probe = inspectHerdr(config as ProviderRuntimeConfig);
+        return { installed: true, ready: probe.ready, reason: probe.reason };
+      }
       if (config.mode !== "cli-fallback") return { installed: true, ready: true };
       const detected = detectProviderCommand(config.command);
       return { ...detected, ready: detected.installed };
     },
     create: (config: RegistryProviderConfig) => {
-      const instance = createClaudeExecutorProvider(config as ProviderRuntimeConfig, options.eventSink) as ExecutorProvider;
+      const instance: ExecutorProvider = config.mode === "herdr"
+        ? new ClaudeHerdrProvider(config as ProviderRuntimeConfig, options)
+        : createClaudeExecutorProvider(config as ProviderRuntimeConfig, options.eventSink);
       return Object.assign(instance, { manifest, policyAdapter: claudeExecutionPolicyAdapter }) as RegisteredProvider;
     }
   };

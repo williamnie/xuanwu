@@ -127,10 +127,13 @@ export function mergeEvidenceJson(
   plan: GuardianDecisionPlan
 ): string {
   const previous = existing ? guardianDecisionMergeMeta(existing) : null;
-  const ids = [...(previous?.event_ids ?? []), candidate.event_id].slice(-20);
+  // consume 前中断后可重放；最近 20 个 ID 的证据窗口内不重复计数。
+  const previousIDs = [...new Set(previous?.event_ids ?? [])];
+  const replay = previousIDs.includes(candidate.event_id);
+  const ids = replay ? previousIDs : [...previousIDs, candidate.event_id].slice(-20);
   const meta: GuardianDecisionMergeMeta = {
     base_key: guardianDecisionBaseKey(candidate),
-    event_count: (previous?.event_count ?? 0) + 1,
+    event_count: (previous?.event_count ?? 0) + (replay ? 0 : 1),
     event_ids: ids,
     idempotency_key: plan.idempotency_key,
     merge_key: plan.merge_key,

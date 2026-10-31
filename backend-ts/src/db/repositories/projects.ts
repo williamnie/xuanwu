@@ -4,6 +4,7 @@ import { getAgentProfile, type AgentProfile } from "./agentProfiles.ts";
 import { normalizeProjectForWrite, normalizeProjectModel, normalizeProjectPatch, normalizeProjectProvider, normalizeProjectProviderConfig, type NormalizedProjectWrite, type ProjectPatchInput, type ProjectWriteInput } from "./projectUtils.ts";
 import type { ExecutionPolicyRequest } from "../../providers/core/policyContracts.ts";
 import { readStoredExecutionPolicy } from "../../providers/core/policyPersistence.ts";
+import { isRemoteProjectCwd, projectLocation } from "../../nodes/projectLocation.ts";
 
 type ProjectRow = {
   hold_since: unknown;
@@ -56,6 +57,9 @@ export type Project = {
   id: string;
   loop_status: string;
   model: string;
+  /** 仅远程项目：所在节点与节点上的路径（cwd 为 node:// 形式）。 */
+  node_id?: string;
+  node_path?: string;
   name: string;
   pi_managed: number;
   provider: string;
@@ -164,6 +168,7 @@ function mapProjectRow(row: ProjectRow): Project {
     created_at: requiredString(row.created_at, "projects.created_at"),
     updated_at: requiredString(row.updated_at, "projects.updated_at"),
     ...(projectHold(row) ? { hold: projectHold(row) } : {}),
+    ...remoteLocation(requiredString(row.cwd, "projects.cwd")),
     loop_status: "stopped",
     provider_capabilities: providerCapabilities(row.provider)
   };
@@ -182,7 +187,14 @@ function validateProjectForWrite(id: string, cwd: string): void {
   validateProjectCWD(cwd);
 }
 
+function remoteLocation(cwd: string): Pick<Project, "node_id" | "node_path"> {
+  const location = projectLocation(cwd);
+  return location.nodeId === "" ? {} : { node_id: location.nodeId, node_path: location.path };
+}
+
 function validateProjectCWD(cwd: string): void {
+  // 远程项目的目录在节点上，由 API 层经节点 path.check 校验。
+  if (isRemoteProjectCwd(cwd)) return;
   try {
     if (!statSync(cwd).isDirectory()) throw new Error("cwd 不是目录");
   } catch (error) {

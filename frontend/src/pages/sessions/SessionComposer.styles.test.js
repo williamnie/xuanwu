@@ -1,10 +1,12 @@
+import { readStylesheet } from '../../../test-support/readStylesheet.js';
+import { readSessionPageSource, readSessionComposerSource } from './sessionTestSources.js';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
 import test from 'node:test';
 
-const css = readFileSync(new URL('./SessionComposer.css', import.meta.url), 'utf8');
-const source = readFileSync(new URL('./SessionComposer.jsx', import.meta.url), 'utf8');
-const sessionsSource = readFileSync(new URL('../Sessions.jsx', import.meta.url), 'utf8');
+const css = readStylesheet(new URL('./SessionComposer.css', import.meta.url));
+const source = readSessionComposerSource();
+const sessionsSource = readSessionPageSource();
 
 function ruleFor(selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -48,7 +50,6 @@ test('running stop action is visibly distinct from disabled sending spinner', ()
   assert.match(stopRule, /color:\s*var\(--button-primary-fg\)/);
   assert.doesNotMatch(css, /@keyframes composer-stop-pulse/);
 });
-
 
 test('session composer exposes a speed control backed by service tier', () => {
   assert.match(source, /SERVICE_TIER_STANDARD/);

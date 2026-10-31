@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { resolve, dirname, basename, join } from "node:path";
 
 const REPO_ROOT = resolve(import.meta.dir, "../../..");
 const DELETED_SEMANTIC_PLANNERS = [
@@ -80,5 +80,10 @@ describe("PI-first decision boundary", () => {
 });
 
 function source(path: string): string {
-  return readFileSync(resolve(REPO_ROOT, path), "utf8");
+  const absolute = resolve(REPO_ROOT, path);
+  if (!path.endsWith(".ts")) return readFileSync(absolute, "utf8");
+  const stem = basename(path, ".ts");
+  const modules = readdirSync(dirname(absolute)).filter(file =>
+    file.startsWith(`${stem}.`) && file.endsWith(".ts") && !file.includes(".test."));
+  return modules.map(file => readFileSync(join(dirname(absolute), file), "utf8")).join("\n");
 }

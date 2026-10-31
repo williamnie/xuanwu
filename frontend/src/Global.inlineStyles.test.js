@@ -1,3 +1,4 @@
+import { readStylesheet } from '../test-support/readStylesheet.js';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import test from 'node:test';
@@ -16,7 +17,7 @@ function iconTags(source) {
 }
 
 test('lucide icon props and CSS use the spec 7 size tiers and stroke 2', () => {
-  const foundation = readFileSync(new URL('./GeekWorkbench.css', root), 'utf8');
+  const foundation = readStylesheet(new URL('./GeekWorkbench.css', root));
   assert.match(foundation, /button \.lucide, \.btn \.lucide \{ height: 14px; width: 14px; \}/);
   for (const [file, source] of Object.entries(sources)) {
     for (const [, icon, props] of iconTags(source)) {
@@ -38,7 +39,7 @@ const inlineGeometry = {
   'components/CodexUsageBreakdown.jsx': ['{ width: `${Math.max(2, (total / max) * 100)}%` }'], // Relative usage chart.
   'components/CodexUsagePanel.jsx': ['{ width: `${used}%` }'], // Live quota progress.
   'components/editor/PromptEditor.jsx': ['{ minHeight }', '{ minHeight }'], // Caller-selected editor height.
-  'pages/WorkBoard.jsx': ['{ minWidth: `${WORK_BOARD_STATUSES.length * 276}px` }'], // Board column count, not spacing.
+  'pages/work/WorkKanban.jsx': ['{ minWidth: `${WORK_BOARD_STATUSES.length * 276}px` }'], // Board column count, not spacing.
 };
 
 function inlineStyles(source) {
@@ -63,8 +64,7 @@ test('JSX inline styles are restricted to reviewed data-dependent geometry', () 
   }
 });
 
-
 test('auxiliary settings actions do not compete with the form primary', () => {
   assert.match(sources['pages/PiMcpManagementPanel.jsx'], /className="btn btn-secondary" disabled=\{scanning\} onClick=\{onScan\}/);
-  assert.match(sources['pages/PiAgentSettingsPanel.jsx'], /className="btn btn-secondary" onClick=\{onSave\}/);
+  assert.match(sources['pages/PiSupervisorBehaviorSettings.jsx'], /className="btn btn-secondary" onClick=\{onSave\}/);
 });

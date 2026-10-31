@@ -13,6 +13,7 @@ import {
   type PatchInput
 } from "./common.ts";
 import { placeholders } from "../../sql.ts";
+import { GUARDIAN_INBOX_ACTIVE_INDEX } from "../../schema/094_guardian_inbox_active_index.ts";
 
 export type PiGuardianEvent = {
   consumed_at: string; conversation_id: string; created_at: string; error: string;
@@ -76,6 +77,29 @@ export function listPiGuardianEvents(
     ["source=?", filter.source],
     ["status=?", filter.status]
   ], "sequence_id asc"));
+}
+
+export const GUARDIAN_EVENT_BATCH_SIZE = 50;
+export const GUARDIAN_EVENT_CYCLE_LIMIT = 250;
+
+export function guardianEventLimit(value: number | undefined, fallback = GUARDIAN_EVENT_BATCH_SIZE): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.min(Math.max(1, Math.floor(value)), GUARDIAN_EVENT_CYCLE_LIMIT)
+    : fallback;
+}
+
+/** FIFO 在 SQL 中截断，避免积压时每一批都加载剩余全部 payload。 */
+export function listPendingPiGuardianEvents(db: RunnerDatabase, limit?: number): PiGuardianEvent[] {
+  return db.sqlite.query<Record<string, unknown>, [number]>(`
+    select ${COLUMNS} from ${TABLE} indexed by ${GUARDIAN_INBOX_ACTIVE_INDEX}
+    where status='pending'
+    order by sequence_id asc limit ?
+  `).all(guardianEventLimit(limit)).map(mapEvent);
+}
+
+export function hasPendingPiGuardianEvents(db: RunnerDatabase): boolean {
+  return db.sqlite.query(`select 1 from ${TABLE} indexed by ${GUARDIAN_INBOX_ACTIVE_INDEX}
+    where status='pending' limit 1`).get() !== null;
 }
 
 export function updatePiGuardianEvent(

@@ -1,3 +1,4 @@
+import { readAppSource } from '../../test-support/readAppSource.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -27,7 +28,7 @@ test('home prioritizes action and progress without querying diagnostic or usage 
 });
 
 test('page changes keep the revealed Suspense content and do not replay entry motion', () => {
-  assert.match(read('../App.jsx'), /startPageTransition\(\(\) => updateAppState/);
-  assert.match(read('../App.jsx'), /mainContentRef\.current\.scrollTop = 0/);
+  assert.match(readAppSource(), /startPageTransition\(\(\) => updateAppState/);
+  assert.match(readAppSource(), /mainContentRef\.current\.scrollTop = 0/);
   assert.match(read('../App.css'), /\.main-content > \.animate-fade-in\s*\{\s*animation: none;/);
 });

@@ -1,12 +1,22 @@
+import { readStylesheet } from '../../test-support/readStylesheet.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const source = readFileSync(new URL('./Projects.jsx', import.meta.url), 'utf8');
-const editorSource = readFileSync(new URL('./ProjectSettingsEditor.jsx', import.meta.url), 'utf8');
+const source = [
+  './Projects.jsx',
+  './projects/ProjectCard.jsx',
+  './projects/useProjectsActions.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
+const editorSource = [
+  './ProjectSettingsEditor.jsx',
+  './projects/useProjectSettingsEditor.js',
+  './projects/ProjectRuntimeFields.jsx',
+  './projects/projectSettingsForm.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
 const presetsSource = readFileSync(new URL('./ExecutionPresetsPanel.jsx', import.meta.url), 'utf8');
 const managerSource = readFileSync(new URL('./AgentProfileManager.jsx', import.meta.url), 'utf8');
-const css = readFileSync(new URL('./Projects.css', import.meta.url), 'utf8');
+const css = readStylesheet(new URL('./Projects.css', import.meta.url));
 
 function ruleFor(selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -109,7 +119,8 @@ test('project card actions share one compact control height', () => {
 
 test('project config modal reads Provider catalog and models from generic APIs', () => {
   assert.match(editorSource, /systemApi\.getProviders\(\)/);
-  assert.match(editorSource, /systemApi\.getProviderModels\(provider\)/);
+  // 远程项目读取节点上的模型列表，本机项目 nodeId 为空。
+  assert.match(editorSource, /systemApi\.getProviderModels\(provider, \{ nodeId \}\)/);
   assert.match(editorSource, /providerOptionsFromCatalog\(ui\.providerCatalog\)/);
   assert.match(editorSource, /buildProviderModelOptions\(ui\.formProvider, ui\.codexModels, \[ui\.formModel\], language\)/);
   assert.match(editorSource, /modelOptions\.map\(option =>/);
@@ -145,11 +156,19 @@ test('new project form defaults to one required field and keeps optional control
   assert.match(editorSource, /mode === 'create'[\s\S]*<details className="project-settings-advanced">/);
   assert.match(editorSource, /高级运行配置（可选）/);
   assert.match(editorSource, /mode === 'edit'[\s\S]*loadAgentProfiles\(\)/);
-  assert.doesNotMatch(editorSource, /<AgentProfileManager|<AgentProfileSelectOptions/);
+  assert.doesNotMatch(editorSource, /<AgentProfileManager/);
+  assert.match(editorSource, /<AgentProfileSelectOptions catalog=\{presetCatalog\.catalog\}/);
   assert.match(editorSource, /href="#\/settings\?section=advanced:presets"/);
   assert.match(editorSource, /在 高级 → 执行预设 中修改/);
   assert.match(editorSource, /更多选项/);
   assert.match(managerSource, /<details className="project-profile-overrides">[\s\S]*?更多选项[\s\S]*?推理深度[\s\S]*?执行速度/);
   assert.match(managerSource, /Skill 意图/);
   assert.doesNotMatch(managerSource, /Plugin 意图|onFieldChange\('plugin_intents'/);
+});
+
+test('new project form checks the selected location and uses its collision-free project ID', () => {
+  assert.match(editorSource, /mode === 'create'\s*\? await projectsApi\.checkPath\(payload\.cwd, \{ nodeId: ui\.formNodeId \}\)\s*: null/);
+  assert.match(editorSource, /if \(pathCheck && !pathCheck\.directory\) throw new Error/);
+  assert.match(editorSource, /projectsApi\.createProject\(\{ id: pathCheck\.suggested_id, \.\.\.payload \}\)/);
+  assert.doesNotMatch(editorSource, /projectIdFromPath/);
 });

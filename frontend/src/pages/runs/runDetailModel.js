@@ -9,9 +9,28 @@ export function runAttemptProviderSessionRef(attempt, run = {}) {
   return provider && sessionRef ? `${provider}:${sessionRef}` : '';
 }
 
-export function selectedRunAttempt(run, attemptId = '') {
+// 没有手动固定的 ID 时，每次投影更新都跟随最新尝试。
+export function selectedRunAttempt(run, pinnedAttemptId = '') {
   const attempts = Array.isArray(run?.attempts) ? run.attempts : [];
-  return attempts.find(attempt => attempt.id === attemptId) || attempts.at(-1) || null;
+  return attempts.find(attempt => attempt.id === pinnedAttemptId) || attempts.at(-1) || null;
+}
+
+export function runTerminalNotices(run, attempt) {
+  const problemStatuses = ['failed', 'interrupted', 'cancelled'];
+  const attemptProblem = problemStatuses.includes(attempt?.status);
+  const runProblem = problemStatuses.includes(run?.status);
+  const attemptReason = text(attempt?.terminal?.reason);
+  const runReason = text(run?.terminal?.reason);
+  const singleAttempt = run?.attempts?.length === 1;
+  const sameProblem = attempt?.status === run?.status && attemptReason === runReason;
+  const notices = [];
+  if (attemptProblem && !(runProblem && (singleAttempt || sameProblem))) {
+    notices.push({ scope: 'attempt', status: attempt.status, reason: attemptReason });
+  }
+  if (runProblem) {
+    notices.push({ scope: 'run', status: run.status, reason: runReason || (singleAttempt && attemptProblem ? attemptReason : '') });
+  }
+  return notices;
 }
 
 export function runEventInitialBeforeId(run, attempt = null) {
@@ -103,6 +122,7 @@ export function runCostView(cost) {
   return {
     cachedInput: tokenValue(usage.cached_input_tokens),
     completeness: text(usage.completeness) || 'unavailable',
+    completenessLabel: ({ complete: '用量统计完整', partial: '用量统计不完整' })[usage.completeness] || '暂无用量数据',
     input: tokenValue(usage.input_tokens),
     money: moneyValue(money),
     output: tokenValue(usage.output_tokens),
@@ -118,7 +138,7 @@ function tokenValue(value) {
 function moneyValue(money) {
   const amountMicros = money.amount_micros;
   const currency = text(money.currency);
-  if (!Number.isFinite(amountMicros) || !currency) return 'Unavailable';
+  if (!Number.isFinite(amountMicros) || !currency) return '暂无费用数据';
   return `${currency} ${(amountMicros / 1_000_000).toFixed(6)}`;
 }
 

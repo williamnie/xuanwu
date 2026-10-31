@@ -57,7 +57,7 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
       setTotalPages(Number(response?.total_pages || 0));
       setError('');
     } catch (loadError) {
-      if (loadError?.name !== 'AbortError') setError(loadError.message || '加载 Runs 失败');
+      if (loadError?.name !== 'AbortError') setError(loadError.message || '加载执行记录失败');
     } finally {
       if (listRequest.current === pending) {
         listRequest.current = null;
@@ -82,7 +82,7 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
       setPage(Number(response?.page || page + 1));
       setTotalPages(Number(response?.total_pages || totalPages));
     } catch (loadError) {
-      if (loadError?.name !== 'AbortError') toast.error(loadError.message || '继续加载 Runs 失败');
+      if (loadError?.name !== 'AbortError') toast.error(loadError.message || '继续加载执行记录失败');
     } finally {
       if (loadMoreController.current === controller) loadMoreController.current = null;
       setLoadingMore(false);
@@ -155,7 +155,7 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
         if (active) setRunDetail(response?.run || null);
       })
       .catch(detailError => {
-        if (active && detailError?.name !== 'AbortError') toast.error(detailError.message || '读取 Run 详情失败');
+        if (active && detailError?.name !== 'AbortError') toast.error(detailError.message || '读取执行详情失败');
       })
       .finally(() => {
         if (active) setDetailLoading(false);
@@ -231,7 +231,7 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
       ) : error && runs.length === 0 ? (
         <RunLoadError error={error} onRetry={() => loadFirstPage()} />
       ) : detailLoading && !runDetail ? (
-        <div className="run-detail-loading"><TurtleLoader label="正在重建 Run 视图…" /></div>
+        <div className="run-detail-loading"><TurtleLoader label="正在读取执行详情…" /></div>
       ) : runDetail ? (
         <div className="run-detail-surface">
           <RunContextBar
@@ -248,8 +248,8 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
       ) : (
         <div className="run-provider-empty">
           <History size={16} />
-          <strong>{loading ? '正在读取 Runs…' : runs.length > 0 ? '选择左侧 Run 查看详情' : '暂无可显示的 Run'}</strong>
-          <span>{runs.length > 0 ? '列表已就绪；详情只在选择后按需读取。' : 'Work 被 runner claim 后会生成统一 Run。'}</span>
+          <strong>{loading ? '正在读取执行记录…' : runs.length > 0 ? '选择一条执行记录查看详情' : '暂无执行记录'}</strong>
+          <span>{runs.length > 0 ? '查看这次执行的对话、进展和日志。' : '任务开始执行后，记录会显示在这里。'}</span>
         </div>
       )}
     </section>
@@ -259,8 +259,8 @@ export default function Runs({ navigateTo, onMobileSidebarAction, onPageContextC
 function NewProviderSessionNotice() {
   return (
     <div className="run-surface-notice">
-      <strong>新建 provider session</strong>
-      <span>独立对话保留旧能力；被 Work claim 的正式执行会出现在 Runs list。</span>
+      <strong>新建对话</strong>
+      <span>在这里开始独立对话；任务的执行过程可在执行记录中查看。</span>
     </div>
   );
 }
@@ -269,7 +269,7 @@ function RunLoadError({ error, onRetry }) {
   return (
     <div className="run-load-error" role="alert">
       <AlertTriangle size={16} />
-      <strong>Runs 暂不可用</strong>
+      <strong>执行记录暂不可用</strong>
       <span>{error}</span>
       <button onClick={onRetry} type="button">重试</button>
     </div>

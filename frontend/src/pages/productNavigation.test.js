@@ -10,7 +10,12 @@ import {
   resolveProductPage,
 } from './assistantModules.js';
 
-const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+const appSource = [
+  '../App.jsx',
+  '../useAppNavigation.js',
+  '../useAppReconciliation.js',
+  '../useMobileSidebar.js',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
 const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
 
 const EXPECTED_PAGES = [
@@ -55,7 +60,10 @@ test('product navigation has one ordered Xuanwu identity and centralized labels'
   });
 
   const dashboardSource = readFileSync(new URL('./Dashboard.jsx', import.meta.url), 'utf8');
-  const workBoardSource = readFileSync(new URL('./WorkBoard.jsx', import.meta.url), 'utf8');
+  const workBoardSource = [
+  './WorkBoard.jsx',
+  './work/WorkBoardHeader.jsx',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
   const runSidebarSource = readFileSync(new URL('./runs/RunSidebar.jsx', import.meta.url), 'utf8');
   const piChatSource = readFileSync(new URL('./PiChat.jsx', import.meta.url), 'utf8');
   const automationsSource = readFileSync(new URL('./Automations.jsx', import.meta.url), 'utf8');
@@ -63,7 +71,8 @@ test('product navigation has one ordered Xuanwu identity and centralized labels'
 
   assert.match(dashboardSource, /01 COMMAND_CENTER/);
   assert.match(workBoardSource, /02 WORK_LEDGER/);
-  assert.match(runSidebarSource, /03 RUN_INSPECTOR/);
+  assert.match(runSidebarSource, />执行记录</);
+  assert.doesNotMatch(runSidebarSource, /RUN_INSPECTOR|TELEMETRY: RUNTIME/);
   assert.match(piChatSource, /04 ASK_XUANWU/);
   assert.match(automationsSource, /06 AUTOMATION_LOOPS/);
   assert.match(analyticsSource, /05 TELEMETRY_ANALYTICS/);

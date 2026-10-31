@@ -1,0 +1,222 @@
+import { expect, test } from "bun:test";
+import { type PiMemoryItem } from "../../db/repositories/pi.ts";
+import { buildPiMemoryPromptContext } from "../../pi/memory/memoryContext.ts";
+import { createDefaultRouter } from "../server.ts";
+import type { TestFixture } from "./piMemoryApi.testFixture.ts";
+
+export function registerCreatesActiveMemoryAndUpdatesCases(testScope: TestFixture) {
+  const { BASE_URL, openFixtureDatabase, createResolution, request } = testScope;
+  test("creates active memory and updates the same stable key instead of appending", async () => {
+      const database = await openFixtureDatabase();
+      const router = createDefaultRouter({ database });
+      const first = await request(router, "/api/pi/memory", "POST", {
+        id: "mem-first",
+        memory_key: "project.patch-policy",
+        memory_type: "project",
+        layer: "long_term",
+        scope: "project",
+        scope_id: "demo",
+        kind: "project_preference",
+        content: "Prefer minimal patches",
+        source_type: "manual",
+        source_id: "settings-memory-form",
+        confidence: "high"
+      });
+      const second = await request(router, "/api/pi/memory", "POST", {
+        id: "mem-duplicate",
+        memory_key: "project.patch-policy",
+        memory_type: "project",
+        layer: "long_term",
+        scope: "project",
+        scope_id: "demo",
+        kind: "project_preference",
+        content: "Prefer minimal, verified patches",
+        source_type: "manual",
+        source_id: "settings-memory-form",
+        confidence: "high"
+      });
+      const list = await router.handle(new Request(
+        `${BASE_URL}/api/pi/memory?scope=project&scope_id=demo&status=active`
+      ));
+  
+      expect(first.status).toBe(201);
+      expect(await first.json()).toMatchObject({
+        disabled: 0,
+        id: "mem-first",
+        memory_key: "project.patch-policy",
+        occurrence_count: 1
+      });
+      expect(second.status).toBe(201);
+      expect(await second.json()).toMatchObject({
+        content: "Prefer minimal, verified patches",
+        disabled: 0,
+        id: "mem-first",
+        memory_key: "project.patch-policy",
+        occurrence_count: 1
+      });
+      expect(await list.json()).toEqual([
+        expect.objectContaining({ id: "mem-first", occurrence_count: 1 })
+      ]);
+    });
+  
+  test("supports edit, pin, disable, enable, and forget without a review queue", async () => {
+      const database = await openFixtureDatabase();
+      const router = createDefaultRouter({ database });
+      await createResolution(router, "typed-memory");
+      const pinned = await request(router, "/api/pi/memory/typed-memory/pin", "POST", {});
+      const disabled = await request(router, "/api/pi/memory/typed-memory/disable", "POST", {});
+      const enabled = await request(router, "/api/pi/memory/typed-memory/enable", "POST", {});
+      const edited = await request(router, "/api/pi/memory/typed-memory", "PATCH", {
+        citation_label: "Verified incident review",
+        content: "根因是仅查看 Run 叙述；修复并复验 completion gate、Evidence 和 Handoff。"
+      });
+      const beforeForget = buildPiMemoryPromptContext(database, { projectID: "demo" });
+      const forgot = await request(router, "/api/pi/memory/typed-memory/forget", "POST", {});
+  
+      expect(await pinned.json()).toMatchObject({ id: "typed-memory", pinned: 1 });
+      expect(await disabled.json()).toMatchObject({ disabled: 1 });
+      expect(await enabled.json()).toMatchObject({ disabled: 0 });
+      expect(await edited.json()).toMatchObject({
+        citation_label: "Verified incident review",
+        content: "根因是仅查看 Run 叙述；修复并复验 completion gate、Evidence 和 Handoff。",
+        disabled: 0,
+        pinned: 1
+      });
+      expect(beforeForget).not.toContain("修复并复验 completion gate、Evidence 和 Handoff");
+      expect(await forgot.json()).toEqual({ forgotten: true });
+      expect(buildPiMemoryPromptContext(database, { projectID: "demo" })).not.toContain("typed-memory");
+    });
+  
+  test("exposes immutable correction history and honors optional revision preconditions", async () => {
+      const database = await openFixtureDatabase();
+      const router = createDefaultRouter({ database });
+      const original = await createResolution(router, "history-memory").then((res) => res.json()) as PiMemoryItem;
+      const edited = await request(router, "/api/pi/memory/history-memory", "PATCH", {
+        content: "根因限定为共享响应时的取消竞争；修复后通过双回调顺序测试。", expected_revision: 1,
+        occurrence_count: 999, revision: 999
+      });
+      expect(await edited.json()).toMatchObject({ revision: 2, occurrence_count: 1, authority: "user_explicit" });
+      const stale = await request(router, "/api/pi/memory/history-memory", "PATCH", { content: "根因是旧判断；修复方式待验证。", expected_revision: 1 });
+      expect(stale.status).toBe(400);
+      const history = await router.handle(new Request(`${BASE_URL}/api/pi/memory/history-memory/history`)).then((res) => res.json());
+      expect(history).toMatchObject([
+        { revision: 1, operation: "create", snapshot: { content: original.content, citation_id: "issue-785" } },
+        { revision: 2, operation: "edit", snapshot: { occurrence_count: 1 } }
+      ]);
+      await request(router, "/api/pi/memory/history-memory/forget", "POST", {});
+      const forgottenHistory = await router.handle(new Request(`${BASE_URL}/api/pi/memory/history-memory/history`)).then((res) => res.json());
+      expect(forgottenHistory).toHaveLength(3);
+      expect(JSON.stringify(forgottenHistory)).not.toContain(original.content);
+    });
+  
+  test("create/replay cannot bypass disable or delete; explicit re-enable remains available", async () => {
+      const database = await openFixtureDatabase();
+      const router = createDefaultRouter({ database });
+      const original = await createResolution(router, "lifecycle-memory").then((res) => res.json()) as PiMemoryItem;
+      await request(router, "/api/pi/memory/lifecycle-memory/disable", "POST", {});
+      expect((await createResolution(router, "lifecycle-memory")).status).toBe(400);
+      expect((await request(router, "/api/pi/memory/batch", "POST", { action: "enable", ids: [original.id] })).status).toBe(200);
+      expect((await createResolution(router, "lifecycle-memory")).status).toBe(201);
+      const deleted = await request(router, "/api/pi/memory/lifecycle-memory", "DELETE", {});
+      expect(await deleted.json()).toEqual({ deleted: true });
+      expect((await createResolution(router, "lifecycle-memory")).status).toBe(400);
+      const restored = await request(router, "/api/pi/memory", "POST", { ...original, reenable: true });
+      expect(restored.status).toBe(201);
+      expect(await restored.json()).toMatchObject({ id: original.id, disabled: 0, revision: 5, occurrence_count: 1 });
+    });
+  
+  test("retires candidate creation, digest, approve, and promote review endpoints", async () => {
+      const database = await openFixtureDatabase();
+      const router = createDefaultRouter({ database });
+      const responses = await Promise.all([
+        request(router, "/api/pi/memory/candidates", "POST", {
+          memory_key: "retired.candidate",
+          scope: "project",
+          scope_id: "demo",
+          kind: "decision",
+          content: "Should never be stored"
+        }),
+        router.handle(new Request(`${BASE_URL}/api/pi/memory/digest`)),
+        request(router, "/api/pi/memory/missing/approve", "POST", {}),
+        request(router, "/api/pi/memory/missing/promote", "POST", {})
+      ]);
+  
+      expect(responses.map((response) => response.status)).toEqual([410, 410, 410, 410]);
+      expect(await responses[0]!.json()).toEqual({
+        message: "memory review queue has been retired; reusable memory is automatic"
+      });
+      expect(await router.handle(new Request(`${BASE_URL}/api/pi/memory`)).then((response) => response.json())).toEqual([]);
+    });
+  
+  test("rejects transient Issue status and non-reusable kinds but keeps root-cause treatment", async () => {
+      const database = await openFixtureDatabase();
+      const router = createDefaultRouter({ database });
+      const status = await request(router, "/api/pi/memory", "POST", {
+        memory_key: "issue.785.status",
+        scope: "project",
+        scope_id: "demo",
+        kind: "decision",
+        content: "当前 Issue #785 failed，等待人工处理。"
+      });
+      const observation = await request(router, "/api/pi/memory", "POST", {
+        memory_key: "manager.summary",
+        scope: "project",
+        scope_id: "demo",
+        kind: "project_observation",
+        content: "全部终态，没有未完成 Work"
+      });
+      const resolution = await request(router, "/api/pi/memory", "POST", {
+        memory_key: "issue.785.completion-gate",
+        scope: "project",
+        scope_id: "demo",
+        kind: "resolution",
+        content: "Issue #785 failed 的根因是只看 Run 叙述；修复方式是复验 Evidence、Handoff 和 completion gate。"
+      });
+  
+      expect(status.status).toBe(400);
+      expect(await status.json()).toEqual({ message: "current Work/Run/Issue status snapshots are not memory" });
+      expect(observation.status).toBe(400);
+      expect(await observation.json()).toEqual({ message: "memory kind is not reusable" });
+      expect(resolution.status).toBe(201);
+      expect(await resolution.json()).toMatchObject({ disabled: 0, kind: "resolution" });
+      const prompt = buildPiMemoryPromptContext(database, { projectID: "demo" });
+      // 旧文本仍可管理，但缺少适用条件/版本的技术经验不自动注入。
+      expect(prompt).not.toContain("Issue #785 failed 的根因");
+      expect(prompt).toContain("always query authoritative tools for current state");
+    });
+  
+  test("batch forget removes disabled legacy garbage without promoting it", async () => {
+      const database = await openFixtureDatabase();
+      const router = createDefaultRouter({ database });
+      await createResolution(router, "garbage-row");
+      await request(router, "/api/pi/memory/garbage-row/disable", "POST", {});
+      const forgotten = await request(router, "/api/pi/memory/batch", "POST", {
+        action: "forget",
+        ids: ["garbage-row"]
+      });
+      const obsoletePromote = await request(router, "/api/pi/memory/batch", "POST", {
+        action: "promote",
+        ids: ["garbage-row"]
+      });
+  
+      expect(await forgotten.json()).toEqual({ action: "forget", forgotten: ["garbage-row"], skipped: [] });
+      expect(obsoletePromote.status).toBe(400);
+      expect(await router.handle(new Request(`${BASE_URL}/api/pi/memory`)).then((response) => response.json())).toEqual([]);
+    });
+  
+  test("rejects memory writes that contain high-sensitive secrets", async () => {
+      const database = await openFixtureDatabase();
+      const router = createDefaultRouter({ database });
+      const response = await request(router, "/api/pi/memory", "POST", {
+        memory_key: "project.provider-secret",
+        scope: "project",
+        scope_id: "demo",
+        kind: "constraint",
+        content: "OPENAI_API_KEY=fixture-secret should not be stored"
+      });
+  
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ message: "memory content contains sensitive data" });
+      expect(await router.handle(new Request(`${BASE_URL}/api/pi/memory`)).then((item) => item.json())).toEqual([]);
+    });
+}

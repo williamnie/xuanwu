@@ -1,3 +1,5 @@
+import { projectOptionLabel } from '../../utils/projectOptionLabel.js';
+import { useProjectNodes } from '../../store/useProjectNodes.js';
 import { useEffect, useState } from 'react';
 import { BarChart3, RefreshCw } from 'lucide-react';
 import { projectsApi } from '../../api/projects.js';
@@ -6,6 +8,7 @@ import { RANGE_OPTIONS, effectivenessFacts, diagnosticFacts, currencySubtotal, d
 import './DeliveryEffectivenessSection.css';
 
 export default function DeliveryEffectivenessSection() {
+  const nodesById = useProjectNodes();
   const [days, setDays] = useState(30);
   const [projectId, setProjectId] = useState('');
   const [reload, setReload] = useState(0);
@@ -35,7 +38,7 @@ export default function DeliveryEffectivenessSection() {
         {RANGE_OPTIONS.map(option => <button aria-pressed={days === option} key={option} onClick={() => setDays(option)} type="button">近 {option} 天</button>)}
       </nav>
       <select aria-label="项目" value={projectId} onChange={event => setProjectId(event.target.value)}>
-        <option value="">全部项目</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+        <option value="">全部项目</option>{projects.map(project => <option key={project.id} value={project.id}>{projectOptionLabel(project, nodesById, project.name)}</option>)}
       </select>
       <button className="btn btn-secondary" disabled={loading} onClick={() => setReload(value => value + 1)} type="button">
         <RefreshCw className={loading ? 'spin-animation' : ''} size={14} aria-hidden="true" /> 刷新

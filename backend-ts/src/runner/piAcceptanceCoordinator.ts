@@ -25,6 +25,7 @@ import { redactSensitiveText } from "../util/redact.ts";
 import { applyPiAcceptanceDecision } from "./piAcceptanceApplication.ts";
 import { startProjectLoop } from "./projectLoopManager.ts";
 import { cleanString } from "../util/values.ts";
+import { providersForProjectID } from "../nodes/remoteExecution.ts";
 
 export type PiIssueAcceptanceRunner = (card: CompletionCard) => Promise<PiAcceptanceRuntimeResult>;
 
@@ -176,7 +177,8 @@ async function completionSessionInput(
   const run = listIssueRuns(input.database, issue.id).at(-1);
   if (!run || run.provider_session_id === "") return undefined;
   const providerID = run.provider as ExecutorProviderId;
-  const provider = input.providers?.[providerID];
+  // 远程项目的会话在节点上，经节点读取。
+  const provider = providersForProjectID(input.database, input.providers, issue.project_id)?.[providerID];
   if (!provider?.readSession) return undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {

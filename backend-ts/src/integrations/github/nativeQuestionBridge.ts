@@ -4,13 +4,14 @@ import type { ProjectLoopRuntime } from "../../runner/projectLoopManager.ts";
 import type { GitHubIssueCase } from "./issueCaseStore.ts";
 import { isExecutorProviderId } from "../../providers/types.ts";
 import { providerReportedOutcome, reconcileProviderOutcome } from "../../runner/providerOutcome.ts";
+import { providersForProjectID } from "../../nodes/remoteExecution.ts";
 
 /** 原生异步问答不会结束 Provider Turn；将其交回标准 needs_user → PI → HumanReview 路径。 */
 export async function relayNativeGitHubQuestion(runtime: ProjectLoopRuntime, record: GitHubIssueCase): Promise<boolean> {
   if (!record.issue_id || getIssue(runtime.database, record.issue_id)?.status !== "in_progress") return false;
   const run = listIssueRuns(runtime.database, record.issue_id).at(-1);
   if (!run || run.ended_at || !run.provider_session_id || !run.provider_turn_id || !isExecutorProviderId(run.provider)) return false;
-  const provider = runtime.providers?.[run.provider];
+  const provider = providersForProjectID(runtime.database, runtime.providers, getIssue(runtime.database, record.issue_id)?.project_id ?? "")?.[run.provider];
   if (!provider?.listSessionTurns || !provider.sendSessionMessage) return false;
   const turns = await provider.listSessionTurns(run.provider_session_id, { limit: 1, sortDirection: "desc", itemsView: "summary" });
   const turn = turns.data.find(item => item.id === run.provider_turn_id);

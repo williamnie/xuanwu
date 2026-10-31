@@ -68,12 +68,18 @@ export function buildRunControlPayload(run, action, {
 
 export function runStatusLabel(status) {
   return ({
+    created: '准备中',
     cancelled: '已取消',
     failed: '失败',
+    interrupted: '已中断',
     recovering: '恢复中',
     running: '执行中',
     succeeded: '成功',
   })[status] || '未知';
+}
+
+export function providerLabel(provider) {
+  return ({ codex: 'Codex', claude: 'Claude', 'pi-coding-agent': 'Pi Coding Agent', qoder: 'Qoder' })[provider] || provider || '未知工具';
 }
 
 function text(value) {

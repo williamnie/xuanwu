@@ -1,9 +1,10 @@
+import { readSessionPageSource, readSessionTranscriptSource } from './sessions/sessionTestSources.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const sessionsSource = readFileSync(new URL('./Sessions.jsx', import.meta.url), 'utf8');
-const transcriptSource = readFileSync(new URL('./sessions/SessionTranscript.jsx', import.meta.url), 'utf8');
+const sessionsSource = readSessionPageSource();
+const transcriptSource = readSessionTranscriptSource();
 const chatWorkspaceSource = readFileSync(new URL('./sessions/SessionChatWorkspace.jsx', import.meta.url), 'utf8');
 
 test('session detail uses paginated summary turns without periodic full transcript replay', () => {

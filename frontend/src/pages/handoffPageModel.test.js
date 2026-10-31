@@ -1,3 +1,4 @@
+import { readAppSource } from '../../test-support/readAppSource.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -68,10 +69,10 @@ test('risk presentation orders every delivery state by severity without mutating
 });
 
 test('Handoff stays available for audit while normal delivery lives inside Work Detail', () => {
-  const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+  const app = readAppSource();
   const sidebar = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
   const client = readFileSync(new URL('../api/handoffs.js', import.meta.url), 'utf8');
-  const page = readFileSync(new URL('./Handoffs.jsx', import.meta.url), 'utf8');
+  const page = ['Handoffs.jsx', 'HandoffDetail.jsx'].map(file => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n');
   const workDetail = readFileSync(new URL('./WorkDetail.jsx', import.meta.url), 'utf8');
   assert.match(app, /lazy\(\(\) => import\('\.\/pages\/Handoffs'\)\)/);
   assert.match(app, /currentPage === 'handoffs'/);

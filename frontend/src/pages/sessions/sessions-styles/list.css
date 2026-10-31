@@ -1,0 +1,178 @@
+/* Session list and transcript primitives. Page composition lives in SessionsClient.css. */
+
+.session-list-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  position: relative;
+  padding: var(--space-3) var(--space-3);
+}
+
+.session-list-empty-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4-5) var(--space-3);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.session-list-empty-state strong {
+  color: var(--text-secondary);
+  font-size: var(--text-md);
+}
+
+.session-list-empty-state span {
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+/* 按项目分组与折叠样式 */
+.project-session-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.project-group-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.project-group-container.drag-over .project-group-header {
+  box-shadow: none;
+  background: var(--primary-glow);
+  border-left: 2px solid var(--primary);
+}
+
+.project-group-container[draggable="true"] .project-group-header {
+  cursor: grab;
+}
+
+.project-group-container[draggable="true"] .project-group-header:active {
+  cursor: grabbing;
+}
+
+.project-group-header {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--space-2) var(--space-2-5);
+  background: transparent;
+  border: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+  gap: var(--space-2);
+}
+
+.project-group-header:hover {
+  background: var(--nav-hover);
+  color: var(--text-primary);
+}
+
+.project-order-saving {
+  color: var(--primary);
+  animation: spin 1s linear infinite;
+}
+
+.project-group-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  width: 16px;
+  height: 16px;
+  transition: transform 180ms ease;
+}
+
+.project-group-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.project-group-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+  opacity: 0.85;
+}
+
+.project-group-sessions {
+  display: flex;
+  flex-direction: column;
+  padding-left: var(--space-6);
+  margin-top: var(--space-1);
+}
+
+/* 缩进 Session 项样式 */
+.session-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 38px;
+  padding: var(--space-1-5) var(--space-2-5);
+  margin: var(--space-1) 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.session-item-row:hover {
+  background-color: var(--nav-hover);
+  color: var(--text-primary);
+}
+
+.session-item-row.active {
+  background-color: var(--nav-active);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.session-item-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-md);
+  margin-right: var(--space-2);
+}
+
+.session-item-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1-5);
+  min-width: 32px;
+}
+
+.session-provider-pill {
+  max-width: 62px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: var(--space-0-5) var(--space-1);
+  border-radius: var(--radius-xs);
+  background: var(--nav-hover);
+  color: var(--text-muted);
+  line-height: 1.35;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+

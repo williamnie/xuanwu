@@ -12,3 +12,11 @@ test('Qoder Code Agent card exposes runtime, authentication, and version diagnos
   assert.match(source, /cli_version/);
   assert.match(source, /protocol_version/);
 });
+
+test('Code Agents panel lists remote node tools read-only beside the hub tools', () => {
+  assert.match(source, /nodesApi\.listNodes\(\)/);
+  assert.match(source, /remoteCodeAgentGroups\(nodes\.items, state\.agents\)/);
+  assert.match(source, /<RemoteNodeAgents group=\{group\}/);
+  const remote = source.slice(source.indexOf('function RemoteNodeAgents'), source.indexOf('function CodeAgentRow'));
+  assert.doesNotMatch(remote, /onToggle|<button/);
+});

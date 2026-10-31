@@ -6,6 +6,7 @@ import { ensureDefaultPiAgent } from "./defaultPiAgent.ts";
 import { ensureDefaultPiPersona } from "./defaultPiPersona.ts";
 import { runMigrations } from "./migrations.ts";
 import { ISSUE_EVENT_QUERY_INDEX_NAMES } from "./schema/075_issue_event_query_indexes.ts";
+import { GUARDIAN_INBOX_ACTIVE_INDEX } from "./schema/094_guardian_inbox_active_index.ts";
 import { sqlSlowTraceThreshold, traceSlowSQLiteQueries } from "./slowQueryTrace.ts";
 
 type OpenDatabaseOptions = {
@@ -88,7 +89,8 @@ export async function openDatabase(options: OpenDatabaseOptions = {}): Promise<R
 }
 
 function assertRuntimeSchema(sqlite: SQLiteDatabase): void {
-  const missing = ISSUE_EVENT_QUERY_INDEX_NAMES.filter((name) => !sqlite.query<{ name: string }, [string]>(
+  const requiredIndexes = [...ISSUE_EVENT_QUERY_INDEX_NAMES, GUARDIAN_INBOX_ACTIVE_INDEX];
+  const missing = requiredIndexes.filter((name) => !sqlite.query<{ name: string }, [string]>(
     "select name from sqlite_master where type='index' and name=?"
   ).get(name));
   if (missing.length > 0) {

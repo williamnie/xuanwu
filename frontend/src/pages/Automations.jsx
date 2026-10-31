@@ -1,3 +1,5 @@
+import { projectOptionLabel } from '../utils/projectOptionLabel.js';
+import { useProjectNodes } from '../store/useProjectNodes.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -142,13 +144,14 @@ export default function Automations() {
 }
 
 function AutomationFilters({ filters, projects, setFilters }) {
+  const nodesById = useProjectNodes();
   const { t } = useI18n();
   const update = (key, value) => setFilters(current => ({ ...current, [key]: value }));
   return <section className="automations-filters" aria-label={t('automations.filters')}>
     <label className="automation-search"><Search size={14} /><input aria-label={t('automations.search')} onChange={event => update('query', event.target.value)} placeholder={t('automations.searchPlaceholder')} value={filters.query} /></label>
     <label><Filter size={13} /><select aria-label={t('automations.statusFilter')} onChange={event => update('status', event.target.value)} value={filters.status}><option value="">{t('automations.allStatuses')}</option>{AUTOMATION_STATUSES.map(item => <option key={item} value={item}>{t(`automations.status.${item}`)}</option>)}</select></label>
     <label><CalendarClock size={13} /><select aria-label={t('automations.triggerFilter')} onChange={event => update('triggerType', event.target.value)} value={filters.triggerType}><option value="">{t('automations.allTriggers')}</option>{AUTOMATION_TRIGGERS.map(item => <option key={item} value={item}>{t(`automations.trigger.${item}`)}</option>)}</select></label>
-    <label><Bot size={13} /><select aria-label={t('automations.projectFilter')} onChange={event => update('projectId', event.target.value)} value={filters.projectId}><option value="">{t('automations.allProjects')}</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name || project.id}</option>)}</select></label>
+    <label><Bot size={13} /><select aria-label={t('automations.projectFilter')} onChange={event => update('projectId', event.target.value)} value={filters.projectId}><option value="">{t('automations.allProjects')}</option>{projects.map(project => <option key={project.id} value={project.id}>{projectOptionLabel(project, nodesById, project.name || project.id)}</option>)}</select></label>
   </section>;
 }
 
@@ -204,6 +207,7 @@ function History({ events, runs }) {
 }
 
 function AutomationEditor({ editor, onCancel, onChange, onSave, projects, submitting }) {
+  const nodesById = useProjectNodes();
   const { t } = useI18n();
   const form = editor.form;
   const update = (key, value) => onChange({ ...form, [key]: value });
@@ -221,7 +225,7 @@ function AutomationEditor({ editor, onCancel, onChange, onSave, projects, submit
       <FormSection description={t('automations.basicDescription')} index="01" title={t('automations.basicTitle')}>
         <FormField hint={t('automations.field.nameHint')} label={t('automations.field.name')}><input autoFocus onChange={event => update('name', event.target.value)} placeholder={t('automations.field.namePlaceholder')} value={form.name} /></FormField>
         <FormField hint={t('automations.field.idHint')} label={t('automations.field.id')}><input disabled={editor.mode === 'edit'} onChange={event => update('id', event.target.value)} placeholder="daily-review" value={form.id} /></FormField>
-        <FormField hint={t('automations.field.projectHint')} label={t('automations.field.project')}><select disabled={editor.mode === 'edit'} onChange={event => { const id = event.target.value; onChange({ ...form, project_id: id, permission_policy_ref: id ? `project-policy:${id}` : 'control-plane-policy:local' }); }} value={form.project_id}><option value="">{t('automations.controlPlane')}</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name || project.id}</option>)}</select></FormField>
+        <FormField hint={t('automations.field.projectHint')} label={t('automations.field.project')}><select disabled={editor.mode === 'edit'} onChange={event => { const id = event.target.value; onChange({ ...form, project_id: id, permission_policy_ref: id ? `project-policy:${id}` : 'control-plane-policy:local' }); }} value={form.project_id}><option value="">{t('automations.controlPlane')}</option>{projects.map(project => <option key={project.id} value={project.id}>{projectOptionLabel(project, nodesById, project.name || project.id)}</option>)}</select></FormField>
         <FormField hint={t('automations.field.statusHint')} label={t('automations.field.status')}><select disabled={editor.mode === 'edit'} onChange={event => update('status', event.target.value)} value={form.status}>{AUTOMATION_STATUSES.map(item => <option key={item} value={item}>{t(`automations.status.${item}`)}</option>)}</select></FormField>
       </FormSection>
 

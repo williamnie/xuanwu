@@ -30,6 +30,9 @@ import { registerReadApiRoutes } from "./readApi.ts";
 import { instrumentLegacyCompatibilityResponse } from "./projects/legacyCompatibilityApi.ts";
 import { registerRunnerSettingsRoutes } from "./settings/runnerSettingsApi.ts";
 import { registerI18nRoutes } from "./i18nApi.ts";
+import { registerNodesRoutes } from "./nodes/nodesApi.ts";
+import { NodeHub } from "../nodes/hub.ts";
+import { recordRequestPeerAddress } from "./peerAddress.ts";
 import { createRouter, type Router } from "./router.ts";
 import { buildRuntimeLogs, runtimeLogLineLimit } from "./system/systemLogs.ts";
 import { staticWebResponse } from "./staticWeb.ts";
@@ -62,6 +65,7 @@ type DefaultRouterOptions = {
   feishuReceiverStatus?: () => FeishuReceiverStatus;
   interruptTimeoutMs?: number;
   imChannels?: ImChannelRegistry;
+  nodeHub?: NodeHub;
   onFeishuConfigChanged?: (config: FeishuConnectorConfig) => Promise<void> | void;
   onTelegramConfigChanged?: (config: TelegramConnectorConfig) => Promise<void> | void;
   feishuAgentBridge?: ReturnType<typeof createFeishuAgentBridge>;
@@ -90,6 +94,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
   if (runtime.config) setProjectLoopMaxParallelProjects(runtime.config.runner.maxParallelProjects);
   const router = createRouter();
   const bus = runtime.bus ?? new EventBus();
+  const nodeHub = runtime.nodeHub ?? new NodeHub();
   router.get("/health", () => json({ status: "ok" }));
   router.get("/api/health", () => json({ role: "core", status: "ok" }));
   if (runtime.authTokenManager) registerAuthTokenRoutes(router, { manager: runtime.authTokenManager });
@@ -113,7 +118,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
     checkUpdate: runtime.releaseUpdateMonitor?.checkNow,
     stateDir: runtime.config.stateDir
   });
-  registerProvidersCatalogRoute(router, { database: runtime.database, providersRegistry: runtime.providersRegistry });
+  registerProvidersCatalogRoute(router, { database: runtime.database, nodeHub, providersRegistry: runtime.providersRegistry });
   if (runtime.imChannels) {
     registerImChannelRoutes(router, { registry: runtime.imChannels });
     for (const module of runtime.imChannels.list()) void module.notifications?.start();
@@ -164,6 +169,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
       providers: runtime.providers
     });
     registerI18nRoutes(router, { database: runtime.database });
+    registerNodesRoutes(router, { database: runtime.database, hub: nodeHub });
     registerExternalEventRoutes(router, { database: runtime.database });
     registerWebhookEventRoutes(router, {
       database: runtime.database,
@@ -180,6 +186,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
     });
     registerReadApiRoutes(router, {
       agenticClient: runtime.agenticClient,
+      nodeHub,
       auditSystemRestart: runtime.auditSystemRestart,
       bus,
       codexSessionsDir: runtime.codexSessionsDir,
@@ -217,11 +224,15 @@ export async function startServer(
   registerControlledBlockRoute(activeRouter, runtime.testBlockMs ?? Number(Bun.env.XUANWU_TEST_BLOCK_MS ?? "0"));
   registerSystemStatusRoute(activeRouter, { authToken: authTokenManager.current(), config, ...runtime });
   registerSystemLogsRoute(activeRouter, { config });
+  const handleRequest = createRequestHandler(activeRouter, authTokenManager, { database: runtime.database, webDir: config.webDir });
   return Bun.serve({
     hostname: address.hostname,
     idleTimeout: 120,
     port: address.port,
-    fetch: createRequestHandler(activeRouter, authTokenManager, { database: runtime.database, webDir: config.webDir })
+    fetch: (request, server) => {
+      recordRequestPeerAddress(request, server);
+      return handleRequest(request);
+    }
   });
 }
 

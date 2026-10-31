@@ -8,7 +8,7 @@ const ALLOWED_RUNTIME_INLINE_STYLES = {
   'components/CodexUsageBreakdown.jsx': 1,
   'components/CodexUsagePanel.jsx': 1,
   'components/editor/PromptEditor.jsx': 2,
-  'pages/WorkBoard.jsx': 1,
+  'pages/work/WorkKanban.jsx': 1,
 };
 
 test('JSX files do not accumulate inline styles', () => {

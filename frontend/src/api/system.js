@@ -87,7 +87,12 @@ export const systemApi = {
 
   getCodexModels: () => request('/api/codex/models'),
 
-  getProviders: () => request('/api/providers'),
+  getProviders: ({ nodeId = '', projectId = '', ...options } = {}) => {
+    const params = new URLSearchParams();
+    if (nodeId) params.set('node_id', nodeId);
+    if (projectId) params.set('project_id', projectId);
+    return request(`/api/providers${params.size ? `?${params}` : ''}`, options);
+  },
 
   getCodeAgents: () => request('/api/code-agents'),
 
@@ -101,7 +106,10 @@ export const systemApi = {
     body: JSON.stringify({ enabled }),
   }),
 
-  getProviderModels: (id, options = {}) => request(`/api/providers/${encodeURIComponent(id)}/models`, options),
+  getProviderModels: (id, { nodeId = '', ...options } = {}) => request(
+    `/api/providers/${encodeURIComponent(id)}/models${nodeId ? `?${new URLSearchParams({ node_id: nodeId })}` : ''}`,
+    options,
+  ),
 
   resolveProviderExecutionPolicy: (id, payload) => request(`/api/providers/${encodeURIComponent(id)}/execution-policy/resolve`, {
     method: 'POST',

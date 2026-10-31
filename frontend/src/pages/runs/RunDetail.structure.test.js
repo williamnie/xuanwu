@@ -1,30 +1,43 @@
+import { readSessionPageSource } from '../sessions/sessionTestSources.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const detailSource = readFileSync(new URL('./RunDetail.jsx', import.meta.url), 'utf8');
+const detailSource = ['RunDetail.jsx', 'RunSummary.jsx', 'RunEventPanels.jsx', 'RunDetailPrimitives.jsx', 'useRunEvents.js', 'runDetailFormat.js'].map(file => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n');
 const apiSource = readFileSync(new URL('../../api/runs.js', import.meta.url), 'utf8');
 const modelSource = readFileSync(new URL('./runDetailModel.js', import.meta.url), 'utf8');
 
 const runsPageSource = readFileSync(new URL('../Runs.jsx', import.meta.url), 'utf8');
-const sessionsSource = readFileSync(new URL('../Sessions.jsx', import.meta.url), 'utf8');
+const sessionsSource = readSessionPageSource();
 const chatSource = readFileSync(new URL('../sessions/SessionChatWorkspace.jsx', import.meta.url), 'utf8');
 const infoSource = readFileSync(new URL('../sessions/SessionInfoPanel.jsx', import.meta.url), 'utf8');
 
-test('Run Detail puts Provider first and hides a single Attempt selector', () => {
-  for (const label of ['Coding tool', 'Summary', 'Logs', 'Checks', 'Advanced']) {
-    assert.match(detailSource, new RegExp(`label: '${label}'`));
-  }
-  assert.ok(detailSource.indexOf("label: 'Coding tool'") < detailSource.indexOf("label: 'Summary'"));
-  assert.doesNotMatch(detailSource, /label: 'Approvals'/);
-  assert.match(detailSource, /aria-label="Run attempts"/);
+test('Run Detail defaults to conversation and keeps diagnostics out of primary tabs', () => {
+  for (const label of ['对话', '概览', '日志']) assert.ok(detailSource.includes(`label: '${label}'`));
+  for (const label of ['Checks', 'Advanced']) assert.ok(!detailSource.includes(`label: '${label}'`));
+  assert.match(detailSource, /aria-label="执行尝试"/);
   assert.match(detailSource, /attempts\.length > 1/);
-  assert.match(detailSource, />Timeline</);
-  assert.match(detailSource, />Cost</);
-  assert.match(detailSource, /Advanced raw events/);
-  assert.match(detailSource, /<EvidencePanel runId=\{run\.id\}/);
-  assert.match(detailSource, /useState\('summary'\)/);
-  assert.match(detailSource, /setActiveSection\('summary'\)/);
+  assert.match(detailSource, /useState\('provider'\)/);
+  assert.match(detailSource, /<RunDetailContent key=\{run\.id\}/);
+  assert.doesNotMatch(detailSource, /setActiveSection\('(?:summary|provider)'\)/);
+  assert.doesNotMatch(detailSource, /Selected Attempt|Progress events|source events|Complete bounded projection/);
+});
+
+test('verification and developer events only mount inside opened disclosures', () => {
+  assert.match(detailSource, /<RunDisclosure title="本次执行验证">\s*<EvidencePanel runId=\{run\.id\}/);
+  assert.match(detailSource, /<RunDisclosure title="开发者信息">\s*<RunAdvanced/);
+  assert.match(detailSource, /\{open \? children : null\}/);
+  assert.match(detailSource, /const \[open, setOpen\] = useState\(false\)/);
+  assert.match(detailSource, /<RunAttention attempt=\{selectedAttempt\} run=\{run\} \/>/);
+  assert.match(detailSource, /仅显示近期记录/);
+  assert.doesNotMatch(detailSource, /normalized provider events|first_event_id.*last_event_id/);
+});
+
+test('only a manual attempt click pins selection; background updates keep following the latest', () => {
+  assert.match(detailSource, /const \[pinnedAttemptId, setPinnedAttemptId\] = useState\(''\)/);
+  assert.match(detailSource, /selectedRunAttempt\(run, pinnedAttemptId\)/);
+  assert.match(detailSource, /onClick=\{\(\) => setPinnedAttemptId\(attempt.id\)\}/);
+  assert.equal((detailSource.match(/setPinnedAttemptId\(/g) || []).length, 1);
 });
 
 test('provider observation is an embedded primary tab without duplicate Evidence', () => {
@@ -59,5 +72,6 @@ test('logs, raw events, and transcript commentary use bounded Run APIs', () => {
   assert.doesNotMatch(apiSource, /getRunApprovals|approval-requests/);
   assert.match(modelSource, /RUN_EVENT_PAGE_SIZE = 100/);
   assert.match(modelSource, /RUN_EVENT_SCAN_LIMIT = 500/);
-  assert.match(detailSource, /interactive cap \{RUN_EVENT_SCAN_LIMIT\}/);
+  assert.match(detailSource, /scanned >= RUN_EVENT_SCAN_LIMIT/);
+  assert.doesNotMatch(detailSource, /interactive cap|raw events scanned|bounded .*event pages/);
 });

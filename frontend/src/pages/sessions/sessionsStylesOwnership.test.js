@@ -1,13 +1,14 @@
+import { readStylesheet } from '../../../test-support/readStylesheet.js';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const sessionsCss = readFileSync(new URL('./Sessions.css', import.meta.url), 'utf8');
-const clientCss = readFileSync(new URL('./SessionsClient.css', import.meta.url), 'utf8');
-const composerCss = readFileSync(new URL('./SessionComposer.css', import.meta.url), 'utf8');
+const sessionsCss = readStylesheet(new URL('./Sessions.css', import.meta.url));
+const clientCss = readStylesheet(new URL('./SessionsClient.css', import.meta.url));
+const composerCss = readStylesheet(new URL('./SessionComposer.css', import.meta.url));
 const designTokensCss = readFileSync(new URL('../../../../docs/design-system/tokens.css', import.meta.url), 'utf8');
 const globalCss = [
-  readFileSync(new URL('../../index.css', import.meta.url), 'utf8'),
+  readStylesheet(new URL('../../index.css', import.meta.url)),
   readFileSync(new URL('../../GeekWorkbenchPages.css', import.meta.url), 'utf8'),
 ].join('\n');
 const runtimeSource = [

@@ -1,3 +1,4 @@
+import { readSessionTranscriptSource, readSessionComposerSource } from './sessionTestSources.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -7,17 +8,19 @@ const sidebarSource = readFileSync(new URL('./SessionSidebar.jsx', import.meta.u
 const workspaceSource = readFileSync(new URL('./SessionWorkspace.jsx', import.meta.url), 'utf8');
 const chatSource = readFileSync(new URL('./SessionChatWorkspace.jsx', import.meta.url), 'utf8');
 const newSessionSource = readFileSync(new URL('./NewSessionWorkspace.jsx', import.meta.url), 'utf8');
-const transcriptSource = readFileSync(new URL('./SessionTranscript.jsx', import.meta.url), 'utf8');
+const transcriptSource = readSessionTranscriptSource();
 const infoSource = readFileSync(new URL('./SessionInfoPanel.jsx', import.meta.url), 'utf8');
 const selectorsSource = readFileSync(new URL('./useSessionPageSelectors.js', import.meta.url), 'utf8');
-const composerSource = readFileSync(new URL('./SessionComposer.jsx', import.meta.url), 'utf8');
+const composerSource = readSessionComposerSource();
 
-test('Sessions stays an orchestration container below half of the original monolith size', () => {
+test('Sessions stays a focused orchestration container below 300 lines', () => {
   const lineCount = pageSource.split('\n').length;
-  assert.ok(lineCount < 1_000, `Sessions.jsx should stay below 1000 lines, received ${lineCount}`);
+  assert.ok(lineCount <= 300, `Sessions.jsx should stay at or below 300 lines, received ${lineCount}`);
   assert.match(pageSource, /import SessionSidebar from '.\/sessions\/SessionSidebar'/);
   assert.match(pageSource, /import SessionWorkspace from '.\/sessions\/SessionWorkspace'/);
-  assert.match(pageSource, /useSessionPageSelectors\(/);
+  assert.match(pageSource, /useSessionsController\(/);
+  const controllerSource = readFileSync(new URL('./useSessionsController.js', import.meta.url), 'utf8');
+  assert.match(controllerSource, /useSessionPageSelectors\(/);
   assert.doesNotMatch(pageSource, /function SessionDetail\(/);
   assert.doesNotMatch(pageSource, /function SessionSidebarContent\(/);
 });

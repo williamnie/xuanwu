@@ -7,6 +7,7 @@ import { isProviderId, type ExecutorProviderId, type SessionRef } from "../provi
 import { requestIssuePiAcceptance } from "./piAcceptanceRequest.ts";
 import { reconcileProviderOutcome, type ProviderReportedOutcome } from "./providerOutcome.ts";
 import { restoreUnstartedWorkspaceWait } from "../domain/review/workspaceWait.ts";
+import { hasActiveRemoteRun } from "../db/repositories/remoteRuns.ts";
 
 type RecoveryInput = {
   database: RunnerDatabase;
@@ -47,6 +48,8 @@ async function reconcileIssueOnStartup(
     });
     return "reconciled";
   }
+  // 远程节点上的运行由节点运行时在节点重连后接回或收口，启动恢复不介入。
+  if (hasActiveRemoteRun(db, run.id)) return "signaled";
   if (canRequeueUnstartedClaim(db, issue)) {
     if (restoreUnstartedWorkspaceWait(db, issue.id)) return "signaled";
     requeueUnstartedIssueClaim(db, issue.id);

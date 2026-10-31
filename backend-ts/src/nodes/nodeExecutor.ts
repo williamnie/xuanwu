@@ -1,0 +1,175 @@
+import { NODE_PROVIDER_READ_METHODS, NODE_PROVIDER_SESSION_METHODS, type NodeProviderInfo } from "../db/repositories/nodes.ts";
+import {
+  isProviderInterruptedError,
+  type ExecutorProvider,
+  type ProviderEvent,
+  type SessionCreateInput,
+  type SessionMessageInput
+} from "../providers/types.ts";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { NodeCommandHandler } from "./agent.ts";
+import { materializeRunAttachments } from "./runAttachments.ts";
+import {
+  isTerminalProviderEvent,
+  type NodeApprovalResolveParams,
+  type NodeRunEvent,
+  type NodeRunInterruptParams,
+  type NodeRunStartParams
+} from "./protocol.ts";
+
+/** 节点向中心开放的能力。会话事件（审批请求、会话更新）经 NodeAgent.emitAppEvent 送回中心。 */
+const REMOTE_CAPABILITIES = ["issue_execution", "interrupt", "approvals", "model_list", "resume_session", "sessions"] as const;
+type ReadMethod = (typeof NODE_PROVIDER_READ_METHODS)[number];
+
+type ProviderSource = () => Record<string, ExecutorProvider>;
+
+/** 节点上真实执行 provider 的命令处理器：run.start / run.interrupt / approval.resolve。 */
+/** workDir：节点缓存托管 Skill、存放运行附件的目录。 */
+export function nodeExecutionHandlers(
+  providers: ProviderSource,
+  options: { workDir?: string } = {}
+): Record<string, NodeCommandHandler> {
+  const workDir = options.workDir ?? join(tmpdir(), "xuanwu-node");
+  const activeRuns = new Set<string>();
+  return {
+    "run.start": async (params, agent) => {
+      const { images, input, mode, providerId, runRef, session, skillPackages } = parseRunStart(params);
+      // 中心可能因超时重发同一指令；运行已在进行时直接确认，不重复启动。
+      if (activeRuns.has(runRef)) return { accepted: true };
+      const provider = requireProvider(providers, providerId, mode === "recover" ? "resume_session" : "issue_execution");
+      if (mode === "recover" && !session) throw new Error("run.start recover needs a session");
+      const cwd = await agent.resolveAllowedPath(input.cwd);
+      const attachments = await materializeRunAttachments(workDir, runRef, { images, skillPackages }, input);
+      activeRuns.add(runRef);
+      agent.trackRun(runRef);
+      const emit = (event: NodeRunEvent) => agent.emitRunEvent(runRef, event);
+      // run() 返回后 provider 仍可能推送事件；返回且见到终止事件（或失败）才结束转发。
+      let returned = false;
+      let terminal = false;
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        activeRuns.delete(runRef);
+        agent.finishRun(runRef);
+        void attachments.cleanup();
+      };
+      const onEvent = (event: ProviderEvent) => {
+        if (finished) return;
+        emit({ type: "event", event });
+        if (!isTerminalProviderEvent(event)) return;
+        terminal = true;
+        if (returned) finish();
+      };
+      const runInput = { ...input, cwd, onEvent, prompt: attachments.prompt, ...(attachments.images ? { images: attachments.images } : {}) };
+      void (mode === "recover" ? provider.recover!({ ...runInput, session: session! }) : provider.run(runInput))
+        .then((result) => {
+          emit({ type: "result", result });
+          returned = true;
+          if (terminal) finish();
+        })
+        .catch((error: unknown) => {
+          emit({
+            type: "error",
+            interrupted: isProviderInterruptedError(error),
+            message: error instanceof Error ? error.message : String(error)
+          });
+          finish();
+        });
+      return { accepted: true };
+    },
+    "run.interrupt": async (params) => {
+      const { input, providerId } = params as NodeRunInterruptParams;
+      const provider = requireProvider(providers, String(providerId ?? ""), "interrupt");
+      await provider.interrupt!(input);
+      return { ok: true };
+    },
+    // 中心验收读取会话摘要、项目编辑读取模型列表；仅限白名单内的只读方法。
+    "provider.read": async (params) => {
+      const { args, method, providerId } = params as { args?: unknown[]; method?: string; providerId?: string };
+      if (!(NODE_PROVIDER_READ_METHODS as readonly string[]).includes(String(method))) throw new Error(`provider.read ${String(method)} is not allowed`);
+      const provider = providers()[String(providerId ?? "")];
+      const fn = provider?.[method as ReadMethod] as ((...values: unknown[]) => Promise<unknown>) | undefined;
+      if (!provider || typeof fn !== "function") throw new Error(`provider ${String(providerId)} does not support ${String(method)}`);
+      // JSON 把省略的参数序列化为 null，换回 undefined 让 provider 的默认参数生效。
+      return await fn.apply(provider, Array.isArray(args) ? args.slice(0, 2).map((arg) => arg ?? undefined) : []);
+    },
+    // 对话页新建会话、人工审核后在原会话续写；cwd 必须落在 allowedRoots 内。
+    "provider.session": async (params, agent) => {
+      const { input, method, providerId } = params as { input?: Record<string, unknown>; method?: string; providerId?: string };
+      if (method !== "createSession" && method !== "sendSessionMessage") throw new Error(`provider.session ${String(method)} is not allowed`);
+      const provider = requireProvider(providers, String(providerId ?? ""), method === "createSession" ? "sessions" : "resume_session");
+      if (typeof provider[method] !== "function" || !input || typeof input !== "object") throw new Error(`provider ${String(providerId)} does not support ${method}`);
+      const cwd = typeof input.cwd === "string" && input.cwd !== "" ? await agent.resolveAllowedPath(input.cwd) : undefined;
+      if (method === "createSession") {
+        if (!cwd) throw new Error("createSession needs a cwd on the node");
+        return await provider.createSession!({ ...(input as unknown as SessionCreateInput), cwd });
+      }
+      return await provider.sendSessionMessage!({ ...(input as unknown as SessionMessageInput), ...(cwd ? { cwd } : {}) });
+    },
+    "approval.resolve": async (params) => {
+      const { decision, providerId, requestId } = params as NodeApprovalResolveParams;
+      const provider = requireProvider(providers, String(providerId ?? ""), "approvals");
+      await provider.resolveApproval!(String(requestId ?? ""), decision);
+      return { ok: true };
+    }
+  };
+}
+
+/** 握手时上报的 provider 列表。 */
+export function nodeProviderInfo(providers: Record<string, ExecutorProvider>): NodeProviderInfo[] {
+  return Object.values(providers).map((provider) => {
+    const status = provider.runtimeStatus?.();
+    return {
+      capabilities: REMOTE_CAPABILITIES.filter((capability) => supports(provider, capability)),
+      id: provider.id,
+      ...(provider.interruptScope ? { interrupt_scope: provider.interruptScope } : {}),
+      read_methods: NODE_PROVIDER_READ_METHODS.filter((method) => typeof provider[method] === "function"),
+      session_methods: NODE_PROVIDER_SESSION_METHODS.filter((method) => typeof provider[method] === "function"),
+      ready: status?.ready ?? true,
+      ...(status?.reason ? { reason: status.reason } : {}),
+      ...(status?.version ? { version: status.version } : {})
+    };
+  });
+}
+
+function supports(provider: ExecutorProvider, capability: (typeof REMOTE_CAPABILITIES)[number]): boolean {
+  if (!provider.capabilities.includes(capability)) return false;
+  if (capability === "interrupt") return typeof provider.interrupt === "function";
+  if (capability === "approvals") return typeof provider.resolveApproval === "function";
+  if (capability === "model_list") return typeof provider.listModels === "function";
+  if (capability === "resume_session") return typeof provider.recover === "function";
+  if (capability === "sessions") return typeof provider.createSession === "function";
+  return true;
+}
+
+function requireProvider(
+  providers: ProviderSource,
+  providerId: string,
+  capability: (typeof REMOTE_CAPABILITIES)[number]
+): ExecutorProvider {
+  const provider = providers()[providerId];
+  if (!provider) throw new Error(`provider ${providerId} is not available on this node`);
+  if (!supports(provider, capability)) throw new Error(`provider ${providerId} does not support ${capability}`);
+  return provider;
+}
+
+function parseRunStart(params: unknown): NodeRunStartParams {
+  const value = params as Partial<NodeRunStartParams> | null;
+  const runRef = typeof value?.runRef === "string" ? value.runRef.trim() : "";
+  const providerId = typeof value?.providerId === "string" ? value.providerId.trim() : "";
+  if (runRef === "" || providerId === "" || typeof value?.input !== "object" || value.input === null) {
+    throw new Error("invalid run.start params");
+  }
+  if (typeof value.input.cwd !== "string" || typeof value.input.prompt !== "string") throw new Error("run.start input needs cwd and prompt");
+  return {
+    input: value.input,
+    providerId,
+    runRef,
+    ...(Array.isArray(value.images) ? { images: value.images } : {}),
+    ...(Array.isArray(value.skillPackages) ? { skillPackages: value.skillPackages } : {}),
+    ...(value.mode === "recover" ? { mode: "recover" as const } : {}),
+    ...(value.session && typeof value.session.sessionId === "string" ? { session: value.session } : {})
+  };
+}

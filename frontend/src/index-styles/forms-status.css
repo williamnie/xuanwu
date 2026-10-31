@@ -1,0 +1,131 @@
+/* Modals */
+.modal-overlay {
+  align-items: center;
+  background: color-mix(in srgb, var(--bg-primary) 48%, transparent);
+  backdrop-filter: blur(8px);
+  box-sizing: border-box;
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  overflow: auto;
+  padding: var(--space-6);
+  position: fixed;
+  z-index: 1000;
+}
+
+.modal-overlay > * {
+  margin-block: auto;
+}
+
+@media (max-width: 760px) {
+  .modal-overlay {
+    padding: var(--space-3);
+  }
+}
+
+.modal-content {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  width: 90%;
+  max-width: 500px;
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-6);
+}
+
+.form-group {
+  margin-bottom: var(--space-4);
+}
+
+.form-group label {
+  display: block;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-1-5);
+}
+
+.form-control {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--text-base);
+  line-height: 1.4;
+  outline: none;
+}
+
+.form-control:is(input, textarea) {
+  appearance: none;
+  -webkit-appearance: none;
+  background-clip: padding-box;
+}
+
+.form-control:is(input, textarea):-webkit-autofill,
+.form-control:is(input, textarea):-webkit-autofill:hover,
+.form-control:is(input, textarea):-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text-primary);
+  box-shadow: 0 0 0 1000px var(--bg-card) inset;
+}
+
+.form-control:focus {
+  border-color: var(--primary);
+
+  outline: 2px solid var(--primary-glow);
+}
+
+/* Switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* Grid helper */
+
+.grid-cols-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+}
+
+/* Status Badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  padding: var(--space-0-5) var(--space-2);
+  border-radius: var(--radius-xs);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.status-badge.triage { background: var(--warning-bg); color: var(--warning); border-color: var(--warning-glow); }
+.status-badge.todo { background: transparent; color: var(--text-muted); border-color: var(--border-color); }
+.status-badge.in_progress { background: var(--info-bg); color: var(--info); border-color: var(--info-glow); }
+.status-badge.done { background: var(--success-bg); color: var(--success); border-color: var(--success-glow); }
+.status-badge.failed { background: var(--error-bg); color: var(--error); border-color: var(--error-glow); }
+.status-badge.cancelled { background: var(--error-bg); color: var(--error); border-color: var(--error-glow); }
+
+/* Status Dot indicators */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.status-dot.active { background-color: var(--success); }
+.status-dot.idle { background-color: var(--text-muted); }
+.status-dot.running { background-color: var(--info); }
+

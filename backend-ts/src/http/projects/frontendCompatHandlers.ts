@@ -22,6 +22,7 @@ import { HttpError } from "../errors.ts";
 import { searchProjectReferences } from "./projectReferences.ts";
 import { previewCodexProjects, syncCodexProjects } from "./projectSync.ts";
 import { cleanString } from "../../util/values.ts";
+import { providersForApprovalRequest, providersForProjectCwd, providersForProjectID } from "../../nodes/remoteExecution.ts";
 
 export type FrontendCompatContext = {
   bus?: EventBus;
@@ -94,8 +95,9 @@ function setProjectLoop(context: FrontendCompatContext, projectID: string, autoR
 }
 
 function hasIssueExecutionProvider(context: FrontendCompatContext, projectID: string): boolean {
-  const providerID = getProject(context.database, projectID)?.provider as ExecutorProviderId | undefined;
-  const provider = providerID ? context.providers?.[providerID] : undefined;
+  const project = getProject(context.database, projectID);
+  const providerID = project?.provider as ExecutorProviderId | undefined;
+  const provider = providerID && project ? providersForProjectCwd(context.providers, project.cwd)?.[providerID] : undefined;
   return Boolean(provider?.capabilities.includes("issue_execution"));
 }
 
@@ -184,9 +186,15 @@ async function resolveApproval(
 ): Promise<Record<string, boolean>> {
   // P5：approval request 与 provider 绑定——从 pi_approval_requests 查 request 归属 provider，
   // 不再硬编码 codex；跨 provider 路由到对应实例，Provider 不支持 resolveApproval 时 fail closed。
-  const boundProvider = getPiApprovalRequest(context.database, id)?.provider.trim() ?? "";
+  const request = getPiApprovalRequest(context.database, id);
+  const boundProvider = request?.provider.trim() ?? "";
   const target = boundProvider !== "" ? boundProvider : "codex"; // 旧前端无绑定记录的请求按 codex 兼容
-  const instance = context.providers?.[target as ExecutorProviderId];
+  // 远程项目的审批由其节点上的 provider 处理。
+  // 交互式会话的审批不入库：按审批事件记下的来源节点路由。
+  const providers = request
+    ? providersForProjectID(context.database, context.providers, request.project_id)
+    : providersForApprovalRequest(context.providers, id);
+  const instance = providers?.[target as ExecutorProviderId];
   if (!instance?.resolveApproval) {
     if (boundProvider === "") return { ok: true }; // 兼容：无绑定记录且无 codex provider 时静默成功
     throw new HttpError(409, `approval request ${id} 的 provider ${target} 不支持 resolveApproval`);

@@ -2,6 +2,7 @@ import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { chmod, mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { dirname } from "node:path";
 import { jsonError } from "./errors.ts";
+import { NODE_AGENT_PATH_PREFIX } from "../nodes/protocol.ts";
 import { cleanString } from "../util/values.ts";
 
 type AuthConfig = {
@@ -40,7 +41,9 @@ export async function loadAuthToken(config: AuthConfig): Promise<string> {
 
 export function requireBearerAuth(request: Request, authToken: string): Response | undefined {
   const configured = cleanString(authToken);
-  if (configured === "" || !isApiRequest(request) || isPublicIntegrationCallback(request)) return undefined;
+  if (configured === "" || !isApiRequest(request) || isPublicIntegrationCallback(request) || isNodeAgentRequest(request)) {
+    return undefined;
+  }
   if (constantTimeEqual(requestToken(request), configured)) return undefined;
   return jsonError(401, "unauthorized");
 }
@@ -175,11 +178,16 @@ function isPublicIntegrationCallback(request: Request): boolean {
   );
 }
 
+/** 远程节点通道使用各自的节点密钥，由 nodes API 自行鉴权。 */
+function isNodeAgentRequest(request: Request): boolean {
+  return new URL(request.url).pathname.startsWith(NODE_AGENT_PATH_PREFIX);
+}
+
 function requestToken(request: Request): string {
   return requestBearerToken(request) || requestCookieToken(request);
 }
 
-function requestBearerToken(request: Request): string {
+export function requestBearerToken(request: Request): string {
   const header = cleanString(request.headers.get("authorization") ?? "");
   if (!header.toLowerCase().startsWith("bearer ")) return "";
   return cleanString(header.slice("bearer ".length));

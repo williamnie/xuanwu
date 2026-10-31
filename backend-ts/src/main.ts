@@ -70,6 +70,11 @@ if (Bun.argv[2] === "__pi-usage-worker") {
   }
 }
 
+if (Bun.argv[2] === "node" && Bun.argv[3] !== "list") {
+  const { runNodeCommand } = await import("./nodes/cli.ts");
+  process.exit(await runNodeCommand(Bun.argv.slice(3)));
+}
+
 const { serve, args, version } = commandMode(Bun.argv.slice(2));
 coldStartTrace("entry_loaded");
 

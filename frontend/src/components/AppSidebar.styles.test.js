@@ -1,11 +1,13 @@
+import { readAppSource } from '../../test-support/readAppSource.js';
+import { readStylesheet } from '../../test-support/readStylesheet.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
+const css = readStylesheet(new URL('../index.css', import.meta.url));
 const workbenchCss = readFileSync(new URL('../GeekWorkbench.css', import.meta.url), 'utf8');
 const source = readFileSync(new URL('./AppSidebar.jsx', import.meta.url), 'utf8');
-const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+const appSource = readAppSource();
 
 function ruleFor(selector, stylesheet = css) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -62,7 +64,7 @@ test('sidebar footer never shrinks under a long session list', () => {
 
 test('session list bleed stays inside the sidebar padding so no horizontal scrollbar covers the footer', () => {
   // 侧栏内边距 10px = 插槽外伸 4px + 滚动区外伸 6px；超出即出现横向滚动条压住底部设置
-  const sessionsCss = readFileSync(new URL('../pages/sessions/SessionsClient.css', import.meta.url), 'utf8');
+  const sessionsCss = readStylesheet(new URL('../pages/sessions/SessionsClient.css', import.meta.url));
   const piChatCss = readFileSync(new URL('../pages/PiChatSidebar.css', import.meta.url), 'utf8');
   assert.match(ruleFor('.sidebar', workbenchCss), /padding:\s*var\(--space-4\)\s+var\(--space-2-5\)/);
   assert.match(ruleFor('.sessions-app-sidebar-slot', sessionsCss), /margin:\s*var\(--space-5\)\s+calc\(var\(--space-1\)\s*\*\s*-1\)\s+0/);

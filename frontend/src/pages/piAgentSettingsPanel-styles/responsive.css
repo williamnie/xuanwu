@@ -1,0 +1,112 @@
+@media (max-width: 900px) {
+  .provider-console {
+    grid-template-columns: 1fr;
+  }
+
+  .provider-console-main {
+    padding-right: 0;
+  }
+
+  .provider-progress-rail {
+    border-left: 0;
+    border-top: 1px solid var(--border-color);
+    padding: var(--space-3) 0;
+  }
+
+  .provider-progress-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .provider-progress-step {
+    border-right: 1px solid var(--border-color);
+    padding-right: var(--space-2-5);
+  }
+
+  .provider-progress-step:last-child {
+    border-right: 0;
+  }
+
+  .provider-connection-summary {
+    max-width: 360px;
+  }
+}
+
+@media (max-width: 640px) {
+  .supervisor-settings-header,
+  .supervisor-scope-note,
+  .provider-flow-heading,
+  .provider-model-heading,
+  .supervisor-oauth-heading,
+  .provider-connection-actions,
+  .prompt-debug-heading,
+  .supervisor-applied-model,
+  .supervisor-save-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .supervisor-readiness,
+  .provider-credential-grid,
+  .supervisor-behavior-grid,
+  .persona-select-grid,
+  .provider-progress-list {
+    grid-template-columns: 1fr;
+  }
+
+  .supervisor-readiness-item,
+  .supervisor-readiness-item + .supervisor-readiness-item {
+    border-right: 0;
+    padding-left: 0;
+  }
+
+  .provider-connection-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--space-1-5);
+    padding: var(--space-2) 0;
+  }
+
+  .provider-connection-picker,
+  .provider-connection-picker > label,
+  .provider-connection-toolbar .form-control {
+    width: 100%;
+  }
+
+  .provider-connection-picker {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .provider-delete-confirm {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .provider-delete-confirm > div:last-child {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .provider-model-row {
+    grid-template-columns: 1fr;
+  }
+
+  .provider-connection-actions > div,
+  .supervisor-oauth-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .provider-progress-step {
+    border-right: 0;
+  }
+
+  .provider-connection-summary {
+    max-width: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .provider-mode-tabs { grid-template-columns: 1fr; }
+}
