@@ -100,6 +100,9 @@ function isRelated(
   options: ContextBundleBuilderOptions
 ): boolean {
   if (!withinWindow(event, anchor, options.windowMinutes)) return false;
+  // A conversation is the outer boundary: never mix chats, even without a thread.
+  // Events from chat-less sources (both keys empty) keep the plain time-window behavior.
+  if (chatKey(event) !== chatKey(anchor)) return false;
   const anchorThread = threadKey(anchor);
   if (anchorThread === "") return true;
   return threadKey(event) === anchorThread || replyRelated(event, anchor);
@@ -206,6 +209,12 @@ function replyRelated(event: ExternalEventRecord, anchor: ExternalEventRecord): 
 function replyTarget(event: ExternalEventRecord): string {
   const message = objectValue(event.normalized_message);
   return firstText(message.reply_to_external_id, message.reply_to_message_id, message.parent_id);
+}
+
+function chatKey(event: ExternalEventRecord): string {
+  const message = objectValue(event.normalized_message);
+  const conversation = objectValue(message.conversation);
+  return firstText(conversation.id, message.chat_id, message.chatId, message.conversation_id);
 }
 
 function threadKey(event: ExternalEventRecord): string {

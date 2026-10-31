@@ -87,6 +87,51 @@ describe("context bundle builder", () => {
     });
   });
 
+  test("keeps a threadless bundle inside the anchor chat when chats interleave", async () => {
+    const db = await openFixtureDatabase();
+    const first = event(db, "a1", "2026-07-06T01:00:00Z", "A 问：报告好了吗", {
+      normalized_message: chatMessage("a1", "chat-a")
+    });
+    event(db, "b1", "2026-07-06T01:00:30Z", "B 群里的闲聊", {
+      normalized_message: chatMessage("b1", "chat-b")
+    });
+    const reply = event(db, "a2", "2026-07-06T01:01:00Z", "本人：下午发", {
+      normalized_message: chatMessage("a2", "chat-a")
+    });
+    event(db, "b2", "2026-07-06T01:01:30Z", "B 群里的另一句", {
+      normalized_message: { conversation: { id: "chat-b" }, message_id: "b2" }
+    });
+    const anchor = event(db, "a3", "2026-07-06T01:02:00Z", "A：好的", {
+      normalized_message: { conversation: { id: "chat-a" }, message_id: "a3" }
+    });
+
+    const bundle = buildContextBundleFromEvents(listExternalEvents(db, { source: "fixture-im" }), {
+      anchorEventId: anchor.id,
+      createdBy: "automation",
+      maxEvents: 10,
+      trigger: "continuous",
+      windowMinutes: 5
+    });
+
+    expect(bundle.event_refs).toEqual([first.id, reply.id, anchor.id]);
+  });
+
+  test("keeps the time-window behavior for sources without a chat id", async () => {
+    const db = await openFixtureDatabase();
+    const first = event(db, "n1", "2026-07-06T01:00:00Z", "one", { normalized_message: { message_id: "n1" } });
+    const anchor = event(db, "n2", "2026-07-06T01:01:00Z", "two", { normalized_message: { message_id: "n2" } });
+    event(db, "c1", "2026-07-06T01:00:30Z", "chat message", { normalized_message: chatMessage("c1", "chat-a") });
+
+    const bundle = buildContextBundleFromEvents(listExternalEvents(db, { source: "fixture-im" }), {
+      anchorEventId: anchor.id,
+      createdBy: "automation",
+      trigger: "continuous",
+      windowMinutes: 5
+    });
+
+    expect(bundle.event_refs).toEqual([first.id, anchor.id]);
+  });
+
   test("caps automatic bundles by event count and token budget", async () => {
     const db = await openFixtureDatabase();
     event(db, "m1", "2026-07-06T01:00:00Z", "one");
@@ -134,6 +179,10 @@ function message(messageID: string, threadID: string): Record<string, unknown> {
     message_id: messageID,
     thread_id: threadID
   };
+}
+
+function chatMessage(messageID: string, chatID: string): Record<string, unknown> {
+  return { chat_id: chatID, chat_type: "direct", message_id: messageID };
 }
 
 function replyMessage(messageID: string, replyTo: string): Record<string, unknown> {

@@ -290,7 +290,7 @@ ADR 2.5 第 1 条"本人回复之后，在它之前的未分拣消息视为已�
 
 `contextBundleBuilder.ts` 的旧路径（飞书机器人 intake）也要修，独立 PR，最先做：
 
-- 先按会话过滤：`chat_id`（或 `conversation.id`）相同才算相关；锚点没有会话 ID 时只取锚点本身。
+- 先按会话过滤：会话 key（`conversation.id`、`chat_id`、`chatId`、`conversation_id` 取第一个非空）相同才算相关。锚点和事件都没有会话 key 的（git 事件、无会话概念的 CLI 来源）保留原来的时间窗行为；一方有、一方没有的不相关。（S1 已实现，2026-10-31）
 - 有 thread 时，再按 thread 或回复关系过滤（保留现有逻辑）。
 - 补测试：两个会话交错发言时，bundle 里只有锚点所在会话的消息。
 
