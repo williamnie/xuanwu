@@ -98,18 +98,18 @@
 
 **分拣合同：**
 
-1. **本人身份是插件设置的一部分**，事件带 `is_self`。本人发的消息只当上下文，不触发 intake；同一会话里本人回复之后，在它之前的未分拣消息视为已处理。
+1. **本人身份是插件设置的一部分**，事件带 `is_self`。本人发的消息只当上下文，不触发 intake。本人在同一会话里的回复作为上下文交给分拣，由模型判断前面的消息是否已由本人处理（可给出 `ignore`，原因 `self_handled`）；引擎不自动标记为已处理（TD-1 第 5.5 节）。
 2. **对话以 chat 为单位，而不是以发送方为单位。** context bundle 必须按 `chat_id`（有 thread 时按 thread）选取事件。现状 `contextBundleBuilder.isRelated` 在没有 thread 时会纳入同一来源、时间窗内的**所有会话**，必须先修。
 3. **静默窗。** 同一 chat 最后一条消息之后静默 N 秒才分拣，并设最长等待上限。静默窗只是触发时机，正确性靠第 2 条（每次分拣都带整段上文和该 chat 之前的处理结果），不靠窗口长短。现状飞书 bridge 每到一条就路由，需要改。
 4. **单次结构化调用，不用 agent 循环。** 引擎负责准备本人身份、整段对话、chat 绑定的项目、项目列表、相关记忆，以及该 chat 最近的分拣决定；模型只输出 `action_proposals`。分拣不加载技能和 Soul 全文。
 5. **项目归属由引擎先决定。** chat 已绑定项目（`event.project_id`）的，直接沿用；未绑定的，模型从项目列表里选，并沿用 `require_project_confirmation`。
 
-**授权：** 现有来源授权已经满足以下要求，不改：外部来源的提案和用户对话的提案走不同路径；`message.reply_send` 只有在低风险、`auto_reply_enabled` 为真并命中 allowlist 时才自动执行；`issue.create` 只能自动建成 triage 状态；`issue.enqueue` 需要单独开关。
+**授权：** 原稿认为"现有来源授权已经满足要求，不改"，核对代码后不成立（TD-3 第 2 节）：来源授权只覆盖 4 种动作，其他低风险动作从外部来源来也会自动执行；allowlist 没有可配置的存储；执行时的策略从动作 payload 读取。因此改为：
 
-需要改的有两处：
-
-1. **新增 `source_inferred` memory authority。** 现状 `createMemoryFromAction` 只要动作被批准就写成 `user_explicit`。改成：从 Inbox 推断出的记忆写成 `source_inferred`，允许在不审批的情况下写入（一批有上限），检索时单独标注，不能覆盖 `user_explicit`，不能升级为指令或授权；用户在记忆页确认后才转成 `user_explicit`。
-2. **按审批记录逐步放权只产出建议，不直接改授权。** 同一类目标（来源 + 会话 / 人 + 动作）连续批准 N 次后，在 Attention 里提示「加入 allowlist」；用户点了才写进来源授权配置。驳回一次计数清零。授权的唯一依据仍然是配置，不是审批历史本身，更不是 memory。
+1. **放权规则表是 Inbox 动作授权的唯一依据**（TD-3）。类别 = 动作 + 来源 + 会话 / 人 / 来源 + 起因；默认问用户；只有用户的操作能写入（审批时"以后同类自动"、连续批准 N 次后的提示被采纳、授权页手动修改）；驳回或标记"做错了"即退回问用户。Inbox 提案执行时忽略 payload 里的一切授权字段。审批历史只产生计数和提示，记忆不参与授权。
+2. **第一版不代用户自动发送外部消息**（2026-10-31 定）。`message.reply_send` 固定为问用户；先以影子评测积累准确率（TD-1 第 10.4 节），以后再另行设计放开条件。
+3. **放权规则在记忆页呈现**（2026-10-31 定）：每条放开或禁止的规则同步为一条受管记忆，可在记忆页撤销；方向单向（规则 → 记忆），撤销经规则接口（TD-3 第 8 节、TD-4 第 9 节）。
+4. **新增 `source_inferred` memory authority**（TD-4）。从 Inbox 推断出的记忆写成 `source_inferred`，不经审批写入（单段、每日有上限），只能使用人、项目、约定、情景四种 kind，检索时单独标注，不能覆盖 `user_explicit`，不能升级为指令或授权；用户在记忆页确认后才转成 `user_explicit`。它与现有的 `advisory`（迁移遗留的未分类记录）分开，不合并。
 
 ### 2.6 提醒与日历
 
@@ -130,11 +130,16 @@
 
 | 块 | 朱雀的设计 | 玄武现状 | 改造方向 / 要先定的冲突 |
 | --- | --- | --- | --- |
-| 插件中心 | 官方目录、安装、设置、授权、随时启停；stream / poll；self / history / send / setup 协议 | 工具式 CLI connector manifest；飞书、GitHub 各有独立设置面板 | 按 2.4 扩 manifest、建统一插件中心；原生 channel（对话入口）不迁，只把「读用户本人消息」的部分改成插件 |
+| 插件中心 | 官方目录、安装、设置、授权、随时启停；stream / poll；self / history / send / setup 协议 | 工具式 CLI connector manifest；飞书、GitHub 各有独立设置面板 | 按 2.4 扩 manifest、建统一插件中心；原生 channel（对话入口）不迁。飞书拆分：机器人留在原生 channel，"以用户本人身份读写飞书消息"做成插件 `feishu-user`（TD-2） |
 | 记忆 | 事实 / 情景 / 程序三层；每条带来源（user / inferred）和置信度；可导出 markdown；从 Codex、Claude Code 导入时先列候选逐条筛选，像密钥的拦下 | `pi/memory/`：authority（`user_explicit` / `evidence_backed`）、scope、revision、反思队列；记忆面板 | 保留玄武的 authority / scope / revision 作为存储真值，补 `source_inferred`（2.5）；页面、分层展示、导入筛选流程迁自朱雀 |
 | Soul | 一份用户亲手写的 `soul.md`，网页编辑；人格和偏好归它，规则和授权不归它；拼在各会话固定规则之后 | `PiPersona` 四个结构化字段，只影响最终回复的措辞 | **已定：Soul 替代 persona**（理由：persona 只能调措辞，表达不了用户是谁、在意什么、怎么做事，Pi 显得死板）。迁移时把现有 persona 的四个字段转写成 Soul 初稿；`language_mode` 这类需要确定性执行的设置留在系统设置，不进 Soul。保持「改变不了工具、风险、授权、状态真值和完成标准」的合同；分拣只用其中的称呼与偏好摘要，不注入全文。persona 的表、接口和面板按 ADR-XW-0001 第 6.2 节的删除门禁退役 |
 | 模型与登录 | 凭据自己保管；网页上用 Pi SDK 各家 provider 的 OAuth / API Key 登录；可从本机 Pi 导入；换模型不写回 Pi 设置 | `credential_source` 只有 `stored` 和复用 Codex 登录 | 迁朱雀的多 provider 登录页面和流程；按用途分模型（对话、分拣、记忆整理）沿用玄武 `model_policy` |
 | 技能 | **只要知识型**：只拷文字文件，只经 `skill_read` 读，不能执行；按需读取，不把列表全塞进提示词 | ADR-XW-0058 可执行 Skill Runtime（allowlisted handler + capability gateway）与技能库 | **暂定两类并存**，分开命名、分开展示：知识型 skill 用朱雀的导入和页面，只能读；可执行 skill 保持 0058 的门禁。分拣和对话都只注入当前相关的技能，不注入全量列表。长期是否合并成一类，等阶段 A 用过之后再定 |
+| 分拣规则 | 用户手写 `triage-rules.md`，只给分拣看；审批时"这是闲聊"一键追加 | 无（只有结构化的来源策略） | **沿用朱雀**（2026-10-31 定），存数据目录（TD-1 第 8 节） |
+| 联系我 | 经插件主动找用户、待决汇总、IM 里"批准 12 / 以后自动"、回声过滤、每日上限 | 机器人 channel 能对话、卡片审批；外发目标靠链接反推，无固定联系渠道，无文本指令 | **迁入**（2026-10-31 定），优先用原生 channel，也支持指定插件会话（TD-6） |
+| 作息 / 值守 / 早晚报 | 用户级上下班；下班攒着不打扰；引擎取事实、Pi 写简报 | 项目级静默时段；项目通知日报 | **迁入**（2026-10-31 定）（TD-6） |
+
+**不迁的部分**（2026-10-31 定）：成员与路由、经 OCS 派活（`dispatch.ts`、`ocs.ts`）——工程活完全由玄武 issue 驱动；管任务的 Pi（`steward.ts`）——用玄武现有的 Pi 与 issue supervisor。朱雀里"原文随任务保存"的做法并入 Inbox 建 issue 的流程（TD-1 第 7.3 节）。
 
 ## 4. 影响分析
 
@@ -142,7 +147,7 @@
 | --- | --- |
 | 权限 | 不新增自动执行的路径；新增的自动行为只有 `source_inferred` 记忆写入，且不参与授权 |
 | 审计 | 全部经 `action_proposals` / `pi_action_events`；插件启停、会话三档变更、放权建议及其采纳都要落审计 |
-| 数据 | `pi_memory_items.authority` 新增一个取值；外部事件的 `normalized_message` 新增 `is_self`、`chat_id` 必填；插件设置新增本人身份与会话三档；分拣状态记在 chat 级 cursor 上 |
+| 数据 | `pi_memory_items.authority` 新增 `source_inferred`（与现有 `advisory` 分开），新增 `expires_at`、`managed_by` 列；`external_events` 新增 `inbox_chat_id`、`sender_key`、`is_self`、`inbox_status`、`inbox_decision_id` 列；新表 `inbox_chats`、`inbox_people`、`inbox_triage_runs`、`inbox_decisions`、`inbox_reply_shadow`、`source_plugins`、`pi_autonomy_rules`、`pi_contact_refs`、`pi_briefs`、`pi_soul`、`pi_memory_import_candidates` |
 | 公开 contract / schema | memory authority 枚举扩展；connector manifest 新增 `source` 能力；connector 事件合同（ADR-XW-0064）新增字段；persona → Soul、技能分类、模型凭据来源扩展，各自需要迁移和回滚方案 |
 | 迁移 | 朱雀数据不迁入：它的 25 条记忆全是推断出来的，且掺有身份混淆。只迁代码与设计（插件、页面、流程）、分拣规则文本和身份配置 |
 
@@ -167,5 +172,24 @@
 
 - [x] Soul 与 `PiPersona`：Soul 替代 persona（2026-10-31 定）。
 - [x] 技能：先让知识型与可执行两类并存（2026-10-31 定）；长期是否合并成一类待定。
+- [x] 逐步放权：放权规则表，在记忆页呈现；第一版不自动代发外部消息（2026-10-31 定）。
+- [x] 插件宿主：中心与钉钉 `dws` 都在 Mac mini 上，钉钉插件在中心本机运行；远程节点宿主推后（2026-10-31 定）。
 - [ ] 静默窗的默认值与上限，以第 5 节第 5 步的回放数据为准。
+- [ ] 联系我用哪个渠道（TD-6 第 10 节）。
+- [ ] 主导航新页面的名称（TD-5 第 11 节）。
 - [ ] 朱雀仓库是归档还是删除。
+
+## 7. 技术设计
+
+| 文档 | 内容 |
+| --- | --- |
+| [TD-0](0098-td0-zhuque-gap-inventory.md) | 朱雀 → 玄武差距盘点 |
+| [TD-1](0098-td1-inbox-domain-and-triage.md) | Inbox 领域模型与分拣（含回放评测、影子评测） |
+| [TD-2](0098-td2-source-plugin-runtime.md) | 来源插件运行时与合同 |
+| [TD-3](0098-td3-autonomy-rules.md) | Inbox 授权与逐步放权 |
+| [TD-4](0098-td4-memory-authority.md) | 记忆的权威等级与 Inbox 推断记忆 |
+| [TD-5](0098-td5-pages.md) | 页面：消息、插件中心与相关设置 |
+| [TD-6](0098-td6-contact-schedule-briefs.md) | 联系我、用户作息、值守与早晚报 |
+| [TD-7](0098-td7-soul.md) | Soul 替代 persona |
+| [TD-8](0098-td8-models-and-skills.md) | 模型与登录；知识型与可执行技能并存 |
+| [TD-9](0098-td9-memory-page-and-import.md) | 记忆页面与导入 |
